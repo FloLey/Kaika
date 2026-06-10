@@ -4,7 +4,7 @@ Turn a piece of music into a video clip. A fluid simulation is *danced* by audio
 analysis, then metamorphosed into living forms by a video diffusion model — all
 driven from a local web app launched with a single command.
 
-Full specification: [`../project_ideas/kaika.md`](../project_ideas/kaika.md).
+Full specification: [`docs/SPEC.md`](docs/SPEC.md).
 
 ```
 SON ──▶ FLUIDE ──▶ FLORAISON
