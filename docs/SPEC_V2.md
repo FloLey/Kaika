@@ -508,9 +508,16 @@ validated mutation endpoints the UI uses. No code execution, no file access.
 ### 5.1 Architecture
 
 - Backend endpoint `POST /api/projects/{id}/chat` (server-sent events for streaming).
-  The server holds the conversation, calls the LLM (Claude API; key configured in
-  Settings, never sent to the browser), executes tool calls, streams text + applied
-  changes back.
+  The server holds the conversation, calls the LLM, executes tool calls, streams
+  text + applied changes back.
+- **The model is swappable.** The server defines one internal interface —
+  `complete(messages, tools) → (text deltas, tool calls)` — with a backend per
+  provider. v2 ships two: **Anthropic (Claude)** and **Google (Gemini)**, both of
+  which support JSON-schema tool calling natively. Provider, model name, and API key
+  are chosen in Settings (keys live server-side, never sent to the browser).
+  Everything below the interface — tools, validation, revisions, system prompt — is
+  provider-neutral, so adding a third backend (e.g. any OpenAI-compatible endpoint)
+  touches one module.
 - The system prompt embeds: the recipe v2 schema (with ranges and effects of each
   field), the current project/recipe JSON, and a compact score digest (duration,
   tempo, sections, onset density per band) so "the drop" or "around 2 seconds"
@@ -566,7 +573,7 @@ New/changed endpoints (existing ones keep working):
 | `POST /api/projects/{id}/preview_window` | `{t0, t1, draft}` → job; supersedes `preview_segment` (kept as alias); uses checkpoints |
 | `GET /api/projects/{id}/revisions` · `POST …/revisions/{n}/restore` | undo history: every mutation appends `project.json` to a revision log inside the run dir |
 | `POST /api/projects/{id}/chat` (SSE) | the copilot |
-| `GET/PUT /api/settings` | LLM API key, GPU provisioning keys |
+| `GET/PUT /api/settings` | LLM provider + model + API keys, GPU provisioning keys |
 
 Schema validation: recipe v2 gets a JSON Schema (generated from the dataclasses)
 served at `GET /api/schema/recipe`, used by the server (authoritative), the YAML tab
@@ -616,11 +623,12 @@ tastefully (mids, beat pulse, chroma accents) and 2–3 showcase recipes.
 
 - **Streaming previews**: MP4 swap is simple; if 1–3 s still feels laggy, upgrade path
   is WebSocket frame streaming into a canvas while the encode finishes.
-- **LLM provider abstraction**: start Claude-only; the tool layer is provider-neutral
-  by construction if that needs to change.
 
 **Resolved during review**
 
+- **LLM provider**: swappable by design — a single internal completion/tool-call
+  interface with per-provider backends; Claude and Gemini ship in v2, provider +
+  model selected in Settings. See §5.1.
 - **Modulators on emitters** modulate the *template* only — sources sample it at
   spawn, then follow their own envelope (physical coherence, no mid-flight pops, no
   per-source bookkeeping). See §2.3.
