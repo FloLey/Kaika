@@ -1,4 +1,4 @@
-"""Phase 2: E2 fluid simulation."""
+"""Phase 2: E2 fluid simulation (v2 engine)."""
 from __future__ import annotations
 
 import json
@@ -33,7 +33,29 @@ def test_render_resolution(track_wav, tmp_path):
     score = analyze(track_wav, fps=24)
     res = simulate(score, _small_recipe(), tmp_path, max_frames=4)
     img = imageio.imread(res.fluid_dir / "000003.png")
-    assert img.shape[:2] == (64, 64)     # upsampled render
+    assert img.shape[:2] == (64, 64)     # upsampled render (v1 render_resolution)
+
+
+def test_rectangular_canvas(track_wav, tmp_path):
+    """A 9:16 canvas simulates on a rectangular FFT-friendly grid and renders
+    at the canvas aspect."""
+    import imageio.v2 as imageio
+    score = analyze(track_wav, fps=24)
+    rec = R.from_dict({"version": 2, "seed": 1,
+                       "canvas": {"width": 90, "height": 160,
+                                  "sim_resolution": 48}})
+    res = simulate(score, rec, tmp_path, max_frames=4)
+    h, w = res.grid
+    assert w == 48 and h > w             # portrait: long side vertical
+    for n in (h, w):                     # FFT-friendly factors only
+        for p in (2, 3, 5):
+            while n % p == 0:
+                n //= p
+        assert n == 1
+    img = imageio.imread(res.fluid_dir / "000003.png")
+    assert img.shape[:2] == (160, 90)
+    v = np.load(res.velocity_dir / "000003.npy")
+    assert v.shape == (res.grid[0], res.grid[1], 2)
 
 
 def test_density_appears(track_wav, tmp_path):
@@ -41,7 +63,7 @@ def test_density_appears(track_wav, tmp_path):
     res = simulate(score, _small_recipe(), tmp_path, max_frames=12)
     import imageio.v2 as imageio
     last = imageio.imread(sorted(res.fluid_dir.glob("*.png"))[-1])
-    assert last.max() > 0   # splats injected colour, frame is not black
+    assert last.max() > 0   # emitters injected colour, frame is not black
 
 
 def test_stats_for_sync_check(track_wav, tmp_path):
@@ -68,8 +90,9 @@ def _divergence(u, v):
 
 def test_projection_makes_incompressible():
     """The spectral (FFT) projection solves the Poisson system exactly, so a
-    single call must drive the velocity field's divergence to ~zero."""
-    sim = FluidSim(n=32, dissipation=0.99, viscosity=0.0, seed=1)
+    single call must drive the velocity field's divergence to ~zero — also on
+    a rectangular grid."""
+    sim = FluidSim(shape=(32, 48), dissipation=0.99, viscosity=0.0, seed=1)
     sim.add_splat(0.5, 0.5, 0.1, 8000.0, np.array([1.0, 0.2, 0.5]), 0.7)
     before = np.abs(_divergence(sim.u, sim.v)).mean()
     sim._project()

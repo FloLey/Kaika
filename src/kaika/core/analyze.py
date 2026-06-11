@@ -5,20 +5,25 @@ target video framerate so every video frame gets exactly one row of audio
 data with no interpolation. Because ``sr / fps`` is not always an integer
 (e.g. 44100 / 24 = 1837.5), the hop is rounded and the per-frame timestamps
 are recomputed from real time, which bounds the drift to a fraction of a frame.
+
+Version 2 adds chroma (pitch content), spectral flux, beat/bar phase and the
+harmonic/percussive ratio, and lets the recipe move the band split and onset
+peak-picking strictness (``analysis`` block).
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import List, Sequence
 
 import numpy as np
 import librosa
 
-from .score import Score, AudioInfo, Event, FrameData, Section
+from .score import Score, AudioInfo, Event, FrameData, Section, SCORE_VERSION
 
 N_FFT = 2048
-LOW_HZ = 150.0
-HIGH_HZ = 4000.0
+DEFAULT_BANDS = (150.0, 4000.0)
+DEFAULT_ONSET_DELTA = 0.10
+DEFAULT_ONSET_WAIT = 4
 
 
 def _normalise(x: np.ndarray) -> np.ndarray:
@@ -28,7 +33,8 @@ def _normalise(x: np.ndarray) -> np.ndarray:
     return x / peak if peak > 1e-12 else np.zeros_like(x)
 
 
-def _band_onsets(S_band: np.ndarray, sr: int, hop: int) -> List[Event]:
+def _band_onsets(S_band: np.ndarray, sr: int, hop: int,
+                 delta: float, wait: int) -> List[Event]:
     """Detect onsets within a single frequency band's magnitude spectrogram.
 
     The band is expected to be the *percussive* HPSS component: sustained tones
@@ -43,7 +49,7 @@ def _band_onsets(S_band: np.ndarray, sr: int, hop: int) -> List[Event]:
     if env.max() <= 0:
         return []
     frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop,
-                                        backtrack=False, delta=0.10, wait=4)
+                                        backtrack=False, delta=delta, wait=wait)
     if len(frames) == 0:
         return []
     times = librosa.frames_to_time(frames, sr=sr, hop_length=hop)
@@ -75,8 +81,41 @@ def _label_sections(boundaries_t: List[float], duration: float,
     return sections
 
 
+def _beat_phases(beat_times: np.ndarray, frame_times: np.ndarray,
+                 tempo_bpm: float) -> tuple:
+    """(beat_phase, bar_phase) per frame. 4/4 assumed; before the first / after
+    the last beat the phase free-runs at the detected tempo."""
+    n = len(frame_times)
+    beat_phase = np.zeros(n)
+    bar_phase = np.zeros(n)
+    period = 60.0 / tempo_bpm if tempo_bpm > 0 else 0.5
+    if len(beat_times) == 0:
+        beat_phase = (frame_times / period) % 1.0
+        bar_phase = (frame_times / (4 * period)) % 1.0
+        return beat_phase, bar_phase
+    # Index of the beat preceding each frame (-1 before the first beat).
+    idx = np.searchsorted(beat_times, frame_times, side="right") - 1
+    for i, t in enumerate(frame_times):
+        k = idx[i]
+        if k < 0:
+            beat_phase[i] = ((t - beat_times[0]) / period) % 1.0
+            beats_done = (t - beat_times[0]) / period
+        elif k >= len(beat_times) - 1:
+            beat_phase[i] = ((t - beat_times[-1]) / period) % 1.0
+            beats_done = k + (t - beat_times[-1]) / period
+        else:
+            span = beat_times[k + 1] - beat_times[k]
+            beat_phase[i] = (t - beat_times[k]) / span if span > 0 else 0.0
+            beats_done = k + beat_phase[i]
+        bar_phase[i] = (beats_done / 4.0) % 1.0
+    return np.clip(beat_phase, 0.0, 1.0), np.clip(bar_phase, 0.0, 1.0)
+
+
 def analyze(audio_path: str | Path, fps: int = 24,
-            target_sr: int | None = None) -> Score:
+            target_sr: int | None = None,
+            bands: Sequence[float] = DEFAULT_BANDS,
+            onset_delta: float = DEFAULT_ONSET_DELTA,
+            onset_wait: int = DEFAULT_ONSET_WAIT) -> Score:
     """Analyse ``audio_path`` and return a frame-aligned :class:`Score`.
 
     Parameters
@@ -84,7 +123,11 @@ def analyze(audio_path: str | Path, fps: int = 24,
     fps : target video framerate; the analysis hop is ``round(sr / fps)``.
     target_sr : optional resample rate. Pick one that divides evenly by ``fps``
         (e.g. 48000 for 24 fps) to eliminate hop rounding drift entirely.
+    bands : (low_hz, high_hz) band-split edges for the low/mid/high features.
+    onset_delta, onset_wait : onset peak-picking strictness (see recipe
+        ``analysis`` block).
     """
+    low_hz, high_hz = float(bands[0]), float(bands[1])
     y, sr = librosa.load(str(audio_path), sr=target_sr, mono=True)
     duration = float(len(y) / sr)
     hop = int(round(sr / fps))
@@ -97,13 +140,55 @@ def analyze(audio_path: str | Path, fps: int = 24,
     rms = _normalise(librosa.feature.rms(S=S)[0])
     centroid = librosa.feature.spectral_centroid(S=S, sr=sr)[0]
 
-    low_mask = freqs < LOW_HZ
-    high_mask = freqs > HIGH_HZ
+    low_mask = freqs < low_hz
+    high_mask = freqs > high_hz
     mid_mask = ~low_mask & ~high_mask
     band_low = S[low_mask].sum(0)
     band_mid = S[mid_mask].sum(0)
     band_high = S[high_mask].sum(0)
     band_tot = band_low + band_mid + band_high + 1e-9
+
+    # Spectral flux (onset envelope), the continuous "business" signal.
+    onset_env = librosa.onset.onset_strength(S=S, sr=sr, hop_length=hop)
+    flux = _normalise(onset_env)
+    if len(flux) < n:
+        flux = np.pad(flux, (0, n - len(flux)))
+
+    # Tempo + beats.
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
+    tempo_bpm = float(np.atleast_1d(tempo)[0])
+    beat_times = librosa.frames_to_time(beat_frames, sr=sr, hop_length=hop)
+    beat_strength = _normalise(onset_env[beat_frames]) if len(beat_frames) else np.array([])
+    beats = [Event(t=round(float(t), 3), mag=round(float(s), 3))
+             for t, s in zip(beat_times, beat_strength)]
+
+    frame_times = librosa.frames_to_time(np.arange(n), sr=sr, hop_length=hop)
+    beat_phase, bar_phase = _beat_phases(np.asarray(beat_times), frame_times,
+                                         tempo_bpm)
+
+    # HPSS: percussive component for onsets; the split also yields the
+    # harmonic ratio (pads vs percussion -> soft vs sharp visuals).
+    try:
+        S_harm, S_perc = librosa.decompose.hpss(S)
+    except Exception:
+        S_harm, S_perc = S * 0.5, S
+    h_sum = S_harm.sum(0)
+    p_sum = S_perc.sum(0)
+    harmonic_ratio = h_sum / (h_sum + p_sum + 1e-9)
+
+    # Chroma (pitch content). CQT chroma is best but needs enough samples;
+    # fall back to STFT chroma on tiny inputs.
+    try:
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop)
+    except Exception:
+        chroma = librosa.feature.chroma_stft(S=S ** 2, sr=sr)
+    if chroma.shape[1] < n:
+        chroma = np.pad(chroma, ((0, 0), (0, n - chroma.shape[1])))
+    chroma = chroma[:, :n]
+    peaks = chroma.max(axis=0)
+    chroma_n = chroma / np.where(peaks > 1e-12, peaks, 1.0)[None, :]
+    chroma_arg = chroma.argmax(axis=0)
+
     frames = [
         FrameData(
             rms=round(float(rms[i]), 4),
@@ -111,29 +196,20 @@ def analyze(audio_path: str | Path, fps: int = 24,
             bands=[round(float(band_low[i] / band_tot[i]), 4),
                    round(float(band_mid[i] / band_tot[i]), 4),
                    round(float(band_high[i] / band_tot[i]), 4)],
+            chroma=[round(float(c), 3) for c in chroma_n[:, i]],
+            chroma_argmax=int(chroma_arg[i]),
+            flux=round(float(flux[i]), 4),
+            beat_phase=round(float(beat_phase[i]), 4),
+            bar_phase=round(float(bar_phase[i]), 4),
+            harmonic_ratio=round(float(harmonic_ratio[i]), 4),
         )
         for i in range(n)
     ]
 
-    # Tempo + beats.
-    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
-    tempo_bpm = float(np.atleast_1d(tempo)[0])
-    onset_env = librosa.onset.onset_strength(S=S, sr=sr, hop_length=hop)
-    beat_times = librosa.frames_to_time(beat_frames, sr=sr, hop_length=hop)
-    beat_strength = _normalise(onset_env[beat_frames]) if len(beat_frames) else np.array([])
-    beats = [Event(t=round(float(t), 3), mag=round(float(s), 3))
-             for t, s in zip(beat_times, beat_strength)]
-
-    # HPSS: detect hits on the percussive component only, so pads/sustained
-    # tones don't masquerade as onsets (each onset spawns a visual source).
-    try:
-        S_perc = librosa.decompose.hpss(S)[1]
-    except Exception:
-        S_perc = S
     onsets = {
-        "low": _band_onsets(S_perc[low_mask], sr, hop),
-        "mid": _band_onsets(S_perc[mid_mask], sr, hop),
-        "high": _band_onsets(S_perc[high_mask], sr, hop),
+        "low": _band_onsets(S_perc[low_mask], sr, hop, onset_delta, onset_wait),
+        "mid": _band_onsets(S_perc[mid_mask], sr, hop, onset_delta, onset_wait),
+        "high": _band_onsets(S_perc[high_mask], sr, hop, onset_delta, onset_wait),
     }
 
     # Structural sections via agglomerative clustering on chroma+mfcc.
@@ -147,6 +223,7 @@ def analyze(audio_path: str | Path, fps: int = 24,
         onsets=onsets,
         frames=frames,
         sections=sections,
+        version=SCORE_VERSION,
     )
 
 

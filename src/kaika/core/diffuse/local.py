@@ -30,22 +30,22 @@ class _FlowTexture:
     filament detail that moves exactly with the fluid.
     """
 
-    def __init__(self, size: int, seed: int):
+    def __init__(self, shape_hw: tuple, seed: int):
         self.rng = np.random.default_rng(seed)
-        self.size = size
-        self.tex = self.rng.random((size, size), dtype=np.float32)
-        ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
+        self.h, self.w = int(shape_hw[0]), int(shape_hw[1])
+        self.tex = self.rng.random((self.h, self.w), dtype=np.float32)
+        ys, xs = np.mgrid[0:self.h, 0:self.w].astype(np.float32)
         self.xs, self.ys = xs, ys
 
     def step(self, vel: Optional[np.ndarray]) -> np.ndarray:
         if vel is not None:
-            u = cv2.resize(vel[..., 0], (self.size, self.size))
-            v = cv2.resize(vel[..., 1], (self.size, self.size))
+            u = cv2.resize(vel[..., 0], (self.w, self.h))
+            v = cv2.resize(vel[..., 1], (self.w, self.h))
             mx = self.xs - FLOW_TEX_STEP * u
             my = self.ys - FLOW_TEX_STEP * v
             self.tex = cv2.remap(self.tex, mx, my, cv2.INTER_LINEAR,
                                  borderMode=cv2.BORDER_WRAP)
-        fresh = self.rng.random((self.size, self.size), dtype=np.float32)
+        fresh = self.rng.random((self.h, self.w), dtype=np.float32)
         self.tex = (1 - FLOW_TEX_REFRESH) * self.tex + FLOW_TEX_REFRESH * fresh
         return self.tex
 
@@ -97,7 +97,7 @@ class LocalStylizer(Diffuser):
             if depth_dir is not None and (depth_dir / fp.name).exists():
                 depth = imageio.imread(depth_dir / fp.name)
             if flow_tex is None:
-                flow_tex = _FlowTexture(fluid.shape[0], req.recipe.seed)
+                flow_tex = _FlowTexture(fluid.shape[:2], req.recipe.seed)
             vp = velocity_dir / (fp.stem + ".npy")
             tex = flow_tex.step(np.load(vp) if vp.exists() else None)
             out = self._stylize(fluid, depth, strength, tex)
