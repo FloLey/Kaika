@@ -21,6 +21,13 @@ function label(name: string, ui: any): string {
   return name.replace(/_/g, " ").replace(/\bs\b$/, "(s)");
 }
 
+/** Hoverable ⓘ describing what a parameter does (text comes from the schema's
+ * ui.help annotation — one source of truth with the chat copilot). */
+function Help({ ui }: { ui: any }) {
+  if (!ui?.help) return null;
+  return <span className="help" title={ui.help}>?</span>;
+}
+
 function NumberRow({ name, schema, value, path, ctx }:
   { name: string; schema: any; value: any; path: string; ctx: FormCtx }) {
   const ui = schema.ui || {};
@@ -31,9 +38,10 @@ function NumberRow({ name, schema, value, path, ctx }:
   const isMod = ctx.modulated.has(path);
   const pinned = ctx.pins.has(path);
   return (
-    <div className="slider-row" title={path}>
-      <label className="field">
-        {label(name, ui)}
+    <div className="slider-row">
+      <label className="field frow">
+        <span className="fname">{label(name, ui)}</span>
+        <Help ui={ui} />
         {isMod && <span className="mod-badge" title="audio-driven by a modulator">~</span>}
         <span className="val">{schema.type === "integer" ? v : (+v).toFixed(3).replace(/\.?0+$/, "")}</span>
         <button className={`pin ${pinned ? "on" : ""}`} title="pin to session controls"
@@ -49,8 +57,11 @@ function NumberRow({ name, schema, value, path, ctx }:
 function EnumRow({ name, schema, value, path, ctx }:
   { name: string; schema: any; value: any; path: string; ctx: FormCtx }) {
   return (
-    <div className="enum-row" title={path}>
-      <label className="field">{label(name, schema.ui)}</label>
+    <div className="enum-row">
+      <label className="field frow">
+        <span className="fname">{label(name, schema.ui)}</span>
+        <Help ui={schema.ui} />
+      </label>
       <select value={value ?? schema.default ?? schema.enum[0]}
         onChange={(e) => ctx.onSet(path, e.target.value)}>
         {schema.enum.map((o: string) => <option key={o} value={o}>{o}</option>)}
@@ -63,19 +74,19 @@ function StringRow({ name, schema, value, path, ctx }:
   { name: string; schema: any; value: any; path: string; ctx: FormCtx }) {
   const v = value ?? schema.default ?? "";
   const isColor = schema.ui?.widget === "color" || /^#[0-9a-fA-F]{6}$/.test(v);
-  if (isColor) {
-    return (
-      <div className="enum-row" title={path}>
-        <label className="field">{label(name, schema.ui)}</label>
+  return (
+    <div className="enum-row">
+      <label className="field frow">
+        <span className="fname">{label(name, schema.ui)}</span>
+        <Help ui={schema.ui} />
+      </label>
+      {isColor ? (
         <input type="color" value={v || "#888888"}
           onChange={(e) => ctx.onSet(path, e.target.value)} />
-      </div>
-    );
-  }
-  return (
-    <div className="enum-row" title={path}>
-      <label className="field">{label(name, schema.ui)}</label>
-      <input type="text" value={v} onChange={(e) => ctx.onSet(path, e.target.value)} />
+      ) : (
+        <input type="text" value={v}
+          onChange={(e) => ctx.onSet(path, e.target.value)} />
+      )}
     </div>
   );
 }
@@ -83,20 +94,24 @@ function StringRow({ name, schema, value, path, ctx }:
 function BoolRow({ name, schema, value, path, ctx }:
   { name: string; schema: any; value: any; path: string; ctx: FormCtx }) {
   return (
-    <label className="check" title={path}>
+    <label className="check">
       <input type="checkbox" checked={value ?? schema.default ?? false}
         onChange={(e) => ctx.onSet(path, e.target.checked)} />
       {label(name, schema.ui)}
+      <Help ui={schema.ui} />
     </label>
   );
 }
 
-function NumListRow({ name, value, path, ctx, dflt }:
-  { name: string; value: any; path: string; ctx: FormCtx; dflt: any[] }) {
+function NumListRow({ name, value, path, ctx, dflt, ui }:
+  { name: string; value: any; path: string; ctx: FormCtx; dflt: any[]; ui?: any }) {
   const v: any[] = Array.isArray(value) ? value : dflt;
   return (
-    <div className="numlist-row" title={path}>
-      <label className="field">{label(name, null)}</label>
+    <div className="numlist-row">
+      <label className="field frow">
+        <span className="fname">{label(name, ui)}</span>
+        <Help ui={ui} />
+      </label>
       <div className="numlist">
         {v.map((x, i) => (
           <input key={i} type="number" step={0.01} value={Array.isArray(x) ? "" : x}
@@ -206,7 +221,7 @@ export function SchemaSection({ schema, value, basePath, tier, ctx, skip = [] }:
     else if (sub.type === "array" && Array.isArray(sub.default ?? v)
              && (sub.default ?? v)?.every?.((x: any) => typeof x === "number"))
       rows.push(<NumListRow key={path} name={name} value={v} path={path} ctx={ctx}
-        dflt={sub.default ?? v ?? []} />);
+        dflt={sub.default ?? v ?? []} ui={sub.ui} />);
   }
   // prune empty groups
   const visible = rows.filter((r) => !(r.props?.className === "schema-group"

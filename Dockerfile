@@ -27,6 +27,14 @@ COPY recipes recipes
 COPY --from=web /build/src/kaika/webapp_dist src/kaika/webapp_dist
 RUN pip install --no-cache-dir .
 
+# GPU by default: CuPy installs fine without a GPU and the engine falls back
+# to CPU at runtime when CUDA isn't reachable. Build with --build-arg GPU=0
+# for a slimmer CPU-only image, or GPU_WHEEL=cupy-cuda11x for CUDA 11 hosts.
+ARG GPU=1
+ARG GPU_WHEEL=cupy-cuda12x
+RUN if [ "$GPU" = "1" ]; then pip install --no-cache-dir "$GPU_WHEEL"; fi
+ENV KAIKA_GPU=1
+
 # Runs land in /data/runs; uploads + settings (LLM keys) in /data/.kaika.
 VOLUME /data
 EXPOSE 8400

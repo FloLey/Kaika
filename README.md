@@ -36,6 +36,21 @@ docker run -p 8400:8400 -v "$(pwd)/data:/data" kaika
 Open <http://localhost:8400>. Runs, uploads and settings persist under
 `./data` (`data/runs`, `data/.kaika`).
 
+### GPU acceleration (optional, NVIDIA)
+
+The solver can run its field math on CUDA via CuPy — worthwhile at high
+resolutions (the CPU path is already real-time at draft sizes):
+
+```bash
+pip install cupy-cuda12x        # match your CUDA version (cupy-cuda11x for 11)
+KAIKA_GPU=1 kaika serve
+```
+
+Falls back to CPU automatically (with a visible warning in the run manifest)
+when CuPy/CUDA is unavailable. GPU output is deterministic per machine but not
+bit-identical to the CPU path. In Docker, run with `--gpus all` and add
+`cupy-cuda12x` to the image.
+
 ### What you still need to configure
 
 Everything works out of the box **except** two optional integrations:

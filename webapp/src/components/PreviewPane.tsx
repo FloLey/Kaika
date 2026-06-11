@@ -37,14 +37,17 @@ export default function PreviewPane({ runId, jobId, version, aspect,
     return () => { ws.close(); window.clearInterval(t); };
   }, [jobId, runId]);
 
+  // a fresh preview landed: mount the video, then (re)load it once mounted
+  useEffect(() => {
+    if (version > 0) setHasVideo(true);
+  }, [version]);
   useEffect(() => {
     const v = videoRef.current;
-    if (v && version > 0) {
-      setHasVideo(true);
+    if (v && hasVideo) {
       v.load();
       v.play().catch(() => {});
     }
-  }, [version]);
+  }, [version, hasVideo]);
 
   return (
     <div className="card preview-pane">

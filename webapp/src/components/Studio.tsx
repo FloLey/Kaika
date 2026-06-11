@@ -64,6 +64,11 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     }
   }, [initialRunId]);
 
+  // first preview as soon as a project is open — never an empty pane
+  useEffect(() => {
+    if (runId) kickPreview(runId);
+  }, [runId]);                                          // eslint-disable-line
+
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -77,13 +82,18 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   }, [playing]);
 
   // ---- the live loop: save (debounced) then re-render the window ----------
-  const kickPreview = useCallback(async (rid: string) => {
+  const kickTimer = useRef<number | undefined>(undefined);
+  const kickPreview = useCallback((rid: string) => {
     if (!livePreview) return;
-    const t0 = Math.max(0, playheadRef.current - 1);
-    try {
-      const { job_id } = await api.previewWindow(rid, t0, t0 + WINDOW_S, true);
-      setPreviewJob(job_id);
-    } catch (e: any) { setErr(String(e.message || e)); }
+    // debounced: scrubbing/seeking must not flood the job queue
+    window.clearTimeout(kickTimer.current);
+    kickTimer.current = window.setTimeout(async () => {
+      const t0 = Math.max(0, playheadRef.current - 1);
+      try {
+        const { job_id } = await api.previewWindow(rid, t0, t0 + WINDOW_S, true);
+        setPreviewJob(job_id);
+      } catch (e: any) { setErr(String(e.message || e)); }
+    }, 400);
   }, [livePreview]);
 
   const scheduleSave = useCallback((next: ProjectDoc) => {

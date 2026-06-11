@@ -50,8 +50,11 @@ UI: dict = {
                                "step": 0.05},
     "render.bloom.sigma": {"tier": "advanced", "min": 0.0, "max": 32.0,
                            "step": 0.5},
-    "render.background": {"tier": "advanced", "min": 0.0, "max": 0.3,
-                          "step": 0.01},
+    "render.background": {"tier": "primary", "min": 0.0, "max": 0.3,
+                          "step": 0.01, "label": "Background level"},
+    "render.background_color.type": {"tier": "primary"},
+    "render.background_smooth_s": {"tier": "advanced", "min": 0.0, "max": 8.0,
+                                   "step": 0.25},
     "render.gamma": {"tier": "advanced", "min": 0.8, "max": 2.0, "step": 0.05},
     # emitter body
     "emitters.*.count": {"tier": "primary", "min": 1, "max": 16, "step": 1},
@@ -100,6 +103,146 @@ UI: dict = {
                            "step": 0.05, "label": "Denoise strength"},
 }
 
+# Plain-language help per field, shown as hover tooltips in the inspector and
+# embedded in the chat copilot's schema context. Wildcards as in UI.
+HELP: dict = {
+    "seed": "Same seed = identical video. Change it to reshuffle randomness.",
+    "canvas.width": "Output video width in pixels.",
+    "canvas.height": "Output video height in pixels.",
+    "canvas.fps": "Video framerate; analysis is locked to it frame-for-frame.",
+    "canvas.sim_resolution": "Simulation cells on the SHORT side. Higher = "
+        "finer fluid detail but slower previews.",
+    "field.dissipation": "How much dye survives each frame. Lower = trails "
+        "clear faster; higher = colour lingers.",
+    "field.velocity_dissipation": "How much motion survives each frame. "
+        "Lower = the fluid calms down faster.",
+    "field.viscosity": "Thickness of the fluid; smooths and slows the motion.",
+    "field.vorticity": "Swirl reinforcement. Higher = curlier, more turbulent "
+        "(by default RMS drives this via a modulator).",
+    "field.vorticity_gain": "Internal scale of the swirl force — small "
+        "changes have big effects (advanced).",
+    "field.force_gain": "How strongly emitter impulses push the fluid "
+        "(advanced).",
+    "field.density_clamp": "Ceiling on accumulated dye brightness (HDR).",
+    "field.ambient.strength": "Continuous background stirring so the fluid "
+        "is always alive (by default RMS drives this).",
+    "field.ambient.scale": "Spatial size of the ambient swirls — higher = "
+        "smaller, busier swirls.",
+    "field.ambient.speed": "How fast the ambient stirring pattern evolves.",
+    "render.exposure": "Overall brightness of the tone-mapped image.",
+    "render.bloom.amount": "Glow added around bright areas.",
+    "render.bloom.threshold": "Brightness above which bloom kicks in.",
+    "render.bloom.sigma": "Blur radius of the glow. 0 = automatic.",
+    "render.background": "Background tint intensity (0 = pure black). "
+        "Modulate it with rms to make the field breathe with the music.",
+    "render.background_color.type": "What colors the background: fixed hex, "
+        "a palette entry, pitch -> hue wheel (chroma_hue), pitch -> palette "
+        "(chroma_palette), or brightness ramp by spectral centroid "
+        "(centroid_ramp).",
+    "render.background_smooth_s": "How slowly the background color drifts "
+        "toward its target (seconds) — keeps the wash gentle, not strobing.",
+    "render.gamma": "Contrast curve of the final image.",
+    "diffusion.strength": "How strongly the diffusion model restyles the "
+        "fluid: low = faithful to the motion, high = freer reinterpretation.",
+    "post.grain": "Film grain on the final clip (fuses diffusion artefacts).",
+    "post.vignette": "Darkened corners on the final clip.",
+    # emitters
+    "emitters.*.count": "Sources spawned per trigger event (e.g. 3 = three "
+        "simultaneous jets).",
+    "emitters.*.enabled": "Untick to silence this emitter entirely.",
+    "emitters.*.trigger.type": "What fires it: onset = a detected hit, beat "
+        "= the metronome grid, continuous = steady cadence, lookahead = "
+        "ramps up before a section, manual = only from the timeline.",
+    "emitters.*.trigger.band": "Which band's onsets: low = kicks, mid = "
+        "melody, high = hats.",
+    "emitters.*.trigger.min_mag": "Ignore hits weaker than this (0–1).",
+    "emitters.*.trigger.max_per_frame": "Cap of hits per frame (0 = no cap).",
+    "emitters.*.trigger.every": "Beat divider: 1 = every beat, 4 = once a bar.",
+    "emitters.*.trigger.offset": "Shifts which beat counts as the first.",
+    "emitters.*.trigger.every_frames": "Cadence in frames for continuous / "
+        "lookahead triggers.",
+    "emitters.*.trigger.when": "Condition for continuous triggers, e.g. "
+        "\"rms > 0.5\".",
+    "emitters.*.trigger.mag_source": "Continuous triggers: spawn strength "
+        "follows this signal (e.g. 'voice' = sustained vocal presence); "
+        "min_mag gates weak frames out.",
+    "emitters.*.trigger.section": "Section label this trigger targets "
+        "(lookahead) or filters on (continuous).",
+    "emitters.*.trigger.window_s": "Seconds before the section start during "
+        "which the lookahead ramps up.",
+    "emitters.*.placement.type": "Where sources appear: fixed points, random "
+        "region, wandering anchor, line, circle, grid, or position driven by "
+        "an audio signal.",
+    "emitters.*.placement.jitter": "Random spread around the computed spot.",
+    "emitters.*.placement.wander_amp": "How far the anchor orbits its center.",
+    "emitters.*.placement.wander_freq": "How fast the anchor orbits.",
+    "emitters.*.placement.radius": "Circle radius (fraction of the canvas).",
+    "emitters.*.placement.arc_deg": "Arc of the circle (360 = full ring).",
+    "emitters.*.placement.rows": "Grid rows.",
+    "emitters.*.placement.cols": "Grid columns.",
+    "emitters.*.placement.source": "Audio signal that drives the position "
+        "(e.g. chroma_argmax = pitch).",
+    "emitters.*.placement.range": "Position range the signal maps into (0–1).",
+    "emitters.*.placement.x": "Fixed horizontal position for signal_y.",
+    "emitters.*.placement.y": "Fixed vertical position for signal_x.",
+    "emitters.*.placement.points": "Explicit positions (0–1); a line uses "
+        "the first two as its endpoints.",
+    "emitters.*.placement.region": "Rectangle [x0, y0, x1, y1] for random "
+        "placement.",
+    "emitters.*.placement.center": "Reference center (0–1 per axis).",
+    "emitters.*.direction.type": "Initial heading of the jet: radial_out = "
+        "away from the center, flow = follow the current, fixed = angle_deg.",
+    "emitters.*.direction.angle_deg": "Fixed heading in degrees (0 = right, "
+        "90 = down).",
+    "emitters.*.direction.jitter": "Randomness on the heading (radians).",
+    "emitters.*.color.type": "How the colour is picked: palette index, "
+        "cycling, random, pitch → hue wheel, pitch → palette, brightness "
+        "ramp by spectral centroid, or a fixed hex.",
+    "emitters.*.color.hex": "Fixed colour (used when type = fixed).",
+    "emitters.*.color.palette": "Which named palette to draw from.",
+    "emitters.*.color.index": "Palette entry (type = palette).",
+    "emitters.*.color.start": "First palette index the cycle uses.",
+    "emitters.*.color.hue_offset": "Rotates the pitch → hue wheel (degrees).",
+    "emitters.*.color.saturation": "HSV saturation for chroma_hue.",
+    "emitters.*.color.value": "HSV brightness for chroma_hue.",
+    "emitters.*.color.dark": "Colour at a dark/low spectral centroid.",
+    "emitters.*.color.bright": "Colour at a bright/high spectral centroid.",
+    "emitters.*.color.min_hold_s": "How long a new pitch must persist before "
+        "the colour switches (anti-flicker).",
+    "emitters.*.color.opacity": "Multiplies the colour's intensity.",
+    "emitters.*.color.brightness.source": "What drives brightness: fixed "
+        "value, spectral centroid, or loudness.",
+    "emitters.*.color.brightness.value": "Brightness multiplier (fixed).",
+    "emitters.*.color.brightness.range": "Brightness range the signal maps "
+        "into.",
+    "emitters.*.body.radius": "Size of the source (fraction of the short "
+        "side).",
+    "emitters.*.body.force": "Initial impulse strength — how hard it kicks "
+        "the fluid.",
+    "emitters.*.body.lifetime_s": "How long the source lives and emits.",
+    "emitters.*.body.emit": "Dye amount it releases while alive.",
+    "emitters.*.body.drift": "How strongly the flow carries the source.",
+    "emitters.*.body.speed": "Self-propulsion along its heading.",
+    "emitters.*.body.jet_fraction": "Ongoing push along the heading, as a "
+        "fraction of the initial impulse.",
+    "emitters.*.body.decay": "Emission envelope: higher = more front-loaded, "
+        "punchier.",
+    "emitters.*.body.expand": "How much its radius grows over its lifetime.",
+    "emitters.*.body.mag_gain": "How much the hit's strength scales this "
+        "spawn (0 = ignore magnitude).",
+    # modulators
+    "modulators.*.source": "The audio signal that drives the target.",
+    "modulators.*.target": "Dot-path of the parameter being driven "
+        "(field.* / render.* / emitters.<id>.*).",
+    "modulators.*.range": "Signal 0 maps to the first value, signal 1 to the "
+        "second.",
+    "modulators.*.mode": "absolute = the signal owns the target; add / scale "
+        "= move around the segment's base value.",
+    "modulators.*.curve": "Shaping: linear, pow(k), smoothstep, step(t).",
+    "modulators.*.smooth_s": "Low-pass on the signal (seconds) — smooths "
+        "jittery response.",
+}
+
 # Enum constraints surfaced into the schema.
 ENUMS: dict = {
     "emitters.*.trigger.type": list(R.TRIGGER_TYPES),
@@ -110,32 +253,37 @@ ENUMS: dict = {
     "emitters.*.color.brightness.source": ["fixed", "centroid", "rms"],
     "modulators.*.mode": list(R.MOD_MODES),
     "modulators.*.source": list(R.SIGNALS),
+    "emitters.*.trigger.mag_source": [""] + list(R.SIGNALS),
+    "emitters.*.placement.source": list(R.SIGNALS),
+    "render.background_color.type": list(R.COLOR_TYPES),
+    "render.background_color.brightness.source": ["fixed", "centroid", "rms"],
     "modulators.*.apply_to": ["spawn"],          # "live" reserved, rejected
     "diffusion.backend": ["local", "comfyui"],
 }
 
 
-def _ui_for(path: str) -> dict:
+def _wild_lookup(table: dict, path: str):
     """Look up an annotation, treating list indices / emitter ids as '*'."""
-    if path in UI:
-        return dict(UI[path])
+    if path in table:
+        return table[path]
     parts = path.split(".")
     for i in range(1, len(parts)):
         wp = ".".join(parts[:i] + ["*"] + parts[i + 1:])
-        if wp in UI:
-            return dict(UI[wp])
-    return {}
+        if wp in table:
+            return table[wp]
+    return None
+
+
+def _ui_for(path: str) -> dict:
+    ui = dict(_wild_lookup(UI, path) or {})
+    help_ = _wild_lookup(HELP, path)
+    if help_:
+        ui["help"] = help_
+    return ui
 
 
 def _enum_for(path: str):
-    if path in ENUMS:
-        return ENUMS[path]
-    parts = path.split(".")
-    for i in range(1, len(parts)):
-        wp = ".".join(parts[:i] + ["*"] + parts[i + 1:])
-        if wp in ENUMS:
-            return ENUMS[wp]
-    return None
+    return _wild_lookup(ENUMS, path)
 
 
 def _field_schema(ftype, default, path: str) -> dict:

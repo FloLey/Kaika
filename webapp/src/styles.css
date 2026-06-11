@@ -279,3 +279,79 @@ details.emitter-card > summary { display: flex; align-items: center; gap: 6px;
   display: flex; align-items: center; justify-content: center; z-index: 50; }
 .modal { width: 420px; max-width: calc(100vw - 40px); }
 .ok { color: var(--courant); font-size: 12px; margin-left: 6px; }
+
+/* ===================== v2.1 polish: inspector layout + help ===================== */
+/* wider shell for the three-pane studio only */
+.app:has(.studio3) { max-width: 1500px; }
+
+/* nothing inside the inspector may overflow its column */
+.insp-body { overflow-x: hidden; }
+.insp-body input, .insp-body select, .insp-body textarea {
+  min-width: 0; max-width: 100%; }
+
+/* 7 tabs -> tidy 4-column grid instead of one cramped row */
+.insp-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.insp-tabs button { font-size: 10.5px; padding: 6px 2px; letter-spacing: .04em; }
+
+/* one consistent field-row anatomy: name … help ~ value pin */
+.field.frow { display: flex; align-items: center; gap: 5px; min-width: 0;
+  margin: 0; }
+.field.frow .fname { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0; }
+.field.frow .val { margin-left: auto; flex: none; }
+.field.frow .pin { flex: none; }
+.field.frow .mod-badge { flex: none; }
+.slider-row { margin-bottom: 6px; }
+
+/* enum/string rows: label left, control right, fixed proportions */
+.enum-row { display: flex; align-items: center; gap: 8px; margin: 6px 0;
+  min-width: 0; }
+.enum-row .field.frow { flex: 1 1 45%; }
+.enum-row select, .enum-row input[type="text"] { flex: 1 1 55%; width: 0;
+  font-size: 12.5px; padding: 6px 8px; }
+.enum-row input[type="color"] { flex: none; width: 34px; height: 28px;
+  padding: 2px; }
+
+/* number lists (points, ranges, regions) wrap instead of overflowing */
+.numlist-row { display: flex; align-items: center; gap: 8px; margin: 6px 0;
+  min-width: 0; flex-wrap: wrap; }
+.numlist-row .field.frow { flex: 1 0 40%; }
+.numlist { display: flex; gap: 4px; flex-wrap: wrap; }
+.numlist input { width: 54px; font-size: 12px; padding: 5px 6px; }
+
+/* the hoverable "what does this do?" icon */
+.help { display: inline-flex; align-items: center; justify-content: center;
+  width: 13px; height: 13px; flex: none; border-radius: 50%;
+  border: 1px solid var(--voile); color: var(--brume); font-size: 9px;
+  font-weight: 700; cursor: help; line-height: 1; user-select: none; }
+.help:hover { border-color: var(--courant); color: var(--courant); }
+
+/* modulator rows: two clean lines instead of an overflowing one */
+.mod-row { display: grid; grid-template-columns: 1fr 14px 1.3fr;
+  grid-template-areas: "src arrow tgt" "nums nums del"; gap: 5px 6px;
+  align-items: center; border-bottom: 1px dashed var(--voile);
+  padding: 7px 0; margin: 0; }
+.mod-row > select:nth-of-type(1) { grid-area: src; max-width: none; }
+.mod-row > .muted { grid-area: arrow; text-align: center; }
+.mod-row > select:nth-of-type(2) { grid-area: tgt; max-width: none; }
+.mod-row > input[type="number"], .mod-row > select:nth-of-type(3) {
+  grid-area: nums; }
+.mod-row > input[type="number"]:nth-of-type(1) { margin-right: 62px; }
+.mod-nums { grid-area: nums; display: flex; gap: 6px; align-items: center; }
+.mod-nums input[type="number"] { width: 64px; font-size: 12px; }
+.mod-nums select { font-size: 12px; width: auto; }
+.mod-row > button { grid-area: del; justify-self: end; }
+
+/* timeline rows */
+.tl-row { border-bottom: 1px dashed var(--voile); padding: 6px 0; margin: 0;
+  min-width: 0; }
+.tl-row input { min-width: 0; }
+
+/* emitter cards: header that wraps cleanly */
+details.emitter-card > summary { flex-wrap: wrap; row-gap: 4px; }
+details.emitter-card > summary .btn.slim { padding: 3px 8px; font-size: 11px; }
+.em-grid { grid-template-columns: 1fr; }
+
+/* pinned strip + chat input never overflow */
+.pin-strip { min-width: 0; }
+.pin-ctl { min-width: 150px; max-width: 240px; }

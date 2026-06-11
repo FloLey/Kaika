@@ -129,14 +129,6 @@ class Bloom:
     sigma: float = 0.0              # 0 = auto (resolution / 48)
 
 
-@dataclass
-class RenderConfig:
-    exposure: float = 1.9
-    bloom: Bloom = field(default_factory=Bloom)
-    background: float = 0.04
-    gamma: float = 1.15
-
-
 # ---------------------------------------------------------------------------
 # Emitters
 # ---------------------------------------------------------------------------
@@ -149,7 +141,7 @@ COLOR_TYPES = ("fixed", "palette", "palette_cycle", "palette_random",
                "chroma_hue", "chroma_palette", "centroid_ramp")
 SIGNALS = ("rms", "centroid", "flux", "beat_phase", "bar_phase",
            "harmonic_ratio", "chroma_argmax", "band.low", "band.mid",
-           "band.high", "section.energy")
+           "band.high", "section.energy", "voice")
 MOD_MODES = ("absolute", "add", "scale")
 MOD_CURVES = ("linear", "smoothstep")       # plus pow(k) / step(t), parsed
 
@@ -164,6 +156,9 @@ class Trigger:
     offset: int = 0                 # beat index offset
     every_frames: int = 3           # continuous / lookahead cadence
     when: str = ""                  # continuous condition, e.g. "rms > 0.5"
+    mag_source: str = ""            # continuous: spawn magnitude follows this
+                                    # signal (sustained content breathes);
+                                    # min_mag gates weak frames out
     section: str = "drop"           # lookahead target / continuous filter
     window_s: float = 8.0           # lookahead window
 
@@ -230,6 +225,22 @@ class Body:
     decay: float = 1.3              # was SOURCE_DECAY
     expand: float = 0.8             # was SOURCE_EXPAND
     mag_gain: float = 1.0
+
+
+@dataclass
+class RenderConfig:
+    exposure: float = 1.9
+    bloom: Bloom = field(default_factory=Bloom)
+    background: float = 0.04        # tint intensity (0 = pure black)
+    # The background is a full audio-drivable color, not just a grey level:
+    # any emitter color type works (fixed / palette / chroma_hue /
+    # chroma_palette / centroid_ramp), smoothed so the wash evolves gently.
+    # Vivid endpoints: the visible tint is background * color, so at level
+    # ~0.08 these read as a deep blue <-> warm plum wash, never grey-black.
+    background_color: ColorSpec = field(default_factory=lambda: ColorSpec(
+        type="centroid_ramp", dark="#3350A0", bright="#A05A72"))
+    background_smooth_s: float = 1.5
+    gamma: float = 1.15
 
 
 @dataclass
@@ -307,6 +318,18 @@ def _default_emitters() -> List[Emitter]:
                 color=ColorSpec(type="chroma_palette", palette="main"),
                 body=Body(radius=0.05, force=4000.0, lifetime_s=0.6, emit=0.13,
                           drift=0.5, speed=1.8)),
+        # Sustained content (vocals, pads) is harmonic — onsets never fire on
+        # it. This emitter paints continuously, magnitude following the
+        # "voice" signal (harmonic mid-band energy), position following pitch.
+        Emitter(id="voice",
+                trigger=Trigger(type="continuous", every_frames=4,
+                                mag_source="voice", min_mag=0.25, section=""),
+                placement=Placement(type="signal_x", source="chroma_argmax",
+                                    range=[0.15, 0.85], y=0.6, jitter=0.04),
+                direction=Direction(type="flow", jitter=0.4),
+                color=ColorSpec(type="chroma_palette", palette="main"),
+                body=Body(radius=0.07, force=1500.0, lifetime_s=1.0, emit=0.14,
+                          drift=0.9, speed=0.5)),
         Emitter(id="tension",
                 trigger=Trigger(type="lookahead", section="drop", window_s=8.0,
                                 every_frames=3),
@@ -321,12 +344,15 @@ def _default_emitters() -> List[Emitter]:
 
 def _default_modulators() -> List[Modulator]:
     """The v1 hardwired couplings, now visible: RMS drives vorticity and the
-    ambient stir (with the old 12% floor expressed as the range bottom)."""
+    ambient stir (with the old 12% floor expressed as the range bottom) —
+    plus the background level breathing with loudness."""
     return [
         Modulator(source="rms", target="field.vorticity", range=[8.0, 38.0],
                   mode="absolute"),
         Modulator(source="rms", target="field.ambient.strength",
                   range=[0.192, 1.6], mode="absolute"),
+        Modulator(source="rms", target="render.background",
+                  range=[0.04, 0.11], mode="absolute", smooth_s=0.4),
     ]
 
 
@@ -673,6 +699,9 @@ def validate(rec: Recipe) -> List[str]:
                         f"'{e.trigger.type}' {TRIGGER_TYPES}")
         if e.trigger.type == "onset" and e.trigger.band not in ("low", "mid", "high"):
             errs.append(f"emitter '{e.id}': trigger.band must be low|mid|high")
+        if e.trigger.mag_source and e.trigger.mag_source not in SIGNALS:
+            errs.append(f"emitter '{e.id}': trigger.mag_source "
+                        f"'{e.trigger.mag_source}' is not a signal {SIGNALS}")
         if e.placement.type not in PLACEMENT_TYPES:
             errs.append(f"emitter '{e.id}': unknown placement type "
                         f"'{e.placement.type}' {PLACEMENT_TYPES}")
@@ -687,6 +716,14 @@ def validate(rec: Recipe) -> List[str]:
             if e.color.palette not in rec.palettes:
                 errs.append(f"emitter '{e.id}': palette '{e.color.palette}' "
                             f"not in palettes {sorted(rec.palettes)}")
+    bc = rec.render.background_color
+    if bc.type not in COLOR_TYPES:
+        errs.append(f"render.background_color: unknown type '{bc.type}' "
+                    f"{COLOR_TYPES}")
+    elif bc.type in ("palette", "palette_cycle", "palette_random",
+                     "chroma_palette") and bc.palette not in rec.palettes:
+        errs.append(f"render.background_color: palette '{bc.palette}' not in "
+                    f"palettes {sorted(rec.palettes)}")
     tree = config_tree(rec)
     for i, m in enumerate(rec.modulators):
         if m.apply_to == "live":
