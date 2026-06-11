@@ -6,7 +6,7 @@ canvas:
   width: 1024
   height: 1024
   fps: 24
-  sim_resolution: 256
+  sim_resolution: 512
 
 palettes:
   main: ["#B84A74", "#34808A", "#E0A458", "#6C4A8C", "#3FA39B", "#D98A5E"]
@@ -19,9 +19,12 @@ field:
 render:
   exposure: 1.9
   bloom: { amount: 0.65, threshold: 0.45 }
-  background: 0.06                  # tint level; an rms modulator breathes it
-  background_color: { type: chroma_palette, palette: main, min_hold_s: 1.5 }
-  background_smooth_s: 2.0
+  background: 0.18                  # tint level; an rms modulator breathes it
+  background_color:                 # spectral balance picks the wash color:
+    type: band_mix                  # bass -> rose, mids -> teal, highs -> amber
+    palette: main
+    brightness: { source: rms, range: [0.6, 1.6] }
+  background_smooth_s: 0.8
 
 emitters:
   - id: kicks
@@ -70,7 +73,7 @@ modulators:
   - { source: rms, target: field.vorticity, mode: absolute, range: [8, 38] }
   - { source: rms, target: field.ambient.strength, mode: absolute, range: [0.19, 1.6] }
   - { source: band.low, target: render.exposure, mode: absolute, range: [1.8, 2.1], smooth_s: 0.3 }
-  - { source: rms, target: render.background, mode: absolute, range: [0.04, 0.12], smooth_s: 0.4 }
+  - { source: rms, target: render.background, mode: absolute, range: [0.08, 0.3], smooth_s: 0.4 }
 
 diffusion:
   model: wan-2.2-vace

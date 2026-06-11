@@ -265,6 +265,19 @@ def test_chroma_hold_window(score):
     assert switches_held <= switches_raw
 
 
+def test_band_mix_follows_band_energy(score):
+    """band_mix blends the first palette colors by band energy: on the
+    bassiest frame the result leans toward the first (low-band) color."""
+    eng = S._ColorEngine({"main": ["#FF0000", "#00FF00", "#0000FF"]}, score,
+                         score.n_frames)
+    rng = np.random.default_rng(0)
+    i = int(np.argmax([f.bands[0] for f in score.frames]))
+    c = eng.resolve({"type": "band_mix", "palette": "main"}, i, 0, rng)
+    w = np.asarray(score.frames[i].bands[:3], np.float64) ** 1.5
+    expect = np.array([w[0], w[1], w[2]]) / w.sum()
+    assert np.allclose(c, expect, atol=1e-5)
+
+
 def test_palette_cycle_is_window_stable(score):
     """Cycle indices come from the precomputed trigger index, so a window
     preview sees the same colors as the full run at the same frame."""

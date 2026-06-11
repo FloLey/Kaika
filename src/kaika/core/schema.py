@@ -137,8 +137,9 @@ HELP: dict = {
         "Modulate it with rms to make the field breathe with the music.",
     "render.background_color.type": "What colors the background: fixed hex, "
         "a palette entry, pitch -> hue wheel (chroma_hue), pitch -> palette "
-        "(chroma_palette), or brightness ramp by spectral centroid "
-        "(centroid_ramp).",
+        "(chroma_palette), brightness ramp by spectral centroid "
+        "(centroid_ramp), or palette colors weighted by low/mid/high band "
+        "energy (band_mix).",
     "render.background_smooth_s": "How slowly the background color drifts "
         "toward its target (seconds) — keeps the wash gentle, not strobing.",
     "render.gamma": "Contrast curve of the final image.",

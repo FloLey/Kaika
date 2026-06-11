@@ -108,23 +108,33 @@ def _tonemap(hdr: np.ndarray, exposure: float, gamma: float) -> np.ndarray:
 
 def _render_frame(density: np.ndarray, render_cfg: dict,
                   bloom_auto_sigma: float,
-                  bg_rgb: Optional[np.ndarray] = None) -> np.ndarray:
+                  bg_rgb: Optional[np.ndarray] = None,
+                  xp=np, nd=None) -> np.ndarray:
     """HDR density -> filmic tone-map + bloom over the background tint ->
     uint8 RGB. ``bg_rgb`` is the (possibly audio-driven) background color;
-    ``render.background`` is its intensity."""
+    ``render.background`` is its intensity.
+
+    Pass ``xp=cupy, nd=cupyx.scipy.ndimage`` with an on-device density to
+    render on the GPU (returns a device array — ``.get()`` it): tone-map +
+    bloom dominate the CPU loop, and the uint8 result transfers 3x lighter
+    than the float32 field."""
     bloom = render_cfg.get("bloom", {})
     ldr = _tonemap(density, float(render_cfg.get("exposure", 1.9)),
                    float(render_cfg.get("gamma", 1.15)))
     amount = float(bloom.get("amount", 0.65))
     if amount > 0:
         sigma = float(bloom.get("sigma", 0.0)) or bloom_auto_sigma
-        bright = np.clip(ldr - float(bloom.get("threshold", 0.45)), 0.0, 1.0)
-        ldr = ldr + amount * cv2.GaussianBlur(bright, (0, 0), sigmaX=sigma)
+        bright = xp.clip(ldr - float(bloom.get("threshold", 0.45)), 0.0, 1.0)
+        if nd is not None:
+            blur = nd.gaussian_filter(bright, sigma=(sigma, sigma, 0.0))
+        else:
+            blur = cv2.GaussianBlur(bright, (0, 0), sigmaX=sigma)
+        ldr = ldr + amount * blur
     bg = float(render_cfg.get("background", 0.04))
-    tint = (bg_rgb if bg_rgb is not None
-            else np.ones(3, np.float32)) * bg
-    out = tint[None, None, :] + (1.0 - bg) * np.clip(ldr, 0.0, 1.0)
-    return (np.clip(out, 0.0, 1.0) * 255).astype(np.uint8)
+    tint = xp.asarray((bg_rgb if bg_rgb is not None
+                       else np.ones(3, np.float32)) * bg, dtype=xp.float32)
+    out = tint[None, None, :] + (1.0 - bg) * xp.clip(ldr, 0.0, 1.0)
+    return (xp.clip(out, 0.0, 1.0) * 255).astype(xp.uint8)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +151,7 @@ def _gpu_modules():
         from cupyx.scipy import ndimage as cnd
         a = cp.zeros((2, 2), dtype=cp.float32)
         float(cnd.map_coordinates(a, cp.zeros((2, 1)), order=1).sum())
+        float(cnd.gaussian_filter(a, sigma=1.0).sum())
         float(cp.fft.fft2(a).real.sum())
         return cp, cnd
     except Exception:
@@ -376,6 +387,15 @@ def _write_png(path: Path, rgb: np.ndarray) -> None:
     and it runs on the writer pool, not the solver thread."""
     cv2.imwrite(str(path), cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
                 [cv2.IMWRITE_PNG_COMPRESSION, 2])
+
+
+# Velocities live in CELL units, so a raw recipe force/strength/speed gets
+# physically weaker as the grid grows (the same impulse crosses fewer canvas
+# fractions per second) — full renders came out inert next to draft previews.
+# Recipe motion parameters are therefore calibrated to the draft grid (the
+# pipeline's 112-cell preview cap, where recipes are tuned by eye) and scaled
+# by sim.short/_CALIB_RES so the flow looks the same at any sim_resolution.
+_CALIB_RES = 112.0
 
 
 def _curl_noise(gx: np.ndarray, gy: np.ndarray, t: float, scale: float):
@@ -851,6 +871,18 @@ class _ColorEngine:
             x = _centroid_x(fr.centroid_hz)
             color = ((1 - x) * _hex_to_rgb(c.get("dark", "#1B2740"))
                      + x * _hex_to_rgb(c.get("bright", "#FFE3B0")))
+        elif typ == "band_mix":
+            # The first palette entries weighted by band energy (low, mid,
+            # high...): the color FOLLOWS the spectral balance, not just the
+            # dominant pitch. ``contrast`` > 1 lets the loudest band dominate.
+            fr = self.score.frames[min(frame_i, len(self.score.frames) - 1)]
+            bands = list(fr.bands) or [fr.rms]
+            k = min(len(bands), len(pal))
+            w = np.asarray(bands[:k], np.float64) ** float(
+                c.get("contrast", 1.5))
+            s = float(w.sum())
+            color = (np.asarray(sum(float(w[i]) * pal[i] for i in range(k)),
+                                np.float32) / s if s > 1e-6 else pal[0])
         else:
             color = pal[0]
 
@@ -1121,7 +1153,10 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     # Writer pool: PNG encode + .npy dumps run off the solver thread. The
     # try/finally guarantees the pool drains even on cancellation (the job
     # queue cancels by raising through the progress callback).
-    writer = ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 2))
+    # PNG encoding is the throughput ceiling at high render sizes (~300 ms a
+    # frame at 1440x2558): give it real parallelism — cv2.imwrite releases
+    # the GIL, so threads scale until the disk saturates.
+    writer = ThreadPoolExecutor(max_workers=min(12, os.cpu_count() or 2))
     pending: List = []
     try:
         for step_i, i in enumerate(range(sim_start, sim_end)):
@@ -1153,7 +1188,7 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
             # modulator; the engine itself has no hidden audio coupling).
             amb = fld.get("ambient", {})
             ua, va = _curl_noise(gx, gy, t_phase, float(amb.get("scale", 2.6)))
-            amp = float(amb.get("strength", 1.6))
+            amp = float(amb.get("strength", 1.6)) * sim.short / _CALIB_RES
             sim.add_force(ua * amp, va * amp)
             t_phase += float(amb.get("speed", 0.16))
 
@@ -1223,11 +1258,18 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                                  bg_state=bg_state)
 
             if i >= render_start:
-                frame = _render_frame(sim.density_cpu(), rnd, bloom_auto_sigma,
-                                      bg_rgb=bg_state)
+                if sim.gpu:
+                    frame = _render_frame(sim.density, rnd, bloom_auto_sigma,
+                                          bg_rgb=bg_state, xp=sim.cp,
+                                          nd=sim._cnd).get()
+                else:
+                    frame = _render_frame(sim.density_cpu(), rnd,
+                                          bloom_auto_sigma, bg_rgb=bg_state)
                 if frame.shape[:2] != (rh, rw):
+                    # Cubic: the frame is rendered at grid resolution and
+                    # blown up to the canvas; bilinear visibly smears it.
                     frame = cv2.resize(frame, (rw, rh),
-                                       interpolation=cv2.INTER_LINEAR)
+                                       interpolation=cv2.INTER_CUBIC)
                 pending.append(writer.submit(
                     _write_png, fluid_dir / f"{i - render_start:06d}.png", frame))
                 if write_velocity:
@@ -1282,7 +1324,8 @@ def _spawn_source(sim: FluidSim, sources: List[_Source],
     """Birth a directional source: an initial jet along ``angle`` + ongoing
     directional emission, so matter streams away instead of pooling."""
     dx, dy = float(np.cos(angle)), float(np.sin(angle))
-    impulse = float(body.get("force", 6000.0)) * force_gain / sim.short * mag
+    impulse = (float(body.get("force", 6000.0)) * force_gain * mag
+               * sim.short / (_CALIB_RES * _CALIB_RES))
     sim.add_force_at(pos[0], pos[1], float(body.get("radius", 0.08)),
                      dx * impulse, dy * impulse)
     sources.append(_Source(
@@ -1291,7 +1334,8 @@ def _spawn_source(sim: FluidSim, sources: List[_Source],
         emit=float(body.get("emit", 0.2)) * mag,
         life=max(1, int(float(body.get("lifetime_s", 0.5)) * fps)),
         drift=float(body.get("drift", 0.4)),
-        dx=dx, dy=dy, speed=float(body.get("speed", 1.5)),
+        dx=dx, dy=dy,
+        speed=float(body.get("speed", 1.5)) * sim.short / _CALIB_RES,
         jet=float(body.get("jet_fraction", 0.35)) * impulse,
         decay=float(body.get("decay", 1.3)),
         expand=float(body.get("expand", 0.8))))

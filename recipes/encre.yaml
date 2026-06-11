@@ -6,7 +6,7 @@ canvas:
   width: 1024
   height: 1024
   fps: 24
-  sim_resolution: 256
+  sim_resolution: 512
 
 palettes:
   main: ["#2a2a2a", "#4a4a4a", "#6c6c6c", "#9a9a9a", "#d9d9d9"]
@@ -19,7 +19,13 @@ field:
 render:
   exposure: 1.9
   bloom: { amount: 0.5, threshold: 0.5 }
-  background: 0.05
+  background: 0.12                  # paper tone; an rms modulator breathes it
+  background_color:                 # stays monochrome: centroid lightens the
+    type: centroid_ramp             # paper as the spectrum brightens
+    dark: "#1C1C20"
+    bright: "#D9D9D9"
+    brightness: { source: rms, range: [0.7, 1.5] }
+  background_smooth_s: 0.8
 
 emitters:
   - id: kicks
@@ -54,6 +60,7 @@ emitters:
 modulators:
   - { source: rms, target: field.vorticity, mode: absolute, range: [4, 24] }
   - { source: rms, target: field.ambient.strength, mode: absolute, range: [0.17, 1.4] }
+  - { source: rms, target: render.background, mode: absolute, range: [0.06, 0.22], smooth_s: 0.4 }
 
 diffusion:
   model: wan-2.2-vace

@@ -68,7 +68,9 @@ class Canvas:
     width: int = 1024
     height: int = 1024
     fps: int = 24
-    sim_resolution: int = 256
+    # Keep the grid at >= half the canvas short side: each sim cell then
+    # covers <= 2x2 output pixels and the final render stays crisp.
+    sim_resolution: int = 512
 
     def grid(self) -> tuple:
         """(grid_h, grid_w) simulation cells."""
@@ -138,7 +140,7 @@ PLACEMENT_TYPES = ("fixed", "random", "wander", "line", "circle", "grid",
                    "signal_x", "signal_y")
 DIRECTION_TYPES = ("radial_out", "radial_in", "fixed", "random", "flow")
 COLOR_TYPES = ("fixed", "palette", "palette_cycle", "palette_random",
-               "chroma_hue", "chroma_palette", "centroid_ramp")
+               "chroma_hue", "chroma_palette", "centroid_ramp", "band_mix")
 SIGNALS = ("rms", "centroid", "flux", "beat_phase", "bar_phase",
            "harmonic_ratio", "chroma_argmax", "band.low", "band.mid",
            "band.high", "section.energy", "voice")
@@ -712,7 +714,7 @@ def validate(rec: Recipe) -> List[str]:
             errs.append(f"emitter '{e.id}': unknown color type "
                         f"'{e.color.type}' {COLOR_TYPES}")
         if e.color.type in ("palette", "palette_cycle", "palette_random",
-                            "chroma_palette"):
+                            "chroma_palette", "band_mix"):
             if e.color.palette not in rec.palettes:
                 errs.append(f"emitter '{e.id}': palette '{e.color.palette}' "
                             f"not in palettes {sorted(rec.palettes)}")
@@ -721,7 +723,7 @@ def validate(rec: Recipe) -> List[str]:
         errs.append(f"render.background_color: unknown type '{bc.type}' "
                     f"{COLOR_TYPES}")
     elif bc.type in ("palette", "palette_cycle", "palette_random",
-                     "chroma_palette") and bc.palette not in rec.palettes:
+                     "chroma_palette", "band_mix") and bc.palette not in rec.palettes:
         errs.append(f"render.background_color: palette '{bc.palette}' not in "
                     f"palettes {sorted(rec.palettes)}")
     tree = config_tree(rec)
