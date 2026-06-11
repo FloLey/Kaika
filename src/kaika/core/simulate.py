@@ -46,7 +46,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import cv2
-from scipy import ndimage as _snd
 
 try:                                    # multi-threaded FFT when available
     from scipy import fft as _sfft
@@ -56,7 +55,7 @@ except ImportError:                     # pragma: no cover
 _FFT_WORKERS = max(1, (os.cpu_count() or 2) - 1)
 
 from .score import Score
-from .recipe import Recipe, resolve_path, _normalise_placement
+from .recipe import Recipe, resolve_path, _normalise_placement, fft_friendly
 from .timeline import resolve_directives
 
 ProgressFn = Callable[[int, int], None]
@@ -175,26 +174,40 @@ class FluidSim:
 
     def __init__(self, shape: Tuple[int, int], dissipation: float,
                  viscosity: float, seed: int, vel_dissipation: float = 0.96,
-                 use_gpu: bool = False):
+                 use_gpu: bool = False,
+                 dye_shape: Optional[Tuple[int, int]] = None):
         self.cp, self._cnd = (None, None)
         if use_gpu:
             self.cp, self._cnd = _gpu_modules()
         self.xp = self.cp if self.cp is not None else np
         self.gpu = self.xp is not np
         xp = self.xp
+        # ``shape`` is the VELOCITY grid (the swirl scale); ``dye_shape`` an
+        # optionally finer grid where dye is advected and rendered.
         h, w = int(shape[0]), int(shape[1])
         self.h, self.w = h, w
         self.short = min(h, w)
+        dh, dw = ((int(dye_shape[0]), int(dye_shape[1])) if dye_shape
+                  else (h, w))
+        self.dh, self.dw = dh, dw
+        self.dye_short = min(dh, dw)
         self.dissipation = dissipation
         self.vel_dissipation = vel_dissipation
         self.viscosity = viscosity
         self.rng = np.random.default_rng(seed)
         self.u = xp.zeros((h, w), xp.float32)
         self.v = xp.zeros((h, w), xp.float32)
-        self.density = xp.zeros((h, w, 3), xp.float32)
+        self.density = xp.zeros((dh, dw, 3), xp.float32)
         ys, xs = xp.meshgrid(xp.arange(h), xp.arange(w), indexing="ij")
         self.xs = xs.astype(xp.float32)
         self.ys = ys.astype(xp.float32)
+        if (dh, dw) != (h, w):
+            dys, dxs = xp.meshgrid(xp.arange(dh), xp.arange(dw),
+                                   indexing="ij")
+            self.dxs = dxs.astype(xp.float32)
+            self.dys = dys.astype(xp.float32)
+        else:
+            self.dxs, self.dys = self.xs, self.ys
         # Eigenvalues of the 5-point Poisson operator (per-axis periods).
         iy = xp.arange(h)
         ix = xp.arange(w)
@@ -203,7 +216,6 @@ class FluidSim:
         a[0, 0] = 1.0                       # guard DC; mean pressure is gauge-free
         self._poisson = a
         self._k3 = np.ones((3, 3), np.uint8)
-        self.smooth_sigma = 0.0     # per-step diffusion (cells); see _DIFF_ALPHA
 
     # ---- host transfers -----------------------------------------------------
     def density_cpu(self) -> np.ndarray:
@@ -221,22 +233,26 @@ class FluidSim:
         self.density = xp.asarray(density, xp.float32)
 
     # ---- operators ---------------------------------------------------------
-    def _advect(self, field, u, v, dt: float):
-        """MacCormack advection (bilinear semi-Lagrangian + error correction)."""
+    def _advect(self, field, u, v, dt: float, xs=None, ys=None):
+        """MacCormack advection (bilinear semi-Lagrangian + error correction).
+        ``xs``/``ys`` default to the velocity grid; pass the dye grid's to
+        advect a field living there."""
+        xs = self.xs if xs is None else xs
+        ys = self.ys if ys is None else ys
         if self.gpu:
-            return self._advect_gpu(field, u, v, dt)
-        mx = (self.xs - dt * u).astype(np.float32)
-        my = (self.ys - dt * v).astype(np.float32)
+            return self._advect_gpu(field, u, v, dt, xs, ys)
+        mx = (xs - dt * u).astype(np.float32)
+        my = (ys - dt * v).astype(np.float32)
         fwd = cv2.remap(field, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
-        bx = (self.xs + dt * u).astype(np.float32)
-        by = (self.ys + dt * v).astype(np.float32)
+        bx = (xs + dt * u).astype(np.float32)
+        by = (ys + dt * v).astype(np.float32)
         back = cv2.remap(fwd, bx, by, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
         corrected = fwd + 0.5 * (field - back)
         hi = cv2.dilate(fwd, self._k3)
         lo = cv2.erode(fwd, self._k3)
         return np.clip(corrected, lo, hi).astype(np.float32)
 
-    def _advect_gpu(self, field, u, v, dt: float):
+    def _advect_gpu(self, field, u, v, dt: float, xs, ys):
         cp, cnd = self.cp, self._cnd
 
         def sample(f, yy, xx):
@@ -248,8 +264,8 @@ class FluidSim:
                                      mode="grid-wrap")
                  for c in range(f.shape[-1])], axis=-1)
 
-        fwd = sample(field, self.ys - dt * v, self.xs - dt * u)
-        back = sample(fwd, self.ys + dt * v, self.xs + dt * u)
+        fwd = sample(field, ys - dt * v, xs - dt * u)
+        back = sample(fwd, ys + dt * v, xs + dt * u)
         corrected = fwd + 0.5 * (field - back)
         size = (3, 3) if field.ndim == 2 else (3, 3, 1)
         hi = cnd.maximum_filter(fwd, size=size, mode="wrap")
@@ -277,17 +293,6 @@ class FluidSim:
         self.u -= (p - xp.roll(p, 1, 1)).astype(xp.float32)
         self.v -= (p - xp.roll(p, 1, 0)).astype(xp.float32)
 
-    def _diffuse(self, sigma: float) -> None:
-        """Gaussian diffusion of dye + velocity (toroidal) — the explicit
-        counterpart of the coarse draft grid's numerical smearing, so every
-        sim_resolution shares the draft's smoky look (see _DIFF_ALPHA)."""
-        nd = self._cnd if self._cnd is not None else _snd
-        self.density = nd.gaussian_filter(self.density,
-                                          sigma=(sigma, sigma, 0.0),
-                                          mode="wrap")
-        self.u = nd.gaussian_filter(self.u, sigma=sigma, mode="wrap")
-        self.v = nd.gaussian_filter(self.v, sigma=sigma, mode="wrap")
-
     def _vorticity_confine(self, eps: float, dt: float) -> None:
         if eps <= 0:
             return
@@ -299,35 +304,47 @@ class FluidSim:
         gy = (xp.roll(absc, -1, 0) - xp.roll(absc, 1, 0)) * 0.5
         norm = xp.sqrt(gx * gx + gy * gy) + 1e-5
         gx, gy = gx / norm, gy / norm
-        self.u += eps * dt * (gy * curl)
-        self.v += eps * dt * (-gx * curl)
+        # Curl is grid-free (1/s) but the force is added in cells/s, so the
+        # physical kick would shrink as the grid grows; scale by the grid
+        # (the standard eps*h*(N x w) form), calibrated to the draft grid.
+        k = self.short / _CALIB_RES
+        self.u += eps * dt * (gy * curl) * k
+        self.v += eps * dt * (-gx * curl) * k
 
     def add_force(self, fu, fv) -> None:
         self.u += self.xp.asarray(fu, self.xp.float32)
         self.v += self.xp.asarray(fv, self.xp.float32)
 
-    def _gauss_patch(self, px: float, py: float, radius: float):
+    def _gauss_patch(self, px: float, py: float, radius: float,
+                     dye: bool = False):
         """A Gaussian restricted to its 4-sigma window (toroidal): O(r^2)
         instead of O(H*W) per splat. Returns (g, iy, ix) index arrays; falls
         back to the full grid when the window wraps onto itself (duplicate
-        indices would drop contributions with fancy-index +=)."""
-        r = max(1.0, radius * self.short)
-        cx, cy = px * self.w, py * self.h
+        indices would drop contributions with fancy-index +=). ``dye=True``
+        targets the dye grid, else the velocity grid."""
+        if dye:
+            h, w, short = self.dh, self.dw, self.dye_short
+            gxs, gys = self.dxs, self.dys
+        else:
+            h, w, short = self.h, self.w, self.short
+            gxs, gys = self.xs, self.ys
+        r = max(1.0, radius * short)
+        cx, cy = px * w, py * h
         ext = int(np.ceil(4.0 * r))
-        if 2 * ext + 1 >= self.h or 2 * ext + 1 >= self.w:
-            d2 = (self.xs - cx) ** 2 + (self.ys - cy) ** 2
+        if 2 * ext + 1 >= h or 2 * ext + 1 >= w:
+            d2 = (gxs - cx) ** 2 + (gys - cy) ** 2
             g = np.exp(-d2 / (2 * r * r)).astype(np.float32)
             return g, None, None
         ys = np.arange(int(np.floor(cy)) - ext, int(np.floor(cy)) + ext + 1)
         xs = np.arange(int(np.floor(cx)) - ext, int(np.floor(cx)) + ext + 1)
         d2 = (((xs - cx) ** 2)[None, :] + ((ys - cy) ** 2)[:, None])
         g = np.exp(-d2 / (2 * r * r)).astype(np.float32)
-        return g, ys % self.h, xs % self.w
+        return g, ys % h, xs % w
 
     def add_dye(self, px: float, py: float, radius: float,
                 color: np.ndarray, amount: float) -> None:
         xp = self.xp
-        g, iy, ix = self._gauss_patch(px, py, radius)
+        g, iy, ix = self._gauss_patch(px, py, radius, dye=True)
         col = xp.asarray(color, xp.float32)
         if iy is None:
             self.density += (amount * g)[..., None] * col[None, None, :]
@@ -352,19 +369,13 @@ class FluidSim:
     def add_splat(self, px: float, py: float, radius: float, force: float,
                   color: np.ndarray, dir_angle: float,
                   force_gain: float = 0.04) -> None:
-        xp = self.xp
-        g, iy, ix = self._gauss_patch(px, py, radius)
-        col = xp.asarray(color, xp.float32)
-        vel = xp.asarray(g) * force * force_gain / self.short
-        if iy is None:
-            self.u += (vel * np.cos(dir_angle)).astype(xp.float32)
-            self.v += (vel * np.sin(dir_angle)).astype(xp.float32)
-            self.density += xp.asarray(g)[..., None] * col[None, None, :]
-        else:
-            sel = xp.ix_(xp.asarray(iy), xp.asarray(ix))
-            self.u[sel] += (vel * np.cos(dir_angle)).astype(xp.float32)
-            self.v[sel] += (vel * np.sin(dir_angle)).astype(xp.float32)
-            self.density[sel] += xp.asarray(g)[..., None] * col[None, None, :]
+        """Convenience poke: a directional force kick + a dye blob (each on
+        its own grid)."""
+        imp = force * force_gain / self.short
+        self.add_force_at(px, py, radius,
+                          imp * float(np.cos(dir_angle)),
+                          imp * float(np.sin(dir_angle)))
+        self.add_dye(px, py, radius, np.asarray(color, np.float32), 1.0)
 
     def step(self, dt: float, vort_eps: float, density_clamp: float = 12.0) -> None:
         xp = self.xp
@@ -382,9 +393,25 @@ class FluidSim:
         self.u = xp.ascontiguousarray(vel[..., 0])
         self.v = xp.ascontiguousarray(vel[..., 1])
         self._project()
-        self.density = self._advect(self.density, self.u, self.v, dt)
-        if self.smooth_sigma > 0:
-            self._diffuse(self.smooth_sigma)
+        if (self.dh, self.dw) != (self.h, self.w):
+            # Upsample the coarse velocity onto the dye grid (and convert
+            # cells/s between the grids): the dye keeps full output
+            # resolution while the dynamics keep the calibrated swirl scale.
+            ku, kv = self.dw / self.w, self.dh / self.h
+            if self.gpu:
+                uf = self._cnd.zoom(self.u, (kv, ku), order=1, mode="wrap",
+                                    grid_mode=True) * ku
+                vf = self._cnd.zoom(self.v, (kv, ku), order=1, mode="wrap",
+                                    grid_mode=True) * kv
+            else:
+                uf = cv2.resize(self.u, (self.dw, self.dh),
+                                interpolation=cv2.INTER_LINEAR) * ku
+                vf = cv2.resize(self.v, (self.dw, self.dh),
+                                interpolation=cv2.INTER_LINEAR) * kv
+            self.density = self._advect(self.density, uf, vf, dt,
+                                        self.dxs, self.dys)
+        else:
+            self.density = self._advect(self.density, self.u, self.v, dt)
         self.density *= self.dissipation
         xp.clip(self.density, 0.0, density_clamp, out=self.density)
         self.u *= self.vel_dissipation
@@ -412,14 +439,14 @@ def _write_png(path: Path, rgb: np.ndarray) -> None:
 # by sim.short/_CALIB_RES so the flow looks the same at any sim_resolution.
 _CALIB_RES = 112.0
 
-# Semi-Lagrangian advection also smears every field by ~half a cell per step
-# (bilinear interpolation's intrinsic diffusion, sigma ~ sqrt(1/6) cells).
-# That smearing IS the draft preview's smoky volume: at 112 cells it spans
-# 1/112 of the canvas, while a 512 grid smears 4.6x less in canvas terms and
-# produces thin hairy filaments instead. Fine grids therefore add explicit
-# per-step diffusion so the effective diffusion length matches the reference
-# grid (divided by ``field.detail`` — raise it for deliberately finer wisps).
-_DIFF_ALPHA = 0.41
+# The turbulence CHARACTER is also grid-bound: vorticity confinement (and
+# every cell-scale process) sculpts swirls at the grid scale, so a fine grid
+# produces fine nervous crackle where the 112-cell draft grid - the look
+# recipes are tuned against - folds big smoky volumes. No scalar can map one
+# onto the other, so the solver splits the grids instead: VELOCITY simulates
+# at the calibrated swirl scale (_CALIB_RES * field.detail) while DYE is
+# advected and rendered at the full output grid. Full renders then move
+# exactly like the draft preview, with crisp high-resolution ink.
 
 
 def _curl_noise(gx: np.ndarray, gy: np.ndarray, t: float, scale: float):
@@ -994,6 +1021,7 @@ def structural_hash(recipe: Recipe) -> str:
     seed. Plain numeric edits keep checkpoints (warm-up absorbs the drift)."""
     h, w = recipe.canvas.grid()
     key = json.dumps({"grid": [h, w], "seed": recipe.seed,
+                      "detail": float(getattr(recipe.field_, "detail", 1.0)),
                       "emitters": [e.id for e in recipe.emitters]})
     return f"{zlib.crc32(key.encode()):08x}"
 
@@ -1137,10 +1165,20 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     base_field = recipe.to_dict()["field"]
     want_gpu = (gpu if gpu is not None
                 else os.environ.get("KAIKA_GPU", "") == "1")
-    sim = FluidSim((grid_h, grid_w), base_field["dissipation"],
+    # Velocity simulates at the calibrated swirl scale (the grid the draft
+    # previews use, times field.detail); dye uses the full canvas grid.
+    detail = max(float(base_field.get("detail", 1.0)), 0.25)
+    vshort = min(int(round(_CALIB_RES * detail)), grid_h, grid_w)
+    if vshort < min(grid_h, grid_w):
+        f = vshort / min(grid_h, grid_w)
+        vel_shape = (fft_friendly(max(16, int(round(grid_h * f)))),
+                     fft_friendly(max(16, int(round(grid_w * f)))))
+    else:
+        vel_shape = (grid_h, grid_w)
+    sim = FluidSim(vel_shape, base_field["dissipation"],
                    base_field["viscosity"], recipe.seed,
                    vel_dissipation=base_field["velocity_dissipation"],
-                   use_gpu=want_gpu)
+                   use_gpu=want_gpu, dye_shape=(grid_h, grid_w))
     if want_gpu and not sim.gpu:
         warnings.append("KAIKA_GPU=1 but CuPy/CUDA is unavailable — "
                         "running on CPU (pip install cupy-cuda12x)")
@@ -1163,8 +1201,8 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
             sim_start = int(ck["frame"]) + 1
 
     rh, rw = recipe.canvas.render_size(cap_short=draft_cap)
-    gx = sim.xs / grid_w
-    gy = sim.ys / grid_h
+    gx = sim.xs / sim.w
+    gy = sim.ys / sim.h
     bloom_auto_sigma = max(1.0, min(grid_h, grid_w) / 48)
     dt = 1.0
     stats = {"kinetic_energy": [], "total_density": []}
@@ -1196,10 +1234,6 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
             sim.vel_dissipation = float(fld.get("velocity_dissipation", 0.96))
             sim.viscosity = float(fld.get("viscosity", 0.0))
             force_gain = float(fld.get("force_gain", 0.04))
-            detail = max(float(fld.get("detail", 1.0)), 1e-3)
-            ratio = sim.short / (_CALIB_RES * detail)
-            sim.smooth_sigma = _DIFF_ALPHA * float(
-                np.sqrt(max(ratio * ratio - 1.0, 0.0)))
 
             fdata = score.frames[i] if i < len(score.frames) else score.frames[-1]
             frame_signals = {

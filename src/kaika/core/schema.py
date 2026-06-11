@@ -118,9 +118,10 @@ HELP: dict = {
     "field.velocity_dissipation": "How much motion survives each frame. "
         "Lower = the fluid calms down faster.",
     "field.viscosity": "Thickness of the fluid; smooths and slows the motion.",
-    "field.detail": "Structure fineness. 1.0 reproduces the draft preview's "
-        "smoky volumes at any resolution; higher allows finer, wispier "
-        "filaments, lower is even softer.",
+    "field.detail": "Swirl fineness. 1.0 = the draft preview's turbulence "
+        "scale at any output resolution (the velocity grid stays at the "
+        "calibrated size); 2.0 = twice finer, more nervous swirls; below 1 "
+        "= chunkier.",
     "field.vorticity": "Swirl reinforcement. Higher = curlier, more turbulent "
         "(by default RMS drives this via a modulator).",
     "field.vorticity_gain": "Internal scale of the swirl force — small "
