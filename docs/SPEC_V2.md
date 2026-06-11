@@ -1,7 +1,7 @@
 # Kaika 開花 — Spec v2 : Recipe-driven simulation, live studio, chat copilot
 
-*Spec v2.1 · extends [SPEC.md](SPEC.md) (v0.2) · status: design decisions resolved —
-ready for implementation*
+*Spec v2.2 · extends [SPEC.md](SPEC.md) (v0.2) · status: all design decisions
+resolved — ready for implementation*
 
 **Author:** Florent Lejoly · **Date:** 11 June 2026
 
@@ -531,20 +531,51 @@ sections (colored spans, editable as today), and timeline pins (draggable; doubl
 opens the directive editor). Hovering an emitter card in the inspector highlights the
 lane that triggers it.
 
-### 4.3 Inspector
+### 4.3 Inspector — schema-driven, annotation-curated
 
-- **Canvas tab:** orientation presets + width/height/fps/sim_resolution. Changing
-  canvas invalidates checkpoints and (if fps changes) triggers re-analysis.
-- **Emitters tab:** one card per emitter — enable/mute, trigger, placement (with a
-  mini 2D pad to drag points/regions directly on a thumbnail of the canvas), color,
-  body sliders. "Add emitter" from templates (kick jet, scatter pops, pitch line,
-  beat pulse, tension).
-- **Modulators tab:** rows of `source → target` with range/curve; targets picked from
-  a searchable tree of valid paths.
-- **YAML tab:** the full recipe + project timeline, two-way synced with the form
-  (single source of truth = the server-side document; both views patch it).
-- Every numeric control shows its default and a reset affordance; an "audio-driven"
-  badge appears on any field currently targeted by a modulator.
+**Decision: no hand-built per-field forms.** The inspector is *generated* from the
+recipe JSON Schema (§6) by a single form-rendering engine, and *curated* by UI
+annotations carried in the schema itself. The form-vs-YAML boundary is therefore
+**data, not architecture**: moving a field between the card face and the advanced
+view is one annotation, changed in minutes after real studio use — not a UI
+redesign. This also upgrades the acceptance bar: **every field is reachable via the
+generated form, every capability via chat, YAML is never obligatory.**
+
+- **The generator** walks the schema: numbers → sliders (min/max/step/default from
+  the schema), enums → segmented controls, hex colors → pickers, nested objects →
+  collapsible groups, lists (emitters, modulators, timeline) → cards with
+  add / duplicate / remove / mute. New schema fields appear in the UI for free —
+  the inspector can never drift from the engine.
+- **Annotations** live on the dataclass fields and are exported into the JSON
+  Schema: `ui: {tier: primary | advanced, widget?: pad2d | curve | color, group?,
+  label?, step?}`. The generator renders `primary` fields on the card face and
+  `advanced` ones behind a per-card expander (progressive disclosure). `widget`
+  swaps in the few hand-built controls where a generic one isn't good enough: the
+  **2D placement pad** (drag points/regions on a canvas-aspect thumbnail), the
+  **modulator curve editor**, color pickers. Everything else stays generic by design.
+- **Initial tier curation** (freely revisited after V2-M3 — it is one annotation per
+  field): *primary* = palette, exposure/bloom, `field.vorticity`,
+  `field.ambient.strength`, per-emitter radius / force / lifetime_s / color /
+  placement, modulator source / target / range. *Advanced* = everything else
+  (jet_fraction, decay, expand, gains, hold windows, …).
+- **Tabs:** Canvas (presets + width/height/fps/sim_resolution; canvas changes
+  invalidate checkpoints, fps changes trigger re-analysis) · Emitters ("Add emitter"
+  from templates: kick jet, scatter pops, pitch line, beat pulse, tension) ·
+  Modulators (rows of `source → target`; targets picked from a searchable tree of
+  valid paths) · Render · YAML (full recipe + project timeline, two-way synced —
+  the single source of truth is the server-side document; both views patch it).
+- Every numeric control shows its schema default and a reset affordance; an
+  "audio-driven" badge marks any field currently targeted by a modulator.
+
+### 4.4 Pinned controls (lands with V2-M4)
+
+Any field — found on a card, in the YAML tab, or touched by the chat copilot — can be
+**pinned** to a per-project "session controls" strip above the inspector, so each
+project grows the small cockpit it actually needs. Pins are plain schema-path
+references stored in `project.json` (`ui_pins: []`): they ride revisions and reload
+with the project. The chat copilot pins the parameters it edits ("added a vorticity
+slider — we seem to be tuning it"), which doubles as its "here's what I touched"
+affordance.
 
 ---
 
@@ -625,7 +656,9 @@ New/changed endpoints (existing ones keep working):
 
 Schema validation: recipe v2 gets a JSON Schema (generated from the dataclasses)
 served at `GET /api/schema/recipe`, used by the server (authoritative), the YAML tab
-(inline diagnostics), and embedded in the chat system prompt.
+(inline diagnostics), and embedded in the chat system prompt. The same schema carries
+the `ui` annotations (tier / widget / group) that drive the generated inspector
+(§4.3) — one document feeds validation, forms, diagnostics, and the copilot.
 
 ---
 
@@ -641,14 +674,18 @@ beats, chroma color, and a line placement.*
 **V2-M2 — Canvas.** Rectangular grid through E2→E3→E5; canvas block; UI preset picker.
 *done: the same recipe renders 9:16, 16:9 and 1:1 from one project.*
 
-**V2-M3 — Live studio.** Three-pane layout, waveform lanes, inspector forms ↔ YAML
-sync, window preview with debounce + checkpoints.
-*done: slider drag → updated looping preview in ≤ 3 s on a 3-min track, anywhere on the
-timeline.*
+**V2-M3 — Live studio.** Three-pane layout, waveform lanes, schema-generated
+inspector (form engine + `ui` annotations + custom widgets) ↔ YAML sync, window
+preview with debounce + checkpoints.
+*done: slider drag → updated looping preview in ≤ 3 s on a 3-min track, anywhere on
+the timeline; every recipe field is reachable in the inspector (primary or advanced)
+without opening the YAML tab.*
 
-**V2-M4 — Chat copilot.** Chat endpoint, tools, revisions/undo, diff chips.
+**V2-M4 — Chat copilot + pinned controls.** Chat endpoint, tools, revisions/undo,
+diff chips; pin-to-dashboard (§4.4).
 *done: the "3 sources aligned at 2s" sentence produces the directive, a preview, and an
-undoable revision — without touching the inspector.*
+undoable revision — without touching the inspector; a parameter touched by chat can be
+pinned and then tweaked as a slider.*
 
 **V2-M5 — Default recipe polish.** A v2 default that actually uses the new signals
 tastefully (mids, beat pulse, chroma accents) and 2–3 showcase recipes.
@@ -660,7 +697,8 @@ tastefully (mids, beat pulse, chroma accents) and 2–3 showcase recipes.
 
 | risk | severity | mitigation |
 | --- | --- | --- |
-| v2 recipe schema too expressive → overwhelming UI | medium | inspector shows templates + the few fields that matter; full power lives in YAML/chat; defaults everywhere |
+| v2 recipe schema too expressive → overwhelming UI | medium | schema-generated inspector with tier annotations (§4.3): primary fields on the card face, the rest behind expanders; curation is one annotation per field, re-tuned after V2-M3 |
+| generated forms feel generic, not "agréable" | medium | `widget` annotations swap in hand-built controls exactly where they earn it (placement pad, curve editor); visual design effort goes into the generator once, benefiting every field |
 | pixel-golden migration test brittle across numpy/cv2 versions | low | pin versions in CI; tolerance fallback (max abs diff ≤ 1 LSB) |
 | checkpoint files large (256² × ~40 floats × every 5 s) | low | ~1–2 MB each, fp16 storage; cap + LRU per run |
 | chat edits that "work" but look bad | medium | every chat mutation auto-previews; one-click undo; revisions |
@@ -669,16 +707,16 @@ tastefully (mids, beat pulse, chroma accents) and 2–3 showcase recipes.
 
 **Open questions**
 
-- **Form-UI vs YAML/chat boundary** — the one question left deliberately open. The
-  schema can express more than a usable form UI can show; the working stance (§4.3)
-  is that inspector cards expose emitter templates and the few fields that matter,
-  while full power lives in the YAML tab and the chat copilot. Where exactly the cut
-  goes is decided in front of the built studio (V2-M3), not on paper. Acceptance
-  bar: a non-YAML session must still reach every *capability* (via chat), even if
-  not every *field* (via sliders).
+None remaining. Everything previously open is resolved below; residual unknowns are
+tracked as risks above, each with a mitigation.
 
 **Resolved decisions**
 
+- **Form-UI vs YAML/chat boundary**: dissolved rather than picked. The inspector is
+  generated from the JSON Schema and curated by per-field `ui` tier annotations, so
+  the boundary is *data tuned after real studio use*, not architecture decided on
+  paper. Every field is reachable via the generated form, every capability via chat,
+  YAML never obligatory. Pinned session controls (§4.4) land with V2-M4. See §4.3.
 - **LLM provider**: swappable by design — a single internal completion/tool-call
   interface with per-provider backends; Claude and Gemini ship in v2, provider +
   model selected in Settings. See §5.1.
@@ -703,5 +741,5 @@ tastefully (mids, beat pulse, chroma accents) and 2–3 showcase recipes.
 
 ---
 
-*kaika 開花 · spec v2.1 · the recipe describes everything; the studio shows everything;
+*kaika 開花 · spec v2.2 · the recipe describes everything; the studio shows everything;
 the chat speaks both.*
