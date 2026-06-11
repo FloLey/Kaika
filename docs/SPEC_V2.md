@@ -119,11 +119,17 @@ canvas:
   height: 1920         # vertical 9:16 here; 1920x1080 for wide; 1024x1024 square
   fps: 30
   sim_resolution: 256  # simulation cells on the SHORT side; the long side scales
-                       # with the aspect ratio (e.g. 256x455 grid for 9:16)
+                       # with the aspect ratio, rounded to an FFT-friendly size
+                       # (e.g. 256x448 grid for 9:16, not 256x455)
 ```
 
 - The simulation grid becomes **rectangular** (see §3.1). All normalized coordinates
   (placement, regions) stay 0–1 per axis so recipes are aspect-independent.
+- **FFT-friendly rounding:** the Poisson projection is an FFT, whose cost degrades
+  badly on sizes with large prime factors (455 = 5·7·13). The long side is therefore
+  rounded to the nearest size whose prime factors are only 2/3/5. The ≤ 2 % aspect
+  error this introduces is absorbed by the existing sim-grid → output resize, which
+  is non-uniform anyway.
 - `post.aspect` is removed (subsumed). E4 chunking handles non-square via the model's
   supported buckets; if the model requires square, E4 letterboxes internally and
   E5 crops back (decision recorded per-model in the diffuser backend).
@@ -174,7 +180,7 @@ emitters:
 
   - id: melody                    # NEW capability: mids exist visually
     trigger:   { type: onset, band: mid }
-    placement: { type: signal_x, source: chroma_argmax, y: 0.3 }  # pitch → x position
+    placement: { type: signal_x, source: chroma_argmax, range: [0.1, 0.9], y: 0.3 }  # pitch → x
     direction: { type: fixed, angle_deg: 90 }
     color:     { type: chroma_hue, saturation: 0.6, value: 0.9 }
     body: { radius: 0.05, force: 4000, lifetime_s: 0.6, emit: 0.15, drift: 0.5, speed: 1.8 }
@@ -228,7 +234,8 @@ emitters:
 | `palette` | `palettes[palette][index]` |
 | `palette_cycle` | cycles `palette[start:]` in order per spawn (v1 hat behavior) |
 | `palette_random` | seeded random pick from the palette |
-| `chroma_hue` | dominant pitch class → hue wheel (12 hues), recipe sets `saturation`/`value` |
+| `chroma_hue` | dominant pitch class → hue wheel (12 hues, rotatable via `hue_offset`), recipe sets `saturation`/`value` |
+| `chroma_palette` | dominant pitch class → position across the active palette (interpolated) — pitch-driven color that stays inside the recipe's colors |
 | `centroid_ramp` | spectral centroid → interpolation between two colors (`dark`, `bright`) |
 
 Every color type accepts an optional `brightness` block (`{source: centroid|rms|fixed,
@@ -247,6 +254,7 @@ modulators:
                                       # section.energy, lookahead(drop, 8s)
     target: field.vorticity           # dot-path to any numeric recipe field
     range: [8, 38]                    # signal 0 → 8, signal 1 → 38
+    mode: absolute                    # absolute | add | scale (see rules below)
     curve: linear                     # linear | pow(k) | smoothstep | step(threshold)
     smooth_s: 0.0                     # optional low-pass on the signal
 
@@ -268,8 +276,18 @@ modulators:
 Rules:
 - Targets are validated against the recipe schema at load; unknown path = load error
   with the exact path in the message.
-- Modulation is applied per frame *after* segment-override smoothing (project-level
-  segment overrides set the base value; modulators move around it).
+- **Modes** define how the mapped value combines with the base value (the recipe
+  value after segment-override smoothing and timeline `set` windows):
+  - `absolute` (default): the mapped value **replaces** the base — the modulator owns
+    the target. A segment override on the same leaf is ineffective; validation flags
+    it and suggests overriding the modulator's `range` per segment instead (segment
+    overrides may target `modulators[i].range`).
+  - `add`: base + mapped value (range is an offset, e.g. `[-5, +10]`).
+  - `scale`: base × mapped value (range is a factor, e.g. `[0.8, 1.4]`) — the natural
+    mode for "move around the per-segment base".
+- Modulators targeting `emitters.*` write into the emitter **template**: sources
+  sample it at spawn time and then follow their own envelope. Live sources are never
+  retro-modulated (no mid-flight pops, no per-source bookkeeping).
 - Modulatable targets: any numeric leaf under `field`, `render`, `emitters.*.body`,
   `emitters.*.color.brightness`. Structural fields (resolution, counts, types) are not
   modulatable.
@@ -314,11 +332,14 @@ timeline:
   identical physics, fully deterministic.
 - `set` windows sit **on top of** segment overrides and **under** modulators
   (precedence: recipe < segment override < timeline set < modulator).
-- Times are seconds on the track timeline; the UI shows timeline directives as pins on
-  the waveform, draggable.
+- `at` / `between` accept absolute seconds **or musical anchors**, resolved against
+  the score at load: `"section:drop"`, `"section:drop+4.0"`, `"beat:32"`, `"bar:8"`.
+  Anchors are what make recipe-shipped timelines reusable — "a white flash on every
+  drop start" adapts to any track. The UI shows directives as draggable pins on the
+  waveform and writes whichever form the user authored (drag = seconds).
 - Timeline lives in **`project.json`** (it is authored per-track), not in the recipe —
-  but a recipe may ship `timeline` entries as defaults (merged, project wins). This
-  keeps recipes reusable across tracks while letting a project pin moments.
+  but a recipe may ship `timeline` entries as defaults (merged, project wins),
+  typically anchor-based so they adapt to the track's structure.
 
 ### 2.5 · Field & render
 
@@ -444,9 +465,14 @@ The iteration gesture: **edit a parameter → see the same few seconds re-render
   the sim state (u, v, density, source list, RNG states) every ~5 s into
   `runs/<id>/checkpoints/`. A window preview warms up from the nearest checkpoint
   ≤ t0 instead of cold-starting, so previewing at 2:30 doesn't simulate 150 s.
-  Checkpoints are invalidated when a *structural* parameter changes (resolution,
-  emitter list shape); plain numeric edits keep them (warm-up absorbs the small
-  drift, as today).
+  Checkpoint staleness policy: a *structural* change (resolution, canvas, emitter
+  list shape) invalidates all checkpoints. A plain numeric edit keeps them for the
+  immediate preview — latency wins; warm-up absorbs most of the drift — but marks
+  them **stale**, and an idle background pass re-simulates and refreshes them so
+  drift never accumulates across edits. HQ window renders and final renders never
+  read checkpoints, so the delivered clip is always exact; the accepted tradeoff is
+  that a draft preview right after an edit may differ slightly from a from-scratch
+  state until the refresh lands.
 - Draft is the default; a "HQ window" button renders the window at full resolution.
 
 ### 4.2 Waveform lanes
@@ -588,16 +614,22 @@ tastefully (mids, beat pulse, chroma accents) and 2–3 showcase recipes.
 
 **Open questions**
 
-- **Modulator targets on emitters** fire per-frame but emitters spawn per-event:
-  modulate the *template* (affects future spawns) — proposed — or live sources too?
-- **Chroma hue wheel**: fixed mapping (C=red … B=violet) or recipe-rotatable
-  (`hue_offset`)? Proposal: rotatable, default 0.
-- **Timeline in project vs recipe**: spec says project-with-recipe-defaults (§2.4);
-  challenge welcome.
 - **Streaming previews**: MP4 swap is simple; if 1–3 s still feels laggy, upgrade path
   is WebSocket frame streaming into a canvas while the encode finishes.
 - **LLM provider abstraction**: start Claude-only; the tool layer is provider-neutral
   by construction if that needs to change.
+
+**Resolved during review**
+
+- **Modulators on emitters** modulate the *template* only — sources sample it at
+  spawn, then follow their own envelope (physical coherence, no mid-flight pops, no
+  per-source bookkeeping). See §2.3.
+- **Chroma color**: both a rotatable hue wheel (`chroma_hue` + `hue_offset`) and a
+  palette-constrained variant (`chroma_palette`) — pitch-driven color shouldn't have
+  to fight the recipe's palette. See §2.2.
+- **Timeline in project vs recipe**: project for absolute pins, plus musical anchors
+  (`section:drop+4.0`, `beat:32`) so recipe-shipped timelines adapt to any track.
+  See §2.4.
 
 ---
 
