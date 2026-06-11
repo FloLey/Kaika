@@ -129,14 +129,6 @@ class Bloom:
     sigma: float = 0.0              # 0 = auto (resolution / 48)
 
 
-@dataclass
-class RenderConfig:
-    exposure: float = 1.9
-    bloom: Bloom = field(default_factory=Bloom)
-    background: float = 0.04
-    gamma: float = 1.15
-
-
 # ---------------------------------------------------------------------------
 # Emitters
 # ---------------------------------------------------------------------------
@@ -233,6 +225,22 @@ class Body:
     decay: float = 1.3              # was SOURCE_DECAY
     expand: float = 0.8             # was SOURCE_EXPAND
     mag_gain: float = 1.0
+
+
+@dataclass
+class RenderConfig:
+    exposure: float = 1.9
+    bloom: Bloom = field(default_factory=Bloom)
+    background: float = 0.04        # tint intensity (0 = pure black)
+    # The background is a full audio-drivable color, not just a grey level:
+    # any emitter color type works (fixed / palette / chroma_hue /
+    # chroma_palette / centroid_ramp), smoothed so the wash evolves gently.
+    # Vivid endpoints: the visible tint is background * color, so at level
+    # ~0.08 these read as a deep blue <-> warm plum wash, never grey-black.
+    background_color: ColorSpec = field(default_factory=lambda: ColorSpec(
+        type="centroid_ramp", dark="#3350A0", bright="#A05A72"))
+    background_smooth_s: float = 1.5
+    gamma: float = 1.15
 
 
 @dataclass
@@ -336,12 +344,15 @@ def _default_emitters() -> List[Emitter]:
 
 def _default_modulators() -> List[Modulator]:
     """The v1 hardwired couplings, now visible: RMS drives vorticity and the
-    ambient stir (with the old 12% floor expressed as the range bottom)."""
+    ambient stir (with the old 12% floor expressed as the range bottom) —
+    plus the background level breathing with loudness."""
     return [
         Modulator(source="rms", target="field.vorticity", range=[8.0, 38.0],
                   mode="absolute"),
         Modulator(source="rms", target="field.ambient.strength",
                   range=[0.192, 1.6], mode="absolute"),
+        Modulator(source="rms", target="render.background",
+                  range=[0.04, 0.11], mode="absolute", smooth_s=0.4),
     ]
 
 
@@ -705,6 +716,14 @@ def validate(rec: Recipe) -> List[str]:
             if e.color.palette not in rec.palettes:
                 errs.append(f"emitter '{e.id}': palette '{e.color.palette}' "
                             f"not in palettes {sorted(rec.palettes)}")
+    bc = rec.render.background_color
+    if bc.type not in COLOR_TYPES:
+        errs.append(f"render.background_color: unknown type '{bc.type}' "
+                    f"{COLOR_TYPES}")
+    elif bc.type in ("palette", "palette_cycle", "palette_random",
+                     "chroma_palette") and bc.palette not in rec.palettes:
+        errs.append(f"render.background_color: palette '{bc.palette}' not in "
+                    f"palettes {sorted(rec.palettes)}")
     tree = config_tree(rec)
     for i, m in enumerate(rec.modulators):
         if m.apply_to == "live":

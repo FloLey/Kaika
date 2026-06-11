@@ -106,9 +106,12 @@ def _tonemap(hdr: np.ndarray, exposure: float, gamma: float) -> np.ndarray:
     return np.clip(mapped, 0.0, 1.0) ** (1.0 / max(gamma, 1e-3))
 
 
-def _render_frame(density: np.ndarray, render_cfg: dict, bloom_auto_sigma: float
-                  ) -> np.ndarray:
-    """HDR density -> filmic tone-map + bloom over a dark field -> uint8 RGB."""
+def _render_frame(density: np.ndarray, render_cfg: dict,
+                  bloom_auto_sigma: float,
+                  bg_rgb: Optional[np.ndarray] = None) -> np.ndarray:
+    """HDR density -> filmic tone-map + bloom over the background tint ->
+    uint8 RGB. ``bg_rgb`` is the (possibly audio-driven) background color;
+    ``render.background`` is its intensity."""
     bloom = render_cfg.get("bloom", {})
     ldr = _tonemap(density, float(render_cfg.get("exposure", 1.9)),
                    float(render_cfg.get("gamma", 1.15)))
@@ -118,7 +121,9 @@ def _render_frame(density: np.ndarray, render_cfg: dict, bloom_auto_sigma: float
         bright = np.clip(ldr - float(bloom.get("threshold", 0.45)), 0.0, 1.0)
         ldr = ldr + amount * cv2.GaussianBlur(bright, (0, 0), sigmaX=sigma)
     bg = float(render_cfg.get("background", 0.04))
-    out = bg + (1.0 - bg) * np.clip(ldr, 0.0, 1.0)
+    tint = (bg_rgb if bg_rgb is not None
+            else np.ones(3, np.float32)) * bg
+    out = tint[None, None, :] + (1.0 - bg) * np.clip(ldr, 0.0, 1.0)
     return (np.clip(out, 0.0, 1.0) * 255).astype(np.uint8)
 
 
@@ -939,10 +944,13 @@ class CheckpointStore:
         self.dir = Path(dir_)
 
     def save(self, frame_i: int, sim: FluidSim, sources: List[_Source],
-             t_phase: float, struct: str) -> None:
+             t_phase: float, struct: str,
+             bg_state: Optional[np.ndarray] = None) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
         meta = {"frame": frame_i, "t_phase": t_phase, "struct": struct,
-                "sources": [s.to_state() for s in sources]}
+                "sources": [s.to_state() for s in sources],
+                "bg": [float(c) for c in bg_state] if bg_state is not None
+                      else None}
         # float32 throughout: the nonlinear advection amplifies fp16 density
         # error over a resume; exact state keeps window previews bit-faithful.
         np.savez_compressed(
@@ -974,6 +982,7 @@ class CheckpointStore:
                 return None
             return {"frame": meta["frame"], "t_phase": meta["t_phase"],
                     "sources": [_Source.from_state(s) for s in meta["sources"]],
+                    "bg": meta.get("bg"),
                     "u": data["u"].astype(np.float32),
                     "v": data["v"].astype(np.float32),
                     "density": data["density"].astype(np.float32)}
@@ -1078,6 +1087,7 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                         "running on CPU (pip install cupy-cuda12x)")
     sources: List[_Source] = []
     t_phase = sim_start * float(base_field["ambient"]["speed"])
+    bg_state: Optional[np.ndarray] = None       # smoothed background tint
 
     if checkpoints is not None and render_range is not None:
         # A checkpoint holds the state *after* its frame's step, so resuming
@@ -1089,6 +1099,8 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
             sim.load_state(ck["u"], ck["v"], ck["density"])
             sources = ck["sources"]
             t_phase = ck["t_phase"]
+            if ck.get("bg"):
+                bg_state = np.asarray(ck["bg"], np.float32)
             sim_start = int(ck["frame"]) + 1
 
     rh, rw = recipe.canvas.render_size(cap_short=draft_cap)
@@ -1190,11 +1202,26 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                 fld.get("vorticity_gain", 0.015))
             sim.step(dt, vort, float(fld.get("density_clamp", 12.0)))
 
+            # Audio-driven background tint, smoothed so the wash drifts gently
+            # instead of strobing with the signal.
+            bg_target = color_engine.resolve(
+                rnd.get("background_color") or {"type": "fixed",
+                                                "hex": "#FFFFFF"},
+                i, 0, _event_rng(seed, 0xB6, i))
+            if bg_state is None:
+                bg_state = bg_target.copy()
+            else:
+                alpha = 1.0 - np.exp(-1.0 / max(
+                    float(rnd.get("background_smooth_s", 1.5)) * fps, 1e-6))
+                bg_state = bg_state + alpha * (bg_target - bg_state)
+
             if save_checkpoints and checkpoints is not None and i % ckpt_every == 0:
-                checkpoints.save(i, sim, sources, t_phase, struct)
+                checkpoints.save(i, sim, sources, t_phase, struct,
+                                 bg_state=bg_state)
 
             if i >= render_start:
-                frame = _render_frame(sim.density_cpu(), rnd, bloom_auto_sigma)
+                frame = _render_frame(sim.density_cpu(), rnd, bloom_auto_sigma,
+                                      bg_rgb=bg_state)
                 if frame.shape[:2] != (rh, rw):
                     frame = cv2.resize(frame, (rw, rh),
                                        interpolation=cv2.INTER_LINEAR)

@@ -319,3 +319,31 @@ def test_gpu_falls_back_to_cpu_without_cuda(score, tmp_path):
     res = S.simulate(score, rec, tmp_path, max_frames=4, gpu=True)
     assert res.n_frames == 4
     assert any("CPU" in w for w in res.warnings)
+
+
+# ---- audio-driven background -------------------------------------------------
+
+def test_background_tint_is_not_black(score, tmp_path):
+    """An audio-driven background colors the empty field: corners are tinted
+    (non-grey, non-black), and the wash follows the configured colors."""
+    import imageio.v2 as imageio
+    rec = _rec(emitters=[],
+               render={"background": 0.25,
+                       "background_color": {"type": "fixed", "hex": "#4060C0"},
+                       "background_smooth_s": 0.05},
+               modulators=[])
+    res = S.simulate(score, rec, tmp_path, max_frames=8)
+    img = imageio.imread(res.fluid_dir / "000007.png").astype(float)
+    corner = img[:6, :6].mean(axis=(0, 1))
+    assert corner[2] > corner[0] + 10        # blue tint, not grey
+    assert corner.mean() > 8                 # not pure black
+
+
+def test_background_smoothing_state_checkpointed(score, tmp_path):
+    rec = _rec()
+    store = S.CheckpointStore(tmp_path / "ck")
+    sim = S.FluidSim(rec.canvas.grid(), 0.9, 0.0, rec.seed)
+    bg = np.array([0.1, 0.2, 0.3], np.float32)
+    store.save(3, sim, [], 0.5, S.structural_hash(rec), bg_state=bg)
+    ck = store.nearest(5, S.structural_hash(rec))
+    assert np.allclose(ck["bg"], [0.1, 0.2, 0.3])

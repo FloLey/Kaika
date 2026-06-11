@@ -50,8 +50,11 @@ UI: dict = {
                                "step": 0.05},
     "render.bloom.sigma": {"tier": "advanced", "min": 0.0, "max": 32.0,
                            "step": 0.5},
-    "render.background": {"tier": "advanced", "min": 0.0, "max": 0.3,
-                          "step": 0.01},
+    "render.background": {"tier": "primary", "min": 0.0, "max": 0.3,
+                          "step": 0.01, "label": "Background level"},
+    "render.background_color.type": {"tier": "primary"},
+    "render.background_smooth_s": {"tier": "advanced", "min": 0.0, "max": 8.0,
+                                   "step": 0.25},
     "render.gamma": {"tier": "advanced", "min": 0.8, "max": 2.0, "step": 0.05},
     # emitter body
     "emitters.*.count": {"tier": "primary", "min": 1, "max": 16, "step": 1},
@@ -130,7 +133,14 @@ HELP: dict = {
     "render.bloom.amount": "Glow added around bright areas.",
     "render.bloom.threshold": "Brightness above which bloom kicks in.",
     "render.bloom.sigma": "Blur radius of the glow. 0 = automatic.",
-    "render.background": "Dark floor level — lifts pure black.",
+    "render.background": "Background tint intensity (0 = pure black). "
+        "Modulate it with rms to make the field breathe with the music.",
+    "render.background_color.type": "What colors the background: fixed hex, "
+        "a palette entry, pitch -> hue wheel (chroma_hue), pitch -> palette "
+        "(chroma_palette), or brightness ramp by spectral centroid "
+        "(centroid_ramp).",
+    "render.background_smooth_s": "How slowly the background color drifts "
+        "toward its target (seconds) — keeps the wash gentle, not strobing.",
     "render.gamma": "Contrast curve of the final image.",
     "diffusion.strength": "How strongly the diffusion model restyles the "
         "fluid: low = faithful to the motion, high = freer reinterpretation.",
@@ -245,6 +255,8 @@ ENUMS: dict = {
     "modulators.*.source": list(R.SIGNALS),
     "emitters.*.trigger.mag_source": [""] + list(R.SIGNALS),
     "emitters.*.placement.source": list(R.SIGNALS),
+    "render.background_color.type": list(R.COLOR_TYPES),
+    "render.background_color.brightness.source": ["fixed", "centroid", "rms"],
     "modulators.*.apply_to": ["spawn"],          # "live" reserved, rejected
     "diffusion.backend": ["local", "comfyui"],
 }

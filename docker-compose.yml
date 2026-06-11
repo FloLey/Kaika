@@ -1,9 +1,22 @@
 services:
   kaika:
-    build: .
+    build:
+      context: .
+      args:
+        GPU: "1"              # "0" for a slimmer CPU-only image
     ports:
       - "8400:8400"
     volumes:
       # runs/, uploads and settings (LLM keys) persist here
       - ./data:/data
+    # Hand the NVIDIA GPU to the container (needs nvidia-container-toolkit).
+    # On a machine without one, remove this block — the app falls back to CPU
+    # automatically anyway when CUDA isn't reachable.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     restart: unless-stopped
