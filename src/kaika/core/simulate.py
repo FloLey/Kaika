@@ -133,12 +133,15 @@ def _render_frame(density: np.ndarray, render_cfg: dict,
 
 def _gpu_modules():
     """(cupy, cupyx.scipy.ndimage) when CUDA is genuinely usable, else
-    (None, None). The probe allocates on-device so a broken install fails
-    here, not mid-render."""
+    (None, None). The probe exercises the kernels the solver actually JIT
+    compiles (interpolation, FFT) so a broken install — e.g. CuPy without
+    the CUDA headers — fails here, not mid-render."""
     try:
         import cupy as cp
         from cupyx.scipy import ndimage as cnd
-        float(cp.zeros(2).sum())            # force a real CUDA context
+        a = cp.zeros((2, 2), dtype=cp.float32)
+        float(cnd.map_coordinates(a, cp.zeros((2, 1)), order=1).sum())
+        float(cp.fft.fft2(a).real.sum())
         return cp, cnd
     except Exception:
         return None, None

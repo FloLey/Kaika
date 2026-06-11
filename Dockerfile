@@ -35,8 +35,9 @@ RUN python -c "import tomllib; \
 # GPU by default: CuPy installs fine without a GPU and the engine falls back
 # to CPU at runtime when CUDA isn't reachable. Build with --build-arg GPU=0
 # for a slimmer CPU-only image, or GPU_WHEEL=cupy-cuda11x for CUDA 11 hosts.
+# [ctk] pulls the CUDA toolkit headers CuPy needs to JIT-compile kernels.
 ARG GPU=1
-ARG GPU_WHEEL=cupy-cuda12x
+ARG GPU_WHEEL=cupy-cuda12x[ctk]
 RUN if [ "$GPU" = "1" ]; then pip install --no-cache-dir "$GPU_WHEEL"; fi
 ENV KAIKA_GPU=1
 
