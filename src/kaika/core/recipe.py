@@ -122,6 +122,7 @@ class FieldConfig:
     force_gain: float = 0.04        # was FORCE_K
     ambient: Ambient = field(default_factory=Ambient)
     density_clamp: float = 12.0
+    detail: float = 1.0             # structure fineness; 1.0 = draft-preview look
 
 
 @dataclass

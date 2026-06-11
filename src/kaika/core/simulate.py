@@ -46,6 +46,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import cv2
+from scipy import ndimage as _snd
 
 try:                                    # multi-threaded FFT when available
     from scipy import fft as _sfft
@@ -202,6 +203,7 @@ class FluidSim:
         a[0, 0] = 1.0                       # guard DC; mean pressure is gauge-free
         self._poisson = a
         self._k3 = np.ones((3, 3), np.uint8)
+        self.smooth_sigma = 0.0     # per-step diffusion (cells); see _DIFF_ALPHA
 
     # ---- host transfers -----------------------------------------------------
     def density_cpu(self) -> np.ndarray:
@@ -274,6 +276,17 @@ class FluidSim:
             p = np.real(np.fft.ifft2(p_hat)).astype(np.float32)
         self.u -= (p - xp.roll(p, 1, 1)).astype(xp.float32)
         self.v -= (p - xp.roll(p, 1, 0)).astype(xp.float32)
+
+    def _diffuse(self, sigma: float) -> None:
+        """Gaussian diffusion of dye + velocity (toroidal) — the explicit
+        counterpart of the coarse draft grid's numerical smearing, so every
+        sim_resolution shares the draft's smoky look (see _DIFF_ALPHA)."""
+        nd = self._cnd if self._cnd is not None else _snd
+        self.density = nd.gaussian_filter(self.density,
+                                          sigma=(sigma, sigma, 0.0),
+                                          mode="wrap")
+        self.u = nd.gaussian_filter(self.u, sigma=sigma, mode="wrap")
+        self.v = nd.gaussian_filter(self.v, sigma=sigma, mode="wrap")
 
     def _vorticity_confine(self, eps: float, dt: float) -> None:
         if eps <= 0:
@@ -370,6 +383,8 @@ class FluidSim:
         self.v = xp.ascontiguousarray(vel[..., 1])
         self._project()
         self.density = self._advect(self.density, self.u, self.v, dt)
+        if self.smooth_sigma > 0:
+            self._diffuse(self.smooth_sigma)
         self.density *= self.dissipation
         xp.clip(self.density, 0.0, density_clamp, out=self.density)
         self.u *= self.vel_dissipation
@@ -396,6 +411,15 @@ def _write_png(path: Path, rgb: np.ndarray) -> None:
 # pipeline's 112-cell preview cap, where recipes are tuned by eye) and scaled
 # by sim.short/_CALIB_RES so the flow looks the same at any sim_resolution.
 _CALIB_RES = 112.0
+
+# Semi-Lagrangian advection also smears every field by ~half a cell per step
+# (bilinear interpolation's intrinsic diffusion, sigma ~ sqrt(1/6) cells).
+# That smearing IS the draft preview's smoky volume: at 112 cells it spans
+# 1/112 of the canvas, while a 512 grid smears 4.6x less in canvas terms and
+# produces thin hairy filaments instead. Fine grids therefore add explicit
+# per-step diffusion so the effective diffusion length matches the reference
+# grid (divided by ``field.detail`` — raise it for deliberately finer wisps).
+_DIFF_ALPHA = 0.41
 
 
 def _curl_noise(gx: np.ndarray, gy: np.ndarray, t: float, scale: float):
@@ -1172,6 +1196,10 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
             sim.vel_dissipation = float(fld.get("velocity_dissipation", 0.96))
             sim.viscosity = float(fld.get("viscosity", 0.0))
             force_gain = float(fld.get("force_gain", 0.04))
+            detail = max(float(fld.get("detail", 1.0)), 1e-3)
+            ratio = sim.short / (_CALIB_RES * detail)
+            sim.smooth_sigma = _DIFF_ALPHA * float(
+                np.sqrt(max(ratio * ratio - 1.0, 0.0)))
 
             fdata = score.frames[i] if i < len(score.frames) else score.frames[-1]
             frame_signals = {

@@ -36,6 +36,7 @@ UI: dict = {
                          "step": 0.005},
     "field.density_clamp": {"tier": "advanced", "min": 1.0, "max": 30.0,
                             "step": 0.5},
+    "field.detail": {"tier": "advanced", "min": 0.5, "max": 4.0, "step": 0.1},
     "field.ambient.strength": {"tier": "primary", "min": 0.0, "max": 6.0,
                                "step": 0.1, "label": "Ambient stir"},
     "field.ambient.scale": {"tier": "advanced", "min": 0.5, "max": 8.0,
@@ -117,6 +118,9 @@ HELP: dict = {
     "field.velocity_dissipation": "How much motion survives each frame. "
         "Lower = the fluid calms down faster.",
     "field.viscosity": "Thickness of the fluid; smooths and slows the motion.",
+    "field.detail": "Structure fineness. 1.0 reproduces the draft preview's "
+        "smoky volumes at any resolution; higher allows finer, wispier "
+        "filaments, lower is even softer.",
     "field.vorticity": "Swirl reinforcement. Higher = curlier, more turbulent "
         "(by default RMS drives this via a modulator).",
     "field.vorticity_gain": "Internal scale of the swirl force — small "
