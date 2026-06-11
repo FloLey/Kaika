@@ -16,7 +16,8 @@ from typing import Optional
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import (FileResponse, JSONResponse, HTMLResponse,
+                               Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -528,20 +529,29 @@ def create_app(runs_root: str | Path = "runs",
 
     @app.get("/api/runs/{run_id}/latest_frame")
     def latest_frame(run_id: str):
-        """Most recent frame on disk for this run — live peek while rendering."""
+        """Most recent frame on disk for this run — live peek while rendering.
+
+        The newest file may still be mid-write by the simulation worker, so we
+        serve the *second*-newest when there is one, and always return a byte
+        snapshot (FileResponse stats the size first, then streams a file that
+        may have grown — 'Response content longer than Content-Length')."""
         rd = runs_root / run_id
-        candidates = []
-        for sub in ("styled", "fluid", "seg_preview/fluid"):
+        pngs: list = []
+        for sub in ("styled", "fluid", "window_preview/fluid",
+                    "seg_preview/fluid"):
             d = rd / sub
             if d.is_dir():
-                pngs = list(d.glob("*.png"))
-                if pngs:
-                    candidates.append(max(pngs, key=lambda p: p.stat().st_mtime))
-        if not candidates:
+                pngs.extend(d.glob("*.png"))
+        if not pngs:
             raise HTTPException(404, "no frames yet")
-        newest = max(candidates, key=lambda p: p.stat().st_mtime)
-        return FileResponse(newest, media_type="image/png",
-                            headers={"Cache-Control": "no-store"})
+        pngs.sort(key=lambda p: p.stat().st_mtime)
+        pick = pngs[-2] if len(pngs) > 1 else pngs[-1]
+        try:
+            data = pick.read_bytes()
+        except OSError:
+            raise HTTPException(404, "no frames yet")
+        return Response(content=data, media_type="image/png",
+                        headers={"Cache-Control": "no-store"})
 
     @app.websocket("/ws/jobs/{job_id}")
     async def ws_job(ws: WebSocket, job_id: str):

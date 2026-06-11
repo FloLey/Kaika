@@ -37,13 +37,22 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field as dc_field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import cv2
+
+try:                                    # multi-threaded FFT when available
+    from scipy import fft as _sfft
+except ImportError:                     # pragma: no cover
+    _sfft = None
+
+_FFT_WORKERS = max(1, (os.cpu_count() or 2) - 1)
 
 from .score import Score
 from .recipe import Recipe, resolve_path, _normalise_placement
@@ -160,12 +169,18 @@ class FluidSim:
         return np.clip(corrected, lo, hi).astype(np.float32)
 
     def _project(self, iters: int = 0) -> None:
-        """Exact incompressibility via a spectral Poisson solve (periodic)."""
+        """Exact incompressibility via a spectral Poisson solve (periodic).
+        Uses scipy's multi-threaded FFT when available (numpy's is 1-core)."""
         div = ((np.roll(self.u, -1, 1) - self.u) +
                (np.roll(self.v, -1, 0) - self.v))
-        p_hat = -np.fft.fft2(div) / self._poisson
-        p_hat[0, 0] = 0.0
-        p = np.real(np.fft.ifft2(p_hat)).astype(np.float32)
+        if _sfft is not None:
+            p_hat = -_sfft.fft2(div, workers=_FFT_WORKERS) / self._poisson
+            p_hat[0, 0] = 0.0
+            p = np.real(_sfft.ifft2(p_hat, workers=_FFT_WORKERS)).astype(np.float32)
+        else:
+            p_hat = -np.fft.fft2(div) / self._poisson
+            p_hat[0, 0] = 0.0
+            p = np.real(np.fft.ifft2(p_hat)).astype(np.float32)
         self.u -= (p - np.roll(p, 1, 1)).astype(np.float32)
         self.v -= (p - np.roll(p, 1, 0)).astype(np.float32)
 
@@ -186,30 +201,58 @@ class FluidSim:
         self.u += fu.astype(np.float32)
         self.v += fv.astype(np.float32)
 
-    def _gauss(self, px: float, py: float, radius: float) -> np.ndarray:
+    def _gauss_patch(self, px: float, py: float, radius: float):
+        """A Gaussian restricted to its 4-sigma window (toroidal): O(r^2)
+        instead of O(H*W) per splat. Returns (g, iy, ix) index arrays; falls
+        back to the full grid when the window wraps onto itself (duplicate
+        indices would drop contributions with fancy-index +=)."""
         r = max(1.0, radius * self.short)
-        d2 = (self.xs - px * self.w) ** 2 + (self.ys - py * self.h) ** 2
-        return np.exp(-d2 / (2 * r * r)).astype(np.float32)
+        cx, cy = px * self.w, py * self.h
+        ext = int(np.ceil(4.0 * r))
+        if 2 * ext + 1 >= self.h or 2 * ext + 1 >= self.w:
+            d2 = (self.xs - cx) ** 2 + (self.ys - cy) ** 2
+            g = np.exp(-d2 / (2 * r * r)).astype(np.float32)
+            return g, None, None
+        ys = np.arange(int(np.floor(cy)) - ext, int(np.floor(cy)) + ext + 1)
+        xs = np.arange(int(np.floor(cx)) - ext, int(np.floor(cx)) + ext + 1)
+        d2 = (((xs - cx) ** 2)[None, :] + ((ys - cy) ** 2)[:, None])
+        g = np.exp(-d2 / (2 * r * r)).astype(np.float32)
+        return g, ys % self.h, xs % self.w
 
     def add_dye(self, px: float, py: float, radius: float,
                 color: np.ndarray, amount: float) -> None:
-        g = self._gauss(px, py, radius)
-        self.density += (amount * g)[..., None] * color[None, None, :]
+        g, iy, ix = self._gauss_patch(px, py, radius)
+        if iy is None:
+            self.density += (amount * g)[..., None] * color[None, None, :]
+        else:
+            self.density[np.ix_(iy, ix)] += \
+                (amount * g)[..., None] * color[None, None, :]
 
     def add_force_at(self, x: float, y: float, radius: float,
                      fx: float, fy: float) -> None:
-        g = self._gauss(x, y, radius)
-        self.u += (g * fx).astype(np.float32)
-        self.v += (g * fy).astype(np.float32)
+        g, iy, ix = self._gauss_patch(x, y, radius)
+        if iy is None:
+            self.u += (g * fx).astype(np.float32)
+            self.v += (g * fy).astype(np.float32)
+        else:
+            sel = np.ix_(iy, ix)
+            self.u[sel] += (g * fx).astype(np.float32)
+            self.v[sel] += (g * fy).astype(np.float32)
 
     def add_splat(self, px: float, py: float, radius: float, force: float,
                   color: np.ndarray, dir_angle: float,
                   force_gain: float = 0.04) -> None:
-        g = self._gauss(px, py, radius)
+        g, iy, ix = self._gauss_patch(px, py, radius)
         vel = g * force * force_gain / self.short
-        self.u += (vel * np.cos(dir_angle)).astype(np.float32)
-        self.v += (vel * np.sin(dir_angle)).astype(np.float32)
-        self.density += g[..., None] * color[None, None, :]
+        if iy is None:
+            self.u += (vel * np.cos(dir_angle)).astype(np.float32)
+            self.v += (vel * np.sin(dir_angle)).astype(np.float32)
+            self.density += g[..., None] * color[None, None, :]
+        else:
+            sel = np.ix_(iy, ix)
+            self.u[sel] += (vel * np.cos(dir_angle)).astype(np.float32)
+            self.v[sel] += (vel * np.sin(dir_angle)).astype(np.float32)
+            self.density[sel] += g[..., None] * color[None, None, :]
 
     def step(self, dt: float, vort_eps: float, density_clamp: float = 12.0) -> None:
         if self.viscosity > 0:
@@ -237,6 +280,13 @@ class FluidSim:
 
     def total_density(self) -> float:
         return float(np.mean(self.density))
+
+
+def _write_png(path: Path, rgb: np.ndarray) -> None:
+    """cv2's PNG encoder at low compression: ~5x faster than PIL's default,
+    and it runs on the writer pool, not the solver thread."""
+    cv2.imwrite(str(path), cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
+                [cv2.IMWRITE_PNG_COMPRESSION, 2])
 
 
 def _curl_noise(gx: np.ndarray, gy: np.ndarray, t: float, scale: float):
@@ -877,9 +927,10 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     up either from the nearest matching checkpoint or ``warmup_frames`` of
     unrendered lead-in. ``draft_cap`` caps the *render* short side (the sim grid
     is capped by the caller via the recipe).
-    """
-    import imageio.v2 as imageio
 
+    Frame encoding/IO runs on a small thread pool: PNG encode was ~60% of the
+    wall clock when done inline on the solver thread.
+    """
     out_dir = Path(out_dir)
     fluid_dir = out_dir / "fluid"
     vel_dir = out_dir / "velocity"
@@ -946,104 +997,116 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
 
     ckpt_every = max(1, int(CHECKPOINT_EVERY_S * fps))
     total_steps = max(1, sim_end - sim_start)
+    # Writer pool: PNG encode + .npy dumps run off the solver thread. The
+    # try/finally guarantees the pool drains even on cancellation (the job
+    # queue cancels by raising through the progress callback).
+    writer = ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 2))
+    pending: List = []
+    try:
+        for step_i, i in enumerate(range(sim_start, sim_end)):
+            tree = copy.deepcopy(frame_trees[i]) if frame_trees is not None else {
+                "field": copy.deepcopy(base_field),
+                "render": json.loads(json.dumps(recipe.to_dict()["render"])),
+                "emitters": {e["id"]: copy.deepcopy(e) for e in emitters_d},
+            }
+            mod_engine.apply(tree, i)
+            fld = tree["field"]
+            rnd = tree["render"]
+            sim.dissipation = float(fld.get("dissipation", 0.90))
+            sim.vel_dissipation = float(fld.get("velocity_dissipation", 0.96))
+            sim.viscosity = float(fld.get("viscosity", 0.0))
+            force_gain = float(fld.get("force_gain", 0.04))
 
-    for step_i, i in enumerate(range(sim_start, sim_end)):
-        tree = copy.deepcopy(frame_trees[i]) if frame_trees is not None else {
-            "field": copy.deepcopy(base_field),
-            "render": json.loads(json.dumps(recipe.to_dict()["render"])),
-            "emitters": {e["id"]: copy.deepcopy(e) for e in emitters_d},
-        }
-        mod_engine.apply(tree, i)
-        fld = tree["field"]
-        rnd = tree["render"]
-        sim.dissipation = float(fld.get("dissipation", 0.90))
-        sim.vel_dissipation = float(fld.get("velocity_dissipation", 0.96))
-        sim.viscosity = float(fld.get("viscosity", 0.0))
-        force_gain = float(fld.get("force_gain", 0.04))
+            fdata = score.frames[i] if i < len(score.frames) else score.frames[-1]
+            frame_signals = {
+                "rms": fdata.rms, "centroid": _centroid_x(fdata.centroid_hz),
+                "flux": fdata.flux, "beat_phase": fdata.beat_phase,
+                "bar_phase": fdata.bar_phase, "harmonic_ratio": fdata.harmonic_ratio,
+                "chroma_argmax": fdata.chroma_argmax / 11.0,
+                "band.low": fdata.bands[0] if fdata.bands else 0.0,
+                "band.mid": fdata.bands[1] if len(fdata.bands) > 1 else 0.0,
+                "band.high": fdata.bands[2] if len(fdata.bands) > 2 else 0.0,
+            }
 
-        fdata = score.frames[i] if i < len(score.frames) else score.frames[-1]
-        frame_signals = {
-            "rms": fdata.rms, "centroid": _centroid_x(fdata.centroid_hz),
-            "flux": fdata.flux, "beat_phase": fdata.beat_phase,
-            "bar_phase": fdata.bar_phase, "harmonic_ratio": fdata.harmonic_ratio,
-            "chroma_argmax": fdata.chroma_argmax / 11.0,
-            "band.low": fdata.bands[0] if fdata.bands else 0.0,
-            "band.mid": fdata.bands[1] if len(fdata.bands) > 1 else 0.0,
-            "band.high": fdata.bands[2] if len(fdata.bands) > 2 else 0.0,
-        }
+            # Ambient stirring (strength is typically RMS-modulated by a default
+            # modulator; the engine itself has no hidden audio coupling).
+            amb = fld.get("ambient", {})
+            ua, va = _curl_noise(gx, gy, t_phase, float(amb.get("scale", 2.6)))
+            amp = float(amb.get("strength", 1.6))
+            sim.add_force(ua * amp, va * amp)
+            t_phase += float(amb.get("speed", 0.16))
 
-        # Ambient stirring (strength is typically RMS-modulated by a default
-        # modulator; the engine itself has no hidden audio coupling).
-        amb = fld.get("ambient", {})
-        ua, va = _curl_noise(gx, gy, t_phase, float(amb.get("scale", 2.6)))
-        amp = float(amb.get("strength", 1.6))
-        sim.add_force(ua * amp, va * amp)
-        t_phase += float(amb.get("speed", 0.16))
+            # Spawns.
+            cycle_base = {ei: int(cum[i][ei]) for ei in range(n_emitters)}
+            cycle_seen: Dict[int, int] = {}
+            for sp in spawns_by_frame[i]:
+                if sp.emitter_i >= 0:
+                    ecfg = tree["emitters"].get(recipe.emitters[sp.emitter_i].id)
+                    if ecfg is None:
+                        continue
+                    ecfg = (json.loads(json.dumps(ecfg)) if sp.overrides else ecfg)
+                    for k in ("placement", "color", "body"):
+                        if k in sp.overrides:
+                            ov = sp.overrides[k] or {}
+                            if k == "placement":
+                                # A placement override switches behavior wholesale
+                                # (line vs wander share no params), so it replaces.
+                                ecfg[k] = _normalise_placement(dict(ov))
+                            else:
+                                ecfg[k] = {**ecfg.get(k, {}), **ov}
+                    count = int(sp.overrides.get("count", ecfg.get("count", 1)))
+                    salt = _emitter_salt(recipe.emitters[sp.emitter_i].id)
+                else:
+                    ecfg = _inline_emitter(sp.overrides)
+                    count = int(sp.overrides.get("count", 1))
+                    salt = 0xBEEF
+                rng = _event_rng(seed + salt, max(sp.emitter_i, 0), i, sp.k)
+                pts, center = _place(ecfg.get("placement", {}), max(1, count), i,
+                                     rng, frame_signals)
+                body = ecfg.get("body", {})
+                mag_gain = float(body.get("mag_gain", 1.0))
+                mag = 0.5 + sp.mag * mag_gain
+                if sp.emitter_i >= 0:
+                    seen = cycle_seen.get(sp.emitter_i, 0)
+                    cycle_idx = cycle_base[sp.emitter_i] + seen
+                    cycle_seen[sp.emitter_i] = seen + 1
+                else:
+                    cycle_idx = 0
+                color = color_engine.resolve(ecfg.get("color", {}), i, cycle_idx, rng)
+                for pos in pts:
+                    ang = _direction(ecfg.get("direction", {}), pos, center, rng, sim)
+                    _spawn_source(sim, sources, pos, ang, color, body, mag,
+                                  force_gain, fps)
 
-        # Spawns.
-        cycle_base = {ei: int(cum[i][ei]) for ei in range(n_emitters)}
-        cycle_seen: Dict[int, int] = {}
-        for sp in spawns_by_frame[i]:
-            if sp.emitter_i >= 0:
-                ecfg = tree["emitters"].get(recipe.emitters[sp.emitter_i].id)
-                if ecfg is None:
-                    continue
-                ecfg = (json.loads(json.dumps(ecfg)) if sp.overrides else ecfg)
-                for k in ("placement", "color", "body"):
-                    if k in sp.overrides:
-                        ov = sp.overrides[k] or {}
-                        if k == "placement":
-                            # A placement override switches behavior wholesale
-                            # (line vs wander share no params), so it replaces.
-                            ecfg[k] = _normalise_placement(dict(ov))
-                        else:
-                            ecfg[k] = {**ecfg.get(k, {}), **ov}
-                count = int(sp.overrides.get("count", ecfg.get("count", 1)))
-                salt = _emitter_salt(recipe.emitters[sp.emitter_i].id)
-            else:
-                ecfg = _inline_emitter(sp.overrides)
-                count = int(sp.overrides.get("count", 1))
-                salt = 0xBEEF
-            rng = _event_rng(seed + salt, max(sp.emitter_i, 0), i, sp.k)
-            pts, center = _place(ecfg.get("placement", {}), max(1, count), i,
-                                 rng, frame_signals)
-            body = ecfg.get("body", {})
-            mag_gain = float(body.get("mag_gain", 1.0))
-            mag = 0.5 + sp.mag * mag_gain
-            if sp.emitter_i >= 0:
-                seen = cycle_seen.get(sp.emitter_i, 0)
-                cycle_idx = cycle_base[sp.emitter_i] + seen
-                cycle_seen[sp.emitter_i] = seen + 1
-            else:
-                cycle_idx = 0
-            color = color_engine.resolve(ecfg.get("color", {}), i, cycle_idx, rng)
-            for pos in pts:
-                ang = _direction(ecfg.get("direction", {}), pos, center, rng, sim)
-                _spawn_source(sim, sources, pos, ang, color, body, mag,
-                              force_gain, fps)
+            sources = _advance_sources(sim, sources)
 
-        sources = _advance_sources(sim, sources)
+            vort = float(fld.get("vorticity", 8.0)) * float(
+                fld.get("vorticity_gain", 0.015))
+            sim.step(dt, vort, float(fld.get("density_clamp", 12.0)))
 
-        vort = float(fld.get("vorticity", 8.0)) * float(
-            fld.get("vorticity_gain", 0.015))
-        sim.step(dt, vort, float(fld.get("density_clamp", 12.0)))
+            if save_checkpoints and checkpoints is not None and i % ckpt_every == 0:
+                checkpoints.save(i, sim, sources, t_phase, struct)
 
-        if save_checkpoints and checkpoints is not None and i % ckpt_every == 0:
-            checkpoints.save(i, sim, sources, t_phase, struct)
+            if i >= render_start:
+                frame = _render_frame(sim.density, rnd, bloom_auto_sigma)
+                if frame.shape[:2] != (rh, rw):
+                    frame = cv2.resize(frame, (rw, rh),
+                                       interpolation=cv2.INTER_LINEAR)
+                pending.append(writer.submit(
+                    _write_png, fluid_dir / f"{i - render_start:06d}.png", frame))
+                if write_velocity:
+                    vel = np.stack([sim.u, sim.v], axis=-1).astype(np.float32)
+                    pending.append(writer.submit(
+                        np.save, vel_dir / f"{i - render_start:06d}.npy", vel))
+                stats["kinetic_energy"].append(round(sim.kinetic_energy(), 6))
+                stats["total_density"].append(round(sim.total_density(), 6))
+            if progress:
+                progress(step_i + 1, total_steps)
 
-        if i >= render_start:
-            frame = _render_frame(sim.density, rnd, bloom_auto_sigma)
-            if frame.shape[:2] != (rh, rw):
-                frame = cv2.resize(frame, (rw, rh),
-                                   interpolation=cv2.INTER_LINEAR)
-            imageio.imwrite(fluid_dir / f"{i - render_start:06d}.png", frame)
-            if write_velocity:
-                np.save(vel_dir / f"{i - render_start:06d}.npy",
-                        np.stack([sim.u, sim.v], axis=-1).astype(np.float32))
-            stats["kinetic_energy"].append(round(sim.kinetic_energy(), 6))
-            stats["total_density"].append(round(sim.total_density(), 6))
-        if progress:
-            progress(step_i + 1, total_steps)
+    finally:
+        writer.shutdown(wait=True)
+    for f in pending:                   # surface any IO/encode error
+        f.result()
 
     stats_path = out_dir / "fluid_stats.json"
     stats_path.write_text(json.dumps(stats))
