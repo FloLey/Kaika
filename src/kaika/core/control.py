@@ -43,7 +43,7 @@ def _canny(rgb: np.ndarray) -> np.ndarray:
     return cv2.Canny(g, 50, 150)
 
 
-def _flow_rgb(vel: np.ndarray, size: int, scale: float) -> np.ndarray:
+def _flow_rgb(vel: np.ndarray, size_hw: tuple, scale: float) -> np.ndarray:
     """Colour-code a velocity field (H,W,2) as HSV flow, magnitude normalised by
     a clip-global scale so speed reads consistently across the whole clip."""
     u, v = vel[..., 0], vel[..., 1]
@@ -54,8 +54,9 @@ def _flow_rgb(vel: np.ndarray, size: int, scale: float) -> np.ndarray:
     hsv[..., 1] = 255
     hsv[..., 2] = (np.clip(mag / scale, 0.0, 1.0) * 255).astype(np.uint8)
     rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-    if rgb.shape[0] != size:
-        rgb = cv2.resize(rgb, (size, size), interpolation=cv2.INTER_LINEAR)
+    if rgb.shape[:2] != size_hw:
+        rgb = cv2.resize(rgb, (size_hw[1], size_hw[0]),
+                         interpolation=cv2.INTER_LINEAR)
     return rgb
 
 
@@ -85,15 +86,17 @@ def generate_control(fluid_dir: str | Path, velocity_dir: str | Path,
 
     for i, fp in enumerate(frames):
         rgb = imageio.imread(fp)[..., :3]
-        size = render_resolution or rgb.shape[0]
+        size_hw = rgb.shape[:2]      # control frames match the fluid frames
         if "depth" in dirs:
             imageio.imwrite(dirs["depth"] / fp.name, _depth(rgb, depth_scale))
         if "canny" in dirs:
             imageio.imwrite(dirs["canny"] / fp.name, _canny(rgb))
         if "flow" in dirs:
             vp = velocity_dir / (fp.stem + ".npy")
-            vel = np.load(vp) if vp.exists() else np.zeros((size, size, 2), np.float32)
-            imageio.imwrite(dirs["flow"] / fp.name, _flow_rgb(vel, size, flow_scale))
+            vel = (np.load(vp) if vp.exists()
+                   else np.zeros((*size_hw, 2), np.float32))
+            imageio.imwrite(dirs["flow"] / fp.name,
+                            _flow_rgb(vel, size_hw, flow_scale))
         if progress:
             progress(i + 1, n)
 

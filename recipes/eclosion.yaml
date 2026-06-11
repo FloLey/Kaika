@@ -1,15 +1,67 @@
 name: eclosion
+version: 2
 seed: 4217
 
-fluid:
-  resolution: 256
-  render_resolution: 512
+canvas:
+  width: 1024
+  height: 1024
+  fps: 24
+  sim_resolution: 256
+
+palettes:
+  main: ["#B84A74", "#34808A", "#E0A458", "#6C4A8C", "#3FA39B", "#D98A5E"]
+
+field:
   dissipation: 0.90
-  lookahead_s: 8.0
-  splats:
-    low:  { radius: 0.12, force: 9000, placement: anchored, lifetime_s: 0.8, emit: 0.22, drift: 0.7 }
-    high: { radius: 0.03, force: 3500, placement: scatter, max_per_beat: 5, lifetime_s: 0.3, emit: 0.11, drift: 0.3 }
-  vorticity: { min: 8, max: 38, driver: rms }
+  vorticity: 8.0
+  ambient: { strength: 1.6, scale: 2.6, speed: 0.16 }
+
+render:
+  exposure: 1.9
+  bloom: { amount: 0.65, threshold: 0.45 }
+  background: 0.04
+
+emitters:
+  - id: kicks
+    trigger:   { type: onset, band: low }
+    placement: { type: wander, center: [0.5, 0.5], wander_amp: 0.16, jitter: 0.09 }
+    direction: { type: radial_out, jitter: 0.5 }
+    color:     { type: palette, palette: main, index: 0 }
+    body:      { radius: 0.12, force: 9000, lifetime_s: 0.8, emit: 0.22, drift: 0.7, speed: 1.3 }
+  - id: hats
+    trigger:   { type: onset, band: high, max_per_frame: 5 }
+    placement: { type: random, region: [0.08, 0.08, 0.92, 0.92] }
+    direction: { type: random }
+    color:
+      type: palette_cycle
+      palette: main
+      start: 1
+      brightness: { source: centroid, range: [0.75, 1.25] }
+    body:      { radius: 0.03, force: 3500, lifetime_s: 0.3, emit: 0.11, drift: 0.3, speed: 2.6 }
+  - id: melody                      # mids exist visually: pitch -> x position
+    trigger:   { type: onset, band: mid, min_mag: 0.25 }
+    placement: { type: signal_x, source: chroma_argmax, range: [0.1, 0.9], y: 0.3 }
+    direction: { type: fixed, angle_deg: 90, jitter: 0.2 }
+    color:     { type: chroma_palette, palette: main }
+    body:      { radius: 0.05, force: 4000, lifetime_s: 0.6, emit: 0.13, drift: 0.5, speed: 1.8 }
+  - id: pulse                       # the beat grid breathes: a ring once per bar
+    trigger:   { type: beat, every: 4, min_mag: 0.3 }
+    placement: { type: fixed, points: [[0.5, 0.5]] }
+    direction: { type: radial_out, jitter: 0.0 }
+    count: 8
+    color:     { type: palette, palette: main, index: 0, opacity: 0.4 }
+    body:      { radius: 0.18, force: 2000, lifetime_s: 0.4, emit: 0.05 }
+  - id: tension                     # pre-drop anticipation
+    trigger:   { type: lookahead, section: drop, window_s: 8.0, every_frames: 3 }
+    placement: { type: random, region: [0.2, 0.2, 0.8, 0.8] }
+    direction: { type: random }
+    color:     { type: palette, palette: main, index: 0, brightness: { source: fixed, value: 0.6 } }
+    body:      { radius: 0.08, force: 1500, lifetime_s: 0.7, emit: 0.10, drift: 0.6, speed: 0.8 }
+
+modulators:
+  - { source: rms, target: field.vorticity, mode: absolute, range: [8, 38] }
+  - { source: rms, target: field.ambient.strength, mode: absolute, range: [0.19, 1.6] }
+  - { source: band.low, target: render.exposure, mode: absolute, range: [1.8, 2.1], smooth_s: 0.3 }
 
 diffusion:
   model: wan-2.2-vace
@@ -18,10 +70,6 @@ diffusion:
   control: [depth, flow]
   chunk_s: 5.0
   overlap_frames: 24
-
-post:
-  fps: 24
-  aspect: square
 
 prompts:
   base: "macro photography, botanical, dark background, soft light"

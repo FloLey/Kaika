@@ -8,10 +8,12 @@ from .score import Score
 from .project import Project, Segment
 from .analyze import analyze
 from .pipeline import (run_pipeline, run_fluid, run_diffuse, init_project_run,
+                       run_window_preview, run_segment_preview,
                        load_run, list_runs, RunResult)
 
 __all__ = [
     "Recipe", "load_recipe", "recipe_from_dict", "Score", "Project", "Segment",
     "analyze", "run_pipeline", "run_fluid", "run_diffuse", "init_project_run",
+    "run_window_preview", "run_segment_preview",
     "load_run", "list_runs", "RunResult",
 ]

@@ -2,6 +2,7 @@ import { useState } from "react";
 import Studio from "./components/Studio";
 import RenderView from "./components/RenderView";
 import Gallery from "./components/Gallery";
+import SettingsModal from "./components/SettingsModal";
 
 type View = "studio" | "render" | "gallery";
 
@@ -9,6 +10,7 @@ export default function App() {
   const [view, setView] = useState<View>("studio");
   const [runId, setRunId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
 
   const tab = (v: View, label: string) => (
     <button className={view === v ? "active" : ""} onClick={() => setView(v)}>
@@ -25,6 +27,7 @@ export default function App() {
           {tab("render", "Render")}
           {tab("gallery", "Gallery")}
         </nav>
+        <button className="gear" title="Settings" onClick={() => setSettings(true)}>⚙</button>
       </header>
 
       {view === "studio" && (
@@ -39,6 +42,7 @@ export default function App() {
       {view === "gallery" && (
         <Gallery onOpenInStudio={(rid) => { setRunId(rid); setView("studio"); }} />
       )}
+      {settings && <SettingsModal onClose={() => setSettings(false)} />}
     </div>
   );
 }

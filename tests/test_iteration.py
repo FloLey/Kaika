@@ -1,4 +1,4 @@
-"""Package A: fast iteration — segment preview + draft mode over the API."""
+"""Package A: fast iteration — window/segment preview + draft mode over the API."""
 from __future__ import annotations
 
 import pytest
@@ -25,10 +25,24 @@ def test_segment_preview_endpoint(client, tmp_path):
     j = _wait(client, job)
     assert j["status"] == "done", j.get("error")
     assert j["kind"] == "fluid_segment"
-    r = client.get(f"/api/runs/{run_id}/files/segment_preview.mp4")
+    r = client.get(f"/api/runs/{run_id}/files/window_preview.mp4")
     assert r.status_code == 200
     # full fluid was never built — only the segment window
     assert not (tmp_path / "runs" / run_id / "fluid").exists()
+
+
+def test_window_preview_endpoint(client, tmp_path):
+    data = _make_project(client, tmp_path)
+    run_id = data["run_id"]
+    job = client.post(f"/api/projects/{run_id}/preview_window",
+                      json={"t0": 0.2, "t1": 0.8, "draft": True}).json()["job_id"]
+    j = _wait(client, job)
+    assert j["status"] == "done", j.get("error")
+    assert j["kind"] == "fluid_window"
+    r = client.get(f"/api/runs/{run_id}/files/window_preview.mp4")
+    assert r.status_code == 200
+    m = client.get(f"/api/runs/{run_id}").json()
+    assert abs(m["window_preview"]["start"] - 0.2) < 0.05   # frame-rounded
 
 
 def test_segment_preview_bad_index(client, tmp_path):

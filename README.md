@@ -4,7 +4,9 @@ Turn a piece of music into a video clip. A fluid simulation is *danced* by audio
 analysis, then metamorphosed into living forms by a video diffusion model — all
 driven from a local web app launched with a single command.
 
-Full specification: [`docs/SPEC.md`](docs/SPEC.md).
+Specifications: [`docs/SPEC.md`](docs/SPEC.md) (v0.2, the pipeline) and
+[`docs/SPEC_V2.md`](docs/SPEC_V2.md) (v2 — recipe-driven simulation, live
+studio, chat copilot — implemented).
 
 ```
 SON ──▶ FLUIDE ──▶ FLORAISON
@@ -23,8 +25,70 @@ kaika serve                              # launch the local app (http://localhos
 kaika                                    # bare command = serve + open browser
 ```
 
-`uvx kaika` works once published: the compiled frontend and the recipes ship
-embedded in the wheel, so there is no npm at runtime and no config file to edit.
+### Docker
+
+```bash
+docker build -t kaika .
+docker run -p 8400:8400 -v "$(pwd)/data:/data" kaika
+# or: docker compose up
+```
+
+Open <http://localhost:8400>. Runs, uploads and settings persist under
+`./data` (`data/runs`, `data/.kaika`).
+
+### What you still need to configure
+
+Everything works out of the box **except** two optional integrations:
+
+1. **Chat copilot (LLM)** — open **Settings (⚙ top right)**, pick a provider
+   (**Anthropic Claude** or **Google Gemini**), paste the matching API key and
+   optionally a model name. Keys are stored server-side
+   (`data/.kaika/settings.json` in Docker, `.kaika/settings.json` locally) and
+   never sent to the browser. Without a key, everything except the chat panel
+   works.
+2. **GPU diffusion (E4 `comfyui` backend)** — the default `diffusion.backend:
+   local` renders the final clip with a GPU-free stylizer. For the real
+   figurative metamorphosis, point the recipe at a running ComfyUI/Wan
+   endpoint (see `src/kaika/core/diffuse/`); that needs a rented NVIDIA GPU
+   and is not exercised in CI.
+
+## The studio (v2)
+
+Three panes: **hear it, see it, turn a knob.**
+
+- **Live preview** — a looping window (~6 s) around the playhead, re-rendered
+  at draft quality after every edit (debounced; checkpoints make previews
+  anywhere on the timeline cheap). “HQ window” renders the same window at full
+  resolution; “Preview full track” / “Generate” run the full pipeline.
+- **Waveform + lanes** — beats, onsets and editable sections, plus signal
+  lanes (RMS/flux, band split) and draggable timeline pins.
+- **Schema-driven inspector** — every recipe field is reachable in generated
+  forms (primary fields on the card face, the rest behind *More settings*);
+  the YAML tab is the same document with total control. Any numeric field can
+  be **pinned** to a per-project session-controls strip. Fields driven by a
+  modulator show a `~` badge.
+- **Chat copilot** — “at 2 seconds, I want 3 sources aligned horizontally in
+  the center” → the assistant edits the project through validated tools,
+  queues a preview, and every turn is one undoable revision.
+
+## The recipe (v2)
+
+A recipe **fully** describes the render — no behavior lives only in code:
+
+| Block | What it controls |
+| --- | --- |
+| `canvas` | output width/height/fps + sim resolution (rectangular, FFT-friendly grids — 9:16, 16:9, 1:1, anything) |
+| `analysis` | band split edges, onset detection strictness |
+| `field` / `render` | solver + tone-mapping, every former hardcoded constant exposed with its old value as default |
+| `palettes` | named color lists |
+| `emitters` | the sources: trigger (onset low/mid/high · beat every N · continuous · lookahead · manual) × placement (fixed/random/wander/line/circle/grid/signal-driven) × direction × color (palette, cycle, chroma→hue, chroma→palette, centroid ramp…) × body physics |
+| `modulators` | any audio signal (rms, flux, chroma, beat phase, band energies, …) → any numeric parameter, `absolute`/`add`/`scale` |
+| `timeline` | authored directives: `spawn`/`set`/`mute`/`unmute` at seconds or musical anchors (`section:drop+4`, `beat:32`) |
+| `diffusion` / `post` / `prompts` | unchanged from v1 |
+
+v1 recipes load transparently (upgraded in memory, same behavior).
+Determinism: same seed → identical video; window previews replay the exact
+spawn schedule of the full run (stateless per-event RNG).
 
 ## The pipeline
 
@@ -32,58 +96,14 @@ Five stages in a chain, each with files on disk, each independently testable.
 
 | Stage | Module | In → Out |
 | --- | --- | --- |
-| **E1** analyze   | `kaika.core.analyze`  | audio → `score.json` (frame-aligned partition) |
-| **E2** simulate  | `kaika.core.simulate` | score + recipe → `fluid/*.png`, `velocity/*.npy`, `fluid_stats.json` |
+| **E1** analyze   | `kaika.core.analyze`  | audio → `score.json` (frame-aligned partition: rms, bands, chroma, flux, beat/bar phase, onsets, beats, sections) |
+| **E2** simulate  | `kaika.core.simulate` | score + recipe/project → `fluid/*.png`, `velocity/*.npy`, checkpoints |
 | **E3** control   | `kaika.core.control`  | fluid → `control/{depth,canny,flow}/` |
 | **E4** diffuse   | `kaika.core.diffuse`  | fluid + control → `styled/*.png` |
 | **E5** post      | `kaika.core.post`     | styled + audio → `kaika_final.mp4` |
 
-`kaika.core.pipeline.run_pipeline` orchestrates them into a reproducible
-`runs/<id>/` directory (frozen recipe + score + every intermediate + manifest).
-
-### Design notes
-
-- **E2 is the movement skeleton**, not the final image: a deterministic NumPy
-  stable-fluids solver (toroidal, Jos-Stam style). Same seed → identical video.
-  (Taichi/GPU is a drop-in acceleration; NumPy keeps it runnable and testable
-  everywhere.)
-- **The E3→E4 boundary is the most important interface** — "control frames in,
-  styled frames out". Everything model-specific lives behind `Diffuser`, so E4
-  is replaceable when vid2vid models churn.
-- **E4 has two backends.** `local` is a deterministic, GPU-free stylizer so the
-  whole pipeline produces a clip on any machine (it is *not* the figurative
-  metamorphosis — that needs the GPU). `comfyui` drives ComfyUI / Wan 2.2 on a
-  rented GPU: chunking with section-aligned seams, a prompt schedule from the
-  score, near-lossless **video** transfer (never thousands of PNGs), and a
-  versioned workflow template (`diffuse/workflows/`). Provisioning scaffold in
-  `diffuse/provision.py`.
-- **Sync check** (E5) correlates the audio RMS envelope with the fluid's
-  kinetic energy — deterministically audio-driven — not styled-frame luminance.
-
-## The app
-
-`kaika serve` runs FastAPI + a single-worker job queue + SQLite + WebSocket
-progress, and serves the React/Vite/TS frontend. Three screens:
-
-1. **Studio** — drop audio; analysis splits it into **editable segments**. Click
-   a segment to set *its* prompt and *its* fluid parameters (vorticity, kick/hat
-   emit, ambient stir). Then **Preview fluid** (no GPU) to iterate on the motion.
-2. **Render** — the stages live with progress; watch the fluid preview, and when
-   the motion is right, **Generate** runs the diffusion to the final clip.
-3. **Gallery** — every run, replayable, with its frozen recipe and sync info.
-
-### Projects & staged rendering
-
-A **Project** (`runs/<id>/project.json`) is the mutable working doc: the track's
-segments, each with a prompt and partial fluid overrides. A single *continuous*
-simulation reads these per-frame, so parameters vary by segment without breaking
-the flow. The pipeline runs in two resumable stages:
-
-- **fluid** (`run_fluid`) — E1+E2+E3 + a previewable fluid MP4. Fast, no GPU.
-- **diffuse** (`run_diffuse`) — E4+E5, resuming the cached fluid with the
-  project's per-segment prompts.
-
-Nothing the UI shows is hidden state: runs live on disk under `runs/`.
+`runs/<id>/` holds the frozen recipe + project + score + every intermediate +
+manifest (including warnings, e.g. unbound timeline anchors) + a revision log.
 
 ## Developing the frontend
 
@@ -100,23 +120,29 @@ npm run build    # re-emits into ../src/kaika/webapp_dist
 
 ```
 kaika/
-├── recipes/                 # YAML visual identities (eclosion, encre)
+├── recipes/                 # YAML visual identities (eclosion, encre) — v2
 ├── src/kaika/
-│   ├── core/                # E1–E5 library + pipeline (UI and CLI both call this)
+│   ├── core/                # the library (UI and CLI both call this)
 │   │   ├── analyze.py  simulate.py  control.py  post.py  pipeline.py
-│   │   ├── recipe.py  score.py  media.py
+│   │   ├── recipe.py  score.py  project.py  timeline.py  schema.py
+│   │   ├── chat.py          # copilot: tools + Anthropic/Gemini backends
 │   │   └── diffuse/         # E4: base, local, comfy, provision, workflows/
 │   ├── server/              # FastAPI app, job queue, SQLite
 │   ├── webapp_dist/         # built frontend (embedded)
 │   └── cli.py               # `kaika` (serve) · `kaika run …` (scripting)
-├── webapp/                  # React/Vite/TS sources
-├── tests/                   # pytest, one module per stage + server + e2e
+├── webapp/                  # React/Vite/TS sources (three-pane studio)
+├── tests/                   # pytest — engine, migration, chat, API, e2e
+├── Dockerfile  docker-compose.yml
 └── runs/                    # one dir per render (gitignored)
 ```
 
 ## Sandbox honesty
 
 Everything in this repo runs and is tested with **no GPU** (`pytest` is green
-end-to-end). The figurative flower metamorphosis requires the `comfyui` backend
-on a rented NVIDIA GPU; that code path is structured, unit-tested offline, and
-gated behind a reachable ComfyUI endpoint, but is not exercised here.
+end-to-end, including the chat tool layer via a fake provider). The figurative
+flower metamorphosis requires the `comfyui` backend on a rented NVIDIA GPU;
+that code path is structured and unit-tested offline but not exercised here.
+Checkpoint-resumed window previews are *visually* equivalent to the full run
+(identical spawns/colors/state), not bit-identical — NumPy's vectorized math
+rounds 1 ULP differently across heap states and the solver is chaotic; final
+renders never use checkpoints.
