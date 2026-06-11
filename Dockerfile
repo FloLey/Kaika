@@ -28,9 +28,9 @@ WORKDIR /app
 # takes seconds.
 COPY pyproject.toml ./
 RUN python -c "import tomllib; \
-    [print(d) for d in tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']]" \
+    print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" \
     > /tmp/requirements.txt \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+    && pip install --no-cache-dir hatchling -r /tmp/requirements.txt
 
 # GPU by default: CuPy installs fine without a GPU and the engine falls back
 # to CPU at runtime when CUDA isn't reachable. Build with --build-arg GPU=0
@@ -45,7 +45,9 @@ COPY README.md ./
 COPY src src
 COPY recipes recipes
 COPY --from=web /build/src/kaika/webapp_dist src/kaika/webapp_dist
-RUN pip install --no-cache-dir --no-deps .
+# --no-build-isolation: reuse the hatchling installed in the deps layer
+# instead of re-downloading the build backend on every code change.
+RUN pip install --no-cache-dir --no-deps --no-build-isolation .
 
 # Runs land in /data/runs; uploads + settings (LLM keys) in /data/.kaika.
 VOLUME /data
