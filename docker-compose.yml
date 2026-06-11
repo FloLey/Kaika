@@ -1,0 +1,9 @@
+services:
+  kaika:
+    build: .
+    ports:
+      - "8400:8400"
+    volumes:
+      # runs/, uploads and settings (LLM keys) persist here
+      - ./data:/data
+    restart: unless-stopped

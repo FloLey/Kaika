@@ -1,89 +1,69 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import yaml from "js-yaml";
-import { api, Analysis, ProjectDoc, RecipeEntry, Segment } from "../api";
+// Studio v2 — the three-pane instrument: hear it (waveform + lanes), see it
+// (looping window preview), turn a knob (schema-driven inspector). Any edit
+// re-renders the same few seconds at draft quality in seconds; a chat copilot
+// edits the project through validated tools.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, Analysis, ProjectDoc, RecipeEntry, Segment, Signals,
+         TimelineDirective, getPath, setPath } from "../api";
 import Waveform from "./Waveform";
+import Lanes from "./Lanes";
+import Inspector from "./Inspector";
+import PreviewPane from "./PreviewPane";
+import ChatPanel from "./ChatPanel";
+import { FormCtx } from "./SchemaForm";
 
 interface Props {
-  initialRunId?: string | null;       // reopen an existing project (Gallery)
-  onPreview: (runId: string, jobId: string) => void;
+  initialRunId?: string | null;
+  onPreview: (runId: string, jobId: string) => void;   // full-track → Render view
 }
 
 const MIN_SEG_S = 0.4;
-
-// read/write a nested value in a segment's partial fluid-override object
-function setNested(obj: any, path: string[], value: any) {
-  const next = structuredClone(obj || {});
-  let o = next;
-  for (let i = 0; i < path.length - 1; i++) o = o[path[i]] ??= {};
-  o[path[path.length - 1]] = value;
-  return next;
-}
-function getNested(obj: any, path: string[], fallback: number): number {
-  let o = obj;
-  for (const k of path) { if (o == null) return fallback; o = o[k]; }
-  return o == null ? fallback : o;
-}
-function hasNested(obj: any, path: string[]): boolean {
-  let o = obj;
-  for (const k of path) { if (o == null || typeof o !== "object" || !(k in o)) return false; o = o[k]; }
-  return o !== undefined;
-}
-
-// [label, path, default, min, max, step]
-type Row = [string, string[], number, number, number, number];
-const PRIMARY: Row[] = [
-  ["Vorticity max", ["vorticity", "max"], 38, 5, 90, 1],
-  ["Kick emit", ["splats", "low", "emit"], 0.22, 0, 0.6, 0.02],
-  ["Hat emit", ["splats", "high", "emit"], 0.11, 0, 0.4, 0.01],
-  ["Ambient stir", ["ambient_strength"], 1.6, 0, 6, 0.2],
-];
-const ADVANCED: Row[] = [
-  ["Kick lifetime (s)", ["splats", "low", "lifetime_s"], 0.8, 0.2, 3, 0.1],
-  ["Hat lifetime (s)", ["splats", "high", "lifetime_s"], 0.3, 0.1, 1.5, 0.05],
-  ["Kick speed", ["splats", "low", "speed"], 1.3, 0, 4, 0.1],
-  ["Hat speed", ["splats", "high", "speed"], 2.6, 0, 5, 0.1],
-  ["Exposure", ["exposure"], 1.9, 0.5, 4, 0.1],
-  ["Bloom", ["bloom"], 0.65, 0, 2, 0.05],
-  ["Dissipation", ["dissipation"], 0.9, 0.8, 0.99, 0.01],
-];
+const WINDOW_S = 6.0;
+const SAVE_DEBOUNCE_MS = 500;
 
 export default function Studio({ initialRunId, onPreview }: Props) {
   const [recipes, setRecipes] = useState<RecipeEntry[]>([]);
   const [recipeName, setRecipeName] = useState("eclosion");
+  const [schema, setSchema] = useState<any>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [project, setProject] = useState<ProjectDoc | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [signals, setSignals] = useState<Signals | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(false);
   const [err, setErr] = useState("");
-  const [draft, setDraft] = useState(true);
-  const [tab, setTab] = useState<"segment" | "recipe" | "yaml">("segment");
-  const [yamlText, setYamlText] = useState("");
-  const [yamlErr, setYamlErr] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [previewJob, setPreviewJob] = useState<string | null>(null);
+  const [previewVersion, setPreviewVersion] = useState(0);
+  const [livePreview, setLivePreview] = useState(true);
   const audioRef = useRef<HTMLAudioElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
+  const playheadRef = useRef(0);
+  playheadRef.current = playhead;
 
   useEffect(() => { api.recipes().then(setRecipes).catch(() => {}); }, []);
+  useEffect(() => { api.schema().then(setSchema).catch(() => {}); }, []);
 
   const adopt = (p: Awaited<ReturnType<typeof api.getProject>>) => {
     setRunId(p.run_id);
     setProject(p.project);
     if (p.analysis) setAnalysis(p.analysis);
     setAudioUrl(p.audio_url ?? null);
-    setSel(0);
+    setWarnings(p.manifest?.warnings ?? []);
+    api.signals(p.run_id).then(setSignals).catch(() => {});
   };
 
   useEffect(() => {
     if (initialRunId) {
-      api.getProject(initialRunId).then(adopt).catch((e) => setErr(String(e.message || e)));
+      api.getProject(initialRunId).then(adopt)
+        .catch((e) => setErr(String(e.message || e)));
     }
   }, [initialRunId]);
 
-  // playhead follows the audio element while playing
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -96,20 +76,83 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  // debounced autosave of segment edits
-  const scheduleSave = useCallback((segs: Segment[]) => {
+  // ---- the live loop: save (debounced) then re-render the window ----------
+  const kickPreview = useCallback(async (rid: string) => {
+    if (!livePreview) return;
+    const t0 = Math.max(0, playheadRef.current - 1);
+    try {
+      const { job_id } = await api.previewWindow(rid, t0, t0 + WINDOW_S, true);
+      setPreviewJob(job_id);
+    } catch (e: any) { setErr(String(e.message || e)); }
+  }, [livePreview]);
+
+  const scheduleSave = useCallback((next: ProjectDoc) => {
     if (!runId) return;
     window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      api.updateProject(runId, { segments: segs }).catch(() => {});
-    }, 700);
-  }, [runId]);
+    saveTimer.current = window.setTimeout(async () => {
+      try {
+        setErr("");
+        await api.updateProject(runId, {
+          recipe: next.recipe, segments: next.segments,
+          timeline: next.timeline, ui_pins: next.ui_pins,
+        });
+        kickPreview(runId);
+      } catch (e: any) { setErr(String(e.message || e)); }
+    }, SAVE_DEBOUNCE_MS);
+  }, [runId, kickPreview]);
 
-  const setSegments = (segs: Segment[]) => {
-    setProject((p) => (p ? { ...p, segments: segs } : p));
-    scheduleSave(segs);
+  const mutate = (fn: (p: ProjectDoc) => ProjectDoc) => {
+    setProject((p) => {
+      if (!p) return p;
+      const next = fn(p);
+      scheduleSave(next);
+      return next;
+    });
   };
 
+  // recipe dot-path setter for the schema-driven inspector
+  const onSet = useCallback((path: string, value: any) => {
+    mutate((p) => ({ ...p, recipe: setPath(p.recipe, path, value) }));
+  }, [scheduleSave]);                                   // eslint-disable-line
+
+  const onReplaceRecipe = (recipe: any, onErrCb: (e: string) => void) => {
+    if (!runId) return;
+    api.setRecipe(runId, recipe).then((p) => {
+      setProject(p.project);
+      kickPreview(runId);
+    }).catch((e) => onErrCb(String(e.message || e)));
+  };
+
+  // modulated paths (both by emitter id and list index, for badges)
+  const modulated = useMemo(() => {
+    const out = new Set<string>();
+    const ems: any[] = project?.recipe?.emitters ?? [];
+    for (const m of project?.recipe?.modulators ?? []) {
+      out.add(m.target);
+      const parts = (m.target as string).split(".");
+      if (parts[0] === "emitters") {
+        const idx = ems.findIndex((e) => e.id === parts[1]);
+        if (idx >= 0) out.add(["emitters", String(idx), ...parts.slice(2)].join("."));
+      }
+    }
+    return out;
+  }, [project?.recipe]);
+
+  const pins = useMemo(() => new Set(project?.ui_pins ?? []), [project?.ui_pins]);
+  const togglePin = (path: string) => mutate((p) => ({
+    ...p,
+    ui_pins: p.ui_pins?.includes(path)
+      ? p.ui_pins.filter((x) => x !== path)
+      : [...(p.ui_pins ?? []), path],
+  }));
+
+  const aspect = (project?.recipe?.canvas?.width ?? 1)
+    / (project?.recipe?.canvas?.height ?? 1);
+
+  const ctx: FormCtx = { onSet, modulated, pins, onPin: togglePin,
+                         canvasAspect: aspect || 1 };
+
+  // ---- uploads / actions ---------------------------------------------------
   const upload = async (file: File) => {
     setErr(""); setBusy(true);
     try {
@@ -119,97 +162,36 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     finally { setBusy(false); }
   };
 
-  // ---- segment operations -------------------------------------------------
-  const updateSegment = (patch: Partial<Segment>) => {
-    if (!project) return;
-    setSegments(project.segments.map((s, i) => (i === sel ? { ...s, ...patch } : s)));
-  };
-  const setFluid = (path: string[], value: number) =>
-    updateSegment({ fluid: setNested(project!.segments[sel].fluid, path, value) });
-
-  const moveBoundary = (b: number, t: number) => {
-    if (!project) return;
-    const segs = structuredClone(project.segments);
-    const lo = segs[b - 1].start + MIN_SEG_S;
-    const hi = segs[b].end - MIN_SEG_S;
-    const tt = Math.max(lo, Math.min(hi, t));
-    segs[b - 1].end = tt;
-    segs[b].start = tt;
-    setSegments(segs);
-  };
-
-  const splitAtPlayhead = () => {
-    if (!project) return;
-    const t = playhead;
-    const i = project.segments.findIndex((s) => t > s.start + MIN_SEG_S && t < s.end - MIN_SEG_S);
-    if (i < 0) return;
-    const segs = structuredClone(project.segments);
-    const s = segs[i];
-    const right: Segment = { ...structuredClone(s), start: t };
-    s.end = t;
-    segs.splice(i + 1, 0, right);
-    setSegments(segs);
-    setSel(i + 1);
-  };
-
-  const mergeWithNext = () => {
-    if (!project || sel >= project.segments.length - 1) return;
-    const segs = structuredClone(project.segments);
-    segs[sel].end = segs[sel + 1].end;
-    segs.splice(sel + 1, 1);
-    setSegments(segs);
-  };
-
-  // ---- recipe (global) ----------------------------------------------------
-  const setRecipeField = (path: string[], value: any) => {
-    if (!project || !runId) return;
-    const rec = setNested(project.recipe, path, value);
-    setProject({ ...project, recipe: rec });
-    window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      api.updateProject(runId, { recipe: rec }).catch(() => {});
-    }, 700);
-  };
-
-  const openYaml = () => {
-    setYamlText(yaml.dump(project?.recipe ?? {}, { noRefs: true }));
-    setYamlErr("");
-    setTab("yaml");
-  };
-  const applyYaml = async () => {
-    if (!project || !runId) return;
-    try {
-      const rec = yaml.load(yamlText) as any;
-      setProject({ ...project, recipe: rec });
-      await api.updateProject(runId, { recipe: rec });
-      setYamlErr("");
-      setTab("recipe");
-    } catch (e: any) { setYamlErr(String(e.message || e)); }
-  };
-
-  // ---- actions ------------------------------------------------------------
   const flushSave = async () => {
     if (!runId || !project) return;
     window.clearTimeout(saveTimer.current);
-    await api.updateProject(runId, { segments: project.segments, recipe: project.recipe });
-  };
-  const previewSegment = async () => {
-    if (!runId) return;
-    setBusy(true); setErr("");
-    try {
-      await flushSave();
-      const { job_id } = await api.previewSegment(runId, sel, draft);
-      onPreview(runId, job_id);
-    } catch (e: any) { setErr(String(e.message || e)); setBusy(false); }
+    await api.updateProject(runId, { recipe: project.recipe,
+      segments: project.segments, timeline: project.timeline,
+      ui_pins: project.ui_pins });
   };
   const previewFull = async () => {
     if (!runId) return;
     setBusy(true); setErr("");
     try {
       await flushSave();
-      const { job_id } = await api.previewProject(runId, draft);
+      const { job_id } = await api.previewProject(runId, false);
       onPreview(runId, job_id);
     } catch (e: any) { setErr(String(e.message || e)); setBusy(false); }
+  };
+  const generate = async () => {
+    if (!runId) return;
+    setBusy(true); setErr("");
+    try {
+      await flushSave();
+      const { job_id } = await api.generateProject(runId);
+      onPreview(runId, job_id);
+    } catch (e: any) { setErr(String(e.message || e)); setBusy(false); }
+  };
+  const hqWindow = async () => {
+    if (!runId) return;
+    const t0 = Math.max(0, playhead - 1);
+    const { job_id } = await api.previewWindow(runId, t0, t0 + WINDOW_S, false);
+    setPreviewJob(job_id);
   };
 
   const togglePlay = () => {
@@ -222,40 +204,72 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     const a = audioRef.current;
     if (a) a.currentTime = t;
     setPlayhead(t);
+    if (runId) kickPreview(runId);
   };
 
-  const resetSegment = () => updateSegment({ fluid: {} });
+  const moveBoundary = (b: number, t: number) => {
+    if (!project) return;
+    const segs = structuredClone(project.segments);
+    const lo = segs[b - 1].start + MIN_SEG_S;
+    const hi = segs[b].end - MIN_SEG_S;
+    const tt = Math.max(lo, Math.min(hi, t));
+    segs[b - 1].end = tt;
+    segs[b].start = tt;
+    mutate((p) => ({ ...p, segments: segs }));
+  };
+  const splitAtPlayhead = () => {
+    if (!project) return;
+    const t = playhead;
+    const i = project.segments.findIndex(
+      (s) => t > s.start + MIN_SEG_S && t < s.end - MIN_SEG_S);
+    if (i < 0) return;
+    const segs = structuredClone(project.segments);
+    const right: Segment = { ...structuredClone(segs[i]), start: t };
+    segs[i].end = t;
+    segs.splice(i + 1, 0, right);
+    mutate((p) => ({ ...p, segments: segs }));
+    setSel(i + 1);
+  };
+  const mergeWithNext = () => {
+    if (!project || sel >= project.segments.length - 1) return;
+    const segs = structuredClone(project.segments);
+    segs[sel].end = segs[sel + 1].end;
+    segs.splice(sel + 1, 1);
+    mutate((p) => ({ ...p, segments: segs }));
+  };
 
-  const seg = project?.segments[sel];
-  const nSeg = project?.segments.length ?? 0;
-  const palette: string[] = project?.recipe?.fluid?.palette ?? [];
+  const setTimeline = (tl: TimelineDirective[]) =>
+    mutate((p) => ({ ...p, timeline: tl }));
 
-  const sliderRow = ([name, path, dflt, min, max, step]: Row) => {
-    const ov = seg ? hasNested(seg.fluid, path) : false;
+  // pinned session controls strip
+  const pinControls = (project?.ui_pins ?? []).map((path) => {
+    const v = getPath(project!.recipe, path);
+    if (typeof v !== "number") return null;
     return (
-      <div key={name} className="slider-row">
-        <label className={`field ${ov ? "ov" : ""}`}>
-          {ov && <span className="ov-dot" title="overridden for this segment">●</span>}
-          {name} <span className="val">{getNested(seg!.fluid, path, dflt)}</span>
+      <div key={path} className="pin-ctl" title={path}>
+        <label className="field">{path.split(".").slice(-2).join(".")}
+          <span className="val">{(+v).toFixed(2).replace(/\.?0+$/, "")}</span>
+          <button className="pin on" onClick={() => togglePin(path)}>✕</button>
         </label>
-        <input type="range" min={min} max={max} step={step}
-          value={getNested(seg!.fluid, path, dflt)}
-          onChange={(e) => setFluid(path, parseFloat(e.target.value))} />
+        <input type="range" min={0} max={Math.max(1, v * 3)} step={v > 10 ? 1 : 0.01}
+          value={v} onChange={(e) => onSet(path, parseFloat(e.target.value))} />
       </div>
     );
-  };
+  });
 
   return (
-    <div className="grid">
-      <div>
+    <div className="studio3">
+      <div className="studio-main">
         {!project && (
           <div className={`drop ${hover ? "hover" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setHover(true); }}
             onDragLeave={() => setHover(false)}
-            onDrop={(e) => { e.preventDefault(); setHover(false); const f = e.dataTransfer.files[0]; if (f) upload(f); }}>
+            onDrop={(e) => { e.preventDefault(); setHover(false);
+              const f = e.dataTransfer.files[0]; if (f) upload(f); }}>
             <p style={{ fontSize: 18, marginBottom: 10 }}>Drop an audio file here</p>
             <p className="muted">analysis splits it into editable segments</p>
-            <label className="btn ghost" style={{ display: "inline-block", width: "auto", marginTop: 12 }}>
+            <label className="btn ghost" style={{ display: "inline-block",
+              width: "auto", marginTop: 12 }}>
               Choose file
               <input type="file" accept="audio/*" style={{ display: "none" }}
                 onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
@@ -267,148 +281,109 @@ export default function Studio({ initialRunId, onPreview }: Props) {
                 {recipes.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
               </select>
             </div>
+            {busy && <p className="muted" style={{ marginTop: 10 }}>analyzing…</p>}
           </div>
         )}
 
-        {project && analysis && (
-          <div className="card">
-            <div className="transport">
-              <button className="play" onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
-              <span className="mono muted">{playhead.toFixed(1)}s / {analysis.duration_s.toFixed(1)}s</span>
-              <span className="mono muted" style={{ marginLeft: "auto" }}>
-                {analysis.tempo_bpm} BPM · {project.segments.length} segments
-              </span>
-            </div>
-            {audioUrl && (
-              <audio ref={audioRef} src={audioUrl} onEnded={() => setPlaying(false)} />
+        {project && runId && (
+          <>
+            <PreviewPane runId={runId} jobId={previewJob}
+              version={previewVersion} aspect={aspect || 1}
+              windowLabel={`window ${Math.max(0, playhead - 1).toFixed(1)}–${(Math.max(0, playhead - 1) + WINDOW_S).toFixed(1)}s · draft`}
+              onJobDone={() => { setPreviewJob(null);
+                setPreviewVersion((v) => v + 1); }}
+              onHq={hqWindow} />
+
+            {(project.ui_pins?.length ?? 0) > 0 && (
+              <div className="card pin-strip">{pinControls}</div>
             )}
-            <Waveform
-              waveform={analysis.waveform}
-              duration={analysis.duration_s}
-              segments={project.segments}
-              selected={sel}
-              beats={(analysis.beats || []).map((b) => b.t)}
-              onsets={{ low: analysis.onsets?.low ?? [], high: analysis.onsets?.high ?? [] }}
-              playhead={playhead}
-              onSelect={setSel}
-              onSeek={seek}
-              onMoveBoundary={moveBoundary}
-            />
-            <div className="seg-ops">
-              <button className="btn ghost slim" onClick={splitAtPlayhead}>Split at playhead</button>
-              <button className="btn ghost slim" onClick={mergeWithNext}
-                disabled={!project || sel >= project.segments.length - 1}>
-                Merge with next
-              </button>
-            </div>
-          </div>
+
+            {analysis && (
+              <div className="card">
+                <div className="transport">
+                  <button className="play" onClick={togglePlay}>
+                    {playing ? "❚❚" : "▶"}</button>
+                  <span className="mono muted">
+                    {playhead.toFixed(1)}s / {analysis.duration_s.toFixed(1)}s
+                  </span>
+                  <label className="check" style={{ marginLeft: 12 }}
+                    title="re-render the preview window after every edit">
+                    <input type="checkbox" checked={livePreview}
+                      onChange={(e) => setLivePreview(e.target.checked)} />
+                    live preview
+                  </label>
+                  <span className="mono muted" style={{ marginLeft: "auto" }}>
+                    {analysis.tempo_bpm.toFixed(0)} BPM ·{" "}
+                    {project.segments.length} segments
+                  </span>
+                </div>
+                {audioUrl && (
+                  <audio ref={audioRef} src={audioUrl}
+                    onEnded={() => setPlaying(false)} />
+                )}
+                <Waveform
+                  waveform={analysis.waveform}
+                  duration={analysis.duration_s}
+                  segments={project.segments}
+                  selected={sel}
+                  beats={(analysis.beats || []).map((b) => b.t)}
+                  onsets={{ low: analysis.onsets?.low ?? [],
+                            high: analysis.onsets?.high ?? [] }}
+                  playhead={playhead}
+                  onSelect={setSel}
+                  onSeek={seek}
+                  onMoveBoundary={moveBoundary}
+                />
+                {signals && (
+                  <Lanes signals={signals} duration={analysis.duration_s}
+                    timeline={project.timeline ?? []} playhead={playhead}
+                    onSeek={seek}
+                    onMovePin={(i, t) => {
+                      const tl = [...(project.timeline ?? [])];
+                      tl[i] = { ...tl[i], at: t };
+                      setTimeline(tl);
+                    }} />
+                )}
+                <div className="seg-ops">
+                  <button className="btn ghost slim" onClick={splitAtPlayhead}>
+                    Split at playhead</button>
+                  <button className="btn ghost slim" onClick={mergeWithNext}
+                    disabled={sel >= project.segments.length - 1}>
+                    Merge with next</button>
+                  <span style={{ flex: 1 }} />
+                  <button className="btn ghost slim" disabled={busy}
+                    onClick={previewFull}>Preview full track</button>
+                  <button className="btn slim" disabled={busy} onClick={generate}>
+                    Generate (diffusion)</button>
+                </div>
+              </div>
+            )}
+            {warnings.length > 0 && (
+              <div className="card warn">
+                {warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+              </div>
+            )}
+            {err && <p className="err">{err}</p>}
+
+            <ChatPanel runId={runId}
+              onProjectChanged={() => api.getProject(runId).then((p) => {
+                setProject(p.project);
+                setWarnings(p.manifest?.warnings ?? []);
+              })}
+              onPreviewJob={(jid) => setPreviewJob(jid)} />
+          </>
         )}
-        {err && <p className="err">{err}</p>}
+        {!project && err && <p className="err">{err}</p>}
       </div>
 
-      <aside>
-        {project && (
-          <div className="card inspector">
-            <div className="insp-tabs">
-              <button className={tab === "segment" ? "active" : ""} onClick={() => setTab("segment")}>Segment</button>
-              <button className={tab === "recipe" ? "active" : ""} onClick={() => setTab("recipe")}>Recipe</button>
-              <button className={tab === "yaml" ? "active" : ""} onClick={openYaml}>YAML</button>
-            </div>
-
-            <div className="insp-body">
-              {tab === "segment" && seg && (
-                <>
-                  <div className="seg-nav">
-                    <button disabled={sel === 0} onClick={() => setSel(sel - 1)}>‹</button>
-                    <span className="mono">{sel + 1}/{nSeg} · {seg.start.toFixed(1)}–{seg.end.toFixed(1)}s</span>
-                    <button disabled={sel >= nSeg - 1} onClick={() => setSel(sel + 1)}>›</button>
-                  </div>
-
-                  <label className="field">Label</label>
-                  <input type="text" value={seg.label}
-                    onChange={(e) => updateSegment({ label: e.target.value })} />
-
-                  <label className="field">Prompt (diffusion)</label>
-                  <textarea value={seg.prompt}
-                    onChange={(e) => updateSegment({ prompt: e.target.value })} />
-
-                  {PRIMARY.map(sliderRow)}
-
-                  <details className="advanced">
-                    <summary>More settings</summary>
-                    {ADVANCED.map(sliderRow)}
-                  </details>
-
-                  <button className="btn ghost slim reset" onClick={resetSegment}>
-                    Reset segment to recipe defaults
-                  </button>
-                </>
-              )}
-
-              {tab === "recipe" && (
-                <>
-                  <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                    Global defaults — segments inherit these unless overridden.
-                  </p>
-                  <label className="field">Seed</label>
-                  <input type="number" value={project.recipe.seed ?? 0}
-                    onChange={(e) => setRecipeField(["seed"], parseInt(e.target.value) || 0)} />
-
-                  <label className="field">Palette</label>
-                  <div className="palette-row">
-                    {palette.map((c, i) => (
-                      <input key={i} type="color" value={c}
-                        onChange={(e) => {
-                          const p = [...palette]; p[i] = e.target.value;
-                          setRecipeField(["fluid", "palette"], p);
-                        }} />
-                    ))}
-                    <button className="btn ghost slim" onClick={() =>
-                      setRecipeField(["fluid", "palette"], [...palette, "#888888"])}>+</button>
-                    {palette.length > 1 && (
-                      <button className="btn ghost slim" onClick={() =>
-                        setRecipeField(["fluid", "palette"], palette.slice(0, -1))}>−</button>
-                    )}
-                  </div>
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    First colour = kicks; the rest cycle on hats.
-                  </p>
-
-                  <label className="field">
-                    Denoise strength <span className="val">{project.recipe.diffusion?.strength ?? 0.5}</span>
-                  </label>
-                  <input type="range" min={0.1} max={0.9} step={0.05}
-                    value={project.recipe.diffusion?.strength ?? 0.5}
-                    onChange={(e) => setRecipeField(["diffusion", "strength"], parseFloat(e.target.value))} />
-                </>
-              )}
-
-              {tab === "yaml" && (
-                <>
-                  <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                    Full recipe — total control. Apply to use it.
-                  </p>
-                  <textarea className="yaml" value={yamlText}
-                    onChange={(e) => setYamlText(e.target.value)} spellCheck={false} />
-                  {yamlErr && <p className="err">{yamlErr}</p>}
-                  <button className="btn ghost" onClick={applyYaml}>Apply YAML</button>
-                </>
-              )}
-            </div>
-
-            <div className="insp-footer">
-              <label className="check" title="Caps resolution for fast iteration; the final Generate always runs full quality.">
-                <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} />
-                Draft quality (fast)
-              </label>
-              <button className="btn" disabled={busy || !runId} onClick={previewSegment}>
-                {busy ? "Working…" : `Preview segment (${seg ? (seg.end - seg.start).toFixed(1) : "?"}s)`}
-              </button>
-              <button className="btn ghost" disabled={busy || !runId} onClick={previewFull}>
-                Preview full track
-              </button>
-            </div>
-          </div>
+      <aside className="studio-side">
+        {project && schema && (
+          <Inspector schema={schema} project={project} ctx={ctx}
+            onReplaceRecipe={onReplaceRecipe}
+            onSetTimeline={setTimeline}
+            onSetSegments={(segs) => mutate((p) => ({ ...p, segments: segs }))}
+            selectedSegment={sel}
+            onSelectSegment={setSel} />
         )}
       </aside>
     </div>

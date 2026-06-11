@@ -59,7 +59,7 @@ export default function RenderView({ runId, jobId, onSeeGallery }: Props) {
   const kind = job?.kind || "fluid";
   const stageIndex = job?.stage ? STAGES.indexOf(job.stage) : -1;
   const done = job?.status === "done";
-  const isSegment = kind === "fluid_segment";
+  const isSegment = kind === "fluid_segment" || kind === "fluid_window";
   const isFluid = kind === "fluid" || isSegment;
   // show only the stages this kind of job actually runs
   const stages = isSegment ? ["simulate", "post"]
@@ -106,7 +106,7 @@ export default function RenderView({ runId, jobId, onSeeGallery }: Props) {
         {done ? (
           <>
             <video
-              src={isSegment ? api.segPreviewUrl(runId)
+              src={isSegment ? api.windowPreviewUrl(runId)
                 : isFluid ? api.previewUrl(runId) : api.finalUrl(runId)}
               poster={api.posterUrl(runId)}
               controls autoPlay loop
