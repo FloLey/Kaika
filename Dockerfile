@@ -21,11 +21,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
-COPY src src
-COPY recipes recipes
-COPY --from=web /build/src/kaika/webapp_dist src/kaika/webapp_dist
-RUN pip install --no-cache-dir .
+
+# ---- dependency layers: re-run ONLY when pyproject.toml changes ----------
+# Heavy deps (numpy, librosa, scipy, ...) live in their own cached layer, so
+# editing application code does NOT reinstall them — a code-only rebuild
+# takes seconds.
+COPY pyproject.toml ./
+RUN python -c "import tomllib; \
+    print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" \
+    > /tmp/requirements.txt \
+    && pip install --no-cache-dir hatchling -r /tmp/requirements.txt
 
 # GPU by default: CuPy installs fine without a GPU and the engine falls back
 # to CPU at runtime when CUDA isn't reachable. Build with --build-arg GPU=0
@@ -34,6 +39,15 @@ ARG GPU=1
 ARG GPU_WHEEL=cupy-cuda12x
 RUN if [ "$GPU" = "1" ]; then pip install --no-cache-dir "$GPU_WHEEL"; fi
 ENV KAIKA_GPU=1
+
+# ---- app layer: source changes only re-run this cheap, no-deps install ----
+COPY README.md ./
+COPY src src
+COPY recipes recipes
+COPY --from=web /build/src/kaika/webapp_dist src/kaika/webapp_dist
+# --no-build-isolation: reuse the hatchling installed in the deps layer
+# instead of re-downloading the build backend on every code change.
+RUN pip install --no-cache-dir --no-deps --no-build-isolation .
 
 # Runs land in /data/runs; uploads + settings (LLM keys) in /data/.kaika.
 VOLUME /data
