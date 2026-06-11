@@ -149,7 +149,7 @@ COLOR_TYPES = ("fixed", "palette", "palette_cycle", "palette_random",
                "chroma_hue", "chroma_palette", "centroid_ramp")
 SIGNALS = ("rms", "centroid", "flux", "beat_phase", "bar_phase",
            "harmonic_ratio", "chroma_argmax", "band.low", "band.mid",
-           "band.high", "section.energy")
+           "band.high", "section.energy", "voice")
 MOD_MODES = ("absolute", "add", "scale")
 MOD_CURVES = ("linear", "smoothstep")       # plus pow(k) / step(t), parsed
 
@@ -164,6 +164,9 @@ class Trigger:
     offset: int = 0                 # beat index offset
     every_frames: int = 3           # continuous / lookahead cadence
     when: str = ""                  # continuous condition, e.g. "rms > 0.5"
+    mag_source: str = ""            # continuous: spawn magnitude follows this
+                                    # signal (sustained content breathes);
+                                    # min_mag gates weak frames out
     section: str = "drop"           # lookahead target / continuous filter
     window_s: float = 8.0           # lookahead window
 
@@ -307,6 +310,18 @@ def _default_emitters() -> List[Emitter]:
                 color=ColorSpec(type="chroma_palette", palette="main"),
                 body=Body(radius=0.05, force=4000.0, lifetime_s=0.6, emit=0.13,
                           drift=0.5, speed=1.8)),
+        # Sustained content (vocals, pads) is harmonic — onsets never fire on
+        # it. This emitter paints continuously, magnitude following the
+        # "voice" signal (harmonic mid-band energy), position following pitch.
+        Emitter(id="voice",
+                trigger=Trigger(type="continuous", every_frames=4,
+                                mag_source="voice", min_mag=0.25, section=""),
+                placement=Placement(type="signal_x", source="chroma_argmax",
+                                    range=[0.15, 0.85], y=0.6, jitter=0.04),
+                direction=Direction(type="flow", jitter=0.4),
+                color=ColorSpec(type="chroma_palette", palette="main"),
+                body=Body(radius=0.07, force=1500.0, lifetime_s=1.0, emit=0.14,
+                          drift=0.9, speed=0.5)),
         Emitter(id="tension",
                 trigger=Trigger(type="lookahead", section="drop", window_s=8.0,
                                 every_frames=3),
@@ -673,6 +688,9 @@ def validate(rec: Recipe) -> List[str]:
                         f"'{e.trigger.type}' {TRIGGER_TYPES}")
         if e.trigger.type == "onset" and e.trigger.band not in ("low", "mid", "high"):
             errs.append(f"emitter '{e.id}': trigger.band must be low|mid|high")
+        if e.trigger.mag_source and e.trigger.mag_source not in SIGNALS:
+            errs.append(f"emitter '{e.id}': trigger.mag_source "
+                        f"'{e.trigger.mag_source}' is not a signal {SIGNALS}")
         if e.placement.type not in PLACEMENT_TYPES:
             errs.append(f"emitter '{e.id}': unknown placement type "
                         f"'{e.placement.type}' {PLACEMENT_TYPES}")

@@ -281,3 +281,41 @@ def test_palette_cycle_is_window_stable(score):
             seen.append((fi, cum % 3))
             cum += 1
     assert len(seen) > 1          # the cycle actually advances
+
+
+# ---- voice signal + GPU opt-in ----------------------------------------------
+
+def test_voice_signal_tracks_sustained_content(score):
+    sig = S._signal_array(score, "voice", score.n_frames)
+    assert sig.shape == (score.n_frames,)
+    assert 0.0 <= sig.min() and sig.max() <= 1.0 + 1e-9
+
+
+def test_continuous_mag_source_breathes(score):
+    """A continuous emitter with mag_source spawns with signal-driven
+    magnitudes (not the constant 1.0), gated by min_mag."""
+    rec = _rec(emitters=[{"id": "voice",
+                          "trigger": {"type": "continuous", "every_frames": 1,
+                                      "mag_source": "rms", "min_mag": 0.3,
+                                      "section": ""}}])
+    by_frame, _ = S.build_trigger_index(score, rec, score.n_frames)
+    mags = [sp.mag for sps in by_frame for sp in sps]
+    rms = S._signal_array(score, "rms", score.n_frames)
+    assert len(mags) == int((rms >= 0.3).sum())     # min_mag gates
+    assert len(set(round(m, 3) for m in mags)) > 1  # magnitudes vary
+
+
+def test_default_recipe_has_voice_emitter():
+    rec = R.Recipe()
+    voice = rec.emitter("voice")
+    assert voice is not None
+    assert voice.trigger.type == "continuous"
+    assert voice.trigger.mag_source == "voice"
+
+
+def test_gpu_falls_back_to_cpu_without_cuda(score, tmp_path):
+    """KAIKA_GPU on a machine without CuPy/CUDA must run on CPU and say so."""
+    rec = _rec()
+    res = S.simulate(score, rec, tmp_path, max_frames=4, gpu=True)
+    assert res.n_frames == 4
+    assert any("CPU" in w for w in res.warnings)

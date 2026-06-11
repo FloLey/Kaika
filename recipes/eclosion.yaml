@@ -51,6 +51,12 @@ emitters:
     count: 8
     color:     { type: palette, palette: main, index: 0, opacity: 0.4 }
     body:      { radius: 0.18, force: 2000, lifetime_s: 0.4, emit: 0.05 }
+  - id: voice                       # sustained vocals/pads paint continuously:
+    trigger:   { type: continuous, every_frames: 4, mag_source: voice, min_mag: 0.25, section: "" }
+    placement: { type: signal_x, source: chroma_argmax, range: [0.15, 0.85], y: 0.6, jitter: 0.04 }
+    direction: { type: flow, jitter: 0.4 }
+    color:     { type: chroma_palette, palette: main }
+    body:      { radius: 0.07, force: 1500, lifetime_s: 1.0, emit: 0.14, drift: 0.9, speed: 0.5 }
   - id: tension                     # pre-drop anticipation
     trigger:   { type: lookahead, section: drop, window_s: 8.0, every_frames: 3 }
     placement: { type: random, region: [0.2, 0.2, 0.8, 0.8] }

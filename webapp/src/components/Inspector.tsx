@@ -56,7 +56,7 @@ const EMITTER_TEMPLATES: Record<string, any> = {
 
 const SIGNALS = ["rms", "centroid", "flux", "beat_phase", "bar_phase",
   "harmonic_ratio", "chroma_argmax", "band.low", "band.mid", "band.high",
-  "section.energy"];
+  "section.energy", "voice"];
 
 function numericPaths(recipe: any): string[] {
   const out: string[] = [];

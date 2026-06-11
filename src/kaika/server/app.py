@@ -536,16 +536,20 @@ def create_app(runs_root: str | Path = "runs",
         snapshot (FileResponse stats the size first, then streams a file that
         may have grown — 'Response content longer than Content-Length')."""
         rd = runs_root / run_id
-        pngs: list = []
+        # Frame names are zero-padded and sequential, so the lexicographic
+        # tail of each dir IS its chronological tail — stat() only those few
+        # candidates, not every PNG (this endpoint is polled every 700ms).
+        candidates: list = []
         for sub in ("styled", "fluid", "window_preview/fluid",
                     "seg_preview/fluid"):
             d = rd / sub
             if d.is_dir():
-                pngs.extend(d.glob("*.png"))
-        if not pngs:
+                tail = sorted(d.glob("*.png"))[-2:]
+                candidates.extend(tail)
+        if not candidates:
             raise HTTPException(404, "no frames yet")
-        pngs.sort(key=lambda p: p.stat().st_mtime)
-        pick = pngs[-2] if len(pngs) > 1 else pngs[-1]
+        candidates.sort(key=lambda p: p.stat().st_mtime)
+        pick = candidates[-2] if len(candidates) > 1 else candidates[-1]
         try:
             data = pick.read_bytes()
         except OSError:

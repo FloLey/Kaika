@@ -153,6 +153,9 @@ HELP: dict = {
         "lookahead triggers.",
     "emitters.*.trigger.when": "Condition for continuous triggers, e.g. "
         "\"rms > 0.5\".",
+    "emitters.*.trigger.mag_source": "Continuous triggers: spawn strength "
+        "follows this signal (e.g. 'voice' = sustained vocal presence); "
+        "min_mag gates weak frames out.",
     "emitters.*.trigger.section": "Section label this trigger targets "
         "(lookahead) or filters on (continuous).",
     "emitters.*.trigger.window_s": "Seconds before the section start during "
@@ -240,6 +243,8 @@ ENUMS: dict = {
     "emitters.*.color.brightness.source": ["fixed", "centroid", "rms"],
     "modulators.*.mode": list(R.MOD_MODES),
     "modulators.*.source": list(R.SIGNALS),
+    "emitters.*.trigger.mag_source": [""] + list(R.SIGNALS),
+    "emitters.*.placement.source": list(R.SIGNALS),
     "modulators.*.apply_to": ["spawn"],          # "live" reserved, rejected
     "diffusion.backend": ["local", "comfyui"],
 }

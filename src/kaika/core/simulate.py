@@ -126,11 +126,42 @@ def _render_frame(density: np.ndarray, render_cfg: dict, bloom_auto_sigma: float
 # Solver (rectangular toroidal grid)
 # ---------------------------------------------------------------------------
 
+def _gpu_modules():
+    """(cupy, cupyx.scipy.ndimage) when CUDA is genuinely usable, else
+    (None, None). The probe allocates on-device so a broken install fails
+    here, not mid-render."""
+    try:
+        import cupy as cp
+        from cupyx.scipy import ndimage as cnd
+        float(cp.zeros(2).sum())            # force a real CUDA context
+        return cp, cnd
+    except Exception:
+        return None, None
+
+
+def _to_np(a):
+    """Device -> host when needed (cupy arrays have .get())."""
+    return a.get() if hasattr(a, "get") else a
+
+
 class FluidSim:
-    """Stable-fluids solver on an H x W toroidal grid."""
+    """Stable-fluids solver on an H x W toroidal grid.
+
+    ``use_gpu=True`` runs the whole field state on CUDA via CuPy (advection
+    through ``cupyx`` map_coordinates, FFT projection through cupy.fft) and
+    falls back silently to NumPy when CuPy/CUDA is unavailable — check
+    ``self.gpu`` to know what you got. GPU output is deterministic per
+    machine but not bit-identical to the CPU path."""
 
     def __init__(self, shape: Tuple[int, int], dissipation: float,
-                 viscosity: float, seed: int, vel_dissipation: float = 0.96):
+                 viscosity: float, seed: int, vel_dissipation: float = 0.96,
+                 use_gpu: bool = False):
+        self.cp, self._cnd = (None, None)
+        if use_gpu:
+            self.cp, self._cnd = _gpu_modules()
+        self.xp = self.cp if self.cp is not None else np
+        self.gpu = self.xp is not np
+        xp = self.xp
         h, w = int(shape[0]), int(shape[1])
         self.h, self.w = h, w
         self.short = min(h, w)
@@ -138,25 +169,41 @@ class FluidSim:
         self.vel_dissipation = vel_dissipation
         self.viscosity = viscosity
         self.rng = np.random.default_rng(seed)
-        self.u = np.zeros((h, w), np.float32)
-        self.v = np.zeros((h, w), np.float32)
-        self.density = np.zeros((h, w, 3), np.float32)
-        ys, xs = np.mgrid[0:h, 0:w]
-        self.xs = xs.astype(np.float32)
-        self.ys = ys.astype(np.float32)
+        self.u = xp.zeros((h, w), xp.float32)
+        self.v = xp.zeros((h, w), xp.float32)
+        self.density = xp.zeros((h, w, 3), xp.float32)
+        ys, xs = xp.meshgrid(xp.arange(h), xp.arange(w), indexing="ij")
+        self.xs = xs.astype(xp.float32)
+        self.ys = ys.astype(xp.float32)
         # Eigenvalues of the 5-point Poisson operator (per-axis periods).
-        iy = np.arange(h)
-        ix = np.arange(w)
-        a = (4.0 - 2 * np.cos(2 * np.pi * iy / h)[:, None]
-             - 2 * np.cos(2 * np.pi * ix / w)[None, :])
+        iy = xp.arange(h)
+        ix = xp.arange(w)
+        a = (4.0 - 2 * xp.cos(2 * xp.pi * iy / h)[:, None]
+             - 2 * xp.cos(2 * xp.pi * ix / w)[None, :])
         a[0, 0] = 1.0                       # guard DC; mean pressure is gauge-free
         self._poisson = a
         self._k3 = np.ones((3, 3), np.uint8)
 
+    # ---- host transfers -----------------------------------------------------
+    def density_cpu(self) -> np.ndarray:
+        return _to_np(self.density)
+
+    def velocity_cpu(self) -> np.ndarray:
+        return _to_np(self.xp.stack([self.u, self.v], axis=-1)
+                      ).astype(np.float32)
+
+    def load_state(self, u: np.ndarray, v: np.ndarray,
+                   density: np.ndarray) -> None:
+        xp = self.xp
+        self.u = xp.asarray(u, xp.float32)
+        self.v = xp.asarray(v, xp.float32)
+        self.density = xp.asarray(density, xp.float32)
+
     # ---- operators ---------------------------------------------------------
-    def _advect(self, field: np.ndarray, u: np.ndarray, v: np.ndarray,
-                dt: float) -> np.ndarray:
+    def _advect(self, field, u, v, dt: float):
         """MacCormack advection (bilinear semi-Lagrangian + error correction)."""
+        if self.gpu:
+            return self._advect_gpu(field, u, v, dt)
         mx = (self.xs - dt * u).astype(np.float32)
         my = (self.ys - dt * v).astype(np.float32)
         fwd = cv2.remap(field, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
@@ -168,12 +215,37 @@ class FluidSim:
         lo = cv2.erode(fwd, self._k3)
         return np.clip(corrected, lo, hi).astype(np.float32)
 
+    def _advect_gpu(self, field, u, v, dt: float):
+        cp, cnd = self.cp, self._cnd
+
+        def sample(f, yy, xx):
+            coords = cp.stack([yy, xx])
+            if f.ndim == 2:
+                return cnd.map_coordinates(f, coords, order=1, mode="grid-wrap")
+            return cp.stack(
+                [cnd.map_coordinates(f[..., c], coords, order=1,
+                                     mode="grid-wrap")
+                 for c in range(f.shape[-1])], axis=-1)
+
+        fwd = sample(field, self.ys - dt * v, self.xs - dt * u)
+        back = sample(fwd, self.ys + dt * v, self.xs + dt * u)
+        corrected = fwd + 0.5 * (field - back)
+        size = (3, 3) if field.ndim == 2 else (3, 3, 1)
+        hi = cnd.maximum_filter(fwd, size=size, mode="wrap")
+        lo = cnd.minimum_filter(fwd, size=size, mode="wrap")
+        return cp.clip(corrected, lo, hi).astype(cp.float32)
+
     def _project(self, iters: int = 0) -> None:
         """Exact incompressibility via a spectral Poisson solve (periodic).
-        Uses scipy's multi-threaded FFT when available (numpy's is 1-core)."""
-        div = ((np.roll(self.u, -1, 1) - self.u) +
-               (np.roll(self.v, -1, 0) - self.v))
-        if _sfft is not None:
+        cupy.fft on GPU; scipy's multi-threaded FFT on CPU (numpy's is 1-core)."""
+        xp = self.xp
+        div = ((xp.roll(self.u, -1, 1) - self.u) +
+               (xp.roll(self.v, -1, 0) - self.v))
+        if self.gpu:
+            p_hat = -xp.fft.fft2(div) / self._poisson
+            p_hat[0, 0] = 0.0
+            p = xp.real(xp.fft.ifft2(p_hat)).astype(xp.float32)
+        elif _sfft is not None:
             p_hat = -_sfft.fft2(div, workers=_FFT_WORKERS) / self._poisson
             p_hat[0, 0] = 0.0
             p = np.real(_sfft.ifft2(p_hat, workers=_FFT_WORKERS)).astype(np.float32)
@@ -181,25 +253,26 @@ class FluidSim:
             p_hat = -np.fft.fft2(div) / self._poisson
             p_hat[0, 0] = 0.0
             p = np.real(np.fft.ifft2(p_hat)).astype(np.float32)
-        self.u -= (p - np.roll(p, 1, 1)).astype(np.float32)
-        self.v -= (p - np.roll(p, 1, 0)).astype(np.float32)
+        self.u -= (p - xp.roll(p, 1, 1)).astype(xp.float32)
+        self.v -= (p - xp.roll(p, 1, 0)).astype(xp.float32)
 
     def _vorticity_confine(self, eps: float, dt: float) -> None:
         if eps <= 0:
             return
-        curl = ((np.roll(self.v, -1, 1) - np.roll(self.v, 1, 1)) -
-                (np.roll(self.u, -1, 0) - np.roll(self.u, 1, 0))) * 0.5
-        absc = np.abs(curl)
-        gx = (np.roll(absc, -1, 1) - np.roll(absc, 1, 1)) * 0.5
-        gy = (np.roll(absc, -1, 0) - np.roll(absc, 1, 0)) * 0.5
-        norm = np.sqrt(gx * gx + gy * gy) + 1e-5
+        xp = self.xp
+        curl = ((xp.roll(self.v, -1, 1) - xp.roll(self.v, 1, 1)) -
+                (xp.roll(self.u, -1, 0) - xp.roll(self.u, 1, 0))) * 0.5
+        absc = xp.abs(curl)
+        gx = (xp.roll(absc, -1, 1) - xp.roll(absc, 1, 1)) * 0.5
+        gy = (xp.roll(absc, -1, 0) - xp.roll(absc, 1, 0)) * 0.5
+        norm = xp.sqrt(gx * gx + gy * gy) + 1e-5
         gx, gy = gx / norm, gy / norm
         self.u += eps * dt * (gy * curl)
         self.v += eps * dt * (-gx * curl)
 
-    def add_force(self, fu: np.ndarray, fv: np.ndarray) -> None:
-        self.u += fu.astype(np.float32)
-        self.v += fv.astype(np.float32)
+    def add_force(self, fu, fv) -> None:
+        self.u += self.xp.asarray(fu, self.xp.float32)
+        self.v += self.xp.asarray(fv, self.xp.float32)
 
     def _gauss_patch(self, px: float, py: float, radius: float):
         """A Gaussian restricted to its 4-sigma window (toroidal): O(r^2)
@@ -221,65 +294,73 @@ class FluidSim:
 
     def add_dye(self, px: float, py: float, radius: float,
                 color: np.ndarray, amount: float) -> None:
+        xp = self.xp
         g, iy, ix = self._gauss_patch(px, py, radius)
+        col = xp.asarray(color, xp.float32)
         if iy is None:
-            self.density += (amount * g)[..., None] * color[None, None, :]
+            self.density += (amount * g)[..., None] * col[None, None, :]
         else:
-            self.density[np.ix_(iy, ix)] += \
-                (amount * g)[..., None] * color[None, None, :]
+            g = xp.asarray(g, xp.float32)
+            self.density[xp.ix_(xp.asarray(iy), xp.asarray(ix))] += \
+                (amount * g)[..., None] * col[None, None, :]
 
     def add_force_at(self, x: float, y: float, radius: float,
                      fx: float, fy: float) -> None:
+        xp = self.xp
         g, iy, ix = self._gauss_patch(x, y, radius)
         if iy is None:
-            self.u += (g * fx).astype(np.float32)
-            self.v += (g * fy).astype(np.float32)
+            self.u += (g * fx).astype(xp.float32)
+            self.v += (g * fy).astype(xp.float32)
         else:
-            sel = np.ix_(iy, ix)
-            self.u[sel] += (g * fx).astype(np.float32)
-            self.v[sel] += (g * fy).astype(np.float32)
+            g = xp.asarray(g, xp.float32)
+            sel = xp.ix_(xp.asarray(iy), xp.asarray(ix))
+            self.u[sel] += (g * fx).astype(xp.float32)
+            self.v[sel] += (g * fy).astype(xp.float32)
 
     def add_splat(self, px: float, py: float, radius: float, force: float,
                   color: np.ndarray, dir_angle: float,
                   force_gain: float = 0.04) -> None:
+        xp = self.xp
         g, iy, ix = self._gauss_patch(px, py, radius)
-        vel = g * force * force_gain / self.short
+        col = xp.asarray(color, xp.float32)
+        vel = xp.asarray(g) * force * force_gain / self.short
         if iy is None:
-            self.u += (vel * np.cos(dir_angle)).astype(np.float32)
-            self.v += (vel * np.sin(dir_angle)).astype(np.float32)
-            self.density += g[..., None] * color[None, None, :]
+            self.u += (vel * np.cos(dir_angle)).astype(xp.float32)
+            self.v += (vel * np.sin(dir_angle)).astype(xp.float32)
+            self.density += xp.asarray(g)[..., None] * col[None, None, :]
         else:
-            sel = np.ix_(iy, ix)
-            self.u[sel] += (vel * np.cos(dir_angle)).astype(np.float32)
-            self.v[sel] += (vel * np.sin(dir_angle)).astype(np.float32)
-            self.density[sel] += g[..., None] * color[None, None, :]
+            sel = xp.ix_(xp.asarray(iy), xp.asarray(ix))
+            self.u[sel] += (vel * np.cos(dir_angle)).astype(xp.float32)
+            self.v[sel] += (vel * np.sin(dir_angle)).astype(xp.float32)
+            self.density[sel] += xp.asarray(g)[..., None] * col[None, None, :]
 
     def step(self, dt: float, vort_eps: float, density_clamp: float = 12.0) -> None:
+        xp = self.xp
         if self.viscosity > 0:
             k = self.viscosity
-            self.u = (self.u + k * (np.roll(self.u, 1, 0) + np.roll(self.u, -1, 0) +
-                      np.roll(self.u, 1, 1) + np.roll(self.u, -1, 1))) / (1 + 4 * k)
-            self.v = (self.v + k * (np.roll(self.v, 1, 0) + np.roll(self.v, -1, 0) +
-                      np.roll(self.v, 1, 1) + np.roll(self.v, -1, 1))) / (1 + 4 * k)
+            self.u = (self.u + k * (xp.roll(self.u, 1, 0) + xp.roll(self.u, -1, 0) +
+                      xp.roll(self.u, 1, 1) + xp.roll(self.u, -1, 1))) / (1 + 4 * k)
+            self.v = (self.v + k * (xp.roll(self.v, 1, 0) + xp.roll(self.v, -1, 0) +
+                      xp.roll(self.v, 1, 1) + xp.roll(self.v, -1, 1))) / (1 + 4 * k)
         self._vorticity_confine(vort_eps, dt)
         self._project()
         u0, v0 = self.u.copy(), self.v.copy()
-        vel = np.stack([self.u, self.v], axis=-1).astype(np.float32)
+        vel = xp.stack([self.u, self.v], axis=-1).astype(xp.float32)
         vel = self._advect(vel, u0, v0, dt)
-        self.u = np.ascontiguousarray(vel[..., 0])
-        self.v = np.ascontiguousarray(vel[..., 1])
+        self.u = xp.ascontiguousarray(vel[..., 0])
+        self.v = xp.ascontiguousarray(vel[..., 1])
         self._project()
         self.density = self._advect(self.density, self.u, self.v, dt)
         self.density *= self.dissipation
-        np.clip(self.density, 0.0, density_clamp, out=self.density)
+        xp.clip(self.density, 0.0, density_clamp, out=self.density)
         self.u *= self.vel_dissipation
         self.v *= self.vel_dissipation
 
     def kinetic_energy(self) -> float:
-        return float(np.mean(self.u ** 2 + self.v ** 2))
+        return float(self.xp.mean(self.u ** 2 + self.v ** 2))
 
     def total_density(self) -> float:
-        return float(np.mean(self.density))
+        return float(self.xp.mean(self.density))
 
 
 def _write_png(path: Path, rgb: np.ndarray) -> None:
@@ -387,6 +468,13 @@ def _signal_array(score: Score, name: str, n: int) -> np.ndarray:
     if name.startswith("band."):
         idx = {"low": 0, "mid": 1, "high": 2}.get(name.split(".", 1)[1], 0)
         return per_frame(lambda f: f.bands[idx] if len(f.bands) > idx else 0.0)
+    if name == "voice":
+        # Sustained vocal/melodic presence: harmonic energy in the mid band,
+        # weighted by overall loudness, normalized to the track's own peak.
+        raw = per_frame(lambda f: (f.bands[1] if len(f.bands) > 1 else 0.0)
+                        * f.harmonic_ratio * f.rms)
+        peak = float(raw.max())
+        return raw / peak if peak > 1e-9 else raw
     if name == "section.energy":
         fps = score.audio.fps
         out = np.zeros(n)
@@ -522,6 +610,12 @@ def build_trigger_index(score: Score, recipe: Recipe, n_frames: int,
                     by_frame[fi].append(_Spawn(ei, b.mag, len(by_frame[fi])))
         elif trig.type == "continuous":
             step = max(1, int(trig.every_frames))
+            mag_sig = None
+            if trig.mag_source:
+                if trig.mag_source not in sig_cache:
+                    sig_cache[trig.mag_source] = _signal_array(
+                        score, trig.mag_source, n_frames)
+                mag_sig = sig_cache[trig.mag_source]
             for fi in range(0, n_frames, step):
                 t = fi / fps
                 if muted(em.id, t):
@@ -531,8 +625,12 @@ def build_trigger_index(score: Score, recipe: Recipe, n_frames: int,
                                 if s.start <= t < s.end), None)
                     if sec is None or sec.label != trig.section:
                         continue
-                if _cond(trig.when, sig_cache, score, n_frames, fi):
-                    by_frame[fi].append(_Spawn(ei, 1.0, len(by_frame[fi])))
+                if not _cond(trig.when, sig_cache, score, n_frames, fi):
+                    continue
+                mag = float(mag_sig[fi]) if mag_sig is not None else 1.0
+                if mag < trig.min_mag:          # gate weak frames out
+                    continue
+                by_frame[fi].append(_Spawn(ei, mag, len(by_frame[fi])))
         elif trig.type == "lookahead":
             label = trig.section or "drop"
             step = max(1, int(trig.every_frames))
@@ -849,8 +947,9 @@ class CheckpointStore:
         # error over a resume; exact state keeps window previews bit-faithful.
         np.savez_compressed(
             self.dir / f"{frame_i:06d}.npz",
-            u=sim.u.astype(np.float32), v=sim.v.astype(np.float32),
-            density=sim.density.astype(np.float32),
+            u=_to_np(sim.u).astype(np.float32),
+            v=_to_np(sim.v).astype(np.float32),
+            density=_to_np(sim.density).astype(np.float32),
             meta=np.frombuffer(json.dumps(meta).encode(), dtype=np.uint8))
 
     def nearest(self, frame_i: int, struct: str) -> Optional[dict]:
@@ -917,7 +1016,8 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
              write_velocity: bool = True,
              draft_cap: Optional[int] = None,
              checkpoints: Optional[CheckpointStore] = None,
-             save_checkpoints: bool = False) -> SimResult:
+             save_checkpoints: bool = False,
+             gpu: Optional[bool] = None) -> SimResult:
     """Run the fluid sim.
 
     ``frame_trees`` (one config tree per frame, from ``Project.frame_trees``)
@@ -967,9 +1067,15 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
         render_start, sim_start, sim_end = 0, 0, n_frames
 
     base_field = recipe.to_dict()["field"]
+    want_gpu = (gpu if gpu is not None
+                else os.environ.get("KAIKA_GPU", "") == "1")
     sim = FluidSim((grid_h, grid_w), base_field["dissipation"],
                    base_field["viscosity"], recipe.seed,
-                   vel_dissipation=base_field["velocity_dissipation"])
+                   vel_dissipation=base_field["velocity_dissipation"],
+                   use_gpu=want_gpu)
+    if want_gpu and not sim.gpu:
+        warnings.append("KAIKA_GPU=1 but CuPy/CUDA is unavailable — "
+                        "running on CPU (pip install cupy-cuda12x)")
     sources: List[_Source] = []
     t_phase = sim_start * float(base_field["ambient"]["speed"])
 
@@ -980,7 +1086,7 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
         if ck is not None:
             # Exact state always beats an approximate cold-start warm-up,
             # even when the checkpoint sits earlier than the warm-up window.
-            sim.u, sim.v, sim.density = ck["u"], ck["v"], ck["density"]
+            sim.load_state(ck["u"], ck["v"], ck["density"])
             sources = ck["sources"]
             t_phase = ck["t_phase"]
             sim_start = int(ck["frame"]) + 1
@@ -1088,16 +1194,21 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                 checkpoints.save(i, sim, sources, t_phase, struct)
 
             if i >= render_start:
-                frame = _render_frame(sim.density, rnd, bloom_auto_sigma)
+                frame = _render_frame(sim.density_cpu(), rnd, bloom_auto_sigma)
                 if frame.shape[:2] != (rh, rw):
                     frame = cv2.resize(frame, (rw, rh),
                                        interpolation=cv2.INTER_LINEAR)
                 pending.append(writer.submit(
                     _write_png, fluid_dir / f"{i - render_start:06d}.png", frame))
                 if write_velocity:
-                    vel = np.stack([sim.u, sim.v], axis=-1).astype(np.float32)
+                    vel = sim.velocity_cpu()
                     pending.append(writer.submit(
                         np.save, vel_dir / f"{i - render_start:06d}.npy", vel))
+                # Backpressure: each pending task pins a frame in memory; if
+                # the solver outruns the disk, block on the oldest write so
+                # in-flight work stays bounded (and errors surface early).
+                while len(pending) >= 16:
+                    pending.pop(0).result()
                 stats["kinetic_energy"].append(round(sim.kinetic_energy(), 6))
                 stats["total_density"].append(round(sim.total_density(), 6))
             if progress:
