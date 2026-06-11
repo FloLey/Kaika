@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from ..core import recipe as R
 from ..core import chat as C
-from ..core.analyze import analyze
+from ..core.analyze import analyze_cached, audio_cache_key
 from ..core.project import (Project, Segment, append_revision, list_revisions,
                             load_revision)
 from ..core.schema import recipe_schema
@@ -157,10 +157,20 @@ def create_app(runs_root: str | Path = "runs",
 
     @app.post("/api/analyze")
     def analyze_audio(audio_id: str, fps: int = 24):
-        import librosa
         path = _resolve_audio(audio_id)
-        score = analyze(path, fps=fps)
-        y, sr = librosa.load(str(path), sr=None, mono=True)
+        cache = runs_root / ".analysis_cache"
+        score = analyze_cached(path, cache, fps=fps)
+        # The waveform needs a full decode of the track — cache it on the
+        # same content key so resubmissions skip it entirely.
+        wf_path = cache / f"{audio_cache_key(path)}.waveform.json"
+        if wf_path.exists():
+            waveform = json.loads(wf_path.read_text())
+        else:
+            import librosa
+            y, _sr = librosa.load(str(path), sr=None, mono=True)
+            waveform = _waveform_peaks(y)
+            wf_path.parent.mkdir(parents=True, exist_ok=True)
+            wf_path.write_text(json.dumps(waveform))
         return {
             "audio_id": audio_id, "tempo_bpm": score.tempo_bpm,
             "duration_s": score.audio.duration_s, "fps": fps,
@@ -168,7 +178,7 @@ def create_app(runs_root: str | Path = "runs",
             "sections": [s.__dict__ for s in score.sections],
             "beats": [b.__dict__ for b in score.beats],
             "onset_counts": {k: len(v) for k, v in score.onsets.items()},
-            "waveform": _waveform_peaks(y),
+            "waveform": waveform,
         }
 
     # ---- runs (jobs) ------------------------------------------------------

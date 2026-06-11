@@ -26,7 +26,7 @@ from typing import Callable, List, Optional
 from .recipe import Recipe, load_recipe
 from .score import Score
 from .project import Project
-from .analyze import analyze
+from .analyze import analyze_cached
 from .simulate import simulate, CheckpointStore
 from .control import generate_control, ALL_SIGNALS
 from . import diffuse as D
@@ -87,10 +87,13 @@ def _save_manifest(run_dir: Path, manifest: dict) -> None:
     (run_dir / "run.json").write_text(json.dumps(manifest, indent=2))
 
 
-def _analyze_for(recipe: Recipe, audio: Path) -> Score:
+def _analyze_for(recipe: Recipe, audio: Path,
+                 runs_root: Optional[str | Path] = None) -> Score:
     a = recipe.analysis
-    return analyze(audio, fps=recipe.canvas.fps, bands=tuple(a.bands),
-                   onset_delta=a.onset_delta, onset_wait=a.onset_wait)
+    cache = Path(runs_root) / ".analysis_cache" if runs_root else None
+    return analyze_cached(audio, cache, fps=recipe.canvas.fps,
+                          bands=tuple(a.bands),
+                          onset_delta=a.onset_delta, onset_wait=a.onset_wait)
 
 
 def _draft_recipe(recipe: Recipe) -> Recipe:
@@ -114,7 +117,7 @@ def init_project_run(audio_path: str | Path, recipe: Recipe,
     run_dir.mkdir(parents=True, exist_ok=True)
     recipe.to_yaml(run_dir / "recipe.yaml")
     frozen = _freeze_audio(audio_path, run_dir)
-    score = _analyze_for(recipe, frozen)
+    score = _analyze_for(recipe, frozen, runs_root)
     score.to_json(run_dir / "score.json")
     project = Project.from_score(score, recipe, audio=frozen.name)
     project.seconds = seconds
@@ -158,7 +161,7 @@ def run_fluid(project: Project, audio_path: str | Path,
         fps = project.fps
         _emit(progress, "analyze", 0, 1)
         if score is None:
-            score = _analyze_for(recipe, frozen)
+            score = _analyze_for(recipe, frozen, runs_root)
         score.to_json(run_dir / "score.json")
         max_frames = int(round(project.seconds * fps)) if project.seconds else None
         n = min(score.n_frames, max_frames) if max_frames else score.n_frames
@@ -362,7 +365,7 @@ def run_pipeline(audio_path: str | Path, recipe: Recipe | str,
     if isinstance(recipe, str):
         recipe = load_recipe(recipe)
     audio_path = Path(audio_path)
-    score = _analyze_for(recipe, audio_path)
+    score = _analyze_for(recipe, audio_path, runs_root)
     project = Project.from_score(score, recipe, audio=audio_path.name)
     project.seconds = seconds
     fluid = run_fluid(project, audio_path, runs_root=runs_root, run_id=run_id,

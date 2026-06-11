@@ -12,8 +12,10 @@ peak-picking strictness (``analysis`` block).
 """
 from __future__ import annotations
 
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import librosa
@@ -24,6 +26,7 @@ N_FFT = 2048
 DEFAULT_BANDS = (150.0, 4000.0)
 DEFAULT_ONSET_DELTA = 0.10
 DEFAULT_ONSET_WAIT = 4
+CHROMA_HOP_MULT = 4     # pitch moves far slower than the video framerate
 
 
 def _normalise(x: np.ndarray) -> np.ndarray:
@@ -154,8 +157,31 @@ def analyze(audio_path: str | Path, fps: int = 24,
     if len(flux) < n:
         flux = np.pad(flux, (0, n - len(flux)))
 
-    # Tempo + beats.
-    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
+    # The three heavy stages are independent: beat tracking, HPSS (median
+    # filtering) and CQT chroma all release the GIL in their numpy/scipy
+    # cores, so threads genuinely overlap them.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_beat = pool.submit(librosa.beat.beat_track, y=y, sr=sr,
+                             hop_length=hop)
+        # HPSS: percussive component for onsets; the split also yields the
+        # harmonic ratio (pads vs percussion -> soft vs sharp visuals).
+        f_hpss = pool.submit(librosa.decompose.hpss, S)
+        # Chroma (pitch content). CQT chroma is best but needs enough
+        # samples; fall back to STFT chroma on tiny inputs. Computed at a
+        # coarser hop (the CQT dominates analysis time) and repeated back
+        # up to the frame grid.
+        f_chroma = pool.submit(librosa.feature.chroma_cqt, y=y, sr=sr,
+                               hop_length=hop * CHROMA_HOP_MULT)
+        tempo, beat_frames = f_beat.result()
+        try:
+            S_harm, S_perc = f_hpss.result()
+        except Exception:
+            S_harm, S_perc = S * 0.5, S
+        try:
+            chroma = np.repeat(f_chroma.result(), CHROMA_HOP_MULT, axis=1)
+        except Exception:
+            chroma = librosa.feature.chroma_stft(S=S ** 2, sr=sr)
+
     tempo_bpm = float(np.atleast_1d(tempo)[0])
     beat_times = librosa.frames_to_time(beat_frames, sr=sr, hop_length=hop)
     beat_strength = _normalise(onset_env[beat_frames]) if len(beat_frames) else np.array([])
@@ -166,22 +192,10 @@ def analyze(audio_path: str | Path, fps: int = 24,
     beat_phase, bar_phase = _beat_phases(np.asarray(beat_times), frame_times,
                                          tempo_bpm)
 
-    # HPSS: percussive component for onsets; the split also yields the
-    # harmonic ratio (pads vs percussion -> soft vs sharp visuals).
-    try:
-        S_harm, S_perc = librosa.decompose.hpss(S)
-    except Exception:
-        S_harm, S_perc = S * 0.5, S
     h_sum = S_harm.sum(0)
     p_sum = S_perc.sum(0)
     harmonic_ratio = h_sum / (h_sum + p_sum + 1e-9)
 
-    # Chroma (pitch content). CQT chroma is best but needs enough samples;
-    # fall back to STFT chroma on tiny inputs.
-    try:
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop)
-    except Exception:
-        chroma = librosa.feature.chroma_stft(S=S ** 2, sr=sr)
     if chroma.shape[1] < n:
         chroma = np.pad(chroma, ((0, 0), (0, n - chroma.shape[1])))
     chroma = chroma[:, :n]
@@ -225,6 +239,40 @@ def analyze(audio_path: str | Path, fps: int = 24,
         sections=sections,
         version=SCORE_VERSION,
     )
+
+
+def audio_cache_key(audio_path: str | Path) -> str:
+    """Content hash of an audio file — stable across uploads of the same
+    track and across the frozen per-run copies."""
+    h = hashlib.sha1()
+    with open(audio_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()[:20]
+
+
+def analyze_cached(audio_path: str | Path, cache_dir: Optional[str | Path],
+                   fps: int = 24,
+                   bands: Sequence[float] = DEFAULT_BANDS,
+                   onset_delta: float = DEFAULT_ONSET_DELTA,
+                   onset_wait: int = DEFAULT_ONSET_WAIT) -> Score:
+    """:func:`analyze`, memoised on (file content, analysis params): the
+    upload->analyze->project flow re-analyses the same track several times,
+    and resubmitting a track costs a full analysis for nothing. With
+    ``cache_dir=None`` this is a plain passthrough."""
+    if cache_dir is None:
+        return analyze(audio_path, fps=fps, bands=bands,
+                       onset_delta=onset_delta, onset_wait=onset_wait)
+    params = f"{fps}-{float(bands[0])}-{float(bands[1])}-" \
+             f"{onset_delta}-{onset_wait}-v{SCORE_VERSION}"
+    p = Path(cache_dir) / f"{audio_cache_key(audio_path)}-{params}.json"
+    if p.exists():
+        return Score.from_json(p)
+    score = analyze(audio_path, fps=fps, bands=bands,
+                    onset_delta=onset_delta, onset_wait=onset_wait)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    score.to_json(p)
+    return score
 
 
 def _segment(y, sr, hop, S, rms, duration) -> List[Section]:

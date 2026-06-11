@@ -65,3 +65,23 @@ def test_json_roundtrip(track_wav, tmp_path):
     assert again.tempo_bpm == score.tempo_bpm
     assert again.n_frames == score.n_frames
     assert again.sections[0].label == score.sections[0].label
+
+
+def test_analyze_cached_roundtrip(track_wav, tmp_path):
+    """Second call with the same content + params hits the cache and returns
+    an identical score; the cache file is keyed on content, not filename."""
+    from kaika.core.analyze import analyze_cached
+    import shutil
+    cache = tmp_path / "cache"
+    s1 = analyze_cached(track_wav, cache, fps=24)
+    files = list(cache.glob("*.json"))
+    assert len(files) == 1
+    # Same bytes under another name -> same cache entry, equal result.
+    copy = tmp_path / "renamed.wav"
+    shutil.copy2(track_wav, copy)
+    s2 = analyze_cached(copy, cache, fps=24)
+    assert len(list(cache.glob("*.json"))) == 1
+    assert s2.to_dict() == s1.to_dict()
+    # Different params -> a distinct entry.
+    analyze_cached(track_wav, cache, fps=30)
+    assert len(list(cache.glob("*.json"))) == 2
