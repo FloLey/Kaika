@@ -729,11 +729,13 @@ def build_trigger_index(score: Score, recipe: Recipe, n_frames: int,
             label = trig.section or "drop"
             step = max(1, int(trig.every_frames))
             window = max(1e-6, float(trig.window_s))
-            hit = False
-            for sec in score.sections:
-                if sec.label != label:
-                    continue
-                hit = True
+            targets = [s for s in score.sections if s.label == label]
+            if not targets and score.sections:
+                # The named section isn't in this track's structure — ramp up
+                # to the loudest section instead (the de-facto peak), so the
+                # anticipation still lands somewhere meaningful. No warning.
+                targets = [max(score.sections, key=lambda s: s.energy)]
+            for sec in targets:
                 f_start = int(max(0.0, sec.start - window) * fps)
                 f_end = min(n_frames, int(sec.start * fps))
                 for fi in range(f_start, f_end, step):
@@ -741,9 +743,6 @@ def build_trigger_index(score: Score, recipe: Recipe, n_frames: int,
                     boost = 1.0 - (sec.start - t) / window
                     if boost > 0 and not muted(em.id, t):
                         by_frame[fi].append(_Spawn(ei, boost, len(by_frame[fi])))
-            if not hit and any(s.label for s in score.sections):
-                warnings.append(f"emitter '{em.id}': lookahead section "
-                                f"'{label}' not found in this track")
         # "manual": timeline only.
 
     # Timeline spawns.
