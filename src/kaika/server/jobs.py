@@ -91,10 +91,12 @@ class JobManager:
         with self._lock:
             job = self._jobs[job_id]
             fn = job["_fn"]
-            if job.get("_cancel"):
+            cancelled = job.get("_cancel", False)
+            if cancelled:
                 job["status"] = "cancelled"
-                self.db.update(job_id, status="cancelled")
-                return
+        if cancelled:
+            self.db.update(job_id, status="cancelled")
+            return
         self._set(job_id, status="running")
         self.db.update(job_id, status="running")
 

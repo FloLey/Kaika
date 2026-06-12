@@ -119,6 +119,48 @@ def _waveform_peaks(y: np.ndarray, buckets: int = 800) -> list:
             for a, b in zip(edges[:-1], edges[1:])]
 
 
+def _read_json(path: Path, default):
+    """Parse a JSON file, falling back to ``default`` when missing or corrupt."""
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return default
+
+
+def _cached_waveform(wf_path: Path, audio: Optional[Path]) -> list:
+    """Waveform peaks need a full decode of the track — cache them so
+    resubmissions skip it entirely (empty list when the audio is gone)."""
+    if wf_path.exists():
+        return json.loads(wf_path.read_text())
+    if audio is None:
+        waveform = []
+    else:
+        y, _sr = load_audio(audio)
+        waveform = _waveform_peaks(y)
+    wf_path.parent.mkdir(parents=True, exist_ok=True)
+    wf_path.write_text(json.dumps(waveform))
+    return waveform
+
+
+def _recipe_from(req) -> R.Recipe:
+    if req.recipe is not None:
+        return R.from_dict(req.recipe)
+    return R.load_recipe(req.recipe_name or "eclosion")
+
+
+def _proposal_segment(project, proposal: dict) -> int:
+    """Which segment to render: the proposal's own, or the longest one
+    (a verse/chorus/drop) for a global-only proposal."""
+    idx = proposal.get("segment_index")
+    segs = project.segments
+    if idx is not None and 0 <= idx < len(segs):
+        return idx
+    return max(range(len(segs)), key=lambda i: segs[i].end - segs[i].start,
+               default=0) if segs else 0
+
+
 def create_app(runs_root: str | Path = "runs",
                data_dir: str | Path | None = None) -> FastAPI:
     runs_root = Path(runs_root)
@@ -186,16 +228,9 @@ def create_app(runs_root: str | Path = "runs",
         path = _resolve_audio(audio_id)
         cache = runs_root / ".analysis_cache"
         score = analyze_cached(path, cache, fps=fps)
-        # The waveform needs a full decode of the track — cache it on the
-        # same content key so resubmissions skip it entirely.
-        wf_path = cache / f"{audio_cache_key(path)}.waveform.json"
-        if wf_path.exists():
-            waveform = json.loads(wf_path.read_text())
-        else:
-            y, _sr = load_audio(path)
-            waveform = _waveform_peaks(y)
-            wf_path.parent.mkdir(parents=True, exist_ok=True)
-            wf_path.write_text(json.dumps(waveform))
+        # Cached on the same content key as the analysis.
+        waveform = _cached_waveform(
+            cache / f"{audio_cache_key(path)}.waveform.json", path)
         return {
             "audio_id": audio_id, "tempo_bpm": score.tempo_bpm,
             "duration_s": score.audio.duration_s, "fps": fps,
@@ -207,11 +242,6 @@ def create_app(runs_root: str | Path = "runs",
         }
 
     # ---- runs (jobs) ------------------------------------------------------
-    def _recipe_from(req) -> R.Recipe:
-        if req.recipe is not None:
-            return R.from_dict(req.recipe)
-        return R.load_recipe(req.recipe_name or "eclosion")
-
     @app.post("/api/runs")
     def start_run(req: RunRequest):
         path = _resolve_audio(req.audio_id)
@@ -229,17 +259,7 @@ def create_app(runs_root: str | Path = "runs",
         if not score_path.exists():
             return None
         score = Score.from_json(score_path)
-        wf_path = rd / "waveform.json"
-        if wf_path.exists():
-            waveform = json.loads(wf_path.read_text())
-        else:
-            audio = frozen_audio(rd)
-            if audio is None:
-                waveform = []
-            else:
-                y, _sr = load_audio(audio)
-                waveform = _waveform_peaks(y)
-            wf_path.write_text(json.dumps(waveform))
+        waveform = _cached_waveform(rd / "waveform.json", frozen_audio(rd))
         return {
             "tempo_bpm": score.tempo_bpm, "duration_s": score.audio.duration_s,
             "fps": score.audio.fps, "n_frames": score.n_frames,
@@ -249,10 +269,14 @@ def create_app(runs_root: str | Path = "runs",
             "waveform": waveform,
         }
 
-    def _project_payload(run_id: str, with_analysis: bool = False) -> dict:
+    def _project_dir(run_id: str) -> Path:
         rd = runs_root / run_id
         if not (rd / "project.json").exists():
             raise HTTPException(404, "project not found")
+        return rd
+
+    def _project_payload(run_id: str, with_analysis: bool = False) -> dict:
+        rd = _project_dir(run_id)
         audio = frozen_audio(rd)
         payload = {
             "run_id": run_id,
@@ -287,12 +311,6 @@ def create_app(runs_root: str | Path = "runs",
     @app.get("/api/projects/{run_id}")
     def get_project(run_id: str):
         return _project_payload(run_id, with_analysis=True)
-
-    def _project_dir(run_id: str) -> Path:
-        rd = runs_root / run_id
-        if not (rd / "project.json").exists():
-            raise HTTPException(404, "project not found")
-        return rd
 
     @app.put("/api/projects/{run_id}")
     def update_project(run_id: str, upd: ProjectUpdate):
@@ -422,12 +440,7 @@ def create_app(runs_root: str | Path = "runs",
     settings_path = data_dir / "settings.json"
 
     def _load_settings() -> dict:
-        if settings_path.exists():
-            try:
-                return json.loads(settings_path.read_text())
-            except json.JSONDecodeError:
-                return {}
-        return {}
+        return _read_json(settings_path, {})
 
     @app.get("/api/schema/recipe")
     def schema_recipe():
@@ -464,12 +477,7 @@ def create_app(runs_root: str | Path = "runs",
             raise HTTPException(400, str(e))
 
         chat_path = rd / "chat.json"
-        history = []
-        if chat_path.exists() and not req.reset:
-            try:
-                history = json.loads(chat_path.read_text())
-            except json.JSONDecodeError:
-                history = []
+        history = [] if req.reset else _read_json(chat_path, [])
 
         def submit_preview(t0: float, t1: float) -> str:
             return jm.submit(
@@ -517,19 +525,11 @@ def create_app(runs_root: str | Path = "runs",
     @app.get("/api/projects/{run_id}/chat")
     def chat_history(run_id: str):
         rd = _project_dir(run_id)
-        p = rd / "chat.json"
-        if not p.exists():
-            return []
-        try:
-            return json.loads(p.read_text())
-        except json.JSONDecodeError:
-            return []
+        return _read_json(rd / "chat.json", [])
 
     @app.post("/api/projects/{run_id}/preview")
     def preview_project(run_id: str, req: PreviewRequest = PreviewRequest()):
-        rd = runs_root / run_id
-        if not (rd / "project.json").exists():
-            raise HTTPException(404, "project not found")
+        rd = _project_dir(run_id)
 
         def task(progress):
             proj = Project.from_json(rd / "project.json")
@@ -544,9 +544,7 @@ def create_app(runs_root: str | Path = "runs",
 
     @app.post("/api/projects/{run_id}/preview_segment")
     def preview_segment(run_id: str, req: SegmentPreviewRequest):
-        rd = runs_root / run_id
-        if not (rd / "project.json").exists():
-            raise HTTPException(404, "project not found")
+        rd = _project_dir(run_id)
         n_segs = len(Project.from_json(rd / "project.json").segments)
         if not (0 <= req.index < n_segs):
             raise HTTPException(400, f"segment index {req.index} out of range")
@@ -582,16 +580,6 @@ def create_app(runs_root: str | Path = "runs",
         return {"global": plan.get("global"),
                 "segments": plan.get("segments") or [], "warnings": warnings}
 
-    def _proposal_segment(project, proposal: dict) -> int:
-        """Which segment to render: the proposal's own, or the longest one
-        (a verse/chorus/drop) for a global-only proposal."""
-        idx = proposal.get("segment_index")
-        segs = project.segments
-        if idx is not None and 0 <= idx < len(segs):
-            return idx
-        return max(range(len(segs)), key=lambda i: segs[i].end - segs[i].start,
-                   default=0) if segs else 0
-
     @app.post("/api/projects/{run_id}/preview_proposal")
     def preview_proposal(run_id: str, req: ProposalRequest):
         from ..core import suggest as SG
@@ -622,9 +610,7 @@ def create_app(runs_root: str | Path = "runs",
 
     @app.post("/api/projects/{run_id}/generate")
     def generate_project(run_id: str):
-        rd = runs_root / run_id
-        if not (rd / "project.json").exists():
-            raise HTTPException(404, "project not found")
+        rd = _project_dir(run_id)
         # run_diffuse rebuilds missing/draft fluid itself, so this always works.
         return {"job_id": jm.submit(lambda progress: run_diffuse(rd, progress=progress),
                                     run_id=run_id, kind="diffuse")}
