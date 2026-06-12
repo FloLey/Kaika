@@ -130,14 +130,34 @@ def test_chat_requires_api_key(client, tmp_path):
     assert "API key" in r.text
 
 
-def test_window_preview_supersedes_previous(client, tmp_path):
+def test_window_preview_supersedes_previous(client, tmp_path, monkeypatch):
+    """The second preview request MUST cancel the first (queued or running).
+    The fake job spins until released, so the first one cannot slip to done
+    before the second request lands — the cancel path is always exercised."""
+    import threading
+    import time
+
+    release = threading.Event()
+
+    def fake_preview(rd, t0, t1, draft=True, progress=None):
+        while not release.is_set():
+            progress("fluid", 0, 1)     # raises JobCancelled once superseded
+            time.sleep(0.01)
+        return None
+
+    monkeypatch.setattr("kaika.server.app.run_window_preview", fake_preview)
     data = _make_project(client, tmp_path)
     rid = data["run_id"]
     j1 = client.post(f"/api/projects/{rid}/preview_window",
                      json={"t0": 0.0, "t1": 0.5}).json()["job_id"]
     j2 = client.post(f"/api/projects/{rid}/preview_window",
                      json={"t0": 0.5, "t1": 1.0}).json()["job_id"]
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        if client.get(f"/api/jobs/{j1}").json()["status"] == "cancelled":
+            break
+        time.sleep(0.05)
+    assert client.get(f"/api/jobs/{j1}").json()["status"] == "cancelled"
+    release.set()                       # let the second job finish
     done = _wait(client, j2)
     assert done["status"] == "done", done.get("error")
-    s1 = client.get(f"/api/jobs/{j1}").json()
-    assert s1["status"] in ("cancelled", "done")   # superseded (or already done)
