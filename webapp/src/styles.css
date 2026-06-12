@@ -177,7 +177,7 @@ img.live-frame { width: 100%; max-width: 320px; border-radius: 8px;
 
 /* ===================== v2 studio: three panes ===================== */
 /* segment spine · big preview · context panel (assist / tune) */
-.studio3 { display: grid; grid-template-columns: 248px minmax(0, 1fr) 400px;
+.studio3 { display: grid; grid-template-columns: 340px minmax(0, 1fr) 420px;
   gap: 16px; align-items: start; }
 .studio-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .studio-side { min-width: 0; position: sticky; top: 16px; }
@@ -320,7 +320,8 @@ details.emitter-card > summary { display: flex; align-items: center; gap: 6px;
 
 /* ===================== v2.1 polish: inspector layout + help ===================== */
 /* wider shell for the three-pane studio only */
-.app:has(.studio3) { max-width: 1680px; }
+/* the studio is a tool, not a page — fill the whole window, no centering */
+.app:has(.studio3) { max-width: none; padding: 0 16px 32px; }
 
 /* nothing inside the inspector may overflow its column */
 .insp-body { overflow-x: hidden; }
