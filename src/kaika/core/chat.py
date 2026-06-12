@@ -13,6 +13,7 @@ Each mutating turn appends one revision (undo history).
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 from dataclasses import dataclass, field
@@ -301,7 +302,7 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
             right = Segment(start=at, end=seg.end,
                             label=str(args.get("label") or seg.label),
                             prompt=str(args.get("prompt") or seg.prompt),
-                            fluid=json.loads(json.dumps(seg.fluid or {})))
+                            fluid=copy.deepcopy(seg.fluid or {}))
             seg.end = at
             proj.segments.insert(idx + 1, right)
             ctx.save(proj, f"segment [{idx}] split @ {at:.2f}s")
@@ -349,7 +350,7 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
             idx = int(args.get("index", -1))
             if not (0 <= idx < len(proj.timeline)):
                 return f"ERROR: timeline index {idx} out of range"
-            merged = json.loads(json.dumps(proj.timeline[idx]))
+            merged = copy.deepcopy(proj.timeline[idx])
             _deep_update(merged, args.get("patch") or {})
             errs = R.validate_timeline([merged])
             if errs:

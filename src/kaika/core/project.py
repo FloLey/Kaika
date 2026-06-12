@@ -12,6 +12,7 @@ modulator (the engine applies modulators last).
 """
 from __future__ import annotations
 
+import copy
 import json
 import time
 from dataclasses import dataclass, field, asdict
@@ -141,7 +142,7 @@ class Project:
                     if w <= 0:
                         continue
                     if fi not in owned:
-                        out[fi] = json.loads(json.dumps(out[fi]))
+                        out[fi] = copy.deepcopy(out[fi])
                         owned.add(fi)
                     tree = out[fi]
                     for path, target_v in (d.get("set") or {}).items():

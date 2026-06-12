@@ -949,6 +949,10 @@ class _ColorEngine:
     def palette(self, name: str) -> List[np.ndarray]:
         return self.palettes.get(name) or [_hex_to_rgb("#B84A74")]
 
+    def _frame(self, frame_i: int):
+        """Frame data clamped to the score's last frame."""
+        return self.score.frames[min(frame_i, len(self.score.frames) - 1)]
+
     def resolve(self, c: dict, frame_i: int, cycle_idx: int,
                 rng: np.random.Generator) -> np.ndarray:
         typ = c.get("type", "palette")
@@ -972,7 +976,7 @@ class _ColorEngine:
             pitch = self.held_pitch(frame_i, float(c.get("min_hold_s", 0.2)))
             color = _palette_lerp(pal, pitch / 11.0)
         elif typ == "centroid_ramp":
-            fr = self.score.frames[min(frame_i, len(self.score.frames) - 1)]
+            fr = self._frame(frame_i)
             x = _centroid_x(fr.centroid_hz)
             color = ((1 - x) * _hex_to_rgb(c.get("dark", "#1B2740"))
                      + x * _hex_to_rgb(c.get("bright", "#FFE3B0")))
@@ -980,7 +984,7 @@ class _ColorEngine:
             # The first palette entries weighted by band energy (low, mid,
             # high...): the color FOLLOWS the spectral balance, not just the
             # dominant pitch. ``contrast`` > 1 lets the loudest band dominate.
-            fr = self.score.frames[min(frame_i, len(self.score.frames) - 1)]
+            fr = self._frame(frame_i)
             bands = list(fr.bands) or [fr.rms]
             k = min(len(bands), len(pal))
             w = np.asarray(bands[:k], np.float64) ** float(
@@ -997,7 +1001,7 @@ class _ColorEngine:
             mul = float(b.get("value", 1.0))
         else:
             lo, hi = b.get("range", [0.75, 1.25])
-            fr = self.score.frames[min(frame_i, len(self.score.frames) - 1)]
+            fr = self._frame(frame_i)
             x = _centroid_x(fr.centroid_hz) if src == "centroid" else fr.rms
             mul = lo + x * (hi - lo)
         return (color * mul * float(c.get("opacity", 1.0))).astype(np.float32)
@@ -1324,7 +1328,7 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     bloom_auto_sigma = max(1.0, min(grid_h, grid_w) / 48)
     dt = 1.0
     stats = {"kinetic_energy": [], "total_density": []}
-    emitters_d = [json.loads(json.dumps(recipe.to_dict()["emitters"][i]))
+    emitters_d = [copy.deepcopy(recipe.to_dict()["emitters"][i])
                   for i in range(n_emitters)]
     seed = int(recipe.seed)
 
@@ -1381,7 +1385,7 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                     ecfg = tree["emitters"].get(recipe.emitters[sp.emitter_i].id)
                     if ecfg is None:
                         continue
-                    ecfg = (json.loads(json.dumps(ecfg)) if sp.overrides else ecfg)
+                    ecfg = (copy.deepcopy(ecfg) if sp.overrides else ecfg)
                     for k in ("placement", "color", "body"):
                         if k in sp.overrides:
                             ov = sp.overrides[k] or {}
