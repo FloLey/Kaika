@@ -56,14 +56,39 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   useEffect(() => { api.recipes().then(setRecipes).catch(() => {}); }, []);
   useEffect(() => { api.schema().then(setSchema).catch(() => {}); }, []);
 
+  const [lyricsStatus, setLyricsStatus] = useState<string | null>(null);
   const adopt = (p: Awaited<ReturnType<typeof api.getProject>>) => {
     setRunId(p.run_id);
     setProject(p.project);
     if (p.analysis) setAnalysis(p.analysis);
     setAudioUrl(p.audio_url ?? null);
     setWarnings(p.manifest?.warnings ?? []);
+    setLyricsStatus(p.manifest?.lyrics?.status ?? null);
     api.signals(p.run_id).then(setSignals).catch(() => {});
   };
+
+  // While lyrics align in the background, poll until ready, then reload the
+  // project (it may have been re-segmented) and refresh the preview.
+  useEffect(() => {
+    if (lyricsStatus !== "pending" || !runId) return;
+    const t = window.setInterval(async () => {
+      try {
+        const p = await api.getProject(runId);
+        const st = p.manifest?.lyrics?.status;
+        if (st && st !== "pending") {
+          window.clearInterval(t);
+          setLyricsStatus(st);
+          if (st === "ready") {
+            setProject(p.project);
+            if (p.analysis) setAnalysis(p.analysis);
+            api.signals(runId).then(setSignals).catch(() => {});
+            kickPreview(runId);
+          }
+        }
+      } catch { /* keep polling */ }
+    }, 2500);
+    return () => window.clearInterval(t);
+  }, [lyricsStatus, runId]);   // eslint-disable-line
 
   useEffect(() => {
     if (initialRunId) {
@@ -335,6 +360,14 @@ export default function Studio({ initialRunId, onPreview }: Props) {
 
         {project && runId && (
           <>
+            {lyricsStatus === "pending" && (
+              <div className="muted mono" style={{ marginBottom: 8 }}>
+                ♪ aligning lyrics to the track…</div>
+            )}
+            {lyricsStatus === "error" && (
+              <div className="err" style={{ marginBottom: 8 }}>
+                lyrics alignment failed — check the track has vocals</div>
+            )}
             <PreviewPane runId={runId} jobId={previewJob}
               version={previewVersion} aspect={aspect || 1}
               windowLabel={`window ${Math.max(0, playhead - 1).toFixed(1)}–${(Math.max(0, playhead - 1) + WINDOW_S).toFixed(1)}s · draft`}

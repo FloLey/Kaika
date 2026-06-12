@@ -429,3 +429,14 @@ def test_window_preview_stable_with_spiral_sequence(score, tmp_path):
     a = imageio.imread(tmp_path / "full" / "fluid" / "000054.png").astype(float)
     b = imageio.imread(tmp_path / "win" / "fluid" / "000006.png").astype(float)
     assert np.abs(a - b).mean() < 2.0
+
+
+def test_vel_grid_never_exceeds_dye_grid(score, tmp_path):
+    """The two-grid velocity shape must stay <= the dye grid even after the
+    fft-friendly rounding."""
+    for short in (90, 160, 200, 448):
+        rec = _rec(canvas={"width": short, "height": int(short * 16 / 9),
+                           "sim_resolution": short})
+        gh, gw = rec.canvas.grid()
+        r = S.simulate(score, rec, tmp_path / f"v{short}", max_frames=3)
+        assert r.grid[0] <= gh and r.grid[1] <= gw

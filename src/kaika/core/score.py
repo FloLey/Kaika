@@ -46,6 +46,8 @@ class FrameData:
     beat_phase: float = 0.0    # 0..1 phase between consecutive beats
     bar_phase: float = 0.0     # 0..1 phase within a 4-beat bar (4/4 assumed)
     harmonic_ratio: float = 0.5  # harmonic / (harmonic + percussive) energy
+    voiced: float = 0.0        # 1.0 while an aligned lyric line is sung (0 = no
+                               # lyrics / instrumental); true vocal activity
 
 
 @dataclass

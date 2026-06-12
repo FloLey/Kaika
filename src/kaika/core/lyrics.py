@@ -112,7 +112,17 @@ def transcribe_words(audio_path: str | Path,
 
     try:
         return run("cuda", "float16")
-    except Exception:                                        # noqa: BLE001
+    except Exception as gpu_err:                             # noqa: BLE001
+        # A missing model (first run, no network) raises here too — surface
+        # it clearly instead of masking it as a silent CPU fallback.
+        msg = str(gpu_err).lower()
+        if any(s in msg for s in ("connection", "could not download",
+                                  "not found", "huggingface", "timed out",
+                                  "resolve", "offline")):
+            raise RuntimeError(
+                f"could not load the Whisper '{name}' model — first-time "
+                "alignment needs network access to download it once "
+                f"(then it is cached). Original error: {gpu_err}") from gpu_err
         return run("cpu", "int8")
 
 
@@ -195,13 +205,14 @@ def align_lines(lines: List[str], words: Words
                         f"'{lines[li][:40]}'")
 
     final = [l for l in res if l is not None]
-    # Readability: minimum display time, slight extension, no overlap.
+    # Readability: minimum display time, slight extension, never overlap the
+    # next line (a hard end-before-next-start contract for the renderer).
     for i, l in enumerate(final):
         nxt = final[i + 1].t0 if i + 1 < len(final) else None
         l.t1 = max(l.t1, l.t0 + 1.2) + 0.5
-        if nxt is not None:
-            l.t1 = min(l.t1, nxt)
-        l.t1 = max(l.t1, l.t0 + 0.6)
+        if nxt is not None and l.t1 > nxt:
+            l.t1 = nxt          # touch but don't cross the next start
+        l.t1 = max(l.t1, l.t0 + 0.05)   # always a positive, non-zero span
     return final, warnings
 
 

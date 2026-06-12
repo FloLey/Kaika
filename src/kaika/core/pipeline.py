@@ -86,6 +86,55 @@ def _lyrics_args(run_dir: Path, recipe: Recipe) -> dict:
     return {}
 
 
+def align_and_update(run_dir: str | Path, runs_root: str | Path,
+                     model_dir: Optional[str | Path] = None,
+                     progress: Optional[ProgressFn] = None,
+                     transcriber=None) -> int:
+    """Lyrics job: align the lyrics, then re-derive the project's structure
+    from them (sections + per-frame vocal activity). Runs once at project
+    creation; only rewrites the auto-detected segments, never hand edits."""
+    from .lyrics import align_project_lyrics, load_lyric_lines
+    run_dir = Path(run_dir)
+    n = align_project_lyrics(run_dir, runs_root, model_dir,
+                             progress=progress, transcriber=transcriber)
+    lines = [asdict(l) for l in load_lyric_lines(run_dir)]
+    if not lines:
+        return n
+    try:
+        project = Project.from_json(run_dir / "project.json")
+        recipe = project.recipe
+        a = recipe.analysis
+        score = analyze_cached(frozen_audio(run_dir),
+                               Path(runs_root) / ".analysis_cache",
+                               fps=recipe.canvas.fps, bands=tuple(a.bands),
+                               onset_delta=a.onset_delta,
+                               onset_wait=a.onset_wait, lyric_lines=lines)
+        score.to_json(run_dir / "score.json")
+        # Re-derive segments only if they are still the auto-detected set
+        # (untouched since creation) — never clobber the user's edits.
+        manifest = _load_manifest(run_dir)
+        auto = manifest.get("lyrics", {}).get("auto_segments")
+        cur = [(round(s.start, 2), round(s.end, 2)) for s in project.segments]
+        if auto is None or cur == [tuple(x) for x in auto]:
+            fresh = Project.from_score(score, recipe,
+                                       audio=project.audio)
+            project.segments = fresh.segments
+            project.to_json(run_dir / "project.json")
+            manifest.setdefault("lyrics", {})["auto_segments"] = [
+                [round(s.start, 2), round(s.end, 2)]
+                for s in project.segments]
+            manifest["lyrics"]["resegmented"] = True
+            _save_manifest(run_dir, manifest)
+    except Exception as e:                                   # noqa: BLE001
+        # Alignment already succeeded; re-segmentation is a bonus — record
+        # the failure rather than crashing the job or hiding it entirely.
+        manifest = _load_manifest(run_dir)
+        manifest.setdefault("lyrics", {})["resegment_error"] = \
+            f"{type(e).__name__}: {e}"
+        _save_manifest(run_dir, manifest)
+    return n
+
+
 def _lyric_stamps(run_dir: Path, recipe: Recipe,
                   warnings: Optional[List[str]] = None) -> Optional[list]:
     """simulate() lyric stamps for fluid mode; warns when alignment is not
@@ -156,7 +205,9 @@ def init_project_run(audio_path: str | Path, recipe: Recipe,
         "recipe": recipe.name, "fps": project.fps, "seconds": seconds,
         "stages": {}, "stage": "created", "status": "created", "error": None,
         "warnings": [],
-        **({"lyrics": {"status": "pending"}} if lyrics_path else {}),
+        **({"lyrics": {"status": "pending", "auto_segments": [
+            [round(s.start, 2), round(s.end, 2)] for s in project.segments]}}
+           if lyrics_path else {}),
     })
     return run_dir, project, score
 

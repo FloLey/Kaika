@@ -49,6 +49,8 @@ export interface RunManifest {
   stage?: string; status: string; sync: { lag_frames: number; correlation: number } | null;
   final?: string; fluid_preview?: string; stages: Record<string, any>;
   warnings?: string[];
+  lyrics?: { status: string; lines?: number; warnings?: string[];
+             resegmented?: boolean; error?: string };
   window_preview?: { start: number; end: number; draft: boolean };
 }
 export interface Revision { index: number; time: number; note: string; }

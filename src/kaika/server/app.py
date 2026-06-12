@@ -266,9 +266,11 @@ def create_app(runs_root: str | Path = "runs",
         if lyr is not None:
             # Alignment runs as a background job; .lrc resolves instantly,
             # plain text goes through Whisper (cached by audio+text+model).
-            from ..core.lyrics import align_project_lyrics
+            # It also re-derives the structure (sections + vocal activity)
+            # from the aligned lyrics.
+            from ..core.pipeline import align_and_update
             rd = run_dir
-            jm.submit(lambda progress: align_project_lyrics(
+            jm.submit(lambda progress: align_and_update(
                           rd, runs_root, data_dir / "models", progress),
                       run_id=run_dir.name, kind="lyrics")
         return _project_payload(run_dir.name, with_analysis=True)

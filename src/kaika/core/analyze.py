@@ -88,21 +88,50 @@ def _band_onsets(S_band: np.ndarray, sr: int, hop: int,
     return [Event(t=float(t), mag=float(m)) for t, m in zip(times, mags)]
 
 
+def _lyric_signature(lines: List[dict], start: float, end: float) -> str:
+    """Normalized word signature of the lyric lines sung within a section —
+    the identity used to spot a repeated chorus."""
+    words: List[str] = []
+    for ln in lines:
+        mid = (float(ln["t0"]) + float(ln["t1"])) / 2
+        if start <= mid < end:
+            for w in str(ln["text"]).lower().split():
+                w = "".join(c for c in w if c.isalnum())
+                if w:
+                    words.append(w)
+    return " ".join(words)
+
+
 def _label_sections(boundaries_t: List[float], duration: float,
-                    energies: List[float]) -> List[Section]:
-    """Heuristic labelling: ends are intro/outro, the rest build/drop by energy."""
+                    energies: List[float],
+                    lyric_lines: Optional[List[dict]] = None) -> List[Section]:
+    """Ends are intro/outro; the middle is labelled by energy, or — when
+    lyrics are available — by lyric content: a word signature shared by two
+    or more sections is a chorus, a unique non-empty one a verse, an empty
+    one an instrumental (drop/build by energy)."""
     sections: List[Section] = []
     n = len(boundaries_t) - 1
     e_norm = _normalise(np.array(energies)) if energies else np.array([])
+    sigs = ([_lyric_signature(lyric_lines, boundaries_t[i], boundaries_t[i + 1])
+             for i in range(n)] if lyric_lines else [""] * n)
+    sig_counts: dict = {}
+    for s in sigs:
+        if s:
+            sig_counts[s] = sig_counts.get(s, 0) + 1
     for i in range(n):
         start, end = boundaries_t[i], boundaries_t[i + 1]
         e = float(e_norm[i]) if i < len(e_norm) else 0.0
-        if i == 0:
-            label = "intro"
+        sig = sigs[i]
+        if sig and sig_counts.get(sig, 0) >= 2:
+            label = "chorus"           # repeated lyric block (content wins)
+        elif sig:
+            label = "verse"            # sung, unique words
+        elif i == 0:
+            label = "intro"            # instrumental edges keep position labels
         elif i == n - 1:
             label = "outro"
         elif e >= 0.66:
-            label = "drop"
+            label = "drop"             # instrumental, loud
         elif e >= 0.33:
             label = "build"
         else:
@@ -110,6 +139,37 @@ def _label_sections(boundaries_t: List[float], duration: float,
         sections.append(Section(start=round(start, 3), end=round(end, 3),
                                 label=label, energy=round(e, 3)))
     return sections
+
+
+def _lyric_boundaries(lines: List[dict], duration: float) -> List[float]:
+    """Structural cut candidates from lyric timing: the start of the first
+    sung line, the end of the last, and the midpoint of every instrumental
+    gap longer than 4 s (verse breaks, drops between vocal sections)."""
+    if not lines:
+        return []
+    ls = sorted(lines, key=lambda l: float(l["t0"]))
+    cuts: List[float] = []
+    first, last = float(ls[0]["t0"]), float(ls[-1]["t1"])
+    if first > 4.0:
+        cuts.append(first)
+    for a, b in zip(ls, ls[1:]):
+        gap = float(b["t0"]) - float(a["t1"])
+        if gap >= 4.0:
+            cuts.append((float(a["t1"]) + float(b["t0"])) / 2)
+    if duration - last > 4.0:
+        cuts.append(last)
+    return cuts
+
+
+def _merge_boundaries(cluster_t: List[float], lyric_t: List[float],
+                      duration: float, min_gap: float = 6.0) -> List[float]:
+    """Union of clustering and lyric boundaries, deduped so none sit closer
+    than ``min_gap`` (lyric cuts win — they reflect real structure)."""
+    kept = [0.0, duration]
+    for t in sorted(lyric_t) + sorted(cluster_t):
+        if 0.0 < t < duration and all(abs(t - k) >= min_gap for k in kept):
+            kept.append(t)
+    return sorted(kept)
 
 
 def _beat_phases(beat_times: np.ndarray, frame_times: np.ndarray,
@@ -142,11 +202,28 @@ def _beat_phases(beat_times: np.ndarray, frame_times: np.ndarray,
     return np.clip(beat_phase, 0.0, 1.0), np.clip(bar_phase, 0.0, 1.0)
 
 
+def _voiced_array(lyric_lines: Optional[List[dict]], n: int, fps: int,
+                  ramp_s: float = 0.08) -> np.ndarray:
+    """Per-frame vocal activity (1.0 while a lyric line is sung) — true VAD
+    from the aligned lyrics, with a short ramp at line edges."""
+    out = np.zeros(n, np.float64)
+    if not lyric_lines:
+        return out
+    r = max(1, int(round(ramp_s * fps)))
+    for ln in lyric_lines:
+        f0 = int(round(float(ln["t0"]) * fps))
+        f1 = int(round(float(ln["t1"]) * fps))
+        for fi in range(max(0, f0 - r), min(n, f1 + r)):
+            out[fi] = 1.0
+    return out
+
+
 def analyze(audio_path: str | Path, fps: int = 24,
             target_sr: int | None = None,
             bands: Sequence[float] = DEFAULT_BANDS,
             onset_delta: float = DEFAULT_ONSET_DELTA,
-            onset_wait: int = DEFAULT_ONSET_WAIT) -> Score:
+            onset_wait: int = DEFAULT_ONSET_WAIT,
+            lyric_lines: Optional[List[dict]] = None) -> Score:
     """Analyse ``audio_path`` and return a frame-aligned :class:`Score`.
 
     Parameters
@@ -157,6 +234,8 @@ def analyze(audio_path: str | Path, fps: int = 24,
     bands : (low_hz, high_hz) band-split edges for the low/mid/high features.
     onset_delta, onset_wait : onset peak-picking strictness (see recipe
         ``analysis`` block).
+    lyric_lines : aligned lyrics [{t0, t1, text}] — when given, they sharpen
+        segmentation/labelling and populate per-frame vocal activity.
     """
     low_hz, high_hz = float(bands[0]), float(bands[1])
     y, sr = load_audio(audio_path, target_sr)
@@ -231,6 +310,7 @@ def analyze(audio_path: str | Path, fps: int = 24,
     chroma_n = chroma / np.where(peaks > 1e-12, peaks, 1.0)[None, :]
     chroma_arg = chroma.argmax(axis=0)
 
+    voiced = _voiced_array(lyric_lines, n, fps)
     frames = [
         FrameData(
             rms=round(float(rms[i]), 4),
@@ -244,6 +324,7 @@ def analyze(audio_path: str | Path, fps: int = 24,
             beat_phase=round(float(beat_phase[i]), 4),
             bar_phase=round(float(bar_phase[i]), 4),
             harmonic_ratio=round(float(harmonic_ratio[i]), 4),
+            voiced=round(float(voiced[i]), 3),
         )
         for i in range(n)
     ]
@@ -254,8 +335,9 @@ def analyze(audio_path: str | Path, fps: int = 24,
         "high": _band_onsets(S_perc[high_mask], sr, hop, onset_delta, onset_wait),
     }
 
-    # Structural sections via agglomerative clustering on chroma+mfcc.
-    sections = _segment(y, sr, hop, S, rms, duration)
+    # Structural sections via agglomerative clustering on chroma+mfcc,
+    # sharpened by lyric boundaries/labels when available.
+    sections = _segment(y, sr, hop, S, rms, duration, lyric_lines)
 
     return Score(
         audio=AudioInfo(sr=int(sr), duration_s=round(duration, 3), fps=fps,
@@ -283,28 +365,40 @@ def analyze_cached(audio_path: str | Path, cache_dir: Optional[str | Path],
                    fps: int = 24,
                    bands: Sequence[float] = DEFAULT_BANDS,
                    onset_delta: float = DEFAULT_ONSET_DELTA,
-                   onset_wait: int = DEFAULT_ONSET_WAIT) -> Score:
-    """:func:`analyze`, memoised on (file content, analysis params): the
-    upload->analyze->project flow re-analyses the same track several times,
-    and resubmitting a track costs a full analysis for nothing. With
+                   onset_wait: int = DEFAULT_ONSET_WAIT,
+                   lyric_lines: Optional[List[dict]] = None) -> Score:
+    """:func:`analyze`, memoised on (file content, analysis params, lyrics):
+    the upload->analyze->project flow re-analyses the same track several
+    times, and resubmitting a track costs a full analysis for nothing. The
+    lyrics-enhanced segmentation caches separately from the plain one. With
     ``cache_dir=None`` this is a plain passthrough."""
     if cache_dir is None:
         return analyze(audio_path, fps=fps, bands=bands,
-                       onset_delta=onset_delta, onset_wait=onset_wait)
+                       onset_delta=onset_delta, onset_wait=onset_wait,
+                       lyric_lines=lyric_lines)
+    lyr = ""
+    if lyric_lines:
+        sig = "|".join(f"{l['t0']:.2f}:{l['text']}" for l in lyric_lines)
+        lyr = "-ly" + hashlib.sha1(sig.encode()).hexdigest()[:10]
     params = f"{fps}-{float(bands[0])}-{float(bands[1])}-" \
-             f"{onset_delta}-{onset_wait}-v{SCORE_VERSION}"
+             f"{onset_delta}-{onset_wait}-v{SCORE_VERSION}{lyr}"
     p = Path(cache_dir) / f"{audio_cache_key(audio_path)}-{params}.json"
     if p.exists():
         return Score.from_json(p)
     score = analyze(audio_path, fps=fps, bands=bands,
-                    onset_delta=onset_delta, onset_wait=onset_wait)
+                    onset_delta=onset_delta, onset_wait=onset_wait,
+                    lyric_lines=lyric_lines)
     p.parent.mkdir(parents=True, exist_ok=True)
     score.to_json(p)
     return score
 
 
-def _segment(y, sr, hop, S, rms, duration) -> List[Section]:
-    """Boundaries from agglomerative clustering, ~one section per 25s."""
+def _segment(y, sr, hop, S, rms, duration,
+             lyric_lines: Optional[List[dict]] = None) -> List[Section]:
+    """Structural sections. Agglomerative clustering on chroma+MFCC gives the
+    base cut points; aligned lyrics, when present, contribute boundaries at
+    instrumental gaps and let labelling tell choruses from drops — fixing the
+    clustering's habit of collapsing long sustained passages into one block."""
     k = max(2, min(8, int(round(duration / 25.0)) + 1))
     chroma = librosa.feature.chroma_stft(S=S ** 2, sr=sr)
     mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=hop, n_mfcc=13)
@@ -316,12 +410,23 @@ def _segment(y, sr, hop, S, rms, duration) -> List[Section]:
     except Exception:
         bound_frames = np.linspace(0, m - 1, k + 1).astype(int)
     bound_frames = np.unique(np.concatenate([[0], bound_frames, [m]]))
-    bound_t = librosa.frames_to_time(bound_frames, sr=sr, hop_length=hop).tolist()
+    cluster_t = librosa.frames_to_time(bound_frames, sr=sr,
+                                       hop_length=hop).tolist()
+    if lyric_lines:
+        bound_t = _merge_boundaries(cluster_t,
+                                    _lyric_boundaries(lyric_lines, duration),
+                                    duration)
+    else:
+        # Interior cuts only, dropping any within 0.5 s of an edge so the
+        # final segment can't degenerate into a frame-thin sliver.
+        interior = sorted({t for t in cluster_t if 0.5 < t < duration - 0.5})
+        bound_t = [0.0] + interior + [duration]
     bound_t[0] = 0.0
     bound_t[-1] = duration
     energies = []
-    for i in range(len(bound_t) - 1):
-        f0 = bound_frames[i]
-        f1 = max(f0 + 1, bound_frames[i + 1])
-        energies.append(float(np.mean(rms[f0:f1])) if f1 <= len(rms) else 0.0)
-    return _label_sections(bound_t, duration, energies)
+    for a, b in zip(bound_t, bound_t[1:]):
+        f0 = int(a * sr / hop)
+        f1 = max(f0 + 1, int(b * sr / hop))
+        seg = rms[f0:min(f1, len(rms))]
+        energies.append(float(np.mean(seg)) if len(seg) else 0.0)
+    return _label_sections(bound_t, duration, energies, lyric_lines)

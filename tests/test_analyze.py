@@ -85,3 +85,46 @@ def test_analyze_cached_roundtrip(track_wav, tmp_path):
     # Different params -> a distinct entry.
     analyze_cached(track_wav, cache, fps=30)
     assert len(list(cache.glob("*.json"))) == 2
+
+
+# ---- lyrics-informed analysis ------------------------------------------------
+
+def test_lyric_boundaries_and_labels():
+    from kaika.core.analyze import (_lyric_boundaries, _label_sections,
+                                    _merge_boundaries)
+    lines = [{"t0": 2, "t1": 5, "text": "na na hey"},
+             {"t0": 35, "t1": 38, "text": "couplet unique"},
+             {"t0": 65, "t1": 68, "text": "na na hey"}]
+    # instrumental gaps (5->35, 38->65) become boundaries; intro before 2s
+    cuts = _lyric_boundaries(lines, 72)
+    assert len(cuts) == 2          # two big gaps (first line at 2s, no intro)
+    merged = _merge_boundaries([0, 40, 72], cuts, 72)
+    assert merged[0] == 0.0 and merged[-1] == 72
+    secs = _label_sections([0, 20, 50, 72], 72, [0.3, 0.5, 0.7], lines)
+    labels = [s.label for s in secs]
+    assert labels.count("chorus") == 2     # repeated "na na hey"
+    assert "verse" in labels
+
+
+def test_voiced_array_and_voice_signal(track_wav):
+    from kaika.core.analyze import analyze
+    from kaika.core import simulate as S
+    lines = [{"t0": 0.3, "t1": 0.8, "text": "hello"}]
+    score = analyze(track_wav, fps=24, lyric_lines=lines)
+    assert any(f.voiced > 0 for f in score.frames)
+    sig = S._signal_array(score, "voice", score.n_frames)
+    assert sig.max() == 1.0 and sig[5:20].sum() > 0   # voiced ~0.3-0.8s
+    # no lyrics -> proxy, still 0..1
+    plain = analyze(track_wav, fps=24)
+    assert all(f.voiced == 0 for f in plain.frames)
+    sig2 = S._signal_array(plain, "voice", plain.n_frames)
+    assert 0.0 <= sig2.max() <= 1.0
+
+
+def test_analyze_cached_keys_on_lyrics(track_wav, tmp_path):
+    from kaika.core.analyze import analyze_cached
+    cache = tmp_path / "c"
+    analyze_cached(track_wav, cache, fps=24)
+    analyze_cached(track_wav, cache, fps=24,
+                   lyric_lines=[{"t0": 1, "t1": 2, "text": "x"}])
+    assert len(list(cache.glob("*.json"))) == 2     # distinct cache entries

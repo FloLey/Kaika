@@ -135,3 +135,14 @@ def test_align_project_lyrics_txt_mocked(track_wav, tmp_path):
     assert n == 1
     line = json.loads((tmp_path / "lyrics.json").read_text())[0]
     assert line["t0"] == pytest.approx(2.0) and line["aligned"]
+
+
+def test_readability_never_overlaps():
+    """Closely-spaced lines must not overlap after the readability pass."""
+    words = []
+    t = 1.0
+    for ph in ("un", "deux", "trois", "quatre"):   # 1 word, 0.3s apart
+        words.append((ph, t, t + 0.1)); t += 0.3
+    out, _ = align_lines(["un", "deux", "trois", "quatre"], words)
+    for a, b in zip(out, out[1:]):
+        assert a.t1 <= b.t0 + 1e-9 and a.t1 > a.t0

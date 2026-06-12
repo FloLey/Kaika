@@ -57,6 +57,7 @@ _FFT_WORKERS = max(1, (os.cpu_count() or 2) - 1)
 from .score import Score
 from .recipe import Recipe, resolve_path, _normalise_placement, fft_friendly
 from .timeline import resolve_directives
+from .lyrics import text_mask as _text_mask
 
 ProgressFn = Callable[[int, int], None]
 
@@ -558,8 +559,12 @@ def _signal_array(score: Score, name: str, n: int) -> np.ndarray:
         idx = {"low": 0, "mid": 1, "high": 2}.get(name.split(".", 1)[1], 0)
         return per_frame(lambda f: f.bands[idx] if len(f.bands) > idx else 0.0)
     if name == "voice":
-        # Sustained vocal/melodic presence: harmonic energy in the mid band,
-        # weighted by overall loudness, normalized to the track's own peak.
+        # Prefer true vocal activity from aligned lyrics; fall back to the
+        # spectral proxy (harmonic mid-band energy x loudness) when a track
+        # has no lyrics.
+        voiced = per_frame(lambda f: getattr(f, "voiced", 0.0))
+        if float(voiced.max()) > 0.0:
+            return voiced
         raw = per_frame(lambda f: (f.bands[1] if len(f.bands) > 1 else 0.0)
                         * f.harmonic_ratio * f.rms)
         peak = float(raw.max())
@@ -1169,9 +1174,13 @@ def _build_text_stamps(score: Score, recipe: Recipe, n_frames: int,
     derive from absolute time only, so window previews match the full run."""
     fps = score.audio.fps
     out: Dict[int, list] = {}
+    # Floor the glyph height so text stays legible on small (draft) grids:
+    # at least ~16 px on the short side.
+    min_height = 16.0 / max(1, min(grid_hw))
 
     def schedule(t: float, text: str, center, height: float,
                  rgb: np.ndarray, emit: float, hold_s: float) -> None:
+        height = max(height, min_height)
         f0 = int(round(t * fps))
         n_hold = max(1, int(round(hold_s * fps)))
         for k in range(n_hold):
@@ -1278,8 +1287,10 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     vshort = min(int(round(_CALIB_RES * detail)), grid_h, grid_w)
     if vshort < min(grid_h, grid_w):
         f = vshort / min(grid_h, grid_w)
-        vel_shape = (fft_friendly(max(16, int(round(grid_h * f)))),
-                     fft_friendly(max(16, int(round(grid_w * f)))))
+        # fft_friendly rounds up to a 2/3/5-smooth size; clamp so the velocity
+        # grid can never exceed the dye grid (the design invariant).
+        vel_shape = (min(grid_h, fft_friendly(max(16, int(round(grid_h * f))))),
+                     min(grid_w, fft_friendly(max(16, int(round(grid_w * f))))))
     else:
         vel_shape = (grid_h, grid_w)
     sim = FluidSim(vel_shape, base_field["dissipation"],
@@ -1415,9 +1426,8 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                 key = (txt, round(t_height, 4), t_center)
                 m = text_mask_cache.get(key)
                 if m is None:
-                    from .lyrics import text_mask
                     m = sim.xp.asarray(
-                        text_mask(txt, (sim.dh, sim.dw), t_center, t_height),
+                        _text_mask(txt, (sim.dh, sim.dw), t_center, t_height),
                         sim.xp.float32)
                     text_mask_cache[key] = m
                 sim.add_dye_mask(m, t_rgb, t_amount)
