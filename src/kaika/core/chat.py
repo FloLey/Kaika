@@ -282,6 +282,27 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
             proj.segments.sort(key=lambda s: s.start)
             ctx.save(proj, f"+ segment '{seg.label}' {start:.1f}-{end:.1f}s")
             return "ok"
+        if name == "split_segment":
+            proj = ctx.project()
+            idx = int(args.get("index", -1))
+            if not (0 <= idx < len(proj.segments)):
+                return f"ERROR: segment index {idx} out of range"
+            seg = proj.segments[idx]
+            try:
+                at = float(args["at"])
+            except (KeyError, TypeError, ValueError):
+                return "ERROR: 'at' (seconds) is required"
+            if not (seg.start < at < seg.end):
+                return (f"ERROR: 'at' must fall inside the segment "
+                        f"({seg.start:.2f}..{seg.end:.2f}s)")
+            right = Segment(start=at, end=seg.end,
+                            label=str(args.get("label") or seg.label),
+                            prompt=str(args.get("prompt") or seg.prompt),
+                            fluid=json.loads(json.dumps(seg.fluid or {})))
+            seg.end = at
+            proj.segments.insert(idx + 1, right)
+            ctx.save(proj, f"segment [{idx}] split @ {at:.2f}s")
+            return "ok"
         if name == "remove_segment":
             proj = ctx.project()
             idx = int(args.get("index", -1))
@@ -491,6 +512,15 @@ def tool_definitions() -> List[dict]:
             "fluid?: partial config overrides}. Segments stay sorted by "
             "start.",
          "input_schema": obj({"spec": {"type": "object"}}, ["spec"])},
+        {"name": "split_segment", "description":
+            "Split the segment at this index in two at `at` seconds (must "
+            "fall inside it). The right half inherits label/prompt/overrides "
+            "unless label/prompt are given for it.",
+         "input_schema": obj({"index": {"type": "integer"},
+                              "at": {"type": "number"},
+                              "label": {"type": "string"},
+                              "prompt": {"type": "string"}},
+                             ["index", "at"])},
         {"name": "remove_segment", "description":
             "Remove the segment at this index.",
          "input_schema": obj({"index": {"type": "integer"}}, ["index"])},
@@ -524,7 +554,8 @@ Common intents:
 - Confine an effect to a moment: a timeline `set` window {between, set, fade_s}, or a mute/unmute pair around a section for an emitter.
 - A run of hits tracing a shape (spiral, ring, sweep): give the emitter a parametric placement (line/circle/spiral) with placement.sequence = N — successive trigger hits advance along the shape (hit k at position (k mod N)/N). direction radial_out makes matter flow outward from the shape's center.
 - React to the music continuously: a modulator (signal -> numeric path); for hit-like reactions use emitter triggers instead.
-- One-off accent at an instant: timeline spawn with overrides; recurring behavior: an emitter."""
+- One-off accent at an instant: timeline spawn with overrides; recurring behavior: an emitter.
+- Segments: rename with update_segment {label}, cut in two with split_segment {index, at}."""
 
 
 def system_prompt(ctx: ToolContext) -> str:

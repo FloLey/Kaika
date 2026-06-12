@@ -313,3 +313,21 @@ def test_update_emitter_accepts_dotted_keys(ctx):
     em = ctx.project().recipe.emitter("hats")
     assert em.color.palette == "ocean"
     assert em.body.radius == 0.05
+
+
+def test_tool_split_segment(ctx):
+    seg0 = ctx.project().segments[0]
+    mid = (seg0.start + seg0.end) / 2
+    n = len(ctx.project().segments)
+    res = C.run_tool(ctx, "split_segment",
+                     {"index": 0, "at": mid, "label": "drop-intro"})
+    assert res == "ok"
+    segs = ctx.project().segments
+    assert len(segs) == n + 1
+    assert segs[0].end == pytest.approx(mid)
+    assert segs[1].start == pytest.approx(mid)
+    assert segs[1].label == "drop-intro"
+    assert "must fall inside" in C.run_tool(
+        ctx, "split_segment", {"index": 0, "at": seg0.end + 99})
+    assert "out of range" in C.run_tool(ctx, "split_segment",
+                                        {"index": 99, "at": 1.0})

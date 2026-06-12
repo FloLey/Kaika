@@ -44,6 +44,13 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const saveTimer = useRef<number | undefined>(undefined);
   const playheadRef = useRef(0);
   playheadRef.current = playhead;
+  const projectRef = useRef<ProjectDoc | null>(null);
+  projectRef.current = project;
+  // Track time of the clip the preview pane currently shows: recorded when a
+  // preview is submitted, committed when its job lands (the video reloads).
+  const pendingStart = useRef(0);
+  const [previewStart, setPreviewStart] = useState(0);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => { api.recipes().then(setRecipes).catch(() => {}); }, []);
   useEffect(() => { api.schema().then(setSchema).catch(() => {}); }, []);
@@ -91,10 +98,26 @@ export default function Studio({ initialRunId, onPreview }: Props) {
       const t0 = Math.max(0, playheadRef.current - 1);
       try {
         const { job_id } = await api.previewWindow(rid, t0, t0 + WINDOW_S, true);
+        pendingStart.current = t0;
         setPreviewJob(job_id);
       } catch (e: any) { setErr(String(e.message || e)); }
     }, 400);
   }, [livePreview]);
+
+  // Clicking a segment targets the preview at THAT segment (debounced so
+  // arrowing through segments doesn't flood the job queue).
+  const selectSegment = useCallback((i: number) => {
+    setSel(i);
+    if (!runId) return;
+    window.clearTimeout(kickTimer.current);
+    kickTimer.current = window.setTimeout(async () => {
+      try {
+        const { job_id } = await api.previewSegment(runId, i, true);
+        pendingStart.current = projectRef.current?.segments[i]?.start ?? 0;
+        setPreviewJob(job_id);
+      } catch (e: any) { setErr(String(e.message || e)); }
+    }, 350);
+  }, [runId]);
 
   const scheduleSave = useCallback((next: ProjectDoc) => {
     if (!runId) return;
@@ -201,14 +224,17 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     if (!runId) return;
     const t0 = Math.max(0, playhead - 1);
     const { job_id } = await api.previewWindow(runId, t0, t0 + WINDOW_S, false);
+    pendingStart.current = t0;
     setPreviewJob(job_id);
   };
 
   const togglePlay = () => {
     const a = audioRef.current;
     if (!a) return;
-    if (a.paused) { a.play(); setPlaying(true); }
-    else { a.pause(); setPlaying(false); }
+    if (a.paused) {
+      previewVideoRef.current?.pause();   // one transport at a time
+      a.play(); setPlaying(true);
+    } else { a.pause(); setPlaying(false); }
   };
   const seek = (t: number) => {
     const a = audioRef.current;
@@ -300,9 +326,19 @@ export default function Studio({ initialRunId, onPreview }: Props) {
             <PreviewPane runId={runId} jobId={previewJob}
               version={previewVersion} aspect={aspect || 1}
               windowLabel={`window ${Math.max(0, playhead - 1).toFixed(1)}–${(Math.max(0, playhead - 1) + WINDOW_S).toFixed(1)}s · draft`}
+              windowStart={previewStart}
               onJobDone={() => { setPreviewJob(null);
+                setPreviewStart(pendingStart.current);
                 setPreviewVersion((v) => v + 1); }}
-              onHq={hqWindow} />
+              onHq={hqWindow}
+              onTime={(t) => { if (!playing) setPlayhead(t); }}
+              onPlaying={(pl) => {
+                if (pl) {            // preview takes the transport
+                  const a = audioRef.current;
+                  if (a && !a.paused) { a.pause(); setPlaying(false); }
+                }
+              }}
+              registerVideo={(el) => { previewVideoRef.current = el; }} />
 
             {(project.ui_pins?.length ?? 0) > 0 && (
               <div className="card pin-strip">{pinControls}</div>
@@ -340,7 +376,7 @@ export default function Studio({ initialRunId, onPreview }: Props) {
                   onsets={{ low: analysis.onsets?.low ?? [],
                             high: analysis.onsets?.high ?? [] }}
                   playhead={playhead}
-                  onSelect={setSel}
+                  onSelect={selectSegment}
                   onSeek={seek}
                   onMoveBoundary={moveBoundary}
                 />
@@ -393,7 +429,7 @@ export default function Studio({ initialRunId, onPreview }: Props) {
             onSetTimeline={setTimeline}
             onSetSegments={(segs) => mutate((p) => ({ ...p, segments: segs }))}
             selectedSegment={sel}
-            onSelectSegment={setSel} />
+            onSelectSegment={selectSegment} />
         )}
       </aside>
     </div>

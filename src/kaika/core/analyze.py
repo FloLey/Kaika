@@ -29,6 +29,34 @@ DEFAULT_ONSET_WAIT = 4
 CHROMA_HOP_MULT = 4     # pitch moves far slower than the video framerate
 
 
+def load_audio(audio_path: str | Path,
+               target_sr: Optional[int] = None) -> tuple:
+    """(mono float32 waveform, sr). soundfile decodes wav/flac/ogg/mp3
+    directly; m4a/aac go through the bundled ffmpeg to a temp wav — faster
+    than librosa's audioread fallback, which is deprecated for librosa 1.0."""
+    import soundfile as sf
+    try:
+        y, sr = sf.read(str(audio_path), dtype="float32", always_2d=True)
+        y = y.mean(axis=1)
+        if target_sr and target_sr != sr:
+            y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+            sr = target_sr
+        return y, int(sr)
+    except (sf.LibsndfileError, RuntimeError):
+        pass
+    import subprocess
+    import tempfile
+    import imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        cmd = [ffmpeg, "-y", "-v", "error", "-i", str(audio_path), "-ac", "1"]
+        if target_sr:
+            cmd += ["-ar", str(int(target_sr))]
+        subprocess.run(cmd + [tmp.name], check=True, capture_output=True)
+        y, sr = sf.read(tmp.name, dtype="float32", always_2d=True)
+    return y.mean(axis=1), int(sr)
+
+
 def _normalise(x: np.ndarray) -> np.ndarray:
     """Scale to 0..1 by max, robust to all-zero input."""
     x = np.asarray(x, dtype=np.float64)
@@ -131,7 +159,7 @@ def analyze(audio_path: str | Path, fps: int = 24,
         ``analysis`` block).
     """
     low_hz, high_hz = float(bands[0]), float(bands[1])
-    y, sr = librosa.load(str(audio_path), sr=target_sr, mono=True)
+    y, sr = load_audio(audio_path, target_sr)
     duration = float(len(y) / sr)
     hop = int(round(sr / fps))
 

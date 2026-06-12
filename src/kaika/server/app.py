@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from ..core import recipe as R
 from ..core import chat as C
-from ..core.analyze import analyze_cached, audio_cache_key
+from ..core.analyze import analyze_cached, audio_cache_key, load_audio
 from ..core.project import (Project, Segment, append_revision, list_revisions,
                             load_revision)
 from ..core.schema import recipe_schema
@@ -166,8 +166,7 @@ def create_app(runs_root: str | Path = "runs",
         if wf_path.exists():
             waveform = json.loads(wf_path.read_text())
         else:
-            import librosa
-            y, _sr = librosa.load(str(path), sr=None, mono=True)
+            y, _sr = load_audio(path)
             waveform = _waveform_peaks(y)
             wf_path.parent.mkdir(parents=True, exist_ok=True)
             wf_path.write_text(json.dumps(waveform))
@@ -208,12 +207,11 @@ def create_app(runs_root: str | Path = "runs",
         if wf_path.exists():
             waveform = json.loads(wf_path.read_text())
         else:
-            import librosa
             audio = frozen_audio(rd)
             if audio is None:
                 waveform = []
             else:
-                y, _sr = librosa.load(str(audio), sr=None, mono=True)
+                y, _sr = load_audio(audio)
                 waveform = _waveform_peaks(y)
             wf_path.write_text(json.dumps(waveform))
         return {

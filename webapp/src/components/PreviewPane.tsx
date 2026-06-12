@@ -10,12 +10,18 @@ interface Props {
   version: number;                 // bump to force a video reload
   aspect: number;                  // canvas w/h
   windowLabel: string;
+  windowStart: number;             // track time (s) of the clip's first frame
   onJobDone: () => void;
   onHq: () => void;
+  onTime: (t: number) => void;     // playhead follow (track seconds)
+  onPlaying: (playing: boolean) => void;
+  registerVideo: (el: HTMLVideoElement | null) => void;
 }
 
 export default function PreviewPane({ runId, jobId, version, aspect,
-                                      windowLabel, onJobDone, onHq }: Props) {
+                                      windowLabel, windowStart, onJobDone,
+                                      onHq, onTime, onPlaying,
+                                      registerVideo }: Props) {
   const [stage, setStage] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
   const [peek, setPeek] = useState<string | null>(null);
@@ -43,17 +49,26 @@ export default function PreviewPane({ runId, jobId, version, aspect,
   }, [version]);
   useEffect(() => {
     const v = videoRef.current;
+    registerVideo(v);
     if (v && hasVideo) {
+      v.playbackRate = 1;          // undo any accidental native speed change
       v.load();
       v.play().catch(() => {});
     }
-  }, [version, hasVideo]);
+  }, [version, hasVideo]);         // eslint-disable-line
 
   return (
     <div className="card preview-pane">
       <div className="preview-stage" style={{ aspectRatio: String(aspect) }}>
         {hasVideo && (
-          <video ref={videoRef} loop controls playsInline>
+          <video ref={videoRef} loop controls playsInline
+            // The browser's native video shortcuts (<,> = speed, arrows =
+            // seek) otherwise fire whenever the video keeps focus.
+            onKeyDown={(e) => e.preventDefault()}
+            onTimeUpdate={(e) =>
+              onTime(windowStart + (e.target as HTMLVideoElement).currentTime)}
+            onPlay={() => onPlaying(true)}
+            onPause={() => onPlaying(false)}>
             <source src={`${api.windowPreviewUrl(runId)}?v=${version}`}
               type="video/mp4" />
           </video>
