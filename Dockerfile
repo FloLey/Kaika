@@ -16,8 +16,11 @@ RUN mkdir -p src/kaika && npm --prefix webapp run build
 FROM python:3.12-slim
 # ffmpeg: imageio-ffmpeg bundles its own binary for muxing, but a system
 # ffmpeg lets librosa/audioread decode exotic uploads (mp3/m4a) reliably.
+# fonts-liberation + fontconfig: the lyrics overlay (libass) and the fluid
+# text masks (PIL) need a real font.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-liberation \
+       fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -38,8 +41,13 @@ RUN python -c "import tomllib; \
 # [ctk] pulls the CUDA toolkit headers CuPy needs to JIT-compile kernels.
 ARG GPU=1
 ARG GPU_WHEEL=cupy-cuda12x[ctk]
-RUN if [ "$GPU" = "1" ]; then pip install --no-cache-dir "$GPU_WHEEL"; fi
+# nvidia-cudnn-cu12: CTranslate2 (faster-whisper) needs cuDNN on GPU; the
+# cupy [ctk] extra already covers cuBLAS. LD_LIBRARY_PATH makes the pip
+# wheels' shared libs visible to ctranslate2's dlopen.
+RUN if [ "$GPU" = "1" ]; then \
+        pip install --no-cache-dir "$GPU_WHEEL" nvidia-cudnn-cu12; fi
 ENV KAIKA_GPU=1
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib
 
 # ---- app layer: source changes only re-run this cheap, no-deps install ----
 COPY README.md ./

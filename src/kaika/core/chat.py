@@ -150,6 +150,9 @@ def _set_dot_path(d: dict, path: str, value) -> None:
     parts = [p for p in str(path).split(".") if p]
     if not parts:
         raise ValueError("empty path")
+    if isinstance(d, dict) and parts[0] not in d:
+        raise ValueError(f"path '{path}': unknown top-level key "
+                         f"'{parts[0]}' (see the schema reference)")
     node = d
     for p in parts[:-1]:
         if isinstance(node, list):
@@ -555,7 +558,8 @@ Common intents:
 - A run of hits tracing a shape (spiral, ring, sweep): give the emitter a parametric placement (line/circle/spiral) with placement.sequence = N — successive trigger hits advance along the shape (hit k at position (k mod N)/N). direction radial_out makes matter flow outward from the shape's center.
 - React to the music continuously: a modulator (signal -> numeric path); for hit-like reactions use emitter triggers instead.
 - One-off accent at an instant: timeline spawn with overrides; recurring behavior: an emitter.
-- Segments: rename with update_segment {label}, cut in two with split_segment {index, at}."""
+- Segments: rename with update_segment {label}, cut in two with split_segment {index, at}.
+- Song lyrics on the video: lyrics.enabled/position/scale/mode via set_recipe_values (needs lyrics uploaded with the track; mode "fluid" stamps each line as dye in the simulation). A one-off word/phrase appearing as fluid: timeline directive action "text"."""
 
 
 def system_prompt(ctx: ToolContext) -> str:
@@ -668,6 +672,7 @@ class GeminiBackend(LLMBackend):
             config=gt.GenerateContentConfig(
                 system_instruction=system,
                 tools=[gt.Tool(function_declarations=decls)]))
+        schema_by_name = {t["name"]: t["input_schema"] for t in tools}
         text = ""
         calls = []
         cand = (resp.candidates or [None])[0]
@@ -678,30 +683,61 @@ class GeminiBackend(LLMBackend):
                 fc = getattr(part, "function_call", None)
                 if fc is not None:
                     calls.append({"id": f"call_{i}", "name": fc.name,
-                                  "input": dict(fc.args or {})})
+                                  "input": _coerce_gemini_args(
+                                      dict(fc.args or {}),
+                                      schema_by_name.get(fc.name))})
         return {"text": text, "tool_calls": calls}
 
 
 def _gemini_schema(schema: dict) -> dict:
-    """Gemini rejects empty property maps and bare {} schemas; sanitize."""
+    """Gemini rejects empty property maps and bare {} schemas; sanitize.
+
+    Free-form object ARGUMENTS (spec/patch/values — type object, no
+    properties) become JSON-encoded strings: with the old '_' placeholder
+    property Gemini stuffed serialized JSON into invented keys. The string
+    round-trips back to an object in :func:`_coerce_gemini_args`."""
     import copy
     s = copy.deepcopy(schema)
 
-    def fix(node):
+    def fix(node, top=False):
         if not isinstance(node, dict):
             return node
         if node.get("type") == "object":
             props = node.get("properties") or {}
-            node["properties"] = {k: fix(v if v else {"type": "string"})
-                                  for k, v in props.items()}
-            if not node["properties"]:
+            if props:
+                node["properties"] = {k: fix(v if v else {"type": "string"})
+                                      for k, v in props.items()}
+            elif top:           # zero-arg tools keep a harmless placeholder
                 node["properties"] = {"_": {"type": "string"}}
+            else:
+                return {"type": "string", "description":
+                        (node.get("description", "") +
+                         " Pass a JSON OBJECT encoded as a string.").strip()}
         if "items" in node:
             node["items"] = fix(node["items"] or {"type": "string"})
         if not node.get("type") and "enum" not in node:
             node["type"] = "string"
         return node
-    return fix(s)
+    return fix(s, top=True)
+
+
+def _coerce_gemini_args(args: dict, input_schema: Optional[dict]) -> dict:
+    """Undo the Gemini schema transforms: decode JSON-string object args,
+    drop placeholder/invented keys not in the tool's schema."""
+    props = (input_schema or {}).get("properties") or {}
+    if not props:
+        return {}
+    out = {}
+    for k, v in (args or {}).items():
+        if k not in props:
+            continue
+        if props[k].get("type") == "object" and isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except json.JSONDecodeError:
+                pass
+        out[k] = v
+    return out
 
 
 class FakeBackend(LLMBackend):

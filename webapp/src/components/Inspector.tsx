@@ -173,6 +173,9 @@ export default function Inspector(p: Props) {
             <div className="group-name">Diffusion</div>
             <SchemaSection schema={props.diffusion} value={recipe.diffusion}
               basePath="diffusion" tier="primary" ctx={ctx} />
+            <div className="group-name">Lyrics</div>
+            <SchemaCard schema={props.lyrics} value={recipe.lyrics}
+              basePath="lyrics" ctx={ctx} />
           </>
         )}
 

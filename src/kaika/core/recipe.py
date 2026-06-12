@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, get_type_hints, get_origin, get_args
 
 import os
+import re
 
 import yaml
 
@@ -298,6 +299,23 @@ class PostConfig:
     vignette: float = 0.0           # 0..1 vignette strength on the final
 
 
+LYRICS_POSITIONS = ("bottom", "lower_third", "center", "top")
+LYRICS_MODES = ("overlay", "fluid", "both")
+
+
+@dataclass
+class LyricsConfig:
+    """Aligned song lyrics on the output. ``overlay`` burns crisp subtitles
+    into the video; ``fluid`` stamps each line as dye into the simulation at
+    its timestamp (the flow then carries it away)."""
+    enabled: bool = False
+    mode: str = "overlay"
+    position: str = "bottom"
+    scale: float = 1.0              # 1.0 ~ 5.5% of frame height
+    color: str = "#FFFFFF"
+    outline: bool = True
+
+
 def _default_emitters() -> List[Emitter]:
     """The v2 default mapping: kicks (low), hats (high), melody (mid, pitch ->
     x position + chroma color), tension (pre-drop lookahead)."""
@@ -383,6 +401,7 @@ class Recipe:
     timeline: List[dict] = field(default_factory=list)   # recipe-shipped defaults
     diffusion: DiffusionConfig = field(default_factory=DiffusionConfig)
     post: PostConfig = field(default_factory=PostConfig)
+    lyrics: LyricsConfig = field(default_factory=LyricsConfig)
     prompts: Dict[str, str] = field(default_factory=lambda: {
         "base": "abstract organic motion, soft light",
         "default": "botanical organic forms, abstract motion",
@@ -748,6 +767,16 @@ def validate(rec: Recipe) -> List[str]:
                      "chroma_palette", "band_mix") and bc.palette not in rec.palettes:
         errs.append(f"render.background_color: palette '{bc.palette}' not in "
                     f"palettes {sorted(rec.palettes)}")
+    ly = rec.lyrics
+    if ly.position not in LYRICS_POSITIONS:
+        errs.append(f"lyrics.position: unknown '{ly.position}' "
+                    f"{LYRICS_POSITIONS}")
+    if ly.mode not in LYRICS_MODES:
+        errs.append(f"lyrics.mode: unknown '{ly.mode}' {LYRICS_MODES}")
+    if not (0.3 <= ly.scale <= 3.0):
+        errs.append("lyrics.scale must be 0.3..3.0")
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", ly.color or ""):
+        errs.append("lyrics.color must be '#RRGGBB'")
     tree = config_tree(rec)
     for i, m in enumerate(rec.modulators):
         if m.apply_to == "live":
@@ -780,7 +809,7 @@ def validate(rec: Recipe) -> List[str]:
     return errs
 
 
-TIMELINE_ACTIONS = ("spawn", "set", "mute", "unmute")
+TIMELINE_ACTIONS = ("spawn", "set", "mute", "unmute", "text")
 
 
 def validate_timeline(timeline: List[dict], prefix: str = "timeline") -> List[str]:
@@ -802,4 +831,15 @@ def validate_timeline(timeline: List[dict], prefix: str = "timeline") -> List[st
             errs.append(f"{prefix}[{i}]: needs 'at' (seconds or anchor)")
         if action in ("mute", "unmute") and not t.get("emitter"):
             errs.append(f"{prefix}[{i}]: '{action}' needs an emitter id")
+        if action == "text":
+            if not str(t.get("text", "")).strip():
+                errs.append(f"{prefix}[{i}]: 'text' needs a non-empty text")
+            if "height" in t and not (0.01 <= float(t["height"]) <= 0.5):
+                errs.append(f"{prefix}[{i}]: text height must be 0.01..0.5 "
+                            "(fraction of the short side)")
+            if "hold_s" in t and not (0.0 < float(t["hold_s"]) <= 10.0):
+                errs.append(f"{prefix}[{i}]: hold_s must be 0..10 seconds")
+            if "color" in t and not re.fullmatch(r"#[0-9a-fA-F]{6}",
+                                                 str(t["color"])):
+                errs.append(f"{prefix}[{i}]: text color must be '#RRGGBB'")
     return errs

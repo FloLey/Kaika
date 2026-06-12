@@ -133,3 +133,26 @@ def test_old_recipe_loads_with_new_placement_defaults():
     p = rec.emitter("k").placement
     assert (p.inner_radius, p.turns, p.start_deg, p.sequence) == (0.0, 2.0,
                                                                   0.0, 0)
+
+
+def test_lyrics_config_roundtrip_and_validation():
+    import pytest as _pt
+    rec = R.from_dict({"version": 2, "lyrics": {"enabled": True,
+                                                "mode": "both",
+                                                "position": "top",
+                                                "scale": 1.4}})
+    assert rec.lyrics.enabled and rec.lyrics.mode == "both"
+    assert rec.to_dict()["lyrics"]["position"] == "top"
+    for bad in ({"position": "nowhere"}, {"mode": "subtitles"},
+                {"scale": 9.0}, {"color": "blue"}):
+        with _pt.raises(ValueError, match="invalid recipe"):
+            R.from_dict({"version": 2, "lyrics": bad})
+
+
+def test_timeline_text_action_validation():
+    assert R.validate_timeline([{"at": 3.0, "action": "text",
+                                 "text": "KAIKA", "height": 0.1,
+                                 "hold_s": 2.0, "color": "#FFFFFF"}]) == []
+    errs = R.validate_timeline([{"at": 3.0, "action": "text", "text": " ",
+                                 "color": "blue"}])
+    assert len(errs) == 2

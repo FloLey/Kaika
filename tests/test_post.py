@@ -69,3 +69,27 @@ def test_media_video_roundtrip(track_wav, tmp_path):
     out = video_to_frames(vid, tmp_path / "restored")
     restored = sorted(out.glob("*.png"))
     assert len(restored) == 10
+
+
+def test_assemble_burns_lyrics(track_wav, tmp_path):
+    import json
+    import numpy as np
+    import imageio.v2 as imageio
+    from kaika.core import recipe as R
+    from kaika.core.post import assemble
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    for i in range(8):
+        imageio.imwrite(frames / f"{i:06d}.png",
+                        np.zeros((64, 64, 3), np.uint8))
+    lj = tmp_path / "lyrics.json"
+    lj.write_text(json.dumps([{"t0": 0.0, "t1": 1.0, "text": "Hello",
+                               "aligned": True}]))
+    out = tmp_path / "out.mp4"
+    assemble(frames, track_wav, out, fps=8, lyrics_json=lj,
+             lyrics_cfg=R.LyricsConfig(enabled=True))
+    assert out.exists() and out.with_suffix(".ass").exists()
+    out2 = tmp_path / "out2.mp4"
+    assemble(frames, track_wav, out2, fps=8, lyrics_json=lj,
+             lyrics_cfg=R.LyricsConfig(enabled=False))
+    assert out2.exists() and not out2.with_suffix(".ass").exists()

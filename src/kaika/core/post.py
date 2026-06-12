@@ -73,7 +73,9 @@ def assemble(frames_dir: str | Path, audio_path: str | Path, out_path: str | Pat
              score: Optional[Score] = None,
              fluid_stats_path: Optional[str | Path] = None,
              audio_offset_s: float = 0.0,
-             grain: float = 0.0, vignette: float = 0.0) -> PostResult:
+             grain: float = 0.0, vignette: float = 0.0,
+             lyrics_json: Optional[str | Path] = None,
+             lyrics_cfg=None) -> PostResult:
     frames_dir = Path(frames_dir)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,6 +94,20 @@ def assemble(frames_dir: str | Path, audio_path: str | Path, out_path: str | Pat
         vf.append(f"vignette=angle={0.25 + 0.55 * min(vignette, 1.0):.3f}")
     if grain > 0:
         vf.append(f"noise=alls={max(1, int(round(min(grain, 1.0) * 24)))}:allf=t")
+    # Lyrics overlay LAST so the text stays clean above vignette/grain. The
+    # .ass sits next to the mp4 (reproducible, served with the run files);
+    # audio_offset_s shifts the lines for clipped window previews.
+    if (lyrics_cfg is not None and getattr(lyrics_cfg, "enabled", False)
+            and lyrics_cfg.mode in ("overlay", "both")
+            and lyrics_json and Path(lyrics_json).exists()):
+        from .lyrics import LyricLine, build_ass, sub_filter_escape
+        lines = [LyricLine(**x)
+                 for x in json.loads(Path(lyrics_json).read_text())]
+        ass_path = out_path.with_suffix(".ass")
+        ass_path.write_text(build_ass(lines, lyrics_cfg,
+                                      offset_s=audio_offset_s),
+                            encoding="utf-8")
+        vf.append(f"subtitles=filename='{sub_filter_escape(ass_path)}'")
 
     has_audio = Path(audio_path).exists()
     args = ["-framerate", str(fps), "-i", str(frames_dir / pattern)]

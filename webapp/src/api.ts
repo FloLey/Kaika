@@ -73,11 +73,15 @@ export const api = {
   recipes: () => fetch("/api/recipes").then(j<RecipeEntry[]>),
   schema: () => fetch("/api/schema/recipe").then(j<any>),
 
-  upload: (file: File) => {
+  upload: (file: File, lyrics?: string) => {
     const fd = new FormData();
     fd.append("file", file);
+    if (lyrics?.trim()) {
+      fd.append("lyrics", new Blob([lyrics], { type: "text/plain" }),
+        "lyrics.txt");
+    }
     return fetch("/api/upload", { method: "POST", body: fd })
-      .then(j<{ audio_id: string; name: string }>);
+      .then(j<{ audio_id: string; name: string; has_lyrics?: boolean }>);
   },
 
   // ---- projects ----

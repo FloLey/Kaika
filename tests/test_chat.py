@@ -331,3 +331,37 @@ def test_tool_split_segment(ctx):
         ctx, "split_segment", {"index": 0, "at": seg0.end + 99})
     assert "out of range" in C.run_tool(ctx, "split_segment",
                                         {"index": 99, "at": 1.0})
+
+
+def test_chat_controls_lyrics_and_fluid_text(ctx):
+    res = C.run_tool(ctx, "set_recipe_values", {"values": {
+        "lyrics.enabled": True, "lyrics.position": "top",
+        "lyrics.mode": "fluid"}})
+    assert res == "ok"
+    ly = ctx.project().recipe.lyrics
+    assert ly.enabled and ly.position == "top" and ly.mode == "fluid"
+    res = C.run_tool(ctx, "add_timeline_directive", {"spec": {
+        "at": "section:drop", "action": "text", "text": "KAIKA",
+        "color": "#2255FF", "height": 0.1, "hold_s": 2.0}})
+    assert res == "ok"
+    assert ctx.project().timeline[-1]["text"] == "KAIKA"
+
+
+def test_gemini_schema_freeform_objects_as_json_strings():
+    """Free-form object args become JSON strings for Gemini (the old '_'
+    placeholder made the model stuff JSON into invented keys), and the
+    coercion decodes them back and drops unknown keys."""
+    defs = {t["name"]: t["input_schema"] for t in C.tool_definitions()}
+    g = C._gemini_schema(defs["set_recipe_values"])
+    assert g["properties"]["values"]["type"] == "string"
+    g0 = C._gemini_schema(defs["get_project"])
+    assert "_" in g0["properties"]          # zero-arg placeholder kept
+    args = C._coerce_gemini_args(
+        {"values": '{"field.vorticity": 20}', "a_": "junk"},
+        defs["set_recipe_values"])
+    assert args == {"values": {"field.vorticity": 20}}
+
+
+def test_set_recipe_values_rejects_unknown_top_level(ctx):
+    res = C.run_tool(ctx, "set_recipe_values", {"values": {"a_": "junk"}})
+    assert "PATH ERROR" in res and "unknown top-level" in res

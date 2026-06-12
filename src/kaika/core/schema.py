@@ -111,6 +111,13 @@ UI: dict = {
     "post.vignette": {"tier": "advanced", "min": 0.0, "max": 1.0, "step": 0.05},
     "diffusion.strength": {"tier": "primary", "min": 0.1, "max": 0.9,
                            "step": 0.05, "label": "Denoise strength"},
+    # lyrics
+    "lyrics.enabled": {"tier": "primary", "label": "Show lyrics"},
+    "lyrics.position": {"tier": "primary"},
+    "lyrics.scale": {"tier": "primary", "min": 0.4, "max": 2.5, "step": 0.05},
+    "lyrics.color": {"widget": "color"},
+    "lyrics.mode": {"tier": "advanced"},
+    "lyrics.outline": {"tier": "advanced"},
 }
 
 # Plain-language help per field, shown as hover tooltips in the inspector and
@@ -165,6 +172,17 @@ HELP: dict = {
         "fluid: low = faithful to the motion, high = freer reinterpretation.",
     "post.grain": "Film grain on the final clip (fuses diffusion artefacts).",
     "post.vignette": "Darkened corners on the final clip.",
+    "lyrics.enabled": "Show the aligned song lyrics on previews and the "
+        "final video. Requires lyrics uploaded with the track.",
+    "lyrics.mode": "overlay = crisp subtitles burned into the video; fluid = "
+        "each line is stamped as dye into the simulation at its timestamp "
+        "and carried away by the flow; both = the two at once.",
+    "lyrics.position": "Where the lyrics sit on the frame (also anchors the "
+        "fluid stamps).",
+    "lyrics.scale": "Lyric size relative to the default.",
+    "lyrics.color": "Lyric color (overlay text / fluid dye).",
+    "lyrics.outline": "Dark outline + shadow behind overlay text for "
+        "legibility.",
     # emitters
     "emitters.*.count": "Sources spawned per trigger event (e.g. 3 = three "
         "simultaneous jets).",
@@ -291,6 +309,8 @@ ENUMS: dict = {
     "render.background_color.brightness.source": ["fixed", "centroid", "rms"],
     "modulators.*.apply_to": ["spawn"],          # "live" reserved, rejected
     "diffusion.backend": ["local", "comfyui"],
+    "lyrics.position": list(R.LYRICS_POSITIONS),
+    "lyrics.mode": list(R.LYRICS_MODES),
 }
 
 
@@ -408,7 +428,8 @@ TIMELINE_DOC = """timeline directives (project-level; tools add/update/remove_ti
   anchors: seconds (3.2) | 'section:drop' | 'section:drop+4.5' | 'beat:32' | 'bar:8'
   spawn (default): {at, emitter?, mag?, count?, placement?, color?, body?} — one-off burst; overrides merge over the emitter's config; no emitter = inline one-shot
   set: {between: [t0, t1], set: {"dot.path": value, ...}, fade_s?} — override recipe values over a time window (numerics eased in/out, strings switch hard); values revert AUTOMATICALLY when the window ends — never add a second directive to restore them
-  mute / unmute: {at, emitter} — silence/restore an emitter from that moment; pair them to confine an emitter to a section"""
+  mute / unmute: {at, emitter} — silence/restore an emitter from that moment; pair them to confine an emitter to a section
+  text: {at, text, center?: [x,y], height?: 0.08, color?: '#RRGGBB', emit?: 0.5, hold_s?: 1.5} — stamp the text as DYE into the simulation at that moment; it forms, holds, then the flow carries it away"""
 
 MODULATOR_DOC = ("modulators (audio signal -> numeric recipe leaf, every frame):\n"
                  "  sources: " + ", ".join(R.SIGNALS) + "\n"

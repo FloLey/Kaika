@@ -353,6 +353,16 @@ class FluidSim:
             self.density[xp.ix_(xp.asarray(iy), xp.asarray(ix))] += \
                 (amount * g)[..., None] * col[None, None, :]
 
+    def add_dye_mask(self, mask, color, amount: float) -> None:
+        """Add dye over a full dye-grid mask (float 0..1) — text stamps.
+        ``mask`` may already live on the device (cache it via ``xp.asarray``
+        once when stamping repeatedly)."""
+        xp = self.xp
+        m = mask if isinstance(mask, xp.ndarray) else xp.asarray(mask,
+                                                                 xp.float32)
+        col = xp.asarray(color, xp.float32)
+        self.density += (amount * m)[..., None] * col[None, None, :]
+
     def add_force_at(self, x: float, y: float, radius: float,
                      fx: float, fy: float) -> None:
         xp = self.xp
@@ -1141,6 +1151,60 @@ class SimResult:
         return self.render_size[1]
 
 
+# Where lyric fluid stamps sit on the canvas per LyricsConfig.position.
+_LYRIC_CENTERS = {"bottom": (0.5, 0.82), "lower_third": (0.5, 0.70),
+                  "center": (0.5, 0.5), "top": (0.5, 0.15)}
+
+
+def _build_text_stamps(score: Score, recipe: Recipe, n_frames: int,
+                       grid_hw: Tuple[int, int],
+                       timeline: Optional[List[dict]],
+                       lyric_stamps: Optional[List[dict]]) -> Dict[int, list]:
+    """Frame -> [(text, center, height, rgb, amount)] for fluid text.
+
+    Two sources share the mechanism: timeline ``text`` directives and the
+    lyrics in fluid mode (one stamp per aligned line, styled by the recipe's
+    LyricsConfig). Stamps re-ink the mask over ``hold_s`` with an envelope —
+    the text forms, holds readable, then the flow carries it away. Schedules
+    derive from absolute time only, so window previews match the full run."""
+    fps = score.audio.fps
+    out: Dict[int, list] = {}
+
+    def schedule(t: float, text: str, center, height: float,
+                 rgb: np.ndarray, emit: float, hold_s: float) -> None:
+        f0 = int(round(t * fps))
+        n_hold = max(1, int(round(hold_s * fps)))
+        for k in range(n_hold):
+            fi = f0 + k
+            if not (0 <= fi < n_frames):
+                continue
+            u = k / n_hold
+            env = min(1.0, u * 6.0 + 0.15) * (1.0 - u) ** 0.5
+            out.setdefault(fi, []).append(
+                (text, (float(center[0]), float(center[1])), float(height),
+                 rgb, 0.30 * emit * env))
+
+    directives, _ = resolve_directives(timeline or [], score)
+    for d in directives:
+        if d.get("action") != "text" or not str(d.get("text", "")).strip():
+            continue
+        schedule(d["t"], str(d["text"]).strip(),
+                 d.get("center", [0.5, 0.5]), float(d.get("height", 0.08)),
+                 _hex_to_rgb(str(d.get("color", "#FFFFFF"))),
+                 float(d.get("emit", 0.5)), float(d.get("hold_s", 1.5)))
+
+    ly = recipe.lyrics
+    if lyric_stamps and ly.enabled and ly.mode in ("fluid", "both"):
+        center = _LYRIC_CENTERS.get(ly.position, (0.5, 0.82))
+        rgb = _hex_to_rgb(ly.color)
+        for line in lyric_stamps:
+            t0, t1 = float(line["t0"]), float(line["t1"])
+            schedule(t0, str(line["text"]), center,
+                     0.055 * float(ly.scale), rgb, 0.5,
+                     min(max(t1 - t0, 0.8), 4.0))
+    return out
+
+
 def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
              max_frames: Optional[int] = None,
              progress: Optional[ProgressFn] = None,
@@ -1152,7 +1216,8 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
              draft_cap: Optional[int] = None,
              checkpoints: Optional[CheckpointStore] = None,
              save_checkpoints: bool = False,
-             gpu: Optional[bool] = None) -> SimResult:
+             gpu: Optional[bool] = None,
+             lyric_stamps: Optional[List[dict]] = None) -> SimResult:
     """Run the fluid sim.
 
     ``frame_trees`` (one config tree per frame, from ``Project.frame_trees``)
@@ -1181,6 +1246,9 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
 
     spawns_by_frame, warnings = build_trigger_index(score, recipe, n_frames,
                                                     timeline)
+    stamps_by_frame = _build_text_stamps(score, recipe, n_frames,
+                                         (grid_h, grid_w), timeline,
+                                         lyric_stamps)
     mod_engine = ModulationEngine(recipe, score, n_frames)
     color_engine = _ColorEngine(recipe.palettes, score, n_frames)
 
@@ -1259,6 +1327,7 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     # the GIL, so threads scale until the disk saturates.
     writer = ThreadPoolExecutor(max_workers=min(12, os.cpu_count() or 2))
     pending: List = []
+    text_mask_cache: Dict[tuple, object] = {}   # (text, height, center) -> mask
     try:
         for step_i, i in enumerate(range(sim_start, sim_end)):
             tree = copy.deepcopy(frame_trees[i]) if frame_trees is not None else {
@@ -1339,6 +1408,19 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                                   force_gain, fps)
 
             sources = _advance_sources(sim, sources)
+
+            # Fluid text stamps (timeline `text` directives + fluid lyrics).
+            for (txt, t_center, t_height, t_rgb,
+                 t_amount) in stamps_by_frame.get(i, ()):
+                key = (txt, round(t_height, 4), t_center)
+                m = text_mask_cache.get(key)
+                if m is None:
+                    from .lyrics import text_mask
+                    m = sim.xp.asarray(
+                        text_mask(txt, (sim.dh, sim.dw), t_center, t_height),
+                        sim.xp.float32)
+                    text_mask_cache[key] = m
+                sim.add_dye_mask(m, t_rgb, t_amount)
 
             vort = float(fld.get("vorticity", 8.0)) * float(
                 fld.get("vorticity_gain", 0.015))

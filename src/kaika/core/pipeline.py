@@ -78,6 +78,30 @@ def frozen_audio(run_dir: Path) -> Optional[Path]:
     return hits[0] if hits else None
 
 
+def _lyrics_args(run_dir: Path, recipe: Recipe) -> dict:
+    """assemble() kwargs for the lyrics overlay, when aligned and enabled."""
+    p = Path(run_dir) / "lyrics.json"
+    if recipe.lyrics.enabled and p.exists():
+        return {"lyrics_json": p, "lyrics_cfg": recipe.lyrics}
+    return {}
+
+
+def _lyric_stamps(run_dir: Path, recipe: Recipe,
+                  warnings: Optional[List[str]] = None) -> Optional[list]:
+    """simulate() lyric stamps for fluid mode; warns when alignment is not
+    ready yet (the sim then runs without text rather than failing)."""
+    ly = recipe.lyrics
+    if not (ly.enabled and ly.mode in ("fluid", "both")):
+        return None
+    p = Path(run_dir) / "lyrics.json"
+    if not p.exists():
+        if warnings is not None:
+            warnings.append("lyrics.mode is fluid but the alignment is not "
+                            "ready — simulated without text")
+        return None
+    return json.loads(p.read_text())
+
+
 def _load_manifest(run_dir: Path) -> dict:
     p = run_dir / "run.json"
     return json.loads(p.read_text()) if p.exists() else {}
@@ -108,15 +132,20 @@ def _draft_recipe(recipe: Recipe) -> Recipe:
 def init_project_run(audio_path: str | Path, recipe: Recipe,
                      runs_root: str | Path = "runs",
                      run_id: Optional[str] = None,
-                     seconds: Optional[float] = None):
-    """Create a working run dir: freeze audio + recipe, analyze, seed a Project
-    from the detected sections. Does NOT simulate. Returns (run_dir, project, score)."""
+                     seconds: Optional[float] = None,
+                     lyrics_path: Optional[str | Path] = None):
+    """Create a working run dir: freeze audio + recipe (+ lyrics), analyze,
+    seed a Project from the detected sections. Does NOT simulate. Returns
+    (run_dir, project, score)."""
     audio_path = Path(audio_path)
     run_id = run_id or _new_run_id()
     run_dir = Path(runs_root) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     recipe.to_yaml(run_dir / "recipe.yaml")
     frozen = _freeze_audio(audio_path, run_dir)
+    if lyrics_path is not None:
+        lp = Path(lyrics_path)
+        shutil.copy2(lp, run_dir / ("lyrics" + (lp.suffix or ".txt")))
     score = _analyze_for(recipe, frozen, runs_root)
     score.to_json(run_dir / "score.json")
     project = Project.from_score(score, recipe, audio=frozen.name)
@@ -127,6 +156,7 @@ def init_project_run(audio_path: str | Path, recipe: Recipe,
         "recipe": recipe.name, "fps": project.fps, "seconds": seconds,
         "stages": {}, "stage": "created", "status": "created", "error": None,
         "warnings": [],
+        **({"lyrics": {"status": "pending"}} if lyrics_path else {}),
     })
     return run_dir, project, score
 
@@ -174,10 +204,12 @@ def run_fluid(project: Project, audio_path: str | Path,
         store = CheckpointStore(run_dir / ("checkpoints_draft" if draft
                                            else "checkpoints"))
         store.clear()
+        stamps = _lyric_stamps(run_dir, recipe, tree_warnings)
         sim = simulate(score, sim_recipe, run_dir, max_frames=max_frames,
                        frame_trees=trees, timeline=project.full_timeline(),
                        draft_cap=DRAFT_RENDER_RES if draft else None,
                        checkpoints=store, save_checkpoints=True,
+                       lyric_stamps=stamps,
                        progress=lambda d, t: _emit(progress, "simulate", d, t))
         warnings = tree_warnings + sim.warnings
         manifest["stages"]["simulate"] = {"done": True, "n_frames": sim.n_frames,
@@ -189,7 +221,8 @@ def run_fluid(project: Project, audio_path: str | Path,
         _emit(progress, "post", 0, 1)
         preview = run_dir / "fluid_preview.mp4"
         post = assemble(sim.fluid_dir, frozen, preview, fps=fps, score=score,
-                        fluid_stats_path=sim.stats_path)
+                        fluid_stats_path=sim.stats_path,
+                        **_lyrics_args(run_dir, recipe))
         manifest["fluid_preview"] = preview.name
         manifest["sync"] = asdict(post.sync) if post.sync else None
         manifest["stage"] = "fluid"
@@ -233,19 +266,21 @@ def run_window_preview(run_dir: str | Path, t0: float, t1: float,
     trees, tree_warnings = project.frame_trees(n_total, score)
     store = CheckpointStore(run_dir / ("checkpoints_draft" if draft
                                        else "checkpoints"))
+    stamps = _lyric_stamps(run_dir, project.recipe, tree_warnings)
     sim = simulate(score, recipe, out_dir, max_frames=n_total,
                    frame_trees=trees, timeline=project.full_timeline(),
                    render_range=(f0, f1),
                    warmup_frames=int(SEGMENT_WARMUP_S * fps),
                    write_velocity=False,
                    draft_cap=DRAFT_RENDER_RES if draft else None,
-                   checkpoints=store,
+                   checkpoints=store, lyric_stamps=stamps,
                    progress=lambda d, t: _emit(progress, "simulate", d, t))
 
     _emit(progress, "post", 0, 1)
     preview = run_dir / "window_preview.mp4"
     audio = frozen_audio(run_dir) or (run_dir / "missing.wav")
-    assemble(sim.fluid_dir, audio, preview, fps=fps, audio_offset_s=f0 / fps)
+    assemble(sim.fluid_dir, audio, preview, fps=fps, audio_offset_s=f0 / fps,
+             **_lyrics_args(run_dir, project.recipe))
     _emit(progress, "post", 1, 1)
 
     manifest = _load_manifest(run_dir)
@@ -334,7 +369,8 @@ def run_diffuse(run_dir: str | Path,
                         interpolate=recipe.post.interpolate,
                         upscale=recipe.post.upscale, score=score,
                         fluid_stats_path=stats if stats.exists() else None,
-                        grain=recipe.post.grain, vignette=recipe.post.vignette)
+                        grain=recipe.post.grain, vignette=recipe.post.vignette,
+                        **_lyrics_args(run_dir, recipe))
         manifest["stages"]["post"] = {"done": True}
         manifest["final"] = final.name
         manifest["sync"] = asdict(post.sync) if post.sync else manifest.get("sync")

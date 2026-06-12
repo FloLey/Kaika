@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -141,19 +142,35 @@ def create_app(runs_root: str | Path = "runs",
 
     # ---- upload + analyze (Studio) ----------------------------------------
     @app.post("/api/upload")
-    async def upload(file: UploadFile = File(...)):
+    async def upload(file: UploadFile = File(...),
+                     lyrics: Optional[UploadFile] = File(None)):
         suffix = Path(file.filename or "audio.wav").suffix or ".wav"
         audio_id = uuid.uuid4().hex[:12]
         dest = uploads / f"{audio_id}{suffix}"
         with dest.open("wb") as f:
             shutil.copyfileobj(file.file, f)
-        return {"audio_id": audio_id, "name": file.filename}
+        has_lyrics = False
+        if lyrics is not None:
+            text = (await lyrics.read()).decode("utf-8", errors="replace")
+            if text.strip():
+                # .lrc content (timestamp tags) skips Whisper entirely.
+                ext = ".lrc" if re.search(r"^\[\d+:\d", text, re.M) else ".txt"
+                # underscore: must NOT match the {audio_id}.* audio glob
+                (uploads / f"{audio_id}_lyrics{ext}").write_text(
+                    text, encoding="utf-8")
+                has_lyrics = True
+        return {"audio_id": audio_id, "name": file.filename,
+                "has_lyrics": has_lyrics}
 
     def _resolve_audio(audio_id: str) -> Path:
         hits = list(uploads.glob(f"{audio_id}.*"))
         if not hits:
             raise HTTPException(404, f"audio {audio_id} not found")
         return hits[0]
+
+    def _resolve_lyrics(audio_id: str) -> Optional[Path]:
+        hits = sorted(uploads.glob(f"{audio_id}_lyrics.*"))
+        return hits[0] if hits else None
 
     @app.post("/api/analyze")
     def analyze_audio(audio_id: str, fps: int = 24):
@@ -242,8 +259,18 @@ def create_app(runs_root: str | Path = "runs",
     def create_project(req: ProjectRequest):
         path = _resolve_audio(req.audio_id)
         rec = _recipe_from(req)
+        lyr = _resolve_lyrics(req.audio_id)
         run_dir, project, score = init_project_run(path, rec, runs_root=runs_root,
-                                                   seconds=req.seconds)
+                                                   seconds=req.seconds,
+                                                   lyrics_path=lyr)
+        if lyr is not None:
+            # Alignment runs as a background job; .lrc resolves instantly,
+            # plain text goes through Whisper (cached by audio+text+model).
+            from ..core.lyrics import align_project_lyrics
+            rd = run_dir
+            jm.submit(lambda progress: align_project_lyrics(
+                          rd, runs_root, data_dir / "models", progress),
+                      run_id=run_dir.name, kind="lyrics")
         return _project_payload(run_dir.name, with_analysis=True)
 
     @app.get("/api/projects/{run_id}")

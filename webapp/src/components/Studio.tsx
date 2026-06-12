@@ -40,6 +40,7 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const [previewJob, setPreviewJob] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState(0);
   const [livePreview, setLivePreview] = useState(true);
+  const [lyricsText, setLyricsText] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
   const playheadRef = useRef(0);
@@ -189,7 +190,7 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const upload = async (file: File) => {
     setErr(""); setBusy(true);
     try {
-      const { audio_id } = await api.upload(file);
+      const { audio_id } = await api.upload(file, lyricsText);
       adopt(await api.createProject({ audio_id, recipe_name: recipeName }));
     } catch (e: any) { setErr(String(e.message || e)); }
     finally { setBusy(false); }
@@ -316,6 +317,17 @@ export default function Studio({ initialRunId, onPreview }: Props) {
                 style={{ maxWidth: 240, margin: "0 auto" }}>
                 {recipes.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
               </select>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <label className="field" style={{ textAlign: "center" }}>
+                Lyrics (optional)</label>
+              <textarea value={lyricsText}
+                onChange={(e) => setLyricsText(e.target.value)}
+                onDrop={(e) => e.stopPropagation()}
+                placeholder={"Paste the song lyrics — plain text or .lrc.\nThey get auto-aligned to the track."}
+                rows={4}
+                style={{ maxWidth: 420, margin: "0 auto", display: "block",
+                         width: "100%", resize: "vertical" }} />
             </div>
             {busy && <p className="muted" style={{ marginTop: 10 }}>analyzing…</p>}
           </div>
