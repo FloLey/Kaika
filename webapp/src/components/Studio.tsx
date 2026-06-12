@@ -152,8 +152,10 @@ export default function Studio({ initialRunId, onPreview }: Props) {
 
   // ---- the live loop: save (debounced) then re-render the window ----------
   const kickTimer = useRef<number | undefined>(undefined);
-  const kickPreview = useCallback((rid: string) => {
-    if (!livePreview) return;
+  // ``force`` bypasses the live-preview toggle — for explicit edits (chat,
+  // applied suggestion) the user always wants to see the result.
+  const kickPreview = useCallback((rid: string, force = false) => {
+    if (!livePreview && !force) return;
     // debounced: scrubbing/seeking must not flood the job queue
     window.clearTimeout(kickTimer.current);
     kickTimer.current = window.setTimeout(async () => {
@@ -373,10 +375,16 @@ export default function Studio({ initialRunId, onPreview }: Props) {
         onProjectChanged={reloadProject}
         onPreviewJob={(jid) => setPreviewJob(jid)} />
       <ChatPanel runId={runId!}
-        onProjectChanged={() => runId && api.getProject(runId).then((pp) => {
-          setProject(pp.project);
-          setWarnings(pp.manifest?.warnings ?? []);
-        })}
+        onProjectChanged={(previewQueued) => runId &&
+          api.getProject(runId).then((pp) => {
+            setProject(pp.project);
+            setWarnings(pp.manifest?.warnings ?? []);
+            api.signals(runId).then(setSignals).catch(() => {});
+            // The copilot doesn't always call its preview tool — re-render the
+            // current window so a chat edit is always visible (unless it
+            // already queued a targeted preview of its own).
+            if (!previewQueued) kickPreview(runId, true);
+          })}
         onPreviewJob={(jid) => setPreviewJob(jid)} />
     </>
   );

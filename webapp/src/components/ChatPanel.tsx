@@ -13,7 +13,8 @@ interface Msg {
 
 interface Props {
   runId: string;
-  onProjectChanged: () => void;       // reload project after tool mutations
+  onProjectChanged: (previewQueued?: boolean) => void;  // reload after edits
+                                      // (previewQueued: chat already queued one)
   onPreviewJob: (jobId: string) => void;
 }
 
@@ -47,6 +48,7 @@ export default function ChatPanel({ runId, onProjectChanged, onPreviewJob }: Pro
     setBusy(true);
     setMsgs((m) => [...m, { role: "user", text }]);
     let mutated = false;
+    let queued = false;
     try {
       await api.chat(runId, text, (e: ChatEvent) => {
         if (e.type === "text" && e.text) {
@@ -59,8 +61,8 @@ export default function ChatPanel({ runId, onProjectChanged, onPreviewJob }: Pro
           if (e.changes?.length) {
             setMsgs((m) => [...m, { role: "event", text: "", changes: e.changes }]);
           }
-          if (e.preview_job) onPreviewJob(e.preview_job);
-          if (e.render_job) onPreviewJob(e.render_job);
+          if (e.preview_job) { onPreviewJob(e.preview_job); queued = true; }
+          if (e.render_job) { onPreviewJob(e.render_job); queued = true; }
         } else if (e.type === "error") {
           setErr(e.error || "chat failed");
         }
@@ -69,7 +71,7 @@ export default function ChatPanel({ runId, onProjectChanged, onPreviewJob }: Pro
       setErr(String(e.message || e));
     } finally {
       setBusy(false);
-      if (mutated) onProjectChanged();
+      if (mutated) onProjectChanged(queued);
     }
   };
 

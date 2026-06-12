@@ -307,8 +307,9 @@ LYRICS_MODES = ("overlay", "fluid", "both")
 class LyricsConfig:
     """Aligned song lyrics on the output. ``overlay`` burns crisp subtitles
     into the video; ``fluid`` stamps each line as dye into the simulation at
-    its timestamp (the flow then carries it away)."""
-    enabled: bool = False
+    its timestamp (the flow then carries it away). On by default: lyrics show
+    as soon as an alignment exists (no-op for tracks without lyrics)."""
+    enabled: bool = True
     mode: str = "overlay"
     position: str = "bottom"
     scale: float = 1.0              # 1.0 ~ 5.5% of frame height
