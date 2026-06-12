@@ -10,6 +10,7 @@ import Lanes from "./Lanes";
 import Inspector from "./Inspector";
 import PreviewPane from "./PreviewPane";
 import ChatPanel from "./ChatPanel";
+import SuggestionsPanel from "./SuggestionsPanel";
 import { FormCtx } from "./SchemaForm";
 
 interface Props {
@@ -455,6 +456,14 @@ export default function Studio({ initialRunId, onPreview }: Props) {
               </div>
             )}
             {err && <p className="err">{err}</p>}
+
+            <SuggestionsPanel runId={runId}
+              onProjectChanged={() => api.getProject(runId).then((p) => {
+                setProject(p.project);
+                setWarnings(p.manifest?.warnings ?? []);
+                api.signals(runId).then(setSignals).catch(() => {});
+              })}
+              onPreviewJob={(jid) => setPreviewJob(jid)} />
 
             <ChatPanel runId={runId}
               onProjectChanged={() => api.getProject(runId).then((p) => {

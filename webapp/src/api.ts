@@ -54,6 +54,19 @@ export interface RunManifest {
   window_preview?: { start: number; end: number; draft: boolean };
 }
 export interface Revision { index: number; time: number; note: string; }
+export interface GlobalProposal {
+  title?: string; reasoning?: string; recipe_values?: Record<string, any>;
+  invalid?: string;
+}
+export interface SegmentProposal {
+  segment_index: number; label?: string; reasoning?: string;
+  fluid?: Record<string, any>; prompt?: string; timeline?: any[];
+  invalid?: string;
+}
+export interface SuggestPlan {
+  global: GlobalProposal | null; segments: SegmentProposal[];
+  warnings: string[];
+}
 export interface Settings {
   llm_provider: string; llm_model: string;
   anthropic_api_key: boolean | string; gemini_api_key: boolean | string;
@@ -119,6 +132,17 @@ export const api = {
       .then(j<{ job_id: string }>),
   generateProject: (runId: string) =>
     fetch(`/api/projects/${runId}/generate`, { method: "POST" }).then(j<{ job_id: string }>),
+
+  // ---- creative suggestions (LLM) ----
+  suggest: (runId: string, extra = "") =>
+    fetch(`/api/projects/${runId}/suggest`, { method: "POST", headers: JSON_H,
+      body: JSON.stringify({ extra }) }).then(j<SuggestPlan>),
+  previewProposal: (runId: string, proposal: any, draft = true) =>
+    fetch(`/api/projects/${runId}/preview_proposal`, { method: "POST", headers: JSON_H,
+      body: JSON.stringify({ proposal, draft }) }).then(j<{ job_id: string }>),
+  applySuggestion: (runId: string, proposal: any) =>
+    fetch(`/api/projects/${runId}/apply_suggestion`, { method: "POST", headers: JSON_H,
+      body: JSON.stringify({ proposal }) }).then(j<ProjectPayload>),
 
   // ---- revisions (undo) ----
   revisions: (runId: string) => fetch(`/api/projects/${runId}/revisions`).then(j<Revision[]>),

@@ -355,3 +355,14 @@ details.emitter-card > summary .btn.slim { padding: 3px 8px; font-size: 11px; }
 /* pinned strip + chat input never overflow */
 .pin-strip { min-width: 0; }
 .pin-ctl { min-width: 150px; max-width: 240px; }
+
+/* creative suggestions panel */
+.sugg-panel { display: flex; flex-direction: column; gap: 10px; }
+.sugg-bar { display: flex; gap: 6px; }
+.sugg-bar input { flex: 1; }
+.sugg-card { border: 1px solid rgba(255,255,255,.1); border-radius: 8px;
+  padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.sugg-card.invalid { opacity: .55; }
+.sugg-head { font-weight: 600; }
+.sugg-changes { display: flex; gap: 4px; flex-wrap: wrap; }
+.sugg-actions { display: flex; gap: 6px; margin-top: 2px; }

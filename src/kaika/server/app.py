@@ -94,6 +94,15 @@ class ChatRequest(BaseModel):
     reset: bool = False
 
 
+class SuggestRequest(BaseModel):
+    extra: str = ""                 # optional steer ("darker", "more energetic")
+
+
+class ProposalRequest(BaseModel):
+    proposal: dict                  # a single proposal (global or per-segment)
+    draft: bool = True
+
+
 class SettingsUpdate(BaseModel):
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
@@ -545,6 +554,71 @@ def create_app(runs_root: str | Path = "runs",
             lambda progress: run_segment_preview(rd, req.index, draft=req.draft,
                                                  progress=progress),
             run_id=run_id, kind="fluid_segment")}
+
+    # ---- creative suggestions (LLM) ---------------------------------------
+    def _suggest_inputs(run_id: str):
+        rd = _project_dir(run_id)
+        project = Project.from_json(rd / "project.json")
+        score = Score.from_json(rd / "score.json")
+        from ..core.lyrics import load_lyric_lines
+        from dataclasses import asdict as _asdict
+        lyr = [_asdict(l) for l in load_lyric_lines(rd)] or None
+        return rd, project, score, lyr
+
+    @app.post("/api/projects/{run_id}/suggest")
+    def suggest(run_id: str, req: SuggestRequest = SuggestRequest()):
+        from ..core import suggest as SG
+        rd, project, score, lyr = _suggest_inputs(run_id)
+        try:
+            backend = C.get_backend(_load_settings())
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        try:
+            plan = SG.generate_plan(backend, score, project.recipe,
+                                    project.segments, lyr, extra=req.extra)
+        except Exception as e:                               # noqa: BLE001
+            raise HTTPException(502, f"suggestion failed: {e}")
+        plan, warnings = SG.validate_plan(project, plan)
+        return {"global": plan.get("global"),
+                "segments": plan.get("segments") or [], "warnings": warnings}
+
+    def _proposal_segment(project, proposal: dict) -> int:
+        """Which segment to render: the proposal's own, or the longest one
+        (a verse/chorus/drop) for a global-only proposal."""
+        idx = proposal.get("segment_index")
+        segs = project.segments
+        if idx is not None and 0 <= idx < len(segs):
+            return idx
+        return max(range(len(segs)), key=lambda i: segs[i].end - segs[i].start,
+                   default=0) if segs else 0
+
+    @app.post("/api/projects/{run_id}/preview_proposal")
+    def preview_proposal(run_id: str, req: ProposalRequest):
+        from ..core import suggest as SG
+        rd, project, score, _lyr = _suggest_inputs(run_id)
+        try:
+            merged = SG.apply_to_project(project, req.proposal)
+        except Exception as e:                               # noqa: BLE001
+            raise HTTPException(400, f"invalid proposal: {e}")
+        idx = _proposal_segment(merged, req.proposal)
+        return {"job_id": jm.submit(
+            lambda progress: run_segment_preview(
+                rd, idx, draft=req.draft, progress=progress,
+                project_override=merged),
+            run_id=run_id, kind="fluid_segment")}
+
+    @app.post("/api/projects/{run_id}/apply_suggestion")
+    def apply_suggestion(run_id: str, req: ProposalRequest):
+        from ..core import suggest as SG
+        rd = _project_dir(run_id)
+        project = Project.from_json(rd / "project.json")
+        try:
+            merged = SG.apply_to_project(project, req.proposal)
+        except Exception as e:                               # noqa: BLE001
+            raise HTTPException(400, f"invalid proposal: {e}")
+        append_revision(rd, project, note="suggestion")
+        merged.to_json(rd / "project.json")
+        return _project_payload(run_id, with_analysis=True)
 
     @app.post("/api/projects/{run_id}/generate")
     def generate_project(run_id: str):

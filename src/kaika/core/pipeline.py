@@ -296,13 +296,19 @@ def run_fluid(project: Project, audio_path: str | Path,
 
 def run_window_preview(run_dir: str | Path, t0: float, t1: float,
                        draft: bool = True,
-                       progress: Optional[ProgressFn] = None) -> RunResult:
+                       progress: Optional[ProgressFn] = None,
+                       project_override: Optional[Project] = None) -> RunResult:
     """Fluid preview of a TIME WINDOW: simulate just (t0, t1), warmed up from
     the nearest matching checkpoint (or a short unrendered lead-in), and mux it
     with that slice of the audio. Seconds, not minutes — the iteration gesture.
-    Does not touch the full fluid/."""
+    Does not touch the full fluid/.
+
+    ``project_override`` renders an in-memory Project instead of the saved
+    one — used to preview a suggestion WITHOUT persisting it (project.json is
+    never read or written)."""
     run_dir = Path(run_dir)
-    project = Project.from_json(run_dir / "project.json")
+    project = (project_override if project_override is not None
+               else Project.from_json(run_dir / "project.json"))
     score = Score.from_json(run_dir / "score.json")
     fps = project.fps
     cap = int(round(project.seconds * fps)) if project.seconds else score.n_frames
@@ -347,16 +353,20 @@ def run_window_preview(run_dir: str | Path, t0: float, t1: float,
 
 def run_segment_preview(run_dir: str | Path, segment_index: int,
                         draft: bool = True,
-                        progress: Optional[ProgressFn] = None) -> RunResult:
+                        progress: Optional[ProgressFn] = None,
+                        project_override: Optional[Project] = None) -> RunResult:
     """Fluid preview of ONE segment (kept as a thin alias over the window
-    preview — the segment is just a window)."""
+    preview — the segment is just a window). ``project_override`` previews an
+    in-memory project without persisting it."""
     run_dir = Path(run_dir)
-    project = Project.from_json(run_dir / "project.json")
+    project = (project_override if project_override is not None
+               else Project.from_json(run_dir / "project.json"))
     if not (0 <= segment_index < len(project.segments)):
         raise IndexError(f"segment {segment_index} out of range")
     seg = project.segments[segment_index]
     res = run_window_preview(run_dir, seg.start, seg.end, draft=draft,
-                             progress=progress)
+                             progress=progress,
+                             project_override=project_override)
     manifest = _load_manifest(run_dir)
     manifest["segment_preview"] = {"index": segment_index,
                                    **manifest.get("window_preview", {})}
