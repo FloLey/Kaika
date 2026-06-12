@@ -176,11 +176,49 @@ img.live-frame { width: 100%; max-width: 320px; border-radius: 8px;
 .badge.cancelled { background: var(--voile); color: var(--brume); }
 
 /* ===================== v2 studio: three panes ===================== */
-.studio3 { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
-  align-items: start; }
+/* segment spine · big preview · context panel (assist / tune) */
+.studio3 { display: grid; grid-template-columns: 248px minmax(0, 1fr) 400px;
+  gap: 16px; align-items: start; }
 .studio-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.studio-side { min-width: 0; }
-@media (max-width: 1100px) { .studio3 { grid-template-columns: 1fr; } }
+.studio-side { min-width: 0; position: sticky; top: 16px; }
+.studio-rail { min-width: 0; position: sticky; top: 16px; }
+/* upload state spans all columns */
+.studio3 > .studio-main.full { grid-column: 1 / -1; }
+@media (max-width: 1200px) {
+  .studio3 { grid-template-columns: 1fr; }
+  .studio-rail, .studio-side { position: static; }
+}
+
+/* ---- segment rail ---- */
+.seg-rail { display: flex; flex-direction: column; gap: 8px; }
+.seg-rail h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 0 0 2px; }
+.seg-list { display: flex; flex-direction: column; gap: 4px; }
+.seg-item { border: 1px solid rgba(0,0,0,.08); border-radius: 8px;
+  padding: 8px 10px; cursor: pointer; background: var(--white);
+  transition: border-color .12s, background .12s; }
+.seg-item:hover { border-color: var(--courant); }
+.seg-item.sel { border-color: var(--courant); box-shadow: 0 0 0 1px var(--courant); }
+.seg-row { display: flex; align-items: center; gap: 8px; }
+.seg-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.seg-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.seg-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.seg-edit { display: flex; flex-direction: column; gap: 6px; margin-top: 8px;
+  padding-top: 8px; border-top: 1px solid rgba(0,0,0,.07); }
+.seg-edit input, .seg-edit textarea { width: 100%; }
+.seg-edit .row { display: flex; gap: 6px; }
+.seg-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
+/* ---- context panel: assist / tune toggle ---- */
+.context-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  margin-bottom: 12px; background: rgba(0,0,0,.05); border-radius: 9px;
+  padding: 3px; }
+.context-toggle button { border: none; background: transparent; border-radius: 7px;
+  padding: 8px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.context-toggle button.active { background: var(--white); color: var(--encre);
+  box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.context-stack { display: flex; flex-direction: column; gap: 14px; }
 
 /* ---- preview pane ---- */
 .preview-pane { padding: 10px; }
@@ -282,7 +320,7 @@ details.emitter-card > summary { display: flex; align-items: center; gap: 6px;
 
 /* ===================== v2.1 polish: inspector layout + help ===================== */
 /* wider shell for the three-pane studio only */
-.app:has(.studio3) { max-width: 1500px; }
+.app:has(.studio3) { max-width: 1680px; }
 
 /* nothing inside the inspector may overflow its column */
 .insp-body { overflow-x: hidden; }
@@ -291,7 +329,7 @@ details.emitter-card > summary { display: flex; align-items: center; gap: 6px;
 
 /* 7 tabs -> tidy 4-column grid instead of one cramped row */
 .insp-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.insp-tabs button { font-size: 10.5px; padding: 6px 2px; letter-spacing: .04em; }
+.insp-tabs button { font-size: 11.5px; padding: 7px 4px; letter-spacing: .02em; }
 
 /* one consistent field-row anatomy: name … help ~ value pin */
 .field.frow { display: flex; align-items: center; gap: 5px; min-width: 0;

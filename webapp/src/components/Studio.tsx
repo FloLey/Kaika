@@ -11,6 +11,8 @@ import Inspector from "./Inspector";
 import PreviewPane from "./PreviewPane";
 import ChatPanel from "./ChatPanel";
 import SuggestionsPanel from "./SuggestionsPanel";
+import SegmentRail from "./SegmentRail";
+import ContextPanel, { ContextMode } from "./ContextPanel";
 import { FormCtx } from "./SchemaForm";
 
 interface Props {
@@ -42,6 +44,7 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const [previewVersion, setPreviewVersion] = useState(0);
   const [livePreview, setLivePreview] = useState(true);
   const [lyricsText, setLyricsText] = useState("");
+  const [contextMode, setContextMode] = useState<ContextMode>("assist");
   const audioRef = useRef<HTMLAudioElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
   const playheadRef = useRef(0);
@@ -320,10 +323,30 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     );
   });
 
+  const reloadProject = () => runId && api.getProject(runId).then((pp) => {
+    setProject(pp.project);
+    setWarnings(pp.manifest?.warnings ?? []);
+    api.signals(runId).then(setSignals).catch(() => {});
+  });
+
+  const assist = (
+    <>
+      <SuggestionsPanel runId={runId!}
+        onProjectChanged={reloadProject}
+        onPreviewJob={(jid) => setPreviewJob(jid)} />
+      <ChatPanel runId={runId!}
+        onProjectChanged={() => runId && api.getProject(runId).then((pp) => {
+          setProject(pp.project);
+          setWarnings(pp.manifest?.warnings ?? []);
+        })}
+        onPreviewJob={(jid) => setPreviewJob(jid)} />
+    </>
+  );
+
   return (
     <div className="studio3">
-      <div className="studio-main">
-        {!project && (
+      {!project && (
+        <div className="studio-main full">
           <div className={`drop ${hover ? "hover" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setHover(true); }}
             onDragLeave={() => setHover(false)}
@@ -357,10 +380,24 @@ export default function Studio({ initialRunId, onPreview }: Props) {
             </div>
             {busy && <p className="muted" style={{ marginTop: 10 }}>analyzing…</p>}
           </div>
-        )}
+          {err && <p className="err">{err}</p>}
+        </div>
+      )}
 
-        {project && runId && (
-          <>
+      {project && runId && (
+        <>
+          <aside className="studio-rail">
+            <SegmentRail segments={project.segments} selected={sel} busy={busy}
+              onSelect={selectSegment}
+              onUpdateSegment={(i, patch) => mutate((pp) => ({ ...pp,
+                segments: pp.segments.map((s, k) =>
+                  k === i ? { ...s, ...patch } : s) }))}
+              onSplit={splitAtPlayhead} onMerge={mergeWithNext}
+              onTune={() => setContextMode("tune")}
+              onPreviewFull={previewFull} onGenerate={generate} />
+          </aside>
+
+          <div className="studio-main">
             {lyricsStatus === "pending" && (
               <div className="muted mono" style={{ marginBottom: 8 }}>
                 ♪ aligning lyrics to the track…</div>
@@ -436,18 +473,6 @@ export default function Studio({ initialRunId, onPreview }: Props) {
                       setTimeline(tl);
                     }} />
                 )}
-                <div className="seg-ops">
-                  <button className="btn ghost slim" onClick={splitAtPlayhead}>
-                    Split at playhead</button>
-                  <button className="btn ghost slim" onClick={mergeWithNext}
-                    disabled={sel >= project.segments.length - 1}>
-                    Merge with next</button>
-                  <span style={{ flex: 1 }} />
-                  <button className="btn ghost slim" disabled={busy}
-                    onClick={previewFull}>Preview full track</button>
-                  <button className="btn slim" disabled={busy} onClick={generate}>
-                    Generate (diffusion)</button>
-                </div>
               </div>
             )}
             {warnings.length > 0 && (
@@ -456,36 +481,19 @@ export default function Studio({ initialRunId, onPreview }: Props) {
               </div>
             )}
             {err && <p className="err">{err}</p>}
+          </div>
 
-            <SuggestionsPanel runId={runId}
-              onProjectChanged={() => api.getProject(runId).then((p) => {
-                setProject(p.project);
-                setWarnings(p.manifest?.warnings ?? []);
-                api.signals(runId).then(setSignals).catch(() => {});
-              })}
-              onPreviewJob={(jid) => setPreviewJob(jid)} />
-
-            <ChatPanel runId={runId}
-              onProjectChanged={() => api.getProject(runId).then((p) => {
-                setProject(p.project);
-                setWarnings(p.manifest?.warnings ?? []);
-              })}
-              onPreviewJob={(jid) => setPreviewJob(jid)} />
-          </>
-        )}
-        {!project && err && <p className="err">{err}</p>}
-      </div>
-
-      <aside className="studio-side">
-        {project && schema && (
-          <Inspector schema={schema} project={project} ctx={ctx}
-            onReplaceRecipe={onReplaceRecipe}
-            onSetTimeline={setTimeline}
-            onSetSegments={(segs) => mutate((p) => ({ ...p, segments: segs }))}
-            selectedSegment={sel}
-            onSelectSegment={selectSegment} />
-        )}
-      </aside>
+          <aside className="studio-side">
+            <ContextPanel mode={contextMode} onMode={setContextMode}
+              assist={assist}
+              tune={schema ? (
+                <Inspector schema={schema} project={project} ctx={ctx}
+                  onReplaceRecipe={onReplaceRecipe}
+                  onSetTimeline={setTimeline} />
+              ) : null} />
+          </aside>
+        </>
+      )}
     </div>
   );
 }

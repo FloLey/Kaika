@@ -1,14 +1,13 @@
-// The schema-driven inspector: Canvas | Look | Emitters | Modulators |
-// Timeline | Segment | YAML. Forms are generated from the recipe schema
-// (SchemaForm); the few hand-built widgets (placement pad) swap in where the
-// schema asks for them.
+// The schema-driven inspector: Look | Emitters | Motion | YAML. Forms are
+// generated from the recipe schema (SchemaForm); the few hand-built widgets
+// (placement pad) swap in where the schema asks for them. Per-segment editing
+// lives in the segment rail, not here.
 import { useMemo, useState } from "react";
 import yaml from "js-yaml";
-import { ProjectDoc, Segment, TimelineDirective } from "../api";
+import { ProjectDoc, TimelineDirective } from "../api";
 import { SchemaCard, SchemaSection, Pad2D, FormCtx } from "./SchemaForm";
 
-export type Tab = "canvas" | "look" | "emitters" | "modulators" | "timeline"
-  | "segment" | "yaml";
+export type Tab = "look" | "emitters" | "motion" | "yaml";
 
 interface Props {
   schema: any;
@@ -16,9 +15,6 @@ interface Props {
   ctx: FormCtx;                                  // recipe-path setter + badges
   onReplaceRecipe: (recipe: any, onErr: (e: string) => void) => void;
   onSetTimeline: (tl: TimelineDirective[]) => void;
-  onSetSegments: (segs: Segment[]) => void;
-  selectedSegment: number;
-  onSelectSegment: (i: number) => void;
 }
 
 const CANVAS_PRESETS = [
@@ -103,11 +99,6 @@ export default function Inspector(p: Props) {
     } catch (e: any) { setYamlErr(String(e.message || e)); }
   };
 
-  const seg = project.segments[p.selectedSegment];
-  const updateSeg = (patch: Partial<Segment>) =>
-    p.onSetSegments(project.segments.map((s, i) =>
-      i === p.selectedSegment ? { ...s, ...patch } : s));
-
   const T = (t: Tab, l: string) => (
     <button key={t} className={tab === t ? "active" : ""}
       onClick={() => (t === "yaml" ? openYaml() : setTab(t))}>{l}</button>
@@ -116,13 +107,12 @@ export default function Inspector(p: Props) {
   return (
     <div className="card inspector">
       <div className="insp-tabs">
-        {T("canvas", "Canvas")}{T("look", "Look")}{T("emitters", "Emitters")}
-        {T("modulators", "Mods")}{T("timeline", "Timeline")}
-        {T("segment", "Segment")}{T("yaml", "YAML")}
+        {T("look", "Look")}{T("emitters", "Emitters")}
+        {T("motion", "Motion")}{T("yaml", "YAML")}
       </div>
       <div className="insp-body">
 
-        {tab === "canvas" && (
+        {tab === "look" && (
           <>
             <div className="preset-row">
               {CANVAS_PRESETS.map((c) => (
@@ -135,18 +125,6 @@ export default function Inspector(p: Props) {
             </div>
             <SchemaSection schema={props.canvas} value={recipe.canvas}
               basePath="canvas" tier="primary" ctx={ctx} />
-            <label className="field" style={{ marginTop: 10 }}>Seed</label>
-            <input type="number" value={recipe.seed ?? 0}
-              onChange={(e) => ctx.onSet("seed", parseInt(e.target.value) || 0)} />
-            <p className="muted" style={{ fontSize: 12 }}>
-              Changing dimensions invalidates preview checkpoints; the next
-              preview re-warms automatically.
-            </p>
-          </>
-        )}
-
-        {tab === "look" && (
-          <>
             <label className="field">Palette (main)</label>
             <div className="palette-row">
               {(recipe.palettes?.main ?? []).map((c: string, i: number) => (
@@ -243,8 +221,9 @@ export default function Inspector(p: Props) {
           </>
         )}
 
-        {tab === "modulators" && (
+        {tab === "motion" && (
           <>
+            <div className="group-name">Modulators (audio → parameter)</div>
             {(recipe.modulators ?? []).map((m: any, i: number) => (
               <div key={i} className="mod-row">
                 <select value={m.source}
@@ -284,11 +263,9 @@ export default function Inspector(p: Props) {
               absolute = the signal owns the target · add/scale = move around the
               segment's base value.
             </p>
-          </>
-        )}
 
-        {tab === "timeline" && (
-          <>
+            <div className="group-name" style={{ marginTop: 16 }}>
+              Timeline (time-anchored accents)</div>
             {(project.timeline ?? []).map((d, i) => (
               <div key={i} className="tl-row">
                 <input type="text" style={{ width: 90 }}
@@ -328,43 +305,6 @@ export default function Inspector(p: Props) {
               Anchors adapt to the track: try <code>section:drop</code> or{" "}
               <code>beat:32</code>. Unbound anchors are skipped with a warning.
             </p>
-          </>
-        )}
-
-        {tab === "segment" && seg && (
-          <>
-            <div className="seg-nav">
-              <button disabled={p.selectedSegment === 0}
-                onClick={() => p.onSelectSegment(p.selectedSegment - 1)}>‹</button>
-              <span className="mono">
-                {p.selectedSegment + 1}/{project.segments.length} ·{" "}
-                {seg.start.toFixed(1)}–{seg.end.toFixed(1)}s
-              </span>
-              <button disabled={p.selectedSegment >= project.segments.length - 1}
-                onClick={() => p.onSelectSegment(p.selectedSegment + 1)}>›</button>
-            </div>
-            <label className="field">Label</label>
-            <input type="text" value={seg.label}
-              onChange={(e) => updateSeg({ label: e.target.value })} />
-            <label className="field">Prompt (diffusion)</label>
-            <textarea value={seg.prompt}
-              onChange={(e) => updateSeg({ prompt: e.target.value })} />
-            <label className="field">Segment overrides (partial, YAML)</label>
-            <textarea className="yaml" style={{ minHeight: 90 }}
-              defaultValue={yaml.dump(seg.fluid ?? {}, { noRefs: true })}
-              key={p.selectedSegment}
-              onBlur={(e) => {
-                try { updateSeg({ fluid: (yaml.load(e.target.value) as any) ?? {} }); }
-                catch { /* keep last valid */ }
-              }} />
-            <p className="muted" style={{ fontSize: 12 }}>
-              e.g. <code>{"field: {vorticity: 40}"}</code> or{" "}
-              <code>{"emitters: {kicks: {body: {radius: 0.2}}}"}</code> — smoothed
-              over 0.6s at boundaries.
-            </p>
-            <button className="btn ghost slim" onClick={() => updateSeg({ fluid: {} })}>
-              Reset overrides
-            </button>
           </>
         )}
 
