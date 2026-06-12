@@ -24,6 +24,9 @@ dependencies = [
     "pydantic>=2.6",
     "websockets>=12.0",
     "python-multipart>=0.0.9",
+    # chat copilot backends (Anthropic via httpx, Gemini via google-genai)
+    "httpx>=0.27",
+    "google-genai>=1.0",
 ]
 
 [project.optional-dependencies]

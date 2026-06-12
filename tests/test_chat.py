@@ -285,3 +285,31 @@ def test_chat_spiral_scenario(ctx):
     assert len(out["changes"]) == 3
     from kaika.core.project import list_revisions
     assert len(list_revisions(ctx.run_dir)) == 3
+
+
+def test_update_timeline_directive_deep_merges(ctx):
+    C.run_tool(ctx, "add_timeline_directive", {"spec": {
+        "action": "set", "between": [2.0, 8.0],
+        "set": {"emitters.kicks.placement.type": "spiral",
+                "emitters.kicks.color.hex": "#0000FF"}}})
+    res = C.run_tool(ctx, "update_timeline_directive", {"index": 0, "patch": {
+        "set": {"emitters.kicks.placement.sequence": 12}}})
+    assert res == "ok"
+    s = ctx.project().timeline[0]["set"]
+    assert s["emitters.kicks.placement.sequence"] == 12
+    assert s["emitters.kicks.placement.type"] == "spiral"   # not clobbered
+    assert s["emitters.kicks.color.hex"] == "#0000FF"
+
+
+def test_update_emitter_accepts_dotted_keys(ctx):
+    """Models mix dot notation into merge patches; dotted keys must expand
+    instead of being silently dropped by validation."""
+    C.run_tool(ctx, "set_palette",
+               {"name": "ocean", "colors": ["#001F3F", "#004080"]})
+    res = C.run_tool(ctx, "update_emitter",
+                     {"id": "hats", "patch": {"color.palette": "ocean",
+                                              "body.radius": 0.05}})
+    assert res == "ok"
+    em = ctx.project().recipe.emitter("hats")
+    assert em.color.palette == "ocean"
+    assert em.body.radius == 0.05

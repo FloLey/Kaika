@@ -213,7 +213,7 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
             if hit is None:
                 return (f"ERROR: no emitter '{eid}' "
                         f"(have: {[e['id'] for e in d['emitters']]})")
-            _deep_update(hit, args.get("patch") or {})
+            _deep_update(hit, _expand_dots(args.get("patch") or {}))
             return _set_recipe(ctx, d, f"~ emitter '{eid}'")
         if name == "remove_emitter":
             proj = ctx.project()
@@ -325,7 +325,8 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
             idx = int(args.get("index", -1))
             if not (0 <= idx < len(proj.timeline)):
                 return f"ERROR: timeline index {idx} out of range"
-            merged = {**proj.timeline[idx], **(args.get("patch") or {})}
+            merged = json.loads(json.dumps(proj.timeline[idx]))
+            _deep_update(merged, args.get("patch") or {})
             errs = R.validate_timeline([merged])
             if errs:
                 return "VALIDATION ERROR: " + "; ".join(errs)
@@ -371,6 +372,25 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
         return f"ERROR: unknown tool '{name}'"
     except Exception as e:                                   # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
+
+
+def _expand_dots(patch: dict) -> dict:
+    """{"color.palette": "x"} -> {"color": {"palette": "x"}}. Models mix the
+    dot notation (used by set_recipe_values and modulator targets) into
+    emitter merge patches; without expansion the dotted key would merge as a
+    literal key and be silently dropped by recipe validation. NOT applied to
+    timeline directives, whose ``set`` blocks use dotted keys literally."""
+    out: dict = {}
+    for k, v in (patch or {}).items():
+        v = _expand_dots(v) if isinstance(v, dict) else v
+        node, parts = out, str(k).split(".")
+        for p in parts[:-1]:
+            node = node.setdefault(p, {})
+        if isinstance(node.get(parts[-1]), dict) and isinstance(v, dict):
+            node[parts[-1]].update(v)
+        else:
+            node[parts[-1]] = v
+    return out
 
 
 def _deep_update(dst: dict, patch: dict) -> None:
@@ -451,7 +471,9 @@ def tool_definitions() -> List[dict]:
             "set?:{path:value}, fade_s?}.",
          "input_schema": obj({"spec": {"type": "object"}}, ["spec"])},
         {"name": "update_timeline_directive", "description":
-            "Merge a patch into the project timeline directive at this index.",
+            "DEEP-merge a patch into the project timeline directive at this "
+            "index (nested keys like set.{path} merge, they don't replace "
+            "the whole block).",
          "input_schema": obj({"index": {"type": "integer"},
                               "patch": {"type": "object"}},
                              ["index", "patch"])},

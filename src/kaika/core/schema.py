@@ -206,8 +206,10 @@ HELP: dict = {
         "or spiral.",
     "emitters.*.placement.sequence": "Successive trigger hits advance along "
         "the shape (line/circle/spiral) instead of spawning the whole shape "
-        "at once: hit k sits at position (k mod N)/N. 0 = off. Perfect for "
-        "rapid onset runs tracing a path.",
+        "at once: N is how many hits complete one full pass (hit k at "
+        "(k mod N)/N) — use 8-16 for a clearly traced path; 1 pins every hit "
+        "to the start point. 0 = off. Perfect for rapid onset runs tracing "
+        "a path.",
     "emitters.*.placement.rows": "Grid rows.",
     "emitters.*.placement.cols": "Grid columns.",
     "emitters.*.placement.source": "Audio signal that drives the position "
@@ -405,7 +407,7 @@ def recipe_schema() -> dict:
 TIMELINE_DOC = """timeline directives (project-level; tools add/update/remove_timeline_directive):
   anchors: seconds (3.2) | 'section:drop' | 'section:drop+4.5' | 'beat:32' | 'bar:8'
   spawn (default): {at, emitter?, mag?, count?, placement?, color?, body?} — one-off burst; overrides merge over the emitter's config; no emitter = inline one-shot
-  set: {between: [t0, t1], set: {"dot.path": value, ...}, fade_s?} — override numeric recipe values over a time window (eased in/out)
+  set: {between: [t0, t1], set: {"dot.path": value, ...}, fade_s?} — override recipe values over a time window (numerics eased in/out, strings switch hard); values revert AUTOMATICALLY when the window ends — never add a second directive to restore them
   mute / unmute: {at, emitter} — silence/restore an emitter from that moment; pair them to confine an emitter to a section"""
 
 MODULATOR_DOC = ("modulators (audio signal -> numeric recipe leaf, every frame):\n"
