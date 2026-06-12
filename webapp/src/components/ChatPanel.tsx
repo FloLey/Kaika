@@ -3,6 +3,7 @@
 // as chips with an Undo affordance.
 import { useEffect, useRef, useState } from "react";
 import { api, ChatEvent } from "../api";
+import HelpLink from "./HelpLink";
 
 interface Msg {
   role: "user" | "assistant" | "event";
@@ -113,6 +114,7 @@ export default function ChatPanel({ runId, onProjectChanged, onPreviewJob }: Pro
         <button className="btn" disabled={busy || !input.trim()} onClick={send}>
           Send
         </button>
+        <HelpLink anchor="chat" />
       </div>
     </div>
   );

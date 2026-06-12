@@ -2,6 +2,7 @@
 // only ever sees whether one is set).
 import { useEffect, useState } from "react";
 import { api, Settings } from "../api";
+import HelpLink from "./HelpLink";
 
 const MODELS: Record<string, string> = {
   anthropic: "claude-sonnet-4-6",
@@ -38,7 +39,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="card modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Settings</h3>
+        <h3>Settings <HelpLink anchor="settings" /></h3>
         <label className="field">Chat copilot provider</label>
         <select value={provider} onChange={(e) => {
           setProvider(e.target.value);
@@ -67,6 +68,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
           Keys are stored locally on the server (.kaika/settings.json) and are
           never sent to the browser.
+        </p>
+        <p style={{ fontSize: 13, marginTop: 10 }}>
+          <a href="/guide.html" target="_blank" rel="noreferrer">
+            📖 Guide d'utilisation</a>
         </p>
       </div>
     </div>

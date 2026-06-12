@@ -3,6 +3,7 @@ import Studio from "./components/Studio";
 import RenderView from "./components/RenderView";
 import Gallery from "./components/Gallery";
 import SettingsModal from "./components/SettingsModal";
+import HelpLink from "./components/HelpLink";
 
 type View = "studio" | "render" | "gallery";
 
@@ -27,7 +28,9 @@ export default function App() {
           {tab("render", "Render")}
           {tab("gallery", "Gallery")}
         </nav>
-        <button className="gear" title="Settings" onClick={() => setSettings(true)}>⚙</button>
+        <HelpLink className="top" />
+        <button className="gear" style={{ marginLeft: 0 }} title="Settings"
+          onClick={() => setSettings(true)}>⚙</button>
       </header>
 
       {view === "studio" && (

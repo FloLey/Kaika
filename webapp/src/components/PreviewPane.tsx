@@ -3,6 +3,7 @@
 // still running ("it's coming" feedback).
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import HelpLink from "./HelpLink";
 
 interface Props {
   runId: string;
@@ -88,8 +89,11 @@ export default function PreviewPane({ runId, jobId, version, aspect,
       </div>
       <div className="preview-foot">
         <span className="muted mono">{windowLabel}</span>
-        <button className="btn ghost slim" onClick={onHq}
-          title="render this window at full resolution">HQ window</button>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <button className="btn ghost slim" onClick={onHq}
+            title="render this window at full resolution">HQ window</button>
+          <HelpLink anchor="preview" />
+        </span>
       </div>
     </div>
   );

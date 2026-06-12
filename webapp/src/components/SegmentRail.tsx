@@ -4,6 +4,7 @@
 import { useState } from "react";
 import yaml from "js-yaml";
 import { Segment } from "../api";
+import HelpLink from "./HelpLink";
 
 interface Props {
   segments: Segment[];
@@ -54,7 +55,7 @@ export default function SegmentRail({
 
   return (
     <div className="card seg-rail">
-      <h3>Segments</h3>
+      <h3>Segments <HelpLink anchor="segments" /></h3>
       <div className="seg-list">
         {segments.map((s, i) => (
           <div key={i} className={`seg-item${i === selected ? " sel" : ""}`}

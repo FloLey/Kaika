@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, RunManifest } from "../api";
+import HelpLink from "./HelpLink";
 
 interface Props {
   onOpenInStudio: (runId: string) => void;
@@ -78,6 +79,10 @@ export default function Gallery({ onOpenInStudio }: Props) {
 
   return (
     <>
+      <div style={{ display: "flex", justifyContent: "flex-end",
+                    margin: "14px 0 -8px" }}>
+        <HelpLink anchor="gallery" />
+      </div>
       {comparing && pair.length === 2 ? (
         <Compare a={pair[0]} b={pair[1]} onClose={() => setComparing(false)} />
       ) : (

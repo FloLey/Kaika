@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, JobState, STAGES } from "../api";
+import HelpLink from "./HelpLink";
 
 const LIVE_POLL_MS = 1200;
 
@@ -68,7 +69,8 @@ export default function RenderView({ runId, jobId, onSeeGallery }: Props) {
   return (
     <div className="grid">
       <div className="card">
-        <h3>{isSegment ? "Segment preview" : isFluid ? "Fluid preview" : "Diffusion"}</h3>
+        <h3>{isSegment ? "Segment preview" : isFluid ? "Fluid preview" : "Diffusion"}{" "}
+          <HelpLink anchor="render" /></h3>
         <div className="pipeline">
           {stages.map((name) => {
             const isCurrent = job?.stage === name && job.status === "running";

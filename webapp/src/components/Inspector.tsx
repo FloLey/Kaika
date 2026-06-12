@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import yaml from "js-yaml";
 import { ProjectDoc, TimelineDirective } from "../api";
 import { SchemaCard, SchemaSection, Pad2D, FormCtx } from "./SchemaForm";
+import HelpLink from "./HelpLink";
 
 export type Tab = "look" | "emitters" | "motion" | "yaml";
 
@@ -109,6 +110,10 @@ export default function Inspector(p: Props) {
       <div className="insp-tabs">
         {T("look", "Look")}{T("emitters", "Emitters")}
         {T("motion", "Motion")}{T("yaml", "YAML")}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end",
+                    margin: "-4px 0 6px" }}>
+        <HelpLink anchor="reglages" />
       </div>
       <div className="insp-body">
 

@@ -3,6 +3,7 @@
 // or reject (dismiss).
 import { useState } from "react";
 import { api, GlobalProposal, SegmentProposal } from "../api";
+import HelpLink from "./HelpLink";
 
 interface Props {
   runId: string;
@@ -113,6 +114,7 @@ export default function SuggestionsPanel({ runId, onProjectChanged,
           onKeyDown={(e) => e.key === "Enter" && generate()} />
         <button className="btn" disabled={busy} onClick={generate}>
           {busy ? "thinking…" : "✨ Propose ideas"}</button>
+        <HelpLink anchor="assistant" />
       </div>
       {err && <p className="err">{err}</p>}
       {globalP && card("global", `🎨 ${globalP.title || "Global look"}`,
