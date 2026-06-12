@@ -244,6 +244,27 @@ img.live-frame { width: 100%; max-width: 320px; border-radius: 8px;
 .preview-foot { display: flex; align-items: center; justify-content: space-between;
   margin-top: 8px; }
 
+/* ---- "rendering" feedback: obvious while a preview job runs ---- */
+.preview-stage.rendering video { opacity: .35; filter: blur(1px); }
+.rendering-overlay { background: rgba(12,14,18,0.35); }
+.rendering-card { display: flex; flex-direction: column; align-items: center;
+  gap: 10px; background: rgba(12,14,18,0.82); padding: 16px 22px;
+  border-radius: 10px; min-width: 210px; }
+.rendering-card .mono { font-size: 13px; }
+.spinner { width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.25); border-top-color: var(--petale);
+  animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.render-bar { width: 100%; height: 5px; background: rgba(255,255,255,.18);
+  border-radius: 3px; overflow: hidden; }
+.render-bar > i { display: block; height: 100%; background: var(--petale);
+  border-radius: 3px; transition: width .2s; }
+.render-bar > i.indeterminate { animation: slide 1.1s ease-in-out infinite; }
+@keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+.render-dot { color: var(--petale); font-weight: 600;
+  animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
 /* ---- lanes ---- */
 .lanes { display: block; border-radius: 6px; background: rgba(255,255,255,0.02);
   margin-top: 8px; cursor: pointer; }

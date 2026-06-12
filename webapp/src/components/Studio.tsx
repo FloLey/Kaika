@@ -347,6 +347,53 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const setTimeline = (tl: TimelineDirective[]) =>
     mutate((p) => ({ ...p, timeline: tl }));
 
+  // ---- keyboard shortcuts ---------------------------------------------------
+  // Registered once, on the capture phase so they win over the <video>
+  // element's native handling; latest state/actions are read through a ref.
+  const keyCtx = useRef<any>({});
+  keyCtx.current = {
+    togglePlay, seek, selectSegment, splitAtPlayhead, mergeWithNext, hqWindow,
+    sel, nSegs: project?.segments.length ?? 0,
+    duration: analysis?.duration_s ?? 0, hasProject: !!project,
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const k = keyCtx.current;
+      if (!k.hasProject) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+                t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const step = e.shiftKey ? 5 : 1;
+      switch (e.key) {
+        case " ":
+          e.preventDefault(); k.togglePlay(); break;
+        case "ArrowLeft":
+          e.preventDefault();
+          k.seek(Math.max(0, playheadRef.current - step)); break;
+        case "ArrowRight":
+          e.preventDefault();
+          k.seek(Math.min(k.duration, playheadRef.current + step)); break;
+        case "ArrowUp":
+          e.preventDefault();
+          if (k.sel > 0) k.selectSegment(k.sel - 1); break;
+        case "ArrowDown":
+          e.preventDefault();
+          if (k.sel < k.nSegs - 1) k.selectSegment(k.sel + 1); break;
+        case "s": case "S":
+          e.preventDefault(); k.splitAtPlayhead(); break;
+        case "m": case "M":
+          e.preventDefault(); k.mergeWithNext(); break;
+        case "h": case "H":
+          e.preventDefault(); k.hqWindow(); break;
+        case "l": case "L":
+          e.preventDefault(); setLivePreview((v) => !v); break;
+      }
+    };
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
+  }, []);
+
   // pinned session controls strip
   const pinControls = (project?.ui_pins ?? []).map((path) => {
     const v = getPath(project!.recipe, path);
@@ -480,7 +527,8 @@ export default function Studio({ initialRunId, onPreview }: Props) {
             {analysis && (
               <div className="card">
                 <div className="transport">
-                  <button className="play" onClick={togglePlay}>
+                  <button className="play" onClick={togglePlay}
+                    title="play/pause (Space) · ←/→ seek · ↑/↓ segment · S split · M merge · H HQ · L live">
                     {playing ? "❚❚" : "▶"}</button>
                   <span className="mono muted">
                     {playhead.toFixed(1)}s / {analysis.duration_s.toFixed(1)}s
