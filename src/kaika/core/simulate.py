@@ -1218,6 +1218,60 @@ def _build_text_stamps(score: Score, recipe: Recipe, n_frames: int,
     return out
 
 
+def _resolve_render_window(render_range: Optional[tuple], n_frames: int,
+                           warmup_frames: int) -> tuple:
+    """(render_start, sim_start, sim_end): the rendered window plus the
+    unrendered warm-up lead-in before it."""
+    if render_range is not None:
+        render_start = max(0, int(render_range[0]))
+        sim_end = min(n_frames, int(render_range[1]))
+        sim_start = max(0, render_start - max(0, warmup_frames))
+        return render_start, sim_start, sim_end
+    return 0, 0, n_frames
+
+
+def _init_solver(recipe: Recipe, base_field: dict, grid_h: int, grid_w: int,
+                 gpu: Optional[bool], warnings: List[str]) -> FluidSim:
+    """Build the FluidSim: velocity at the calibrated swirl scale (the grid
+    the draft previews use, times field.detail), dye at the full canvas grid."""
+    want_gpu = (gpu if gpu is not None
+                else os.environ.get("KAIKA_GPU", "") == "1")
+    detail = max(float(base_field.get("detail", 1.0)), 0.25)
+    vshort = min(int(round(_CALIB_RES * detail)), grid_h, grid_w)
+    if vshort < min(grid_h, grid_w):
+        f = vshort / min(grid_h, grid_w)
+        # fft_friendly rounds up to a 2/3/5-smooth size; clamp so the velocity
+        # grid can never exceed the dye grid (the design invariant).
+        vel_shape = (min(grid_h, fft_friendly(max(16, int(round(grid_h * f))))),
+                     min(grid_w, fft_friendly(max(16, int(round(grid_w * f))))))
+    else:
+        vel_shape = (grid_h, grid_w)
+    sim = FluidSim(vel_shape, base_field["dissipation"],
+                   base_field["viscosity"], recipe.seed,
+                   vel_dissipation=base_field["velocity_dissipation"],
+                   use_gpu=want_gpu, dye_shape=(grid_h, grid_w))
+    if want_gpu and not sim.gpu:
+        warnings.append("KAIKA_GPU=1 but CuPy/CUDA is unavailable — "
+                        "running on CPU (pip install cupy-cuda12x)")
+    return sim
+
+
+def _restore_from_checkpoint(sim: FluidSim, checkpoints: Optional[CheckpointStore],
+                             render_start: int, struct: str) -> Optional[tuple]:
+    """Load the nearest usable checkpoint into the solver. A checkpoint holds
+    the state *after* its frame's step, so resuming continues at frame+1; it
+    must sit strictly before the render window. Returns
+    (sources, t_phase, bg_state, sim_start) or None when no checkpoint fits."""
+    if checkpoints is None:
+        return None
+    ck = checkpoints.nearest(render_start - 1, struct)
+    if ck is None:
+        return None
+    sim.load_state(ck["u"], ck["v"], ck["density"])
+    bg = np.asarray(ck["bg"], np.float32) if ck.get("bg") else None
+    return ck["sources"], ck["t_phase"], bg, int(ck["frame"]) + 1
+
+
 def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
              max_frames: Optional[int] = None,
              progress: Optional[ProgressFn] = None,
@@ -1274,53 +1328,26 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
             if sp.emitter_i >= 0:
                 cum[fi + 1][sp.emitter_i] += 1
 
-    # Window + warm-up resolution.
-    if render_range is not None:
-        render_start = max(0, int(render_range[0]))
-        sim_end = min(n_frames, int(render_range[1]))
-        sim_start = max(0, render_start - max(0, warmup_frames))
-    else:
-        render_start, sim_start, sim_end = 0, 0, n_frames
+    render_start, sim_start, sim_end = _resolve_render_window(
+        render_range, n_frames, warmup_frames)
 
-    base_field = recipe.to_dict()["field"]
-    want_gpu = (gpu if gpu is not None
-                else os.environ.get("KAIKA_GPU", "") == "1")
-    # Velocity simulates at the calibrated swirl scale (the grid the draft
-    # previews use, times field.detail); dye uses the full canvas grid.
-    detail = max(float(base_field.get("detail", 1.0)), 0.25)
-    vshort = min(int(round(_CALIB_RES * detail)), grid_h, grid_w)
-    if vshort < min(grid_h, grid_w):
-        f = vshort / min(grid_h, grid_w)
-        # fft_friendly rounds up to a 2/3/5-smooth size; clamp so the velocity
-        # grid can never exceed the dye grid (the design invariant).
-        vel_shape = (min(grid_h, fft_friendly(max(16, int(round(grid_h * f))))),
-                     min(grid_w, fft_friendly(max(16, int(round(grid_w * f))))))
-    else:
-        vel_shape = (grid_h, grid_w)
-    sim = FluidSim(vel_shape, base_field["dissipation"],
-                   base_field["viscosity"], recipe.seed,
-                   vel_dissipation=base_field["velocity_dissipation"],
-                   use_gpu=want_gpu, dye_shape=(grid_h, grid_w))
-    if want_gpu and not sim.gpu:
-        warnings.append("KAIKA_GPU=1 but CuPy/CUDA is unavailable — "
-                        "running on CPU (pip install cupy-cuda12x)")
+    # to_dict() (asdict) returns fresh structures, so no defensive copy needed.
+    rec_d = recipe.to_dict()
+    base_field = rec_d["field"]
+    sim = _init_solver(recipe, base_field, grid_h, grid_w, gpu, warnings)
     sources: List[_Source] = []
     t_phase = sim_start * float(base_field["ambient"]["speed"])
     bg_state: Optional[np.ndarray] = None       # smoothed background tint
 
-    if checkpoints is not None and render_range is not None:
-        # A checkpoint holds the state *after* its frame's step, so resuming
-        # continues at frame+1; it must sit strictly before the render window.
-        ck = checkpoints.nearest(render_start - 1, struct)
-        if ck is not None:
+    if render_range is not None:
+        restored = _restore_from_checkpoint(sim, checkpoints, render_start,
+                                            struct)
+        if restored is not None:
             # Exact state always beats an approximate cold-start warm-up,
             # even when the checkpoint sits earlier than the warm-up window.
-            sim.load_state(ck["u"], ck["v"], ck["density"])
-            sources = ck["sources"]
-            t_phase = ck["t_phase"]
-            if ck.get("bg"):
-                bg_state = np.asarray(ck["bg"], np.float32)
-            sim_start = int(ck["frame"]) + 1
+            sources, t_phase, bg, sim_start = restored
+            if bg is not None:
+                bg_state = bg
 
     rh, rw = recipe.canvas.render_size(cap_short=draft_cap)
     gx = sim.xs / sim.w
@@ -1328,8 +1355,6 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     bloom_auto_sigma = max(1.0, min(grid_h, grid_w) / 48)
     dt = 1.0
     stats = {"kinetic_energy": [], "total_density": []}
-    # to_dict() (asdict) returns fresh structures, so no defensive copy needed.
-    rec_d = recipe.to_dict()
     emitters_d = rec_d["emitters"][:n_emitters]
     # Template for frames without a per-frame tree; built once, never mutated —
     # each frame works on its own deep copy (the modulation engine mutates the

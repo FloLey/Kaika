@@ -37,6 +37,7 @@ DEFAULT_MODELS = {
 # ---------------------------------------------------------------------------
 
 def _pointer_parts(pointer: str) -> List[str]:
+    """Split an RFC 6901 JSON Pointer into unescaped path segments."""
     if pointer in ("", "/"):
         return []
     return [p.replace("~1", "/").replace("~0", "~")
@@ -182,219 +183,288 @@ def _set_recipe(ctx: ToolContext, new_recipe_dict: dict, note: str) -> str:
     return "ok"
 
 
+# --- tool handlers: one function per tool, dispatched by run_tool() --------
+
+def _tool_get_project(ctx: ToolContext, args: dict) -> str:
+    return json.dumps(ctx.project().to_dict())
+
+
+def _tool_get_score_summary(ctx: ToolContext, args: dict) -> str:
+    windowed = args.get("t0") is not None or args.get("t1") is not None
+    return json.dumps(_score_summary(ctx.score, args.get("t0"),
+                                     args.get("t1"),
+                                     include_onset_times=windowed))
+
+
+def _tool_patch_recipe(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    try:
+        patched = apply_json_patch(proj.recipe.to_dict(),
+                                   args.get("ops", []))
+    except (ValueError, IndexError, KeyError) as e:
+        return f"PATCH ERROR: {e}"
+    return _set_recipe(ctx, patched,
+                       f"recipe patch ({len(args.get('ops', []))} ops)")
+
+
+def _tool_add_emitter(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    spec = args.get("spec") or {}
+    d["emitters"].append(spec)
+    return _set_recipe(ctx, d, f"+ emitter '{spec.get('id', '?')}'")
+
+
+def _tool_update_emitter(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    eid = args.get("id", "")
+    hit = next((e for e in d["emitters"] if e["id"] == eid), None)
+    if hit is None:
+        return (f"ERROR: no emitter '{eid}' "
+                f"(have: {[e['id'] for e in d['emitters']]})")
+    _deep_update(hit, _expand_dots(args.get("patch") or {}))
+    return _set_recipe(ctx, d, f"~ emitter '{eid}'")
+
+
+def _tool_remove_emitter(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    eid = args.get("id", "")
+    before = len(d["emitters"])
+    d["emitters"] = [e for e in d["emitters"] if e["id"] != eid]
+    if len(d["emitters"]) == before:
+        return f"ERROR: no emitter '{eid}'"
+    return _set_recipe(ctx, d, f"- emitter '{eid}'")
+
+
+def _tool_set_recipe_values(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    values = args.get("values") or {}
+    if not isinstance(values, dict) or not values:
+        return ("ERROR: values must be a non-empty object of "
+                "{\"dot.path\": value}")
+    try:
+        for path, val in values.items():
+            _set_dot_path(d, path, val)
+    except (ValueError, IndexError, KeyError, TypeError) as e:
+        return f"PATH ERROR: {e}"
+    shown = ", ".join(list(values)[:4])
+    if len(values) > 4:
+        shown += f" (+{len(values) - 4})"
+    return _set_recipe(ctx, d, f"set {shown}")
+
+
+def _tool_add_modulator(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    d["modulators"].append(args.get("spec") or {})
+    return _set_recipe(ctx, d, "+ modulator "
+                       f"{(args.get('spec') or {}).get('source', '?')}"
+                       f" -> {(args.get('spec') or {}).get('target', '?')}")
+
+
+def _tool_update_modulator(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(d["modulators"])):
+        return f"ERROR: modulator index {idx} out of range"
+    d["modulators"][idx] = {**d["modulators"][idx],
+                            **(args.get("patch") or {})}
+    return _set_recipe(ctx, d, f"~ modulator [{idx}]")
+
+
+def _tool_remove_modulator(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(d["modulators"])):
+        return f"ERROR: modulator index {idx} out of range"
+    d["modulators"].pop(idx)
+    return _set_recipe(ctx, d, f"- modulator [{idx}]")
+
+
+def _tool_set_palette(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    pname = str(args.get("name", "")).strip()
+    colors = args.get("colors") or []
+    if not pname:
+        return "ERROR: palette name required"
+    bad = [c for c in colors
+           if not (isinstance(c, str)
+                   and re.fullmatch(r"#[0-9a-fA-F]{6}", c))]
+    if not colors or bad:
+        return ("ERROR: colors must be a non-empty list of '#RRGGBB' "
+                f"hex strings (bad: {bad[:3]})")
+    d.setdefault("palettes", {})[pname] = colors
+    return _set_recipe(ctx, d, f"palette '{pname}' ({len(colors)} colors)")
+
+
+def _tool_set_canvas(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    d = proj.recipe.to_dict()
+    d["canvas"] = {**d["canvas"], **(args.get("spec") or {})}
+    return _set_recipe(ctx, d, f"canvas -> {d['canvas']['width']}x"
+                               f"{d['canvas']['height']}")
+
+
+def _tool_add_segment(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    spec = args.get("spec") or {}
+    try:
+        start, end = float(spec["start"]), float(spec["end"])
+    except (KeyError, TypeError, ValueError):
+        return "ERROR: spec needs numeric start and end (seconds)"
+    if end <= start:
+        return "ERROR: end must be > start"
+    seg = Segment(start=start, end=end,
+                  label=str(spec.get("label", "segment")),
+                  prompt=str(spec.get("prompt", "")),
+                  fluid=spec.get("fluid") or {})
+    proj.segments.append(seg)
+    proj.segments.sort(key=lambda s: s.start)
+    ctx.save(proj, f"+ segment '{seg.label}' {start:.1f}-{end:.1f}s")
+    return "ok"
+
+
+def _tool_split_segment(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(proj.segments)):
+        return f"ERROR: segment index {idx} out of range"
+    seg = proj.segments[idx]
+    try:
+        at = float(args["at"])
+    except (KeyError, TypeError, ValueError):
+        return "ERROR: 'at' (seconds) is required"
+    if not (seg.start < at < seg.end):
+        return (f"ERROR: 'at' must fall inside the segment "
+                f"({seg.start:.2f}..{seg.end:.2f}s)")
+    right = Segment(start=at, end=seg.end,
+                    label=str(args.get("label") or seg.label),
+                    prompt=str(args.get("prompt") or seg.prompt),
+                    fluid=copy.deepcopy(seg.fluid or {}))
+    seg.end = at
+    proj.segments.insert(idx + 1, right)
+    ctx.save(proj, f"segment [{idx}] split @ {at:.2f}s")
+    return "ok"
+
+
+def _tool_remove_segment(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(proj.segments)):
+        return f"ERROR: segment index {idx} out of range"
+    seg = proj.segments.pop(idx)
+    ctx.save(proj, f"- segment [{idx}] '{seg.label}'")
+    return "ok"
+
+
+def _tool_update_segment(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(proj.segments)):
+        return (f"ERROR: segment index {idx} out of range "
+                f"(0..{len(proj.segments) - 1})")
+    patch = args.get("patch") or {}
+    seg = proj.segments[idx]
+    for k in ("label", "prompt", "start", "end"):
+        if k in patch:
+            setattr(seg, k, patch[k])
+    if "fluid" in patch:
+        seg.fluid = R._deep_merge(seg.fluid or {}, patch["fluid"] or {})
+    ctx.save(proj, f"~ segment [{idx}] '{seg.label}'")
+    return "ok"
+
+
+def _tool_add_timeline_directive(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    spec = args.get("spec") or {}
+    errs = R.validate_timeline([spec])
+    if errs:
+        return "VALIDATION ERROR: " + "; ".join(errs)
+    proj.timeline.append(spec)
+    ctx.save(proj, f"+ timeline {spec.get('action', 'spawn')} @"
+                   f"{spec.get('at', spec.get('between', '?'))}")
+    return "ok"
+
+
+def _tool_update_timeline_directive(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(proj.timeline)):
+        return f"ERROR: timeline index {idx} out of range"
+    merged = copy.deepcopy(proj.timeline[idx])
+    _deep_update(merged, args.get("patch") or {})
+    errs = R.validate_timeline([merged])
+    if errs:
+        return "VALIDATION ERROR: " + "; ".join(errs)
+    proj.timeline[idx] = merged
+    ctx.save(proj, f"~ timeline [{idx}]")
+    return "ok"
+
+
+def _tool_remove_timeline_directive(ctx: ToolContext, args: dict) -> str:
+    proj = ctx.project()
+    idx = int(args.get("index", -1))
+    if not (0 <= idx < len(proj.timeline)):
+        return f"ERROR: timeline index {idx} out of range"
+    proj.timeline.pop(idx)
+    ctx.save(proj, f"- timeline [{idx}]")
+    return "ok"
+
+
+def _tool_preview(ctx: ToolContext, args: dict) -> str:
+    if ctx.submit_preview is None:
+        return "ERROR: preview is not available in this context"
+    t0 = float(args.get("t0", 0.0))
+    t1 = float(args.get("t1", t0 + 6.0))
+    ctx.preview_job = ctx.submit_preview(t0, t1)
+    return f"ok: preview job {ctx.preview_job} queued for {t0:.1f}-{t1:.1f}s"
+
+
+def _tool_start_render(ctx: ToolContext, args: dict) -> str:
+    if ctx.submit_render is None:
+        return "ERROR: rendering is not available in this context"
+    ctx.render_job = ctx.submit_render()
+    return f"ok: full render job {ctx.render_job} started"
+
+
+_TOOL_HANDLERS: dict = {
+    "get_project": _tool_get_project,
+    "get_score_summary": _tool_get_score_summary,
+    "patch_recipe": _tool_patch_recipe,
+    "add_emitter": _tool_add_emitter,
+    "update_emitter": _tool_update_emitter,
+    "remove_emitter": _tool_remove_emitter,
+    "set_recipe_values": _tool_set_recipe_values,
+    "add_modulator": _tool_add_modulator,
+    "update_modulator": _tool_update_modulator,
+    "remove_modulator": _tool_remove_modulator,
+    "set_palette": _tool_set_palette,
+    "set_canvas": _tool_set_canvas,
+    "add_segment": _tool_add_segment,
+    "split_segment": _tool_split_segment,
+    "remove_segment": _tool_remove_segment,
+    "update_segment": _tool_update_segment,
+    "add_timeline_directive": _tool_add_timeline_directive,
+    "update_timeline_directive": _tool_update_timeline_directive,
+    "remove_timeline_directive": _tool_remove_timeline_directive,
+    "preview": _tool_preview,
+    "start_render": _tool_start_render,
+}
+
+
 def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
     """Execute one tool call; always returns a string for the model."""
-    args = args or {}
-    try:
-        if name == "get_project":
-            return json.dumps(ctx.project().to_dict())
-        if name == "get_score_summary":
-            windowed = args.get("t0") is not None or args.get("t1") is not None
-            return json.dumps(_score_summary(ctx.score, args.get("t0"),
-                                             args.get("t1"),
-                                             include_onset_times=windowed))
-        if name == "patch_recipe":
-            proj = ctx.project()
-            try:
-                patched = apply_json_patch(proj.recipe.to_dict(),
-                                           args.get("ops", []))
-            except (ValueError, IndexError, KeyError) as e:
-                return f"PATCH ERROR: {e}"
-            return _set_recipe(ctx, patched,
-                               f"recipe patch ({len(args.get('ops', []))} ops)")
-        if name == "add_emitter":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            spec = args.get("spec") or {}
-            d["emitters"].append(spec)
-            res = _set_recipe(ctx, d, f"+ emitter '{spec.get('id', '?')}'")
-            return res
-        if name == "update_emitter":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            eid = args.get("id", "")
-            hit = next((e for e in d["emitters"] if e["id"] == eid), None)
-            if hit is None:
-                return (f"ERROR: no emitter '{eid}' "
-                        f"(have: {[e['id'] for e in d['emitters']]})")
-            _deep_update(hit, _expand_dots(args.get("patch") or {}))
-            return _set_recipe(ctx, d, f"~ emitter '{eid}'")
-        if name == "remove_emitter":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            eid = args.get("id", "")
-            before = len(d["emitters"])
-            d["emitters"] = [e for e in d["emitters"] if e["id"] != eid]
-            if len(d["emitters"]) == before:
-                return f"ERROR: no emitter '{eid}'"
-            return _set_recipe(ctx, d, f"- emitter '{eid}'")
-        if name == "set_recipe_values":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            values = args.get("values") or {}
-            if not isinstance(values, dict) or not values:
-                return ("ERROR: values must be a non-empty object of "
-                        "{\"dot.path\": value}")
-            try:
-                for path, val in values.items():
-                    _set_dot_path(d, path, val)
-            except (ValueError, IndexError, KeyError, TypeError) as e:
-                return f"PATH ERROR: {e}"
-            shown = ", ".join(list(values)[:4])
-            if len(values) > 4:
-                shown += f" (+{len(values) - 4})"
-            return _set_recipe(ctx, d, f"set {shown}")
-        if name == "update_modulator":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(d["modulators"])):
-                return f"ERROR: modulator index {idx} out of range"
-            d["modulators"][idx] = {**d["modulators"][idx],
-                                    **(args.get("patch") or {})}
-            return _set_recipe(ctx, d, f"~ modulator [{idx}]")
-        if name == "set_palette":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            pname = str(args.get("name", "")).strip()
-            colors = args.get("colors") or []
-            if not pname:
-                return "ERROR: palette name required"
-            bad = [c for c in colors
-                   if not (isinstance(c, str)
-                           and re.fullmatch(r"#[0-9a-fA-F]{6}", c))]
-            if not colors or bad:
-                return ("ERROR: colors must be a non-empty list of '#RRGGBB' "
-                        f"hex strings (bad: {bad[:3]})")
-            d.setdefault("palettes", {})[pname] = colors
-            return _set_recipe(ctx, d,
-                               f"palette '{pname}' ({len(colors)} colors)")
-        if name == "add_segment":
-            proj = ctx.project()
-            spec = args.get("spec") or {}
-            try:
-                start, end = float(spec["start"]), float(spec["end"])
-            except (KeyError, TypeError, ValueError):
-                return "ERROR: spec needs numeric start and end (seconds)"
-            if end <= start:
-                return "ERROR: end must be > start"
-            seg = Segment(start=start, end=end,
-                          label=str(spec.get("label", "segment")),
-                          prompt=str(spec.get("prompt", "")),
-                          fluid=spec.get("fluid") or {})
-            proj.segments.append(seg)
-            proj.segments.sort(key=lambda s: s.start)
-            ctx.save(proj, f"+ segment '{seg.label}' {start:.1f}-{end:.1f}s")
-            return "ok"
-        if name == "split_segment":
-            proj = ctx.project()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(proj.segments)):
-                return f"ERROR: segment index {idx} out of range"
-            seg = proj.segments[idx]
-            try:
-                at = float(args["at"])
-            except (KeyError, TypeError, ValueError):
-                return "ERROR: 'at' (seconds) is required"
-            if not (seg.start < at < seg.end):
-                return (f"ERROR: 'at' must fall inside the segment "
-                        f"({seg.start:.2f}..{seg.end:.2f}s)")
-            right = Segment(start=at, end=seg.end,
-                            label=str(args.get("label") or seg.label),
-                            prompt=str(args.get("prompt") or seg.prompt),
-                            fluid=copy.deepcopy(seg.fluid or {}))
-            seg.end = at
-            proj.segments.insert(idx + 1, right)
-            ctx.save(proj, f"segment [{idx}] split @ {at:.2f}s")
-            return "ok"
-        if name == "remove_segment":
-            proj = ctx.project()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(proj.segments)):
-                return f"ERROR: segment index {idx} out of range"
-            seg = proj.segments.pop(idx)
-            ctx.save(proj, f"- segment [{idx}] '{seg.label}'")
-            return "ok"
-        if name == "start_render":
-            if ctx.submit_render is None:
-                return "ERROR: rendering is not available in this context"
-            ctx.render_job = ctx.submit_render()
-            return f"ok: full render job {ctx.render_job} started"
-        if name == "add_modulator":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            d["modulators"].append(args.get("spec") or {})
-            return _set_recipe(ctx, d, "+ modulator "
-                               f"{(args.get('spec') or {}).get('source', '?')}"
-                               f" -> {(args.get('spec') or {}).get('target', '?')}")
-        if name == "remove_modulator":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(d["modulators"])):
-                return f"ERROR: modulator index {idx} out of range"
-            d["modulators"].pop(idx)
-            return _set_recipe(ctx, d, f"- modulator [{idx}]")
-        if name == "add_timeline_directive":
-            proj = ctx.project()
-            spec = args.get("spec") or {}
-            errs = R.validate_timeline([spec])
-            if errs:
-                return "VALIDATION ERROR: " + "; ".join(errs)
-            proj.timeline.append(spec)
-            ctx.save(proj, f"+ timeline {spec.get('action', 'spawn')} @"
-                           f"{spec.get('at', spec.get('between', '?'))}")
-            return "ok"
-        if name == "update_timeline_directive":
-            proj = ctx.project()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(proj.timeline)):
-                return f"ERROR: timeline index {idx} out of range"
-            merged = copy.deepcopy(proj.timeline[idx])
-            _deep_update(merged, args.get("patch") or {})
-            errs = R.validate_timeline([merged])
-            if errs:
-                return "VALIDATION ERROR: " + "; ".join(errs)
-            proj.timeline[idx] = merged
-            ctx.save(proj, f"~ timeline [{idx}]")
-            return "ok"
-        if name == "remove_timeline_directive":
-            proj = ctx.project()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(proj.timeline)):
-                return f"ERROR: timeline index {idx} out of range"
-            proj.timeline.pop(idx)
-            ctx.save(proj, f"- timeline [{idx}]")
-            return "ok"
-        if name == "update_segment":
-            proj = ctx.project()
-            idx = int(args.get("index", -1))
-            if not (0 <= idx < len(proj.segments)):
-                return (f"ERROR: segment index {idx} out of range "
-                        f"(0..{len(proj.segments) - 1})")
-            patch = args.get("patch") or {}
-            seg = proj.segments[idx]
-            for k in ("label", "prompt", "start", "end"):
-                if k in patch:
-                    setattr(seg, k, patch[k])
-            if "fluid" in patch:
-                seg.fluid = R._deep_merge(seg.fluid or {}, patch["fluid"] or {})
-            ctx.save(proj, f"~ segment [{idx}] '{seg.label}'")
-            return "ok"
-        if name == "set_canvas":
-            proj = ctx.project()
-            d = proj.recipe.to_dict()
-            d["canvas"] = {**d["canvas"], **(args.get("spec") or {})}
-            return _set_recipe(ctx, d, f"canvas -> {d['canvas']['width']}x"
-                                       f"{d['canvas']['height']}")
-        if name == "preview":
-            if ctx.submit_preview is None:
-                return "ERROR: preview is not available in this context"
-            t0 = float(args.get("t0", 0.0))
-            t1 = float(args.get("t1", t0 + 6.0))
-            ctx.preview_job = ctx.submit_preview(t0, t1)
-            return f"ok: preview job {ctx.preview_job} queued for {t0:.1f}-{t1:.1f}s"
+    handler = _TOOL_HANDLERS.get(name)
+    if handler is None:
         return f"ERROR: unknown tool '{name}'"
+    try:
+        return handler(ctx, args or {})
     except Exception as e:                                   # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
@@ -419,6 +489,8 @@ def _expand_dots(patch: dict) -> dict:
 
 
 def _deep_update(dst: dict, patch: dict) -> None:
+    """Merge ``patch`` into ``dst`` in place: nested dicts merge recursively,
+    any other value replaces."""
     for k, v in (patch or {}).items():
         if isinstance(v, dict) and isinstance(dst.get(k), dict):
             _deep_update(dst[k], v)
