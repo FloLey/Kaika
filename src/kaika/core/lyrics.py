@@ -46,6 +46,10 @@ class LyricLine:
 _LRC_TAG = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
 _LRC_META = re.compile(r"^\[(ar|ti|al|by|offset|re|ve|la|length):", re.I)
 _SECTION_MARK = re.compile(r"^[\[\(][^\]\)]{1,40}[\]\)]$")   # "[Chorus]", "(x2)"
+_INLINE_PARENS = re.compile(r"\([^()]*\)")                   # "(ad-lib)" asides
+# Genius pastes carry a suggestion block: this header, then song/artist lines
+# until the next "[Section]" marker.
+_GENIUS_JUNK = re.compile(r"^you might also like$", re.I)
 
 
 def parse_lrc(text: str) -> List[LyricLine]:
@@ -72,12 +76,27 @@ def parse_lrc(text: str) -> List[LyricLine]:
 
 
 def parse_plain(text: str) -> List[str]:
-    """Plain lyrics -> lines, dropping blanks and "[Chorus]"-style markers."""
+    """Plain lyrics -> lines: drops blanks, "[Chorus]"-style markers and
+    Genius "You might also like" suggestion blocks, and strips inline
+    "(ad-lib)" asides — background echoes are noise for both the Whisper
+    alignment and the overlay. Lines left empty by the strip drop."""
     out = []
+    in_junk = False
     for raw in text.splitlines():
         raw = raw.strip()
-        if raw and not _SECTION_MARK.match(raw):
-            out.append(raw)
+        if not raw:
+            continue
+        if _SECTION_MARK.match(raw):
+            in_junk = False
+            continue
+        if _GENIUS_JUNK.match(raw):
+            in_junk = True
+            continue
+        if in_junk:
+            continue
+        line = re.sub(r"\s{2,}", " ", _INLINE_PARENS.sub(" ", raw)).strip()
+        if line:
+            out.append(line)
     return out
 
 
@@ -225,7 +244,7 @@ def align_lyrics_cached(audio_path: str | Path, lyrics_text: str,
     """Alignment memoised on (audio content, lyrics text, model)."""
     key = (f"{audio_cache_key(audio_path)}-"
            f"{hashlib.sha1(lyrics_text.encode()).hexdigest()[:12]}-"
-           f"{model_name}-lyr1")
+           f"{model_name}-lyr2")     # bump on parsing changes
     p = Path(cache_dir) / f"{key}.json" if cache_dir else None
     if p and p.exists():
         d = json.loads(p.read_text())

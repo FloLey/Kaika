@@ -36,6 +36,30 @@ def test_parse_plain_drops_markers():
     assert parse_plain("Hello\n\n[Chorus]\n(x2)\nWorld") == ["Hello", "World"]
 
 
+def test_parse_plain_strips_inline_parens():
+    # Inline ad-libs go; a line that was only ad-libs goes entirely.
+    text = ("Sûrement (Sûrement)\n"
+            "J'ai les yeux qui débordent (De larmes invisibles)\n"
+            "(Pa-ah-ah-arfois-ah-ah-ah-ah-ah-ah-ah)\n"
+            "(Loin-in, des-es, gens-ens-ens-ens)\n"
+            "Et moi j'suis là")
+    assert parse_plain(text) == ["Sûrement",
+                                 "J'ai les yeux qui débordent",
+                                 "Et moi j'suis là"]
+
+
+def test_parse_plain_drops_genius_suggestion_block():
+    # Everything between "You might also like" and the next [Section] is junk.
+    text = ("Sûrement\n"
+            "You might also like\n"
+            "j'me demande\n"
+            "Ambre Jadah\n"
+            "Jeanne (FRA)\n"
+            "[Pont]\n"
+            "Et moi j'suis là")
+    assert parse_plain(text) == ["Sûrement", "Et moi j'suis là"]
+
+
 # ---- alignment ----------------------------------------------------------------
 
 def test_align_accents_and_fuzzy():
