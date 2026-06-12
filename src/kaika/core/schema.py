@@ -7,6 +7,7 @@ card face and the advanced view is one annotation here, not UI code.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import fields, is_dataclass, MISSING
 from typing import get_type_hints, get_origin, get_args
 
@@ -88,6 +89,14 @@ UI: dict = {
     "emitters.*.trigger.window_s": {"tier": "advanced", "min": 0.5, "max": 20.0,
                                     "step": 0.5},
     "emitters.*.placement": {"widget": "pad2d"},
+    "emitters.*.placement.turns": {"tier": "advanced", "min": 0.25, "max": 8.0,
+                                   "step": 0.25},
+    "emitters.*.placement.inner_radius": {"tier": "advanced", "min": 0.0,
+                                          "max": 0.5, "step": 0.01},
+    "emitters.*.placement.start_deg": {"tier": "advanced", "min": 0.0,
+                                       "max": 360.0, "step": 5.0},
+    "emitters.*.placement.sequence": {"tier": "advanced", "min": 0, "max": 64,
+                                      "step": 1},
     "emitters.*.color.hex": {"widget": "color"},
     "emitters.*.color.opacity": {"tier": "advanced", "min": 0.0, "max": 1.0,
                                  "step": 0.05},
@@ -108,6 +117,10 @@ UI: dict = {
 # embedded in the chat copilot's schema context. Wildcards as in UI.
 HELP: dict = {
     "seed": "Same seed = identical video. Change it to reshuffle randomness.",
+    "palettes": "Named lists of hex colors, referenced by emitter colors and "
+        "the background.",
+    "prompts": "Per-section diffusion style prompts; keys are section labels "
+        "plus 'base' (always prepended) and 'default'.",
     "canvas.width": "Output video width in pixels.",
     "canvas.height": "Output video height in pixels.",
     "canvas.fps": "Video framerate; analysis is locked to it frame-for-frame.",
@@ -177,13 +190,24 @@ HELP: dict = {
     "emitters.*.trigger.window_s": "Seconds before the section start during "
         "which the lookahead ramps up.",
     "emitters.*.placement.type": "Where sources appear: fixed points, random "
-        "region, wandering anchor, line, circle, grid, or position driven by "
-        "an audio signal.",
+        "region, wandering anchor, line, circle, spiral, grid, or position "
+        "driven by an audio signal.",
     "emitters.*.placement.jitter": "Random spread around the computed spot.",
     "emitters.*.placement.wander_amp": "How far the anchor orbits its center.",
     "emitters.*.placement.wander_freq": "How fast the anchor orbits.",
-    "emitters.*.placement.radius": "Circle radius (fraction of the canvas).",
+    "emitters.*.placement.radius": "Circle radius / spiral outer radius "
+        "(fraction of the canvas).",
     "emitters.*.placement.arc_deg": "Arc of the circle (360 = full ring).",
+    "emitters.*.placement.inner_radius": "Radius where the spiral starts "
+        "(0 = the exact center).",
+    "emitters.*.placement.turns": "Revolutions of the spiral from center to "
+        "rim.",
+    "emitters.*.placement.start_deg": "Angle of the first point on a circle "
+        "or spiral.",
+    "emitters.*.placement.sequence": "Successive trigger hits advance along "
+        "the shape (line/circle/spiral) instead of spawning the whole shape "
+        "at once: hit k sits at position (k mod N)/N. 0 = off. Perfect for "
+        "rapid onset runs tracing a path.",
     "emitters.*.placement.rows": "Grid rows.",
     "emitters.*.placement.cols": "Grid columns.",
     "emitters.*.placement.source": "Audio signal that drives the position "
@@ -368,3 +392,71 @@ def recipe_schema() -> dict:
                           "emitters.*.color.pitch_map": "reserved (post-v2)",
                           "emitters.*.color.key_relative": "reserved (post-v2)"}
     return schema
+
+
+# ---------------------------------------------------------------------------
+# Chat copilot reference: the schema rendered as compact text, one line per
+# leaf, so the copilot's knowledge regenerates from the same source as the
+# inspector — a new engine field/enum value reaches the model automatically.
+# ---------------------------------------------------------------------------
+
+# Timeline directives and modulator routing live outside the recipe
+# dataclasses, so their grammar is documented here, next to the generator.
+TIMELINE_DOC = """timeline directives (project-level; tools add/update/remove_timeline_directive):
+  anchors: seconds (3.2) | 'section:drop' | 'section:drop+4.5' | 'beat:32' | 'bar:8'
+  spawn (default): {at, emitter?, mag?, count?, placement?, color?, body?} — one-off burst; overrides merge over the emitter's config; no emitter = inline one-shot
+  set: {between: [t0, t1], set: {"dot.path": value, ...}, fade_s?} — override numeric recipe values over a time window (eased in/out)
+  mute / unmute: {at, emitter} — silence/restore an emitter from that moment; pair them to confine an emitter to a section"""
+
+MODULATOR_DOC = ("modulators (audio signal -> numeric recipe leaf, every frame):\n"
+                 "  sources: " + ", ".join(R.SIGNALS) + "\n"
+                 "  modes: absolute | add | scale; curves: linear | smoothstep"
+                 " | pow(k) | step(t); smooth_s low-passes the signal\n"
+                 "  targets: any numeric dot-path under field.*, render.*,"
+                 " emitters.<id>.*")
+
+
+def _leaf_line(path: str, node: dict) -> str:
+    enum = node.get("enum")
+    typ = ("|".join(str(e) for e in enum) if enum
+           else node.get("type", "any"))
+    rng = ""
+    if "minimum" in node or "maximum" in node:
+        rng = f" {node.get('minimum', '')}..{node.get('maximum', '')}"
+    dflt = ""
+    if node.get("default") not in (None, [], {}, ""):
+        dflt = f" (default {json.dumps(node['default'])})"
+    help_ = (node.get("ui") or {}).get("help", "")
+    if help_:
+        first = help_.split(". ")[0].rstrip(".")
+        help_ = f" — {first}."
+    return f"{path}: {typ}{rng}{dflt}{help_}"
+
+
+def chat_reference() -> str:
+    """The whole recipe schema as one compact text block for the copilot's
+    system prompt, plus the timeline/modulator grammar."""
+    lines: list = []
+
+    def walk(node: dict, path: str) -> None:
+        props = node.get("properties")
+        if props is not None:
+            for key, sub in props.items():
+                walk(sub, f"{path}.{key}" if path else key)
+            return
+        ap = node.get("additionalProperties")
+        if isinstance(ap, dict):                # dict-of-X (palettes, prompts)
+            if ap.get("properties"):
+                walk(ap, path + ".<name>")
+            else:                               # plain values: keep it short
+                lines.append(_leaf_line(path + ".<name>",
+                                        {"ui": node.get("ui", {})}))
+            return
+        items = node.get("items")
+        if isinstance(items, dict) and items.get("properties"):
+            walk(items, path + "[]")            # list of objects (emitters...)
+            return
+        lines.append(_leaf_line(path, node))
+
+    walk(recipe_schema(), "")
+    return "\n".join(lines) + "\n\n" + TIMELINE_DOC + "\n\n" + MODULATOR_DOC

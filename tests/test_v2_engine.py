@@ -360,3 +360,72 @@ def test_background_smoothing_state_checkpointed(score, tmp_path):
     store.save(3, sim, [], 0.5, S.structural_hash(rec), bg_state=bg)
     ck = store.nearest(5, S.structural_hash(rec))
     assert np.allclose(ck["bg"], [0.1, 0.2, 0.3])
+
+
+# ---- spiral + sequence placement --------------------------------------------
+
+def test_place_spiral_grows_from_center():
+    p = {"type": "spiral", "center": [0.5, 0.5], "inner_radius": 0.05,
+         "radius": 0.3, "turns": 2.0}
+    pts, center = S._place(p, 9, 0, np.random.default_rng(0), {})
+    assert center == (0.5, 0.5)
+    radii = [np.hypot(x - 0.5, y - 0.5) for x, y in pts]
+    assert all(b > a for a, b in zip(radii, radii[1:]))     # strictly outward
+    assert radii[0] == pytest.approx(0.05, abs=1e-6)
+    assert radii[-1] == pytest.approx(0.3, abs=1e-6)
+    # angles span turns * 2pi (9 points -> pi/2 steps, unwrap-safe)
+    angs = np.unwrap([np.arctan2(y - 0.5, x - 0.5) for x, y in pts])
+    assert angs[-1] - angs[0] == pytest.approx(2 * 2 * np.pi, rel=1e-5)
+
+
+def test_place_sequence_walks_and_wraps():
+    p = {"type": "spiral", "center": [0.5, 0.5], "inner_radius": 0.05,
+         "radius": 0.3, "turns": 2.0, "sequence": 8}
+    radii = []
+    for k in range(9):
+        pts, _ = S._place(p, 1, 0, np.random.default_rng(0), {}, seq_idx=k)
+        radii.append(np.hypot(pts[0][0] - 0.5, pts[0][1] - 0.5))
+    assert all(b > a for a, b in zip(radii[:8], radii[1:8]))
+    assert radii[8] == pytest.approx(radii[0], abs=1e-9)    # wraps to start
+    # deterministic across calls
+    again, _ = S._place(p, 1, 0, np.random.default_rng(0), {}, seq_idx=3)
+    assert np.hypot(again[0][0] - 0.5, again[0][1] - 0.5) == pytest.approx(
+        radii[3], abs=1e-12)
+
+
+def test_place_sequence_on_circle_and_line():
+    circ = {"type": "circle", "center": [0.5, 0.5], "radius": 0.2,
+            "sequence": 4}
+    angs = []
+    for k in range(4):
+        pts, _ = S._place(circ, 1, 0, np.random.default_rng(0), {}, seq_idx=k)
+        angs.append(np.arctan2(pts[0][1] - 0.5, pts[0][0] - 0.5))
+    assert len({round(a, 6) for a in angs}) == 4            # 4 distinct spots
+    line = {"type": "line", "points": [[0.1, 0.5], [0.9, 0.5]], "sequence": 4}
+    xs = [S._place(line, 1, 0, np.random.default_rng(0), {}, seq_idx=k)[0][0][0]
+          for k in range(4)]
+    assert xs == sorted(xs) and xs[0] == pytest.approx(0.1)
+
+
+def test_window_preview_stable_with_spiral_sequence(score, tmp_path):
+    """Sequence placement uses the same window-stable cumulative counter as
+    palette cycling: a window render places hits exactly like the full run."""
+    import imageio.v2 as imageio
+    rec = _rec(emitters=[{
+        "id": "spin", "trigger": {"type": "onset", "band": "low"},
+        "placement": {"type": "spiral", "center": [0.5, 0.5], "radius": 0.35,
+                      "inner_radius": 0.02, "turns": 2.0, "sequence": 6},
+        "direction": {"type": "radial_out"},
+        "color": {"type": "fixed", "hex": "#2255FF"}}])
+    proj = Project.from_score(score, rec, audio="t.wav")
+    n = score.n_frames
+    trees, _ = proj.frame_trees(n, score)
+    store = S.CheckpointStore(tmp_path / "ck")
+    S.simulate(score, rec, tmp_path / "full", max_frames=n, frame_trees=trees,
+               checkpoints=store, save_checkpoints=True)
+    S.simulate(score, rec, tmp_path / "win", max_frames=n, frame_trees=trees,
+               render_range=(48, 60), warmup_frames=8, checkpoints=store,
+               write_velocity=False)
+    a = imageio.imread(tmp_path / "full" / "fluid" / "000054.png").astype(float)
+    b = imageio.imread(tmp_path / "win" / "fluid" / "000006.png").astype(float)
+    assert np.abs(a - b).mean() < 2.0

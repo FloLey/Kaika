@@ -100,3 +100,36 @@ def test_placement_from_to_aliases():
         {"id": "x", "placement": {"type": "line", "from": [0.2, 0.5],
                                   "to": [0.8, 0.5]}}]})
     assert r.emitter("x").placement.points == [[0.2, 0.5], [0.8, 0.5]]
+
+
+def test_spiral_placement_validation():
+    import pytest as _pt
+    ok = {"version": 2, "seed": 1, "emitters": [{
+        "id": "s", "trigger": {"type": "onset", "band": "mid"},
+        "placement": {"type": "spiral", "center": [0.5, 0.5], "radius": 0.3,
+                      "inner_radius": 0.02, "turns": 3.0, "sequence": 8},
+        "direction": {"type": "radial_out"},
+        "color": {"type": "fixed", "hex": "#2255FF"}}]}
+    rec = R.from_dict(ok)
+    assert rec.emitter("s").placement.turns == 3.0
+    d = rec.to_dict()                                   # round-trips
+    assert d["emitters"][0]["placement"]["sequence"] == 8
+    for bad_placement, frag in [
+        ({"type": "spiral", "radius": 0.0}, "radius > 0"),
+        ({"type": "spiral", "radius": 0.2, "turns": 0}, "turns != 0"),
+        ({"type": "circle", "sequence": -1}, "sequence must be >= 0"),
+        ({"type": "wander", "sequence": 4}, "parametric shapes"),
+    ]:
+        spec = {**ok, "emitters": [{**ok["emitters"][0],
+                                    "placement": bad_placement}]}
+        with _pt.raises(ValueError, match="invalid recipe"):
+            R.from_dict(spec)
+
+
+def test_old_recipe_loads_with_new_placement_defaults():
+    rec = R.from_dict({"version": 2, "seed": 1, "emitters": [{
+        "id": "k", "trigger": {"type": "beat"},
+        "placement": {"type": "circle", "radius": 0.2}}]})
+    p = rec.emitter("k").placement
+    assert (p.inner_radius, p.turns, p.start_deg, p.sequence) == (0.0, 2.0,
+                                                                  0.0, 0)

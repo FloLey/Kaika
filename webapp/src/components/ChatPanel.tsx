@@ -59,6 +59,7 @@ export default function ChatPanel({ runId, onProjectChanged, onPreviewJob }: Pro
             setMsgs((m) => [...m, { role: "event", text: "", changes: e.changes }]);
           }
           if (e.preview_job) onPreviewJob(e.preview_job);
+          if (e.render_job) onPreviewJob(e.render_job);
         } else if (e.type === "error") {
           setErr(e.error || "chat failed");
         }

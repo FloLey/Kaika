@@ -137,8 +137,9 @@ class Bloom:
 # ---------------------------------------------------------------------------
 
 TRIGGER_TYPES = ("onset", "beat", "continuous", "lookahead", "manual")
-PLACEMENT_TYPES = ("fixed", "random", "wander", "line", "circle", "grid",
-                   "signal_x", "signal_y")
+PLACEMENT_TYPES = ("fixed", "random", "wander", "line", "circle", "spiral",
+                   "grid", "signal_x", "signal_y")
+SEQUENCE_PLACEMENTS = ("line", "circle", "spiral")   # shapes `sequence` walks
 DIRECTION_TYPES = ("radial_out", "radial_in", "fixed", "random", "flow")
 COLOR_TYPES = ("fixed", "palette", "palette_cycle", "palette_random",
                "chroma_hue", "chroma_palette", "centroid_ramp", "band_mix")
@@ -175,8 +176,14 @@ class Placement:
     wander_amp: float = 0.16        # was WANDER_AMP
     jitter: float = 0.09            # was KICK_JITTER
     wander_freq: float = 1.0
-    radius: float = 0.25            # circle
+    radius: float = 0.25            # circle / spiral outer radius
     arc_deg: float = 360.0
+    inner_radius: float = 0.0       # spiral start radius (0 = exact center)
+    turns: float = 2.0              # spiral revolutions from center to rim
+    start_deg: float = 0.0          # first angle on circle / spiral
+    sequence: int = 0               # >0: successive trigger hits advance along
+                                    # the shape (line/circle/spiral), hit k at
+                                    # parameter (k mod N)/N. 0 = off.
     rows: int = 2                   # grid
     cols: int = 2
     source: str = "rms"             # signal_x / signal_y driver
@@ -708,6 +715,20 @@ def validate(rec: Recipe) -> List[str]:
         if e.placement.type not in PLACEMENT_TYPES:
             errs.append(f"emitter '{e.id}': unknown placement type "
                         f"'{e.placement.type}' {PLACEMENT_TYPES}")
+        if e.placement.type == "spiral":
+            if e.placement.radius <= 0:
+                errs.append(f"emitter '{e.id}': spiral placement needs "
+                            f"radius > 0")
+            if e.placement.turns == 0:
+                errs.append(f"emitter '{e.id}': spiral placement needs "
+                            f"turns != 0")
+        if e.placement.sequence < 0:
+            errs.append(f"emitter '{e.id}': placement.sequence must be >= 0")
+        elif (e.placement.sequence > 0
+              and e.placement.type not in SEQUENCE_PLACEMENTS):
+            errs.append(f"emitter '{e.id}': placement.sequence only works on "
+                        f"parametric shapes {SEQUENCE_PLACEMENTS}, not "
+                        f"'{e.placement.type}'")
         if e.direction.type not in DIRECTION_TYPES:
             errs.append(f"emitter '{e.id}': unknown direction type "
                         f"'{e.direction.type}' {DIRECTION_TYPES}")

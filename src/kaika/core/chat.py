@@ -23,7 +23,7 @@ from . import recipe as R
 from .project import Project, Segment, append_revision
 from .score import Score
 
-MAX_TOOL_TURNS = 12
+MAX_TOOL_TURNS = 16
 
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-4-6",
@@ -103,8 +103,10 @@ class ToolContext:
     run_dir: Path
     score: Score
     submit_preview: Optional[Callable[[float, float], str]] = None
+    submit_render: Optional[Callable[[], str]] = None
     changes: List[str] = field(default_factory=list)
     preview_job: Optional[str] = None
+    render_job: Optional[str] = None
 
     def project(self) -> Project:
         return Project.from_json(self.run_dir / "project.json")
@@ -115,10 +117,11 @@ class ToolContext:
         self.changes.append(note)
 
 
-def _score_summary(score: Score, t0: Optional[float], t1: Optional[float]) -> dict:
+def _score_summary(score: Score, t0: Optional[float], t1: Optional[float],
+                   include_onset_times: bool = False) -> dict:
     lo = t0 if t0 is not None else 0.0
     hi = t1 if t1 is not None else score.audio.duration_s
-    return {
+    out = {
         "duration_s": score.audio.duration_s,
         "tempo_bpm": score.tempo_bpm,
         "fps": score.audio.fps,
@@ -132,6 +135,36 @@ def _score_summary(score: Score, t0: Optional[float], t1: Optional[float]) -> di
         "beats_in_window": [round(b.t, 3) for b in score.beats
                             if lo <= b.t <= hi][:64],
     }
+    if include_onset_times:
+        out["onset_times_in_window"] = {
+            k: [[round(e.t, 3), round(e.mag, 2)]
+                for e in v if lo <= e.t <= hi][:120]
+            for k, v in score.onsets.items()}
+    return out
+
+
+def _set_dot_path(d: dict, path: str, value) -> None:
+    """Set a value at a dot-path (dict keys + integer list indices, e.g.
+    'palettes.main.0'). Raises on paths that do not exist — structural
+    changes belong to patch_recipe."""
+    parts = [p for p in str(path).split(".") if p]
+    if not parts:
+        raise ValueError("empty path")
+    node = d
+    for p in parts[:-1]:
+        if isinstance(node, list):
+            node = node[int(p)]
+        elif isinstance(node, dict) and p in node:
+            node = node[p]
+        else:
+            raise ValueError(f"path '{path}': '{p}' does not exist")
+    last = parts[-1]
+    if isinstance(node, list):
+        node[int(last)] = value
+    elif isinstance(node, dict):
+        node[last] = value      # new dict keys OK (prompts.<label>, ...)
+    else:
+        raise ValueError(f"path '{path}' does not address a container")
 
 
 def _set_recipe(ctx: ToolContext, new_recipe_dict: dict, note: str) -> str:
@@ -152,8 +185,10 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
         if name == "get_project":
             return json.dumps(ctx.project().to_dict())
         if name == "get_score_summary":
+            windowed = args.get("t0") is not None or args.get("t1") is not None
             return json.dumps(_score_summary(ctx.score, args.get("t0"),
-                                             args.get("t1")))
+                                             args.get("t1"),
+                                             include_onset_times=windowed))
         if name == "patch_recipe":
             proj = ctx.project()
             try:
@@ -189,6 +224,77 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> str:
             if len(d["emitters"]) == before:
                 return f"ERROR: no emitter '{eid}'"
             return _set_recipe(ctx, d, f"- emitter '{eid}'")
+        if name == "set_recipe_values":
+            proj = ctx.project()
+            d = proj.recipe.to_dict()
+            values = args.get("values") or {}
+            if not isinstance(values, dict) or not values:
+                return ("ERROR: values must be a non-empty object of "
+                        "{\"dot.path\": value}")
+            try:
+                for path, val in values.items():
+                    _set_dot_path(d, path, val)
+            except (ValueError, IndexError, KeyError, TypeError) as e:
+                return f"PATH ERROR: {e}"
+            shown = ", ".join(list(values)[:4])
+            if len(values) > 4:
+                shown += f" (+{len(values) - 4})"
+            return _set_recipe(ctx, d, f"set {shown}")
+        if name == "update_modulator":
+            proj = ctx.project()
+            d = proj.recipe.to_dict()
+            idx = int(args.get("index", -1))
+            if not (0 <= idx < len(d["modulators"])):
+                return f"ERROR: modulator index {idx} out of range"
+            d["modulators"][idx] = {**d["modulators"][idx],
+                                    **(args.get("patch") or {})}
+            return _set_recipe(ctx, d, f"~ modulator [{idx}]")
+        if name == "set_palette":
+            proj = ctx.project()
+            d = proj.recipe.to_dict()
+            pname = str(args.get("name", "")).strip()
+            colors = args.get("colors") or []
+            if not pname:
+                return "ERROR: palette name required"
+            bad = [c for c in colors
+                   if not (isinstance(c, str)
+                           and re.fullmatch(r"#[0-9a-fA-F]{6}", c))]
+            if not colors or bad:
+                return ("ERROR: colors must be a non-empty list of '#RRGGBB' "
+                        f"hex strings (bad: {bad[:3]})")
+            d.setdefault("palettes", {})[pname] = colors
+            return _set_recipe(ctx, d,
+                               f"palette '{pname}' ({len(colors)} colors)")
+        if name == "add_segment":
+            proj = ctx.project()
+            spec = args.get("spec") or {}
+            try:
+                start, end = float(spec["start"]), float(spec["end"])
+            except (KeyError, TypeError, ValueError):
+                return "ERROR: spec needs numeric start and end (seconds)"
+            if end <= start:
+                return "ERROR: end must be > start"
+            seg = Segment(start=start, end=end,
+                          label=str(spec.get("label", "segment")),
+                          prompt=str(spec.get("prompt", "")),
+                          fluid=spec.get("fluid") or {})
+            proj.segments.append(seg)
+            proj.segments.sort(key=lambda s: s.start)
+            ctx.save(proj, f"+ segment '{seg.label}' {start:.1f}-{end:.1f}s")
+            return "ok"
+        if name == "remove_segment":
+            proj = ctx.project()
+            idx = int(args.get("index", -1))
+            if not (0 <= idx < len(proj.segments)):
+                return f"ERROR: segment index {idx} out of range"
+            seg = proj.segments.pop(idx)
+            ctx.save(proj, f"- segment [{idx}] '{seg.label}'")
+            return "ok"
+        if name == "start_render":
+            if ctx.submit_render is None:
+                return "ERROR: rendering is not available in this context"
+            ctx.render_job = ctx.submit_render()
+            return f"ok: full render job {ctx.render_job} started"
         if name == "add_modulator":
             proj = ctx.project()
             d = proj.recipe.to_dict()
@@ -285,12 +391,23 @@ def tool_definitions() -> List[dict]:
          "input_schema": obj({})},
         {"name": "get_score_summary", "description":
             "Track structure: sections, beats, onset counts — optionally "
-            "limited to a [t0, t1] window (seconds).",
+            "limited to a [t0, t1] window (seconds). Pass t0/t1 to also get "
+            "the exact onset times+magnitudes per band in that window, for "
+            "precise timeline work.",
          "input_schema": obj({"t0": {"type": "number"},
                               "t1": {"type": "number"}})},
+        {"name": "set_recipe_values", "description":
+            "Set one or more recipe values by dot-path (paths exactly as in "
+            "the schema reference, list indices as numbers — e.g. "
+            "{\"field.vorticity\": 20, \"palettes.main.0\": \"#0040FF\", "
+            "\"prompts.drop\": \"...\", \"seed\": 7}). Preferred tool for "
+            "scalar/string edits anywhere in the recipe.",
+         "input_schema": obj({"values": {"type": "object"}}, ["values"])},
         {"name": "patch_recipe", "description":
             "Apply JSON Patch (RFC 6902 add/replace/remove) ops to the recipe "
-            "document. Schema-validated; returns errors verbatim.",
+            "document. Schema-validated; returns errors verbatim. Use for "
+            "STRUCTURAL edits (insert/remove list elements, delete keys); for "
+            "plain value edits prefer set_recipe_values.",
          "input_schema": obj({"ops": {"type": "array", "items": {
              "type": "object", "properties": {
                  "op": {"type": "string", "enum": ["add", "replace", "remove"]},
@@ -311,9 +428,22 @@ def tool_definitions() -> List[dict]:
             "Add a modulator. spec: {source, target, range:[lo,hi], mode:"
             "absolute|add|scale, curve, smooth_s}.",
          "input_schema": obj({"spec": {"type": "object"}}, ["spec"])},
+        {"name": "update_modulator", "description":
+            "Shallow-merge a patch into the modulator at this index (e.g. "
+            "{range: [5, 20]} or {smooth_s: 0.5}).",
+         "input_schema": obj({"index": {"type": "integer"},
+                              "patch": {"type": "object"}},
+                             ["index", "patch"])},
         {"name": "remove_modulator", "description":
             "Remove the modulator at this index.",
          "input_schema": obj({"index": {"type": "integer"}}, ["index"])},
+        {"name": "set_palette", "description":
+            "Create or replace a named palette with a list of '#RRGGBB' hex "
+            "colors.",
+         "input_schema": obj({"name": {"type": "string"},
+                              "colors": {"type": "array",
+                                         "items": {"type": "string"}}},
+                             ["name", "colors"])},
         {"name": "add_timeline_directive", "description":
             "Add a timeline directive. spec: {at: seconds | 'section:drop+4' "
             "| 'beat:32' | 'bar:8', action: spawn|set|mute|unmute, emitter?, "
@@ -334,6 +464,19 @@ def tool_definitions() -> List[dict]:
          "input_schema": obj({"index": {"type": "integer"},
                               "patch": {"type": "object"}},
                              ["index", "patch"])},
+        {"name": "add_segment", "description":
+            "Add a segment. spec: {start, end (seconds), label?, prompt?, "
+            "fluid?: partial config overrides}. Segments stay sorted by "
+            "start.",
+         "input_schema": obj({"spec": {"type": "object"}}, ["spec"])},
+        {"name": "remove_segment", "description":
+            "Remove the segment at this index.",
+         "input_schema": obj({"index": {"type": "integer"}}, ["index"])},
+        {"name": "start_render", "description":
+            "Start the FULL final render of the project (slow, minutes). Only "
+            "when the user explicitly asks to render; for iteration use "
+            "preview instead.",
+         "input_schema": obj({})},
         {"name": "set_canvas", "description":
             "Set output dimensions/fps. spec: {width?, height?, fps?, "
             "sim_resolution?}.",
@@ -346,38 +489,42 @@ def tool_definitions() -> List[dict]:
     ]
 
 
+_PROMPT_RULES = """You are Kaika's studio copilot. You edit a music-driven fluid simulation project ONLY through the provided tools — never invent fields; every editable path is listed in the schema reference below. Coordinates are normalized 0..1 per axis.
+
+How to work:
+- Scalar/string edits anywhere: set_recipe_values with the dot-paths from the reference. Structural list edits: patch_recipe. Emitters/modulators/palettes/segments/timeline have dedicated tools.
+- If a tool returns a VALIDATION ERROR or PATH ERROR, read it, fix your input and retry.
+- Time precision: get_score_summary(t0, t1) returns the exact onset times per band in that window — use it before anchoring timeline work.
+- After visible changes call preview(t0, t1) around the affected moment so the user sees the result. Only start_render when the user explicitly asks for the final render.
+- Ask (in text) rather than guess when a request is genuinely ambiguous.
+
+Common intents:
+- Confine an effect to a moment: a timeline `set` window {between, set, fade_s}, or a mute/unmute pair around a section for an emitter.
+- A run of hits tracing a shape (spiral, ring, sweep): give the emitter a parametric placement (line/circle/spiral) with placement.sequence = N — successive trigger hits advance along the shape (hit k at position (k mod N)/N). direction radial_out makes matter flow outward from the shape's center.
+- React to the music continuously: a modulator (signal -> numeric path); for hit-like reactions use emitter triggers instead.
+- One-off accent at an instant: timeline spawn with overrides; recurring behavior: an emitter."""
+
+
 def system_prompt(ctx: ToolContext) -> str:
     proj = ctx.project()
-    return (
-        "You are Kaika's studio copilot. You edit a music-driven fluid "
-        "simulation project ONLY through the provided tools — never invent "
-        "fields. The recipe schema: canvas (width/height/fps/sim_resolution), "
-        "field (dissipation, vorticity, ambient...), render (exposure, bloom, "
-        "background), palettes (named hex lists), emitters (trigger: onset "
-        "low/mid/high | beat every N | continuous | lookahead | manual; "
-        "placement: fixed/random/wander/line/circle/grid/signal_x/signal_y; "
-        "direction: radial_out/radial_in/fixed/random/flow; color: fixed/"
-        "palette/palette_cycle/palette_random/chroma_hue/chroma_palette/"
-        "centroid_ramp/band_mix; body: radius/force/lifetime_s/emit/drift/"
-        "speed/...), "
-        "modulators (source signal -> target dot-path, range, mode absolute/"
-        "add/scale), timeline directives (at: seconds or anchors "
-        "'section:drop+4', 'beat:32'; actions spawn/set/mute/unmute). "
-        "Coordinates are normalized 0..1. If a tool returns a VALIDATION "
-        "ERROR, fix your input and retry. After visible changes call "
-        "preview(t0, t1) around the affected time so the user sees the "
-        "result. Ask (in text) rather than guess when a request is ambiguous."
-        "\n\nCurrent project summary: "
-        + json.dumps({
-            "recipe_name": proj.recipe.name,
-            "canvas": proj.recipe.to_dict()["canvas"],
-            "emitters": [e.id for e in proj.recipe.emitters],
-            "modulators": [f"{m.source}->{m.target}" for m in proj.recipe.modulators],
-            "n_segments": len(proj.segments),
-            "timeline": proj.timeline,
-            "score": _score_summary(ctx.score, None, None),
-        })
-    )
+    timeline = proj.timeline[:40]
+    state = {
+        "recipe": proj.recipe.to_dict(),
+        "timeline": timeline,
+        "segments": [{"index": i, "label": s.label, "start": s.start,
+                      "end": s.end, "prompt": s.prompt}
+                     for i, s in enumerate(proj.segments)],
+        "score": _score_summary(ctx.score, None, None),
+    }
+    if len(proj.timeline) > 40:
+        state["timeline_truncated"] = (f"{len(proj.timeline) - 40} more — "
+                                       "use get_project")
+    from .schema import chat_reference
+    return (_PROMPT_RULES
+            + "\n\n# Recipe schema reference (every editable path)\n"
+            + chat_reference()
+            + "\n\n# Current project state\n"
+            + json.dumps(state, separators=(",", ":")))
 
 
 # ---------------------------------------------------------------------------
@@ -571,4 +718,5 @@ def run_chat_turn(ctx: ToolContext, backend: LLMBackend,
             messages.append({"role": "tool", "tool_call_id": tc["id"],
                              "name": tc["name"], "content": result})
     return {"text": final_text, "changes": ctx.changes,
-            "preview_job": ctx.preview_job, "history": messages}
+            "preview_job": ctx.preview_job, "render_job": ctx.render_job,
+            "history": messages}

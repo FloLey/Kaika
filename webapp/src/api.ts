@@ -59,7 +59,8 @@ export interface Settings {
 export interface ChatEvent {
   type: "text" | "tool_call" | "tool_result" | "done" | "error";
   text?: string; name?: string; input?: any; result?: string;
-  changes?: string[]; preview_job?: string | null; error?: string;
+  changes?: string[]; preview_job?: string | null;
+  render_job?: string | null; error?: string;
 }
 
 async function j<T>(r: Response): Promise<T> {

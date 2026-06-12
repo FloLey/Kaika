@@ -441,8 +441,15 @@ def create_app(runs_root: str | Path = "runs",
                                                     progress=progress),
                 run_id=run_id, kind="fluid_window")
 
+        def submit_render() -> str:
+            # Same job as POST /generate: run_diffuse rebuilds missing/draft
+            # fluid itself.
+            return jm.submit(lambda progress: run_diffuse(rd, progress=progress),
+                             run_id=run_id, kind="diffuse")
+
         ctx = C.ToolContext(run_dir=rd, score=score,
-                            submit_preview=submit_preview)
+                            submit_preview=submit_preview,
+                            submit_render=submit_render)
 
         def stream():
             import queue as q
@@ -455,7 +462,8 @@ def create_app(runs_root: str | Path = "runs",
                                           on_event=events.put)
                     chat_path.write_text(json.dumps(out["history"]))
                     events.put({"type": "done", "changes": out["changes"],
-                                "preview_job": out["preview_job"]})
+                                "preview_job": out["preview_job"],
+                                "render_job": out.get("render_job")})
                 except Exception as e:                       # noqa: BLE001
                     events.put({"type": "error",
                                 "error": f"{type(e).__name__}: {e}"})

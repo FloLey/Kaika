@@ -758,12 +758,19 @@ def build_trigger_index(score: Score, recipe: Recipe, n_frames: int,
 # ---------------------------------------------------------------------------
 
 def _place(p: dict, count: int, frame_i: int, rng: np.random.Generator,
-           signals: Dict[str, float]) -> Tuple[List[Tuple[float, float]],
-                                               Tuple[float, float]]:
+           signals: Dict[str, float],
+           seq_idx: int = 0) -> Tuple[List[Tuple[float, float]],
+                                      Tuple[float, float]]:
     """Positions for ``count`` sources + the reference center (for radial
-    directions). All coordinates normalized 0..1 per axis."""
+    directions). All coordinates normalized 0..1 per axis.
+
+    ``seq_idx`` is the emitter's cumulative trigger index (the window-stable
+    counter palette cycling uses): with ``placement.sequence = N > 0`` on a
+    parametric shape (line/circle/spiral), hit k lands at parameter
+    (k mod N)/N along the shape instead of spreading ``count`` points."""
     typ = p.get("type", "random")
     jitter = float(p.get("jitter", 0.0))
+    seq = int(p.get("sequence", 0))
     pts: List[Tuple[float, float]] = []
     center = (0.5, 0.5)
 
@@ -794,7 +801,12 @@ def _place(p: dict, count: int, frame_i: int, rng: np.random.Generator,
     elif typ == "line":
         base = p.get("points") or [[0.25, 0.5], [0.75, 0.5]]
         a, b = np.array(base[0], float), np.array(base[1], float)
-        ws = [0.5] if count == 1 else list(np.linspace(0.0, 1.0, count))
+        if seq > 0:
+            ws = [(seq_idx % seq) / seq] * count
+        elif count == 1:
+            ws = [0.5]
+        else:
+            ws = list(np.linspace(0.0, 1.0, count))
         for wgt in ws:
             xy = a + (b - a) * wgt
             pts.append((float(xy[0]), float(xy[1])))
@@ -803,12 +815,39 @@ def _place(p: dict, count: int, frame_i: int, rng: np.random.Generator,
         c = p.get("center", [0.5, 0.5])
         rad = float(p.get("radius", 0.25))
         arc = np.deg2rad(float(p.get("arc_deg", 360.0)))
-        n = max(1, count)
-        angles = (np.arange(n) / n * arc if arc >= 2 * np.pi - 1e-6
-                  else np.linspace(0, arc, n))
+        start = np.deg2rad(float(p.get("start_deg", 0.0)))
+        if seq > 0:
+            angles = np.full(count, start + (seq_idx % seq) / seq * arc)
+        else:
+            n = max(1, count)
+            angles = start + (np.arange(n) / n * arc
+                              if arc >= 2 * np.pi - 1e-6
+                              else np.linspace(0, arc, n))
         for a in angles:
             pts.append((float(c[0] + rad * np.cos(a)),
                         float(c[1] + rad * np.sin(a))))
+        center = (float(c[0]), float(c[1]))
+    elif typ == "spiral":
+        # Archimedean: angle and radius both grow linearly with the
+        # parameter u, from (start_deg, inner_radius) to the rim after
+        # ``turns`` revolutions. radial_out from the returned center gives
+        # the outward flow.
+        c = p.get("center", [0.5, 0.5])
+        rad = float(p.get("radius", 0.25))
+        inner = float(p.get("inner_radius", 0.0))
+        turns = float(p.get("turns", 2.0))
+        start = np.deg2rad(float(p.get("start_deg", 0.0)))
+        if seq > 0:
+            us = [(seq_idx % seq) / seq] * count
+        elif count == 1:
+            us = [0.0]
+        else:
+            us = list(np.linspace(0.0, 1.0, count))
+        for u in us:
+            a = start + u * turns * 2 * np.pi
+            r = inner + (rad - inner) * u
+            pts.append((float(c[0] + r * np.cos(a)),
+                        float(c[1] + r * np.sin(a))))
         center = (float(c[0]), float(c[1]))
     elif typ == "grid":
         rows = max(1, int(p.get("rows", 2)))
@@ -1278,18 +1317,21 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
                     ecfg = _inline_emitter(sp.overrides)
                     count = int(sp.overrides.get("count", 1))
                     salt = 0xBEEF
-                rng = _event_rng(seed + salt, max(sp.emitter_i, 0), i, sp.k)
-                pts, center = _place(ecfg.get("placement", {}), max(1, count), i,
-                                     rng, frame_signals)
-                body = ecfg.get("body", {})
-                mag_gain = float(body.get("mag_gain", 1.0))
-                mag = 0.5 + sp.mag * mag_gain
+                # Cumulative trigger index (window-stable): drives palette
+                # cycling AND sequence placement, so both see the same
+                # ordinal whether rendering the full track or a window.
                 if sp.emitter_i >= 0:
                     seen = cycle_seen.get(sp.emitter_i, 0)
                     cycle_idx = cycle_base[sp.emitter_i] + seen
                     cycle_seen[sp.emitter_i] = seen + 1
                 else:
                     cycle_idx = 0
+                rng = _event_rng(seed + salt, max(sp.emitter_i, 0), i, sp.k)
+                pts, center = _place(ecfg.get("placement", {}), max(1, count), i,
+                                     rng, frame_signals, seq_idx=cycle_idx)
+                body = ecfg.get("body", {})
+                mag_gain = float(body.get("mag_gain", 1.0))
+                mag = 0.5 + sp.mag * mag_gain
                 color = color_engine.resolve(ecfg.get("color", {}), i, cycle_idx, rng)
                 for pos in pts:
                     ang = _direction(ecfg.get("direction", {}), pos, center, rng, sim)
