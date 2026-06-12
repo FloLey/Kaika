@@ -1328,8 +1328,17 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     bloom_auto_sigma = max(1.0, min(grid_h, grid_w) / 48)
     dt = 1.0
     stats = {"kinetic_energy": [], "total_density": []}
-    emitters_d = [copy.deepcopy(recipe.to_dict()["emitters"][i])
-                  for i in range(n_emitters)]
+    # to_dict() (asdict) returns fresh structures, so no defensive copy needed.
+    rec_d = recipe.to_dict()
+    emitters_d = rec_d["emitters"][:n_emitters]
+    # Template for frames without a per-frame tree; built once, never mutated —
+    # each frame works on its own deep copy (the modulation engine mutates the
+    # tree in place).
+    default_tree = {
+        "field": base_field,
+        "render": rec_d["render"],
+        "emitters": {e["id"]: e for e in emitters_d},
+    }
     seed = int(recipe.seed)
 
     ckpt_every = max(1, int(CHECKPOINT_EVERY_S * fps))
@@ -1345,11 +1354,8 @@ def simulate(score: Score, recipe: Recipe, out_dir: str | Path,
     text_mask_cache: Dict[tuple, object] = {}   # (text, height, center) -> mask
     try:
         for step_i, i in enumerate(range(sim_start, sim_end)):
-            tree = copy.deepcopy(frame_trees[i]) if frame_trees is not None else {
-                "field": copy.deepcopy(base_field),
-                "render": json.loads(json.dumps(recipe.to_dict()["render"])),
-                "emitters": {e["id"]: copy.deepcopy(e) for e in emitters_d},
-            }
+            tree = copy.deepcopy(
+                frame_trees[i] if frame_trees is not None else default_tree)
             mod_engine.apply(tree, i)
             fld = tree["field"]
             rnd = tree["render"]
