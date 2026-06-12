@@ -35,10 +35,11 @@ class JobDB:
         self._conn.commit()
 
     def create(self, job_id: str, kind: str, run_id: str) -> None:
-        # The `recipe` column is historical: it stores the job *kind*.
+        # The `recipe` column is historical: it stores the job *kind*. The
+        # unused `audio` column stays in the schema for existing databases.
         with self._lock:
             self._conn.execute(
-                "INSERT OR REPLACE INTO jobs(id, status, recipe, audio, created) "
+                "INSERT OR REPLACE INTO jobs(id, status, recipe, run_id, created) "
                 "VALUES (?,?,?,?,?)",
                 (job_id, "queued", kind, run_id, time.time()))
             self._conn.commit()
