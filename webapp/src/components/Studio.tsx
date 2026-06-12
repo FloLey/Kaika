@@ -13,6 +13,7 @@ import ChatPanel from "./ChatPanel";
 import SuggestionsPanel from "./SuggestionsPanel";
 import SegmentRail from "./SegmentRail";
 import ContextPanel, { ContextMode } from "./ContextPanel";
+import HelpLink from "./HelpLink";
 import { FormCtx } from "./SchemaForm";
 
 interface Props {
@@ -32,7 +33,6 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const [project, setProject] = useState<ProjectDoc | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [signals, setSignals] = useState<Signals | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(false);
@@ -45,7 +45,37 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   const [livePreview, setLivePreview] = useState(true);
   const [lyricsText, setLyricsText] = useState("");
   const [contextMode, setContextMode] = useState<ContextMode>("assist");
-  const audioRef = useRef<HTMLAudioElement>(null);
+  // Draggable column widths (rail | center | context), persisted.
+  const [railW, setRailW] = useState(
+    () => +(localStorage.getItem("kaika.railW") || 340));
+  const [ctxW, setCtxW] = useState(
+    () => +(localStorage.getItem("kaika.ctxW") || 420));
+  const startResize = (which: "rail" | "ctx") => (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = which === "rail" ? railW : ctxW;
+    const set = which === "rail" ? setRailW : setCtxW;
+    const lo = which === "rail" ? 200 : 300;
+    const hi = which === "rail" ? 640 : 760;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - x0;
+      const w = Math.max(lo, Math.min(hi,
+        which === "rail" ? w0 + dx : w0 - dx));   // ctx handle drags inward
+      set(w);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+      localStorage.setItem(which === "rail" ? "kaika.railW" : "kaika.ctxW",
+        String(which === "rail" ? railRef.current : ctxRef.current));
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const railRef = useRef(railW); railRef.current = railW;
+  const ctxRef = useRef(ctxW); ctxRef.current = ctxW;
   const saveTimer = useRef<number | undefined>(undefined);
   const playheadRef = useRef(0);
   playheadRef.current = playhead;
@@ -65,7 +95,6 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     setRunId(p.run_id);
     setProject(p.project);
     if (p.analysis) setAnalysis(p.analysis);
-    setAudioUrl(p.audio_url ?? null);
     setWarnings(p.manifest?.warnings ?? []);
     setLyricsStatus(p.manifest?.lyrics?.status ?? null);
     api.signals(p.run_id).then(setSignals).catch(() => {});
@@ -106,12 +135,15 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     if (runId) kickPreview(runId);
   }, [runId]);                                          // eslint-disable-line
 
+  // Playhead follows the playing preview video (its audio is the one source).
+  const previewStartRef = useRef(0);
+  previewStartRef.current = previewStart;
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
     const tick = () => {
-      const a = audioRef.current;
-      if (a) setPlayhead(a.currentTime);
+      const v = previewVideoRef.current;
+      if (v) setPlayhead(previewStartRef.current + v.currentTime);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -258,19 +290,25 @@ export default function Studio({ initialRunId, onPreview }: Props) {
     setPreviewJob(job_id);
   };
 
+  // Single audio source: the preview video. Play/pause drives it; its
+  // onPlay/onPause events keep `playing` in sync.
   const togglePlay = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (a.paused) {
-      previewVideoRef.current?.pause();   // one transport at a time
-      a.play(); setPlaying(true);
-    } else { a.pause(); setPlaying(false); }
+    const v = previewVideoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {}); else v.pause();
   };
   const seek = (t: number) => {
-    const a = audioRef.current;
-    if (a) a.currentTime = t;
     setPlayhead(t);
-    if (runId) kickPreview(runId);
+    const v = previewVideoRef.current;
+    const dur = v && !isNaN(v.duration) ? v.duration : WINDOW_S;
+    if (v && t >= previewStartRef.current
+          && t <= previewStartRef.current + dur) {
+      // Inside the rendered window: scrub the video to the exact instant —
+      // playhead and frame stay locked, no re-render needed.
+      v.currentTime = t - previewStartRef.current;
+    } else if (runId) {
+      kickPreview(runId);              // outside: re-render the window around t
+    }
   };
 
   const moveBoundary = (b: number, t: number) => {
@@ -344,7 +382,10 @@ export default function Studio({ initialRunId, onPreview }: Props) {
   );
 
   return (
-    <div className="studio3">
+    <div className="studio3" style={project ? {
+      gridTemplateColumns:
+        `${railW}px 7px minmax(360px, 1fr) 7px ${ctxW}px`,
+    } : undefined}>
       {!project && (
         <div className="studio-main full">
           <div className={`drop ${hover ? "hover" : ""}`}
@@ -352,7 +393,8 @@ export default function Studio({ initialRunId, onPreview }: Props) {
             onDragLeave={() => setHover(false)}
             onDrop={(e) => { e.preventDefault(); setHover(false);
               const f = e.dataTransfer.files[0]; if (f) upload(f); }}>
-            <p style={{ fontSize: 18, marginBottom: 10 }}>Drop an audio file here</p>
+            <p style={{ fontSize: 18, marginBottom: 10 }}>
+              Drop an audio file here <HelpLink anchor="demarrage" /></p>
             <p className="muted">analysis splits it into editable segments</p>
             <label className="btn ghost" style={{ display: "inline-block",
               width: "auto", marginTop: 12 }}>
@@ -397,6 +439,9 @@ export default function Studio({ initialRunId, onPreview }: Props) {
               onPreviewFull={previewFull} onGenerate={generate} />
           </aside>
 
+          <div className="col-resizer" onPointerDown={startResize("rail")}
+            title="drag to resize" />
+
           <div className="studio-main">
             {lyricsStatus === "pending" && (
               <div className="muted mono" style={{ marginBottom: 8 }}>
@@ -412,15 +457,12 @@ export default function Studio({ initialRunId, onPreview }: Props) {
               windowStart={previewStart}
               onJobDone={() => { setPreviewJob(null);
                 setPreviewStart(pendingStart.current);
+                // the fresh clip starts at its frame 0 = the window start
+                setPlayhead(pendingStart.current);
                 setPreviewVersion((v) => v + 1); }}
               onHq={hqWindow}
-              onTime={(t) => { if (!playing) setPlayhead(t); }}
-              onPlaying={(pl) => {
-                if (pl) {            // preview takes the transport
-                  const a = audioRef.current;
-                  if (a && !a.paused) { a.pause(); setPlaying(false); }
-                }
-              }}
+              onTime={(t) => setPlayhead(t)}     // playhead always tracks the video
+              onPlaying={setPlaying}
               registerVideo={(el) => { previewVideoRef.current = el; }} />
 
             {(project.ui_pins?.length ?? 0) > 0 && (
@@ -445,11 +487,8 @@ export default function Studio({ initialRunId, onPreview }: Props) {
                     {analysis.tempo_bpm.toFixed(0)} BPM ·{" "}
                     {project.segments.length} segments
                   </span>
+                  <HelpLink anchor="waveform" />
                 </div>
-                {audioUrl && (
-                  <audio ref={audioRef} src={audioUrl}
-                    onEnded={() => setPlaying(false)} />
-                )}
                 <Waveform
                   waveform={analysis.waveform}
                   duration={analysis.duration_s}
@@ -482,6 +521,9 @@ export default function Studio({ initialRunId, onPreview }: Props) {
             )}
             {err && <p className="err">{err}</p>}
           </div>
+
+          <div className="col-resizer" onPointerDown={startResize("ctx")}
+            title="drag to resize" />
 
           <aside className="studio-side">
             <ContextPanel mode={contextMode} onMode={setContextMode}
