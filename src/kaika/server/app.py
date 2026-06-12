@@ -17,7 +17,7 @@ from typing import Optional
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import (FileResponse, JSONResponse, HTMLResponse,
+from fastapi.responses import (FileResponse, HTMLResponse,
                                Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel

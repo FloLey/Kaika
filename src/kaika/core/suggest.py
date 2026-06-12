@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import copy
 import json
-from dataclasses import asdict
 from typing import List, Optional, Tuple
 
 from . import recipe as R
 from .project import Project
 from .score import Score
 from .schema import chat_reference
-from . import chat as C
 
 
 # ---------------------------------------------------------------------------

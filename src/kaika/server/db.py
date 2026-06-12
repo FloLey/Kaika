@@ -34,12 +34,13 @@ class JobDB:
         self._conn.executescript(SCHEMA)
         self._conn.commit()
 
-    def create(self, job_id: str, recipe: str, audio: str) -> None:
+    def create(self, job_id: str, kind: str, run_id: str) -> None:
+        # The `recipe` column is historical: it stores the job *kind*.
         with self._lock:
             self._conn.execute(
                 "INSERT OR REPLACE INTO jobs(id, status, recipe, audio, created) "
                 "VALUES (?,?,?,?,?)",
-                (job_id, "queued", recipe, audio, time.time()))
+                (job_id, "queued", kind, run_id, time.time()))
             self._conn.commit()
 
     def update(self, job_id: str, **fields) -> None:
