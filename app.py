@@ -333,21 +333,23 @@ def segment_route():
     if original is None:
         return jsonify({"error": "unknown job_id"}), 404
 
+    # All demucs stems feed the LLM's per-bar audio summary.
+    stems = {}
+    for k in ("vocals", "drums", "bass", "other"):
+        p = stem_audio_path(job_id, k)
+        if p is not None:
+            stems[k] = str(p)
+
     lyr = lyrics_path(job_id)
     lyrics_text = None
+    if lyr is not None:
+        text = lyr.read_text(errors="replace")
+        # .lrc carries [mm:ss] tags — reduce to plain lines for alignment.
+        lyrics_text = ("\n".join(l.text for l in seg.parse_lrc(text))
+                       if lyr.suffix == ".lrc" else text)
+
     try:
-        if lyr is not None and lyr.suffix == ".lrc":
-            # .lrc is already timestamped — parse directly, skip Whisper.
-            lines = seg.parse_lrc(lyr.read_text(errors="replace"))
-            lyric_lines = [{"t0": l.t0, "t1": l.t1, "text": l.text,
-                            "aligned": True} for l in lines]
-            result = _segments_from_lyric_lines(
-                str(original), str(vocals) if vocals else None, lyric_lines)
-        else:
-            if lyr is not None:
-                lyrics_text = lyr.read_text(errors="replace")
-            result = seg.propose_segments(
-                str(original), str(vocals) if vocals else None, lyrics_text)
+        result = seg.propose_segments(str(original), stems, lyrics_text)
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
@@ -369,33 +371,6 @@ def _finalize_proposal(job_id: str, result: dict) -> dict:
     }))
     db.save_segments(job_id, result["segments"], step="review")
     return result
-
-
-def _segments_from_lyric_lines(original, vocals, lyric_lines):
-    """Build a /segment response from pre-timestamped (.lrc) lyric lines,
-    reusing the same boundary/labelling/vocal-activity machinery."""
-    y, sr = seg.load_audio(original)
-    duration = float(len(y) / sr)
-    S = np.abs(librosa.stft(y, n_fft=seg.N_FFT, hop_length=seg.HOP))
-    rms = seg._normalise(librosa.feature.rms(S=S)[0])
-    env, env_times, _ = seg.vocal_activity(vocals or original)
-
-    cluster_t = seg._cluster_boundaries(y, sr, S, rms, duration)
-    primary = seg._gap_boundaries(lyric_lines, duration)
-    bound_t = seg._merge_boundaries(cluster_t, primary, duration)
-    bound_t[0], bound_t[-1] = 0.0, duration
-    energies = []
-    for a, b in zip(bound_t, bound_t[1:]):
-        f0 = int(a * sr / seg.HOP)
-        f1 = max(f0 + 1, int(b * sr / seg.HOP))
-        s = rms[f0:min(f1, len(rms))]
-        energies.append(float(np.mean(s)) if len(s) else 0.0)
-    segments = seg._label_sections(bound_t, duration, energies, lyric_lines)
-    return {"segments": segments,
-            "vocal_envelope": [round(v, 4) for v in env],
-            "envelope_times": [round(t, 3) for t in env_times],
-            "duration": round(duration, 3),
-            "lyric_lines": lyric_lines}
 
 
 # --------------------------------------------------------------------------- #

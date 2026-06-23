@@ -26,6 +26,8 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import librosa
 
+import llm
+
 N_FFT = 2048
 HOP = 512
 GAP_S = 4.0           # an instrumental gap this long (s) is a section break
@@ -186,12 +188,11 @@ def transcribe_words(audio_path: str | Path,
 # --------------------------------------------------------------------------- #
 # Alignment
 # --------------------------------------------------------------------------- #
-def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
-                ) -> List[LyricLine]:
-    """Monotonically align lyric LINES to a transcribed word stream. difflib's
-    matching blocks are monotonic, so a repeated chorus lands on its own
-    occurrence. Lines with < 40% matched tokens are interpolated; leading /
-    trailing unmatched lines are dropped."""
+def _resolve_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
+                   ) -> List[Optional[LyricLine]]:
+    """Per-ORIGINAL-line alignment: returns a slot per input line (a LyricLine,
+    incl. interpolated ones, or None). difflib's matching blocks are monotonic,
+    so a repeated chorus lands on its own occurrence."""
     ref_tok: List[str] = []
     ref_line: List[int] = []
     for li, line in enumerate(lines):
@@ -237,7 +238,7 @@ def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
 
     aligned_idx = [i for i, l in enumerate(res) if l is not None]
     if not aligned_idx:
-        return []
+        return res
     for a, b in zip(aligned_idx, aligned_idx[1:]):
         gap = list(range(a + 1, b))
         if not gap:
@@ -248,7 +249,14 @@ def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
             t0 = lo + step * (j + 1)
             res[li] = LyricLine(t0, min(t0 + max(step, 1.0), hi),
                                 lines[li], aligned=False)
+    return res
 
+
+def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
+                ) -> List[LyricLine]:
+    """Aligned lyric lines (Nones dropped) with readable display timings — used
+    for the review overlay / `lyric_lines`."""
+    res = _resolve_lines(lines, words)
     final = [l for l in res if l is not None]
     for i, l in enumerate(final):
         nxt = final[i + 1].t0 if i + 1 < len(final) else None
@@ -407,19 +415,129 @@ def vocal_activity(vocals_path: str | Path, fps: int = 20,
 
 
 # --------------------------------------------------------------------------- #
+# Beat / bar grid + per-bar audio summary (for the LLM)
+# --------------------------------------------------------------------------- #
+def _beat_grid(y, sr):
+    """Beat times, a 4/4 downbeat grid, and tempo. Downbeat phase = the
+    ``beats[k::4]`` (k in 0..3) with the strongest onset energy."""
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+    beats = librosa.frames_to_time(beat_frames, sr=sr)
+    if len(beats) < 4:
+        return beats, beats, float(np.atleast_1d(tempo)[0])
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+
+    def strength(t):
+        f = int(round(t * sr / 512))
+        return float(onset_env[min(len(onset_env) - 1, max(0, f))])
+    best_k = max(range(4), key=lambda k: sum(strength(t) for t in beats[k::4]))
+    return beats, beats[best_k::4], float(np.atleast_1d(tempo)[0])
+
+
+def _snap(t, downbeats, beats, window=1.5):
+    """Nearest downbeat within ``window`` s, else nearest beat within window/2."""
+    cand = [d for d in downbeats if abs(d - t) <= window]
+    if cand:
+        return float(min(cand, key=lambda d: abs(d - t)))
+    cand = [b for b in beats if abs(b - t) <= window * 0.5]
+    if cand:
+        return float(min(cand, key=lambda b: abs(b - t)))
+    return float(t)
+
+
+def _snap_bounds(bound_t, downbeats, beats, duration):
+    snapped = [0.0]
+    for t in bound_t[1:-1]:
+        s = _snap(t, downbeats, beats)
+        if 0 < s < duration and all(abs(s - k) >= 1.0 for k in snapped):
+            snapped.append(s)
+    snapped.append(duration)
+    return sorted(set(snapped))
+
+
+def _bar_mean(env, sr, hop, t0, t1):
+    f0 = int(t0 * sr / hop)
+    f1 = max(f0 + 1, int(t1 * sr / hop))
+    seg = env[f0:min(f1, len(env))]
+    return float(np.mean(seg)) if len(seg) else 0.0
+
+
+def build_bars(downbeats, duration, stem_paths, mix_y, sr):
+    """One row per bar with full-mix + per-stem energy, onset rate, lyric slot."""
+    edges = list(downbeats) + [duration]
+    hop = 512
+    mix_env = _normalise(librosa.feature.rms(y=mix_y, hop_length=hop)[0])
+    stem_envs = {}
+    for key in ("vocals", "drums", "bass", "other"):
+        p = stem_paths.get(key)
+        if p:
+            ys, srs = load_audio(p)
+            stem_envs[key] = (_normalise(librosa.feature.rms(y=ys, hop_length=hop)[0]), srs)
+    onsets = librosa.onset.onset_detect(y=mix_y, sr=sr, units="time")
+    bars = []
+    for i in range(len(downbeats)):
+        t0, t1 = edges[i], edges[i + 1]
+        row = {"bar": i, "time": round(float(t0), 1),
+               "rms": round(_bar_mean(mix_env, sr, hop, t0, t1), 2)}
+        for key, lab in (("vocals", "vox"), ("drums", "drums"),
+                         ("bass", "bass"), ("other", "other")):
+            if key in stem_envs:
+                e, srs = stem_envs[key]
+                row[lab] = round(_bar_mean(e, srs, hop, t0, t1), 2)
+            else:
+                row[lab] = 0.0
+        row["onset"] = round(sum(1 for o in onsets if t0 <= o < t1) / max(0.1, t1 - t0), 2)
+        row["lyric"] = ""
+        bars.append(row)
+    return bars
+
+
+def _attach_lyrics(bars, downbeats, duration, res_lines):
+    """Append each aligned line's text to the bar it starts in."""
+    edges = list(downbeats) + [duration]
+    for ln in res_lines:
+        if ln is None:
+            continue
+        for i in range(len(bars)):
+            if edges[i] <= ln.t0 < edges[i + 1]:
+                bars[i]["lyric"] = (bars[i]["lyric"] + " " + ln.text).strip()
+                break
+
+
+def _sections_from_bars(secs, downbeats, duration):
+    """LLM sections [{label,start_bar}] -> [{start,end,label}] on downbeat times."""
+    out = []
+    for j, s in enumerate(secs):
+        start = 0.0 if j == 0 else float(downbeats[s["start_bar"]])
+        end = (float(downbeats[secs[j + 1]["start_bar"]])
+               if j + 1 < len(secs) else duration)
+        if end - start < 0.5:
+            continue
+        out.append({"start": round(start, 3), "end": round(min(end, duration), 3),
+                    "label": s["label"]})
+    if out:
+        out[0]["start"] = 0.0
+        out[-1]["end"] = round(duration, 3)
+    return out
+
+
+# --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
 def propose_segments(audio_path: str | Path,
-                     vocals_path: Optional[str | Path] = None,
+                     stems: Optional[dict] = None,
                      lyrics_text: Optional[str] = None,
                      model_name: str = "small", fps: int = 20) -> dict:
     """Propose musical segments for a track.
 
-    ``audio_path`` is the full mix (drives clustering); ``vocals_path`` is the
-    demucs vocals stem (drives vocal activity + Whisper). Returns a dict with
-    ``segments``, ``vocal_envelope``, ``envelope_times``, ``duration`` and the
-    aligned ``lyric_lines``.
+    ``audio_path`` is the full mix; ``stems`` is ``{vocals,drums,bass,other:
+    path}`` (per-stem energy feeds the LLM; vocals drives Whisper + activity).
+    Primary path: a local LLM reads a per-bar audio+lyrics table and returns the
+    section structure on the bar grid. Falls back to heuristics if the LLM is
+    unavailable. Returns ``segments``, ``vocal_envelope``, ``envelope_times``,
+    ``duration``, ``lyric_lines``.
     """
+    stems = stems or {}
+    vocals_path = stems.get("vocals")
     y, sr = load_audio(audio_path)
     duration = float(len(y) / sr)
     S = np.abs(librosa.stft(y, n_fft=N_FFT, hop_length=HOP))
@@ -428,34 +546,56 @@ def propose_segments(audio_path: str | Path,
     voice_src = str(vocals_path) if vocals_path else str(audio_path)
     env, env_times, voiced = vocal_activity(voice_src, fps=fps)
 
+    # Whisper alignment: per-line times (for bars) + display lines.
+    res_lines: List[Optional[LyricLine]] = []
     lyric_lines: List[dict] = []
     if lyrics_text and lyrics_text.strip():
         try:
             words = transcribe_words(voice_src, model_name)
-            aligned = align_lines(parse_plain(lyrics_text), words)
+            lines = parse_plain(lyrics_text)
+            res_lines = _resolve_lines(lines, words)
+            disp = align_lines(lines, words)
             lyric_lines = [{"t0": l.t0, "t1": l.t1, "text": l.text,
-                            "aligned": l.aligned} for l in aligned]
+                            "aligned": l.aligned} for l in disp]
         except Exception:
-            lyric_lines = []        # fall back to the vocal-activity path
+            res_lines, lyric_lines = [], []
 
-    cluster_t = _cluster_boundaries(y, sr, S, rms, duration)
-    if lyric_lines:
-        primary = _gap_boundaries(lyric_lines, duration)
-    else:
-        primary = _gap_boundaries([{"t0": a, "t1": b} for a, b in voiced],
-                                  duration)
-    bound_t = _merge_boundaries(cluster_t, primary, duration)
-    bound_t[0], bound_t[-1] = 0.0, duration
+    # --- primary: LLM on a per-bar audio+lyrics table ---
+    segments = None
+    try:
+        beats, downbeats, _tempo = _beat_grid(y, sr)
+        if len(downbeats) >= 2:
+            bars = build_bars(downbeats, duration, stems, y, sr)
+            if res_lines:
+                _attach_lyrics(bars, downbeats, duration, res_lines)
+            secs = llm.structure_sections(bars)
+            segments = _sections_from_bars(secs, downbeats, duration)
+    except Exception as e:  # noqa: BLE001
+        print(f"segment: LLM structuring failed ({e}); using heuristic")
+        segments = None
 
-    energies = []
-    for a, b in zip(bound_t, bound_t[1:]):
-        f0 = int(a * sr / HOP)
-        f1 = max(f0 + 1, int(b * sr / HOP))
-        seg = rms[f0:min(f1, len(rms))]
-        energies.append(float(np.mean(seg)) if len(seg) else 0.0)
+    # --- fallback: heuristic boundaries, beat-snapped ---
+    if not segments:
+        cluster_t = _cluster_boundaries(y, sr, S, rms, duration)
+        primary = (_gap_boundaries(lyric_lines, duration) if lyric_lines
+                   else _gap_boundaries([{"t0": a, "t1": b} for a, b in voiced],
+                                        duration))
+        bound_t = _merge_boundaries(cluster_t, primary, duration, min_gap=3.0)
+        try:
+            beats, downbeats, _t = _beat_grid(y, sr)
+            bound_t = _snap_bounds(bound_t, downbeats, beats, duration)
+        except Exception:  # noqa: BLE001
+            pass
+        bound_t[0], bound_t[-1] = 0.0, duration
+        energies = []
+        for a, b in zip(bound_t, bound_t[1:]):
+            f0 = int(a * sr / HOP)
+            f1 = max(f0 + 1, int(b * sr / HOP))
+            seg = rms[f0:min(f1, len(rms))]
+            energies.append(float(np.mean(seg)) if len(seg) else 0.0)
+        segments = _label_sections(bound_t, duration, energies,
+                                   lyric_lines or None)
 
-    segments = _label_sections(bound_t, duration, energies,
-                               lyric_lines or None)
     return {
         "segments": segments,
         "vocal_envelope": [round(v, 4) for v in env],
@@ -474,7 +614,12 @@ if __name__ == "__main__":
     audio = sys.argv[1]
     vocals = sys.argv[2] if len(sys.argv) > 2 else None
     lyrics = Path(sys.argv[3]).read_text() if len(sys.argv) > 3 else None
-    out = propose_segments(audio, vocals, lyrics)
+    stems = {}
+    if vocals:                       # infer sibling stems next to vocals.wav
+        d = Path(vocals).parent
+        stems = {k: str(d / f"{k}.wav") for k in ("vocals", "drums", "bass", "other")
+                 if (d / f"{k}.wav").exists()}
+    out = propose_segments(audio, stems, lyrics)
     out_print = {k: v for k, v in out.items()
                  if k not in ("vocal_envelope", "envelope_times")}
     out_print["envelope_len"] = len(out["vocal_envelope"])

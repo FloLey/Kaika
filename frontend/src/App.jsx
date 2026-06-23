@@ -30,6 +30,7 @@ export default function App() {
   const [railOpen, setRailOpen] = useState(true);
   const [playing, setPlaying] = useState(() => new Set());
   const [allPlaying, setAllPlaying] = useState(false);
+  const [loop, setLoop] = useState(false);
   const audioEls = useRef(new Map());
   const refAudio = useRef(null);   // clean full-mix reference for "play all"
   const lastSaved = useRef("");
@@ -38,6 +39,7 @@ export default function App() {
     () => segments.find((s) => s.id === activeSegId) || null,
     [segments, activeSegId]
   );
+  const winStart = activeSeg ? activeSeg.start : 0;
   const winEnd = activeSeg ? activeSeg.end : duration;
 
   // ---- autosave (debounced) -------------------------------------------------
@@ -83,10 +85,19 @@ export default function App() {
     audioEls.current.forEach((el) => el.pause());   // stop any solo band
     if (!ref.paused) { ref.pause(); return; }
     const start = activeSeg ? activeSeg.start : 0;
-    if (isFinite(ref.duration) && (ref.currentTime < start || ref.currentTime >= winEnd - 0.02)) {
-      ref.currentTime = start;
+    const begin = () => {
+      if (isFinite(ref.duration) && (ref.currentTime < start || ref.currentTime >= winEnd - 0.02)) {
+        ref.currentTime = start;
+      }
+      ref.play().catch(() => {});
+    };
+    // The full mix is a compressed file; on the first play it may not be buffered
+    // yet (the WAV stems are). Wait for it to be playable instead of starting silent.
+    if (ref.readyState >= 2) begin();
+    else {
+      ref.addEventListener("canplay", begin, { once: true });
+      ref.load();
     }
-    ref.play().catch(() => {});
   }, [activeSeg, winEnd]);
 
   function selectSegment(id) {
@@ -268,14 +279,18 @@ export default function App() {
             <audio
               ref={refAudio}
               src={job ? `/audio/${job}/original` : ""}
-              preload="metadata"
+              preload="auto"
               onPlay={() => setAllPlaying(true)}
               onPause={() => setAllPlaying(false)}
               onEnded={() => setAllPlaying(false)}
               onTimeUpdate={(e) => {
                 if (e.target.currentTime >= winEnd) {
-                  e.target.pause();
-                  e.target.currentTime = winEnd;
+                  if (loop) {
+                    e.target.currentTime = winStart;   // restart the segment
+                  } else {
+                    e.target.pause();
+                    e.target.currentTime = winEnd;
+                  }
                 }
               }}
             />
@@ -288,6 +303,10 @@ export default function App() {
                 <button className="btn on" onClick={playAll}>
                   {allPlaying ? "❚❚ pause" : "▶ play segment"}
                 </button>
+                <label className="loop-toggle" title="Loop the segment">
+                  <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                  loop
+                </label>
               </div>
             </div>
             {activeSeg && STEM_META.filter((m) => stems[m.key]).map((stem) => {

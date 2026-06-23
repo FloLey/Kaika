@@ -2,14 +2,19 @@
 // [start, end]; each segment owns a list of *signals* (a stem + frequency band
 // + shaping -> a drawable curve that drives the simulation).
 
-export const LABELS = ["intro", "verse", "chorus", "build", "drop", "outro"];
+export const LABELS = [
+  "intro", "verse", "pre-chorus", "chorus", "bridge", "build", "drop", "break", "outro",
+];
 
 export const LABEL_COLOR = {
   intro: "#60A5FA",
   verse: "#34D399",
+  "pre-chorus": "#22D3EE",
   chorus: "#FBBF24",
+  bridge: "#F472B6",
   build: "#C084FC",
   drop: "#F87171",
+  break: "#A3A3A3",
   outro: "#94A3B8",
 };
 

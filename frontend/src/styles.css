@@ -459,6 +459,11 @@ header {
 .seg-chip-top { display: flex; align-items: center; gap: 8px; }
 .seg-chip .seg-name { font-size: 12px; letter-spacing: 1px; color: var(--c); }
 .seg-chip-range { color: var(--muted); font-size: 11px; }
+.loop-toggle {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  color: var(--muted); font-size: 12px;
+}
+.loop-toggle input { accent-color: #4d92f6; cursor: pointer; }
 .studio-main { min-width: 0; }
 .studio-main .results-head { margin-top: 0; }
 
