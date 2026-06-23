@@ -1,0 +1,10 @@
+flask
+demucs
+torchcodec
+librosa
+matplotlib
+numpy
+mlx-whisper; platform_system == "Darwin" and platform_machine == "arm64"
+faster-whisper
+yt-dlp
+psycopg[binary]

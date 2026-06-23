@@ -1,11 +1,12 @@
 .venv/
+data/
 __pycache__/
 *.pyc
-*.egg-info/
-runs/
-.pytest_cache/
-node_modules/
-webapp/dist/
 .DS_Store
-*.tsbuildinfo
-.kaika/
+
+frontend/node_modules/
+frontend/dist/
+static/
+
+# Env
+.env

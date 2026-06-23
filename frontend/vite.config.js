@@ -1,0 +1,19 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+// `npm run dev` serves the UI on :5173 and proxies API calls to Flask (:5000).
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: {
+      "/upload": "http://127.0.0.1:5000",
+      "/segment": "http://127.0.0.1:5000",
+      "/extract": "http://127.0.0.1:5000",
+      "/fluid": "http://127.0.0.1:5000",
+      "/projects": "http://127.0.0.1:5000",
+      "/audio": "http://127.0.0.1:5000",
+      "/spectrogram": "http://127.0.0.1:5000",
+    },
+  },
+});

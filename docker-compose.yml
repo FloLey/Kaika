@@ -1,22 +1,24 @@
+# Dev: Docker runs ONLY Postgres. The app (Flask + Vite) runs natively so it can
+# use the Apple-Silicon GPU (MPS) — Metal is not reachable from a Linux
+# container. Start it with `docker compose up -d db` (or `make dev`).
+name: demucs_studio   # pin project name so the Postgres volume is stable across folders
 services:
-  kaika:
-    build:
-      context: .
-      args:
-        GPU: "1"              # "0" for a slimmer CPU-only image
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: demucs
+      POSTGRES_PASSWORD: demucs
+      POSTGRES_DB: demucs
     ports:
-      - "8400:8400"
+      - "5432:5432"
     volumes:
-      # runs/, uploads and settings (LLM keys) persist here
-      - ./data:/data
-    # Hand the NVIDIA GPU to the container (needs nvidia-container-toolkit).
-    # On a machine without one, remove this block — the app falls back to CPU
-    # automatically anyway when CUDA isn't reachable.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demucs -d demucs"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
+
+volumes:
+  pgdata:
