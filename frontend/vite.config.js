@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -9,11 +10,17 @@ export default defineConfig({
     proxy: {
       "/upload": "http://127.0.0.1:5000",
       "/segment": "http://127.0.0.1:5000",
+      "/jobs": "http://127.0.0.1:5000",
       "/extract": "http://127.0.0.1:5000",
       "/fluid": "http://127.0.0.1:5000",
       "/projects": "http://127.0.0.1:5000",
       "/audio": "http://127.0.0.1:5000",
       "/spectrogram": "http://127.0.0.1:5000",
     },
+  },
+  // `npm run test` — unit tests for the pure logic (no DOM needed).
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.js"],
   },
 });

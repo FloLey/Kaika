@@ -106,35 +106,85 @@ function serializeSignals(signals) {
   );
 }
 
-// Defaults on a fresh segment: energy + onset on every track, plus bar & beat
-// phase ONCE on the full mix (they're track-independent).
-const PER_TRACK = ["energy", "onset"];
-const ON_FULLMIX = ["bar", "beat"];
+// Default signals seeded on a fresh segment. Every track gets full-band
+// energy + onset + chroma; the full mix also gets bar & beat phase
+// (track-independent).
+// Drums and bass additionally get the bands where their key elements live, so
+// you get kick / snare / hats and sub / low drivers out of the box. Each entry
+// is {feature, label, minHz?, maxHz?, ...shaping} — omit the band for the full
+// range. Bands are rough starting points; drag the spectrogram handles to refine.
+//
+// Each band ships in BOTH flavors: `energy` (band loudness — frequency selective,
+// so kick/snare/hats follow their own element) and `onset` (a spike per hit).
+// They read differently: a drum hit is a broadband transient, so the onset bands
+// tend to fire together, while the energy bands separate the elements.
+const FULL_BAND = [
+  { feature: "energy", label: "energy" },
+  { feature: "onset", label: "onset" },
+  { feature: "chroma", label: "chroma" },
+];
+// energy + onset variants of one band, named "<label> energy" / "<label> onset".
+const both = (label, minHz, maxHz, release) => [
+  { feature: "energy", label: `${label} energy`, minHz, maxHz, release },
+  { feature: "onset", label: `${label} onset`, minHz, maxHz },
+];
+const STEM_DEFAULTS = {
+  original: [
+    ...FULL_BAND,
+    { feature: "bar", label: "bar phase" },
+    { feature: "beat", label: "beat phase" },
+  ],
+  vocals: FULL_BAND,
+  drums: [
+    ...FULL_BAND,
+    ...both("kick", 40, 120, 120),
+    ...both("snare", 150, 800, 120),
+    ...both("hats", 6000, 16000, 90),
+  ],
+  bass: [
+    ...FULL_BAND,
+    ...both("sub", 30, 80),
+    ...both("low", 80, 250),
+  ],
+  other: FULL_BAND,
+};
+
+// Shaping fields a default entry may override on top of SIGNAL_DEFAULTS.
+const DEFAULT_SHAPE_KEYS = ["attack", "release", "gamma", "gain", "offset", "threshold", "invert"];
+
+function defaultName(meta, def) {
+  if (def.feature === "bar") return "bar phase";
+  if (def.feature === "beat") return "beat phase";
+  return `${meta.name.toLowerCase()} ${def.label}`;
+}
 
 export function defaultSignals(stems) {
   const out = [];
   for (const m of STEM_META) {
     if (!stems || !stems[m.key]) continue;
-    const feats = m.key === "original" ? [...PER_TRACK, ...ON_FULLMIX] : PER_TRACK;
-    for (const f of feats) {
-      const name = f === "bar" ? "bar phase"
-        : f === "beat" ? "beat phase"
-        : `${m.name.toLowerCase()} ${f}`;
-      const sig = seedSignal(stems, name, m.key);
-      sig.feature = f;
+    const nyq = Math.round((stems[m.key].sr || 44100) / 2);
+    for (const def of STEM_DEFAULTS[m.key] || []) {
+      const sig = seedSignal(stems, defaultName(m, def), m.key);
+      sig.feature = def.feature;
+      if (def.minHz != null) sig.minHz = Math.min(def.minHz, nyq);
+      if (def.maxHz != null) sig.maxHz = Math.min(def.maxHz, nyq);
+      for (const k of DEFAULT_SHAPE_KEYS) if (def[k] != null) sig[k] = def[k];
       out.push(sig);
     }
   }
   return out;
 }
 
-// Add any default (stem, feature) signals that aren't already present, keeping
-// the user's existing/custom signals — so existing projects gain the defaults.
+// Identity of a default signal: stem + feature + band. Including the band lets a
+// stem carry several defaults on the same feature (e.g. drums kick/snare/hats).
+const defaultKey = (s) =>
+  `${s.stemKey}|${s.feature}|${Math.round(s.minHz)}|${Math.round(s.maxHz)}`;
+
+// Add any default signals that aren't already present, keeping the user's
+// existing/custom signals — so existing projects gain the new defaults.
 function withDefaults(existing, stems) {
-  const have = new Set(existing.map((s) => s.stemKey + "|" + s.feature));
-  const missing = defaultSignals(stems).filter(
-    (d) => !have.has(d.stemKey + "|" + d.feature)
-  );
+  const have = new Set(existing.map(defaultKey));
+  const missing = defaultSignals(stems).filter((d) => !have.has(defaultKey(d)));
   return [...existing, ...missing];
 }
 

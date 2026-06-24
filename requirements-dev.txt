@@ -1,0 +1,5 @@
+# Dev-only tooling (linting + tests). Install with:
+#   .venv/bin/python -m pip install -r requirements-dev.txt
+# Then: ruff check .   and   python -m pytest
+ruff
+pytest

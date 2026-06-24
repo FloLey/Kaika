@@ -3,8 +3,9 @@ import Spectrogram from "./Spectrogram.jsx";
 import CurveView from "./CurveView.jsx";
 import PulsePad from "./PulsePad.jsx";
 import Info from "./Info.jsx";
+import Ctl from "./Ctl.jsx";
 import { engine } from "../audio.js";
-import { fmtTime } from "../mel.js";
+import { fmtTime, fmtHz, clamp } from "../mel.js";
 import { stemColor } from "../segments.js";
 import { extractSignal } from "../api.js";
 
@@ -49,20 +50,6 @@ const HELP = {
     "+ fast release = the sidechain pump (drops on the kick, swells between).",
 };
 
-function Ctl({ label, value, min, max, step, onChange, fmt, help }) {
-  return (
-    <label className="ctl">
-      <span className="ctl-label">{label}</span>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-      <span className="ctl-val">{fmt ? fmt(value) : value}</span>
-      {help && <Info text={help} />}
-    </label>
-  );
-}
-
 // One signal: a stem + frequency band (drawn on the spectrogram) shaped into a
 // curve. Re-extracts (debounced) whenever the band/segment/shaping change.
 export default function SignalCard({
@@ -79,8 +66,17 @@ export default function SignalCard({
 
   const info = stems[signal.stemKey] || {};
   const sr = info.sr || 44100;
+  const nyq = Math.round(sr / 2);
   const color = stemColor(signal.stemKey);
   const winLen = Math.max(0.001, segEnd - segStart);
+  // beat/bar are tempo-locked phases — the frequency band has no effect.
+  const bandIgnored = signal.feature === "beat" || signal.feature === "bar";
+
+  // Type a band edge directly; clamp to [0, Nyquist] and keep min <= max.
+  const setBandMin = (v) =>
+    patch({ minHz: Math.min(clamp(parseFloat(v) || 0, 0, nyq), signal.maxHz) });
+  const setBandMax = (v) =>
+    patch({ maxHz: Math.max(clamp(parseFloat(v) || 0, 0, nyq), signal.minHz) });
 
   const specTrack = {
     specUrl: info.spectrogram,
@@ -164,6 +160,13 @@ export default function SignalCard({
     if (isFinite(el.duration)) el.currentTime = segStart + f * winLen;
   }
 
+  // Click-to-seek on the curve: move whichever clock drives the curve's playhead
+  // (the shared full-mix during "play segment", otherwise this card's own audio).
+  function seekCurve(f) {
+    const el = (groupPlaying ? groupClock : audioRef).current;
+    if (el && isFinite(el.duration)) el.currentTime = segStart + f * winLen;
+  }
+
   return (
     <div className={"signal" + (collapsed ? " collapsed" : "")} style={{ "--accent": color }}>
       <div className="signal-head">
@@ -191,7 +194,12 @@ export default function SignalCard({
             <option key={f.key} value={f.key}>{f.label}</option>
           ))}
         </select>
-        <Info text={FEATURE_HELP[signal.feature] || HELP.signal} />
+        <Info text={FEATURE_HELP[signal.feature] || HELP.signal} section="studio-features" />
+        {collapsed && (
+          <span className="band-chip" title="Frequency band">
+            {bandIgnored ? "band n/a" : `${fmtHz(signal.minHz)}–${fmtHz(signal.maxHz)}`}
+          </span>
+        )}
         {!collapsed && (
           <span className="time">{fmtTime(frac * winLen)} / {fmtTime(winLen)}</span>
         )}
@@ -199,7 +207,8 @@ export default function SignalCard({
           <>
             <div className="curve-mini">
               <CurveView curve={curve} color={color} loading={loading}
-                         audioRef={padClock} segStart={segStart} winLen={winLen} playing={padPlaying} />
+                         audioRef={padClock} segStart={segStart} winLen={winLen} playing={padPlaying}
+                         onSeek={seekCurve} />
             </div>
             <div className="pulse-mini">
               <PulsePad audioRef={padClock} curve={curve} segStart={segStart}
@@ -212,8 +221,24 @@ export default function SignalCard({
 
       {!collapsed && (
         <>
+          <div className="band-edit">
+            <span className="ctl-label">band</span>
+            <input
+              type="number" className="hz-input" value={Math.round(signal.minHz)}
+              min={0} max={nyq} step={10} disabled={bandIgnored}
+              onChange={(e) => setBandMin(e.target.value)}
+            />
+            <span className="hz-dash">–</span>
+            <input
+              type="number" className="hz-input" value={Math.round(signal.maxHz)}
+              min={0} max={nyq} step={10} disabled={bandIgnored}
+              onChange={(e) => setBandMax(e.target.value)}
+            />
+            <span className="hz-unit">Hz</span>
+            {bandIgnored && <span className="hz-note">band ignored for {signal.feature} phase</span>}
+          </div>
           <div className="signal-body">
-            <div className={"signal-graphs" + (signal.feature === "beat" || signal.feature === "bar" ? " band-ignored" : "")}>
+            <div className={"signal-graphs" + (bandIgnored ? " band-ignored" : "")}>
               <Spectrogram
                 track={specTrack}
                 frac={frac}
@@ -224,7 +249,8 @@ export default function SignalCard({
                 duration={duration}
               />
               <CurveView curve={curve} color={color} loading={loading}
-                     audioRef={padClock} segStart={segStart} winLen={winLen} playing={padPlaying} />
+                     audioRef={padClock} segStart={segStart} winLen={winLen} playing={padPlaying}
+                     onSeek={seekCurve} />
             </div>
             <PulsePad
               audioRef={padClock}
@@ -256,7 +282,7 @@ export default function SignalCard({
               >
                 invert {signal.invert ? "on" : "off"}
               </button>
-              <Info text={HELP.invert} />
+              <Info text={HELP.invert} section="studio-shaping" />
             </div>
           </div>
         </>

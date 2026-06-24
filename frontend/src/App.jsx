@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProjectList from "./components/ProjectList.jsx";
 import FluidLab from "./components/FluidLab.jsx";
 import UploadStep from "./components/UploadStep.jsx";
 import ReviewStep from "./components/ReviewStep.jsx";
-import SegmentRail from "./components/SegmentRail.jsx";
+import Studio from "./components/Studio.jsx";
 import Processing from "./components/Processing.jsx";
-import SignalCard from "./components/SignalCard.jsx";
-import { engine } from "./audio.js";
-import { hydrateSegments, serializeSegments, seedSignal, STEM_META } from "./segments.js";
+import { hydrateSegments, serializeSegments } from "./segments.js";
 import * as api from "./api.js";
 
 export default function App() {
@@ -15,6 +13,7 @@ export default function App() {
   const [step, setStep] = useState("projects");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState(false);
 
   const [job, setJob] = useState(null);
   const [title, setTitle] = useState("");
@@ -26,21 +25,7 @@ export default function App() {
   const [vocalEnvelope, setVocalEnvelope] = useState([]);
   const [envelopeTimes, setEnvelopeTimes] = useState([]);
   const [activeSegId, setActiveSegId] = useState(null);
-
-  const [railOpen, setRailOpen] = useState(true);
-  const [playing, setPlaying] = useState(() => new Set());
-  const [allPlaying, setAllPlaying] = useState(false);
-  const [loop, setLoop] = useState(false);
-  const audioEls = useRef(new Map());
-  const refAudio = useRef(null);   // clean full-mix reference for "play all"
   const lastSaved = useRef("");
-
-  const activeSeg = useMemo(
-    () => segments.find((s) => s.id === activeSegId) || null,
-    [segments, activeSegId]
-  );
-  const winStart = activeSeg ? activeSeg.start : 0;
-  const winEnd = activeSeg ? activeSeg.end : duration;
 
   // ---- autosave (debounced) -------------------------------------------------
   useEffect(() => {
@@ -50,63 +35,16 @@ export default function App() {
     if (jsonStr === lastSaved.current) return;
     const t = setTimeout(() => {
       api.saveProject(job, payload)
-        .then(() => { lastSaved.current = jsonStr; })
-        .catch(() => {});
+        .then(() => { lastSaved.current = jsonStr; setSaveError(false); })
+        .catch((e) => {
+          // lastSaved stays stale, so the next edit retries automatically; we
+          // just flag it so the user knows the latest change isn't persisted.
+          console.warn("autosave failed:", e?.message || e);
+          setSaveError(true);
+        });
     }, 800);
     return () => clearTimeout(t);
   }, [segments, step, job]);
-
-  const registerAudio = useCallback((id, el) => {
-    if (el) audioEls.current.set(id, el);
-    else audioEls.current.delete(id);
-  }, []);
-
-  const onPlayingChange = useCallback((id, isPlaying) => {
-    setPlaying((prev) => {
-      const next = new Set(prev);
-      if (isPlaying) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
-  // Solo: playing one signal pauses the others.
-  const handleSolo = useCallback((id) => {
-    audioEls.current.forEach((el, k) => { if (k !== id) el.pause(); });
-  }, []);
-
-  // Play the whole segment once: ONE audio element (the original full mix) is
-  // the clock + the sound. Every pulse pad reads this same clock (see SignalCard
-  // groupClock), so all pulses animate together with no duplicate/overlapping
-  // audio. Toggles play/pause of that single element.
-  const playAll = useCallback(() => {
-    const ref = refAudio.current;
-    if (!ref) return;
-    audioEls.current.forEach((el) => el.pause());   // stop any solo band
-    if (!ref.paused) { ref.pause(); return; }
-    const start = activeSeg ? activeSeg.start : 0;
-    const begin = () => {
-      if (isFinite(ref.duration) && (ref.currentTime < start || ref.currentTime >= winEnd - 0.02)) {
-        ref.currentTime = start;
-      }
-      ref.play().catch(() => {});
-    };
-    // The full mix is a compressed file; on the first play it may not be buffered
-    // yet (the WAV stems are). Wait for it to be playable instead of starting silent.
-    if (ref.readyState >= 2) begin();
-    else {
-      ref.addEventListener("canplay", begin, { once: true });
-      ref.load();
-    }
-  }, [activeSeg, winEnd]);
-
-  function selectSegment(id) {
-    audioEls.current.forEach((el) => el.pause());
-    if (refAudio.current) refAudio.current.pause();
-    setPlaying(new Set());
-    setAllPlaying(false);
-    setActiveSegId(id);
-  }
 
   // ---- new track: upload + propose -----------------------------------------
   async function handleUpload({ file, youtubeUrl, lyrics, lyricsFile }) {
@@ -119,7 +57,11 @@ export default function App() {
       else if (youtubeUrl) fd.append("youtube_url", youtubeUrl);
       if (lyricsFile) fd.append("lyrics_file", lyricsFile);
       else if (lyrics && lyrics.trim()) fd.append("lyrics", lyrics);
-      const data = await api.uploadSong(fd);
+
+      // Both stages run in the background now; kick them off and poll for the
+      // result, feeding each phase's label into the Processing screen.
+      const { job_id } = await api.uploadSong(fd);
+      const data = await api.pollJob(job_id, setStatus);
 
       setJob(data.job_id);
       setTitle(data.title || "");
@@ -127,8 +69,8 @@ export default function App() {
       setStems(data.stems);
       setOriginalSpec(data.stems.original?.spectrogram || "");
 
-      setStatus("analysing structure (lyrics + vocal activity)…");
-      const segData = await api.segmentJob(data.job_id);
+      await api.segmentJob(job_id);
+      const segData = await api.pollJob(job_id, setStatus);
       setVocalEnvelope(segData.vocal_envelope || []);
       setEnvelopeTimes(segData.envelope_times || []);
       if (segData.duration) setDuration(segData.duration);
@@ -172,44 +114,14 @@ export default function App() {
     }
   }
 
-  // ---- per-segment signal edits --------------------------------------------
-  const editActiveSignals = useCallback((fn) => {
-    setSegments((prev) =>
-      prev.map((s) => (s.id === activeSegId ? { ...s, signals: fn(s.signals) } : s))
-    );
-  }, [activeSegId]);
-
-  const updateSignal = useCallback((id, p) => {
-    editActiveSignals((sigs) => sigs.map((s) => (s.id === id ? { ...s, ...p } : s)));
-  }, [editActiveSignals]);
-
-  const addSignal = useCallback((stemKey) => {
-    editActiveSignals((sigs) => {
-      const meta = STEM_META.find((m) => m.key === stemKey);
-      const n = sigs.filter((s) => s.stemKey === stemKey).length + 1;
-      const name = `${(meta?.name || stemKey).toLowerCase()} ${n}`;
-      return [...sigs, seedSignal(stems, name, stemKey)];
-    });
-  }, [editActiveSignals, stems]);
-
-  const removeSignal = useCallback((id) => {
-    engine.remove(id);
-    audioEls.current.delete(id);
-    editActiveSignals((sigs) => sigs.filter((s) => s.id !== id));
-  }, [editActiveSignals]);
-
   function validateSplit() {
     if (segments.length) setActiveSegId(segments[0].id);
     setStep("studio");
   }
 
   function toProjects() {
-    engine.reset();
-    audioEls.current.clear();
     setSegments([]);
     setActiveSegId(null);
-    setPlaying(new Set());
-    setAllPlaying(false);
     setJob(null);
     setError("");
     lastSaved.current = "";
@@ -223,9 +135,20 @@ export default function App() {
           <h1>DEMUCS.STUDIO</h1>
           <span className="sub">{title || "segment · isolate · extract signals"}</span>
         </div>
-        {(step === "review" || step === "studio" || step === "upload") && (
-          <button className="btn" onClick={toProjects}>↩ projects</button>
-        )}
+        <div className="header-actions">
+          {saveError && (step === "review" || step === "studio") && (
+            <span className="save-warn" title="The latest change hasn't been saved — it will retry on your next edit.">
+              ⚠ save failed
+            </span>
+          )}
+          {(step === "review" || step === "studio" || step === "upload") && (
+            <button className="btn" onClick={toProjects}>↩ projects</button>
+          )}
+          <a className="help-link"
+             href={`/?doc=${step === "upload" || step === "review" || step === "studio" ? step : ""}`}
+             target="_blank" rel="noopener noreferrer"
+             title="User guide" aria-label="User guide">?</a>
+        </div>
       </header>
 
       {step === "projects" && (
@@ -262,89 +185,16 @@ export default function App() {
       )}
 
       {step === "studio" && (
-        <div className={"studio" + (railOpen ? "" : " rail-collapsed")}>
-          {railOpen ? (
-            <SegmentRail
-              segments={segments}
-              activeSegId={activeSegId}
-              onSelect={selectSegment}
-              onCollapse={() => setRailOpen(false)}
-            />
-          ) : (
-            <button className="rail-reopen" title="Show segments" onClick={() => setRailOpen(true)}>
-              ☰
-            </button>
-          )}
-          <div className="studio-main">
-            <audio
-              ref={refAudio}
-              src={job ? `/audio/${job}/original` : ""}
-              preload="auto"
-              onPlay={() => setAllPlaying(true)}
-              onPause={() => setAllPlaying(false)}
-              onEnded={() => setAllPlaying(false)}
-              onTimeUpdate={(e) => {
-                if (e.target.currentTime >= winEnd) {
-                  if (loop) {
-                    e.target.currentTime = winStart;   // restart the segment
-                  } else {
-                    e.target.pause();
-                    e.target.currentTime = winEnd;
-                  }
-                }
-              }}
-            />
-            <div className="results-head">
-              <span className="section-title">
-                {activeSeg ? activeSeg.label.toUpperCase() : "SEGMENT"} · EXTRACT SIGNALS BY TRACK
-              </span>
-              <div className="controls">
-                <button className="btn sm" onClick={() => setStep("review")}>↩ edit split</button>
-                <button className="btn on" onClick={playAll}>
-                  {allPlaying ? "❚❚ pause" : "▶ play segment"}
-                </button>
-                <label className="loop-toggle" title="Loop the segment">
-                  <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
-                  loop
-                </label>
-              </div>
-            </div>
-            {activeSeg && STEM_META.filter((m) => stems[m.key]).map((stem) => {
-              const sigs = activeSeg.signals.filter((s) => s.stemKey === stem.key);
-              return (
-                <div className="track-group" key={stem.key} style={{ "--accent": stem.color }}>
-                  <div className="track-group-head">
-                    <span className="track-name"><span className="dot" />{stem.name}</span>
-                    <button className="btn sm" onClick={() => addSignal(stem.key)}>+ add band</button>
-                  </div>
-                  {sigs.length === 0 && (
-                    <div className="track-empty">no signals — add a frequency band to extract one</div>
-                  )}
-                  <div className="signals">
-                    {sigs.map((sg) => (
-                      <SignalCard
-                        key={sg.id}
-                        signal={sg}
-                        stems={stems}
-                        segStart={activeSeg.start}
-                        segEnd={activeSeg.end}
-                        duration={duration}
-                        jobId={job}
-                        onChange={updateSignal}
-                        onRemove={removeSignal}
-                        registerAudio={registerAudio}
-                        onSolo={handleSolo}
-                        onPlayingChange={onPlayingChange}
-                        groupClock={refAudio}
-                        groupPlaying={allPlaying}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <Studio
+          segments={segments}
+          setSegments={setSegments}
+          activeSegId={activeSegId}
+          setActiveSegId={setActiveSegId}
+          stems={stems}
+          duration={duration}
+          job={job}
+          onEditSplit={() => setStep("review")}
+        />
       )}
     </div>
   );

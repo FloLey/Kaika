@@ -14,19 +14,41 @@ through the same :func:`shape` pipeline. Pure + model-free.
 from __future__ import annotations
 
 import math
+import os
+from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import librosa
 
 import segment as seg
+from config import N_FFT, normalise as _normalise
 
-N_FFT = 2048
+# These caches hold full-song STFTs / HPSS / beat grids (each large). Bound them
+# so a session that processes many songs can't grow memory without limit — keep
+# the most-recently-used few per cache.
+_CACHE_CAP = int(os.environ.get("SIGNAL_CACHE_CAP", "4"))
+
+
+class _LRU(OrderedDict):
+    """Minimal LRU: ``get`` refreshes recency, ``put`` evicts the oldest."""
+
+    def get(self, key, default=None):
+        if key in self:
+            self.move_to_end(key)
+            return self[key]
+        return default
+
+    def put(self, key, val):
+        self[key] = val
+        self.move_to_end(key)
+        while len(self) > _CACHE_CAP:
+            self.popitem(last=False)
+
 
 # STFT magnitude cached per (stem path, fps): band/segment/shaping changes then
 # cost only a row-mask + sum, so dragging sliders stays snappy.
-_STFT_CACHE: dict[tuple[str, int], tuple] = {}
+_STFT_CACHE: _LRU = _LRU()
 
 
 def _stft(stem_path: str | Path, fps: int) -> tuple:
@@ -39,20 +61,15 @@ def _stft(stem_path: str | Path, fps: int) -> tuple:
     S = np.abs(librosa.stft(y, n_fft=N_FFT, hop_length=hop))
     freqs = librosa.fft_frequencies(sr=sr, n_fft=N_FFT)
     val = (S, sr, hop, freqs)
-    _STFT_CACHE[key] = val
+    _STFT_CACHE.put(key, val)
     return val
-
-
-def _normalise(x: np.ndarray) -> np.ndarray:
-    peak = float(np.max(x)) if x.size else 0.0
-    return x / peak if peak > 1e-12 else np.zeros_like(x)
 
 
 _EMPTY = (np.zeros(0), np.zeros(0))
 
-# Heavier per-stem analyses, cached like the STFT.
-_HPSS_CACHE: dict[tuple[str, int], tuple] = {}
-_BEAT_CACHE: dict[tuple[str, int], tuple] = {}
+# Heavier per-stem analyses, cached (and bounded) like the STFT.
+_HPSS_CACHE: _LRU = _LRU()
+_BEAT_CACHE: _LRU = _LRU()
 
 
 def _window(stem_path: str | Path, fps: int, start: float, end: float):
@@ -81,7 +98,7 @@ def _hpss(stem_path: str | Path, fps: int):
     if hit is None:
         S, _sr, _hop, _f = _stft(stem_path, fps)
         hit = librosa.decompose.hpss(S)
-        _HPSS_CACHE[key] = hit
+        _HPSS_CACHE.put(key, hit)
     return hit
 
 
@@ -94,7 +111,7 @@ def _beats(stem_path: str | Path, fps: int):
         tempo, frames = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
         beat_times = librosa.frames_to_time(frames, sr=sr, hop_length=hop)
         hit = (float(np.atleast_1d(tempo)[0]), beat_times)
-        _BEAT_CACHE[key] = hit
+        _BEAT_CACHE.put(key, hit)
     return hit
 
 

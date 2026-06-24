@@ -27,11 +27,9 @@ import numpy as np
 import librosa
 
 import llm
+from config import N_FFT, HOP, normalise as _normalise
 
-N_FFT = 2048
-HOP = 512
 GAP_S = 4.0           # an instrumental gap this long (s) is a section break
-LABELS = ["intro", "verse", "chorus", "build", "drop", "outro"]
 
 
 def load_audio(path: str | Path, sr: Optional[int] = None):
@@ -143,7 +141,7 @@ def _whisper_backend() -> str:
         import ctranslate2
         if ctranslate2.get_cuda_device_count() > 0:
             return "cuda"
-    except Exception:
+    except Exception:  # noqa: BLE001  (intentional fallback)
         pass
     return "cpu"
 
@@ -178,7 +176,7 @@ def transcribe_words(audio_path: str | Path,
     if backend == "mlx":
         try:
             return run_mlx()
-        except Exception:
+        except Exception:  # noqa: BLE001  (intentional fallback)
             return run_fw("cpu", "int8")
     if backend == "cuda":
         return run_fw("cuda", "float16")
@@ -270,12 +268,6 @@ def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
 # --------------------------------------------------------------------------- #
 # Boundaries & labelling
 # --------------------------------------------------------------------------- #
-def _normalise(x: np.ndarray) -> np.ndarray:
-    x = np.asarray(x, dtype=np.float64)
-    peak = float(np.max(x)) if x.size else 0.0
-    return x / peak if peak > 1e-12 else np.zeros_like(x)
-
-
 def _lyric_signature(lines: List[dict], start: float, end: float) -> str:
     """Normalized word signature of lines sung within a section — the identity
     used to spot a repeated chorus."""
@@ -367,7 +359,7 @@ def _cluster_boundaries(y, sr, S, rms, duration) -> List[float]:
     feat = np.vstack([chroma[:, :m], mfcc[:, :m]])
     try:
         bound_frames = librosa.segment.agglomerative(feat, k)
-    except Exception:
+    except Exception:  # noqa: BLE001  (intentional fallback)
         bound_frames = np.linspace(0, m - 1, k + 1).astype(int)
     bound_frames = np.unique(np.concatenate([[0], bound_frames, [m]]))
     return librosa.frames_to_time(bound_frames, sr=sr, hop_length=HOP).tolist()
@@ -557,7 +549,7 @@ def propose_segments(audio_path: str | Path,
             disp = align_lines(lines, words)
             lyric_lines = [{"t0": l.t0, "t1": l.t1, "text": l.text,
                             "aligned": l.aligned} for l in disp]
-        except Exception:
+        except Exception:  # noqa: BLE001  (intentional fallback)
             res_lines, lyric_lines = [], []
 
     # --- primary: LLM on a per-bar audio+lyrics table ---

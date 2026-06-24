@@ -1,0 +1,20 @@
+# Lint config for the Python backend. Lenient on purpose — this is a small,
+# single-developer creative tool, not a library. The codebase already uses
+# `# noqa: BLE001` markers, so blind-except is flagged but suppressible.
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "data", "__pycache__", "frontend"]
+
+# Bug-catching rules, not style churn. Deliberately NOT enabling `I`
+# (import-sort would move matplotlib.use("Agg") after the pyplot import and break
+# the headless backend) or `UP` (pep585/604 hint modernization — pure noise here).
+[lint]
+select = ["E", "F", "W", "B", "BLE"]
+ignore = [
+  "E501",   # line length is advisory here
+  "E741",   # short var names (l, i) are fine in this code's idiom
+  "B905",   # zip(...) without strict= — fine for the equal-length zips here
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["F401", "F811"]

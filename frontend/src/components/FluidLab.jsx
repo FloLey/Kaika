@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import Info from "./Info.jsx";
+import SharedCtl, { Toggle as SharedToggle } from "./Ctl.jsx";
 import { clamp } from "../mel.js";
 import { runFluid } from "../api.js";
 
@@ -27,25 +27,32 @@ const HELP = {
   vorticity: "Swirl: re-energizes little vortices (higher = more curl).",
 };
 
+// Which guide section each control's "?" deep-links to (see Docs.jsx ids).
+const SECTION = {
+  emit: "fluid-source", radius: "fluid-source", force: "fluid-source",
+  angle: "fluid-source", rot_speed: "fluid-source", rot_accel: "fluid-source",
+  radial: "fluid-source", enabled: "fluid-source", r: "fluid-source",
+  g: "fluid-source", b: "fluid-source", intensity: "fluid-source",
+  opacity: "fluid-source",
+  path_speed: "fluid-path", path_closed: "fluid-path", path_pingpong: "fluid-path",
+  dissipation: "fluid-medium", velocity_dissipation: "fluid-medium",
+  viscosity: "fluid-medium", vorticity: "fluid-medium",
+};
+const sectionFor = (k) => SECTION[k] || "fluid-lab";
+
+// Thin adapters over the shared controls: FluidLab keys every param by `k` and
+// its `onChange` is `(k, value)`, so we bind the key and look up help/section.
 function Ctl({ label, k, value, min, max, step, onChange, fmt }) {
   return (
-    <label className="ctl">
-      <span className="ctl-label">{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value}
-             onChange={(e) => onChange(k, parseFloat(e.target.value))} />
-      <span className="ctl-val">{fmt ? fmt(value) : value}</span>
-      <Info text={HELP[k]} />
-    </label>
+    <SharedCtl label={label} value={value} min={min} max={max} step={step} fmt={fmt}
+               help={HELP[k]} section={sectionFor(k)} onChange={(v) => onChange(k, v)} />
   );
 }
 
 function Toggle({ label, k, value, onChange }) {
   return (
-    <label className="ctl ctl-check">
-      <span className="ctl-label">{label}</span>
-      <input type="checkbox" checked={value} onChange={(e) => onChange(k, e.target.checked)} />
-      <Info text={HELP[k]} />
-    </label>
+    <SharedToggle label={label} value={value} help={HELP[k]} section={sectionFor(k)}
+                  onChange={(v) => onChange(k, v)} />
   );
 }
 
