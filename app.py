@@ -28,6 +28,8 @@ import segment as seg
 import signals as sig
 import fluid
 import db
+import jobs
+from config import N_FFT, HOP as HOP_LENGTH, N_MELS, FMIN
 
 # --------------------------------------------------------------------------- #
 # Paths & config
@@ -57,11 +59,13 @@ COLORMAPS = {
 # Apple Silicon GPU (M5) via PyTorch MPS, with CPU fallback.
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
-# Spectrogram parameters.
-N_MELS = 128
-N_FFT = 2048
-HOP_LENGTH = 512
-FMIN = 20
+# Subprocess wall-clock limits (seconds) so a hung download/separation can't
+# wedge a worker forever. Generous by default; override via env for big files.
+YTDLP_TIMEOUT = int(os.environ.get("YTDLP_TIMEOUT", "600"))
+DEMUCS_TIMEOUT = int(os.environ.get("DEMUCS_TIMEOUT", "1800"))
+
+# Spectrogram parameters: N_MELS / N_FFT / HOP_LENGTH / FMIN come from config.py
+# (shared with segment.py + signals.py so the band<->pixel mapping stays exact).
 BG_COLOR = "#0A0C10"
 
 # Flask is a pure API. The UI is always the Vite dev server (:5173).
@@ -162,7 +166,10 @@ def download_youtube_audio(url: str, out_dir: Path) -> Path:
         "-o", out_tmpl,
         url,
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=YTDLP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"yt-dlp timed out after {YTDLP_TIMEOUT}s") from None
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout)[-2000:])
     hits = [p for p in sorted(out_dir.glob("original.*"))
@@ -230,9 +237,10 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    """Stage 1: take the audio (+ optional lyrics), separate stems with demucs
-    and render the full per-stem spectrograms. Segmentation is a separate call
-    (/segment) so the slow Whisper alignment doesn't block the stem display."""
+    """Stage 1: take the audio (+ optional lyrics), then run the slow work
+    (yt-dlp download, demucs, spectrograms) in the background and return a job
+    id immediately. The UI polls /jobs/<id>; the finished job's ``result`` is
+    the stems payload. Segmentation is a separate call (/segment)."""
     audio_upload = request.files.get("file")
     youtube_url = (request.form.get("youtube_url") or "").strip()
     if (not audio_upload or not audio_upload.filename) and not youtube_url:
@@ -242,20 +250,16 @@ def upload():
     job_upload_dir = UPLOAD_DIR / job_id
     job_upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # Source the original audio: an uploaded file wins; otherwise download the
-    # best available audio from the YouTube URL.
+    # Anything that needs the request context happens now (file bytes, lyrics);
+    # the slow work runs off-thread against what we've written to disk.
+    input_path = None
+    upload_filename = None
     if audio_upload and audio_upload.filename:
+        upload_filename = audio_upload.filename
         ext = Path(audio_upload.filename).suffix or ".wav"
         input_path = job_upload_dir / f"original{ext}"
         audio_upload.save(str(input_path))
-    else:
-        try:
-            input_path = download_youtube_audio(youtube_url, job_upload_dir)
-        except RuntimeError as e:
-            return jsonify({"error": "youtube download failed",
-                            "detail": str(e)}), 502
 
-    # Save lyrics: either a pasted text field or an uploaded .txt/.lrc file.
     has_lyrics = False
     lyrics_file = request.files.get("lyrics_file")
     lyrics_text = request.form.get("lyrics", "")
@@ -268,24 +272,37 @@ def upload():
         (job_upload_dir / "lyrics.txt").write_text(lyrics_text)
         has_lyrics = True
 
-    # Run demucs on the GPU (MPS) -> data/separated/<job_id>/<model>/<song>/...
+    first_step = "separating" if input_path is not None else "downloading"
+    jobs.submit(job_id, first_step, lambda: _process_upload(
+        job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename))
+    return jsonify({"job_id": job_id})
+
+
+def _process_upload(job_id, input_path, youtube_url, job_upload_dir,
+                    has_lyrics, upload_filename):
+    """Background worker for /upload. Returns the stems payload; raises on any
+    failure (the job manager turns that into the job's error)."""
+    # 1. Source audio: uploaded file already on disk, else download it.
+    if input_path is None:
+        jobs.set_step(job_id, "downloading")
+        input_path = download_youtube_audio(youtube_url, job_upload_dir)
+
+    # 2. Separate stems with demucs (GPU/MPS) -> data/separated/<job_id>/...
+    jobs.set_step(job_id, "separating")
     job_out = SEPARATED_DIR / job_id
     job_out.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, PYTORCH_ENABLE_MPS_FALLBACK="1")
-    cmd = [
-        sys.executable, "-m", "demucs",
-        "-d", DEVICE,
-        "-o", str(job_out),
-        str(input_path),
-    ]
-    proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    cmd = [sys.executable, "-m", "demucs", "-d", DEVICE, "-o", str(job_out), str(input_path)]
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True,
+                              timeout=DEMUCS_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"demucs separation exceeded {DEMUCS_TIMEOUT}s") from None
     if proc.returncode != 0:
-        return jsonify({
-            "error": "demucs failed",
-            "detail": (proc.stderr or proc.stdout)[-2000:],
-        }), 500
+        raise RuntimeError("demucs failed: " + (proc.stderr or proc.stdout)[-1500:])
 
-    # Generate spectrograms for original + each stem.
+    # 3. Render a spectrogram for the original + each stem.
+    jobs.set_step(job_id, "rendering")
     job_spectro = SPECTRO_DIR / job_id
     job_spectro.mkdir(parents=True, exist_ok=True)
     stems = {}
@@ -293,7 +310,7 @@ def upload():
     for stem in STEMS:
         src = stem_audio_path(job_id, stem)
         if src is None:
-            return jsonify({"error": f"missing stem output: {stem}"}), 500
+            raise RuntimeError(f"missing stem output: {stem}")
         sr, dur = make_spectrogram(src, job_spectro / f"{stem}.png", COLORMAPS[stem])
         if stem == "original":
             duration = dur
@@ -303,9 +320,9 @@ def upload():
             "sr": sr,  # top of the spectrogram == sr / 2
         }
 
-    # Title / source for the project list.
-    if audio_upload and audio_upload.filename:
-        source, title = audio_upload.filename, Path(audio_upload.filename).stem
+    # 4. Title / source for the project list, then persist.
+    if upload_filename:
+        source, title = upload_filename, Path(upload_filename).stem
     else:
         title_file = job_upload_dir / "yt_title.txt"
         source = youtube_url
@@ -314,25 +331,29 @@ def upload():
 
     db.create_project(job_id, title=title, source=source, duration=duration,
                       fmin=FMIN, has_lyrics=has_lyrics, stems=stems)
-
-    return jsonify({"job_id": job_id, "fmin": FMIN, "duration": duration,
-                    "has_lyrics": has_lyrics, "title": title, "stems": stems})
+    return {"job_id": job_id, "fmin": FMIN, "duration": duration,
+            "has_lyrics": has_lyrics, "title": title, "stems": stems}
 
 
 @app.route("/segment", methods=["POST"])
 def segment_route():
-    """Stage 2: propose musical segments for an already-uploaded job, driven by
-    lyrics (Whisper alignment) + vocal activity (from the demucs vocals stem)."""
+    """Stage 2: propose musical segments for an already-uploaded job. The slow
+    Whisper alignment + LLM labelling run in the background; the finished job's
+    ``result`` is the segment proposal (segments + vocal envelope + lyrics)."""
     data = request.get_json(silent=True) or {}
     job_id = data.get("job_id")
     if not job_id:
         return jsonify({"error": "missing job_id"}), 400
-
-    original = stem_audio_path(job_id, "original")
-    vocals = stem_audio_path(job_id, "vocals")
-    if original is None:
+    if stem_audio_path(job_id, "original") is None:
         return jsonify({"error": "unknown job_id"}), 404
 
+    jobs.submit(job_id, "analysing", lambda: _process_segment(job_id))
+    return jsonify({"job_id": job_id})
+
+
+def _process_segment(job_id):
+    """Background worker for /segment. Returns the finalized proposal."""
+    original = stem_audio_path(job_id, "original")
     # All demucs stems feed the LLM's per-bar audio summary.
     stems = {}
     for k in ("vocals", "drums", "bass", "other"):
@@ -348,12 +369,17 @@ def segment_route():
         lyrics_text = ("\n".join(l.text for l in seg.parse_lrc(text))
                        if lyr.suffix == ".lrc" else text)
 
-    try:
-        result = seg.propose_segments(str(original), stems, lyrics_text)
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+    result = seg.propose_segments(str(original), stems, lyrics_text)
+    return _finalize_proposal(job_id, result)
 
-    return jsonify(_finalize_proposal(job_id, result))
+
+@app.route("/jobs/<job_id>", methods=["GET"])
+def job_status(job_id: str):
+    """Poll a background job: {state: running|done|error, step, error, result}."""
+    j = jobs.get(job_id)
+    if j is None:
+        return jsonify({"error": "unknown job"}), 404
+    return jsonify(j)
 
 
 def _finalize_proposal(job_id: str, result: dict) -> dict:
@@ -518,4 +544,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     debug = os.environ.get("FLASK_DEBUG", "1") == "1"
     print(f"Demucs Studio starting — device: {DEVICE}, http://{host}:{port}")
-    app.run(host=host, port=port, debug=debug)
+    # threaded so /jobs/<id> polling is served while a background job runs.
+    # (In-memory jobs reset when the debug reloader restarts — fine for dev.)
+    app.run(host=host, port=port, debug=debug, threaded=True)

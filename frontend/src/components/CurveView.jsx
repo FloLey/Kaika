@@ -6,9 +6,16 @@ import { useEffect, useRef } from "react";
 // pad uses) so it moves during both solo and "play segment" — no re-renders.
 export default function CurveView({
   curve, color = "#60A5FA", loading,
-  audioRef, segStart = 0, winLen = 1, playing,
+  audioRef, segStart = 0, winLen = 1, playing, onSeek,
 }) {
   const headRef = useRef(null);
+  const boxRef = useRef(null);
+
+  function clickSeek(e) {
+    if (!onSeek) return;
+    const r = boxRef.current.getBoundingClientRect();
+    onSeek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+  }
   const n = curve ? curve.length : 0;
   const pts =
     n > 1
@@ -39,7 +46,12 @@ export default function CurveView({
   }, [playing, audioRef, segStart, winLen]);
 
   return (
-    <div className="curve" style={{ "--accent": color }}>
+    <div
+      className={"curve" + (onSeek ? " seekable" : "")}
+      style={{ "--accent": color }}
+      ref={boxRef}
+      onClick={clickSeek}
+    >
       <svg viewBox="0 0 1000 100" preserveAspectRatio="none">
         {n > 1 && <polygon className="curve-fill" points={area} />}
         {n > 1 && <polyline className="curve-line" points={line} />}
