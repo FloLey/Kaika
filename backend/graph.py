@@ -51,9 +51,10 @@ _SIGNAL_HASH_FIELDS = (
     "invert", "gamma", "gain", "offset", "threshold",
 )
 
-# Node types that produce a video stream (spec 10). `output` passes its input
-# through, so it's a producer too.
-_VIDEO_PRODUCERS = ("fluid", "combine", "output")
+# Node types that produce a video stream are DERIVED from the video-handler registry
+# (`_VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)`, defined with the handlers below) so a
+# new producing node type registers in one place. `output` passes its input through,
+# so it's a producer too.
 # A merge combine has no fluid card, so its medium params fall back to the canonical
 # `fluid`-group defaults (the single source of truth in animation_params.PARAMS).
 _MERGE_MEDIUM_DEFAULTS = tuple(
@@ -494,61 +495,103 @@ class _Dag:
         return params
 
     def emitters(self, node_id) -> list:
+        """The flat emitter list a MERGE feeds into one shared sim. Dispatches on
+        node type via `_EMITTER_HANDLERS`; memoized per render."""
         if node_id in self._emit:
             return self._emit[node_id]
         node = self.nodes[node_id]
-        t = node.get("type")
-        if t == "fluid":
-            out = self._fluid_emitters(node)
-        elif t == "output":
-            src = _video_source(self.graph, node_id, "video")
-            out = self.emitters(src) if src else []
-        elif t == "combine":
-            if node.get("data", {}).get("mode") == "stack":
-                raise ValueError("a layered (stack) combine can't feed a merge combine")
-            out = []
-            for slot in node.get("data", {}).get("inputs", []):
-                src = _video_source(self.graph, node_id, slot.get("id"))
-                if src:
-                    out.extend(self.emitters(src))
-        else:
+        handler = _EMITTER_HANDLERS.get(node.get("type"))
+        if handler is None:
             raise ValueError(f"node '{node_id}' has no emitter")
+        out = handler(self, node)
         self._emit[node_id] = out
         return out
 
     def video(self, node_id) -> np.ndarray:
+        """Dye-on-transparent frames for any producer. Dispatches on node type via
+        `_VIDEO_HANDLERS`; memoized per render."""
         if node_id in self._video:
             return self._video[node_id]
         node = self.nodes[node_id]
-        t = node.get("type")
-        if t == "fluid":
-            frames, _, _ = fluid.simulate(self._fluid_video_params(node), apply_bg=False)
-        elif t == "output":
-            src = _video_source(self.graph, node_id, "video")
-            if src is None:
-                raise ValueError(f"output '{node_id}' has no input to pass through")
-            frames = self.video(src)
-        elif t == "combine":
-            data = node.get("data", {})
-            srcs = [(_video_source(self.graph, node_id, s.get("id")), s)
-                    for s in data.get("inputs", [])]
-            srcs = [(s, slot) for (s, slot) in srcs if s is not None]
-            if not srcs:
-                raise ValueError(f"combine '{node_id}' has no inputs")
-            if data.get("mode") == "stack":
-                layers = [self.video(s) for (s, _) in srcs]
-                opac = [float(slot.get("opacity", 1.0)) for (_, slot) in srcs]
-                frames = composite(layers, opac)
-            else:  # merge
-                # Each emitter keeps its OWN `wrap` (from its source fluid). They
-                # share ONE velocity field (so they interact) but each component's
-                # dye advects with its own edge behaviour — see fluid.simulate().
-                params = self._merge_params(self.emitters(node_id), data.get("medium", {}))
-                frames, _, _ = fluid.simulate(params, apply_bg=False)
-        else:
+        handler = _VIDEO_HANDLERS.get(node.get("type"))
+        if handler is None:
             raise ValueError(f"node '{node_id}' is not a video producer")
+        frames = handler(self, node)
         self._video[node_id] = frames
         return frames
+
+
+# --------------------------------------------------------------------------- #
+# Node-type handler registry (spec 10)
+# --------------------------------------------------------------------------- #
+# One video handler (and, where it can feed a merge, one emitter handler) per node
+# type. A handler is `(dag, node) -> frames | emitters` and may recurse through
+# `dag.video` / `dag.emitters`. Adding a producing node type = write a handler +
+# register it here; `_Dag.video`/`emitters` and `_VIDEO_PRODUCERS` pick it up.
+
+def _fluid_video(dag: "_Dag", node: dict) -> np.ndarray:
+    frames, _, _ = fluid.simulate(dag._fluid_video_params(node), apply_bg=False)
+    return frames
+
+
+def _output_video(dag: "_Dag", node: dict) -> np.ndarray:
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"output '{node['id']}' has no input to pass through")
+    return dag.video(src)
+
+
+def _combine_video(dag: "_Dag", node: dict) -> np.ndarray:
+    data = node.get("data", {})
+    srcs = [(_video_source(dag.graph, node["id"], s.get("id")), s)
+            for s in data.get("inputs", [])]
+    srcs = [(s, slot) for (s, slot) in srcs if s is not None]
+    if not srcs:
+        raise ValueError(f"combine '{node['id']}' has no inputs")
+    if data.get("mode") == "stack":
+        layers = [dag.video(s) for (s, _) in srcs]
+        opac = [float(slot.get("opacity", 1.0)) for (_, slot) in srcs]
+        return composite(layers, opac)
+    # merge: each emitter keeps its OWN `wrap` (from its source fluid). They share
+    # ONE velocity field (so they interact) but each component's dye advects with its
+    # own edge behaviour — see fluid.simulate().
+    params = dag._merge_params(dag.emitters(node["id"]), data.get("medium", {}))
+    frames, _, _ = fluid.simulate(params, apply_bg=False)
+    return frames
+
+
+def _fluid_emitters_h(dag: "_Dag", node: dict) -> list:
+    return dag._fluid_emitters(node)
+
+
+def _output_emitters_h(dag: "_Dag", node: dict) -> list:
+    src = _video_source(dag.graph, node["id"], "video")
+    return dag.emitters(src) if src else []
+
+
+def _combine_emitters_h(dag: "_Dag", node: dict) -> list:
+    if node.get("data", {}).get("mode") == "stack":
+        raise ValueError("a layered (stack) combine can't feed a merge combine")
+    out: list = []
+    for slot in node.get("data", {}).get("inputs", []):
+        src = _video_source(dag.graph, node["id"], slot.get("id"))
+        if src:
+            out.extend(dag.emitters(src))
+    return out
+
+
+_VIDEO_HANDLERS = {
+    "fluid": _fluid_video,
+    "output": _output_video,
+    "combine": _combine_video,
+}
+_EMITTER_HANDLERS = {
+    "fluid": _fluid_emitters_h,
+    "output": _output_emitters_h,
+    "combine": _combine_emitters_h,
+}
+# Node types that produce a video stream (used by validate to check output wiring).
+_VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)
 
 
 def render(job_id: str, segment: dict, graph: dict,
