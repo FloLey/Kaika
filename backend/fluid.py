@@ -134,7 +134,11 @@ class FluidSim:
         a = (4.0 - 2 * np.cos(2 * np.pi * np.arange(h) / h)[:, None]
              - 2 * np.cos(2 * np.pi * np.arange(w) / w)[None, :])
         a[0, 0] = 1.0
-        self._poisson = a
+        # float32 so the spectral solve stays in complex64 end-to-end: fft2 of the
+        # float32 divergence is complex64, and dividing by a float32 array keeps it
+        # there (a float64 array here would promote the whole solve to complex128 —
+        # ~2x the work/memory for a result we cast back to float32 anyway).
+        self._poisson = a.astype(np.float32)
 
     def _gauss(self, px: float, py: float, radius: float) -> np.ndarray:
         rc = max(1.0, radius * self.short)
@@ -213,10 +217,19 @@ class FluidSim:
     def step(self):
         if self.viscosity > 0:
             k = self.viscosity
+            denom = 1.0 + 4.0 * k
             for fld in ("u", "v"):
                 f = getattr(self, fld)
-                setattr(self, fld, (f + k * (np.roll(f, 1, 0) + np.roll(f, -1, 0) +
-                        np.roll(f, 1, 1) + np.roll(f, -1, 1))) / (1 + 4 * k))
+                # (f + k*sum_of_4_neighbours) / (1+4k), accumulated in-place to avoid
+                # the large temporary the one-liner allocated each frame.
+                nbr = np.roll(f, 1, 0)
+                nbr += np.roll(f, -1, 0)
+                nbr += np.roll(f, 1, 1)
+                nbr += np.roll(f, -1, 1)
+                nbr *= k
+                nbr += f
+                nbr /= denom
+                setattr(self, fld, nbr)
         self._vorticity(self.vorticity)
         self._project(self._src)   # establish the radial outflow (if any source)
         self._src = None           # consume this frame's divergence source
