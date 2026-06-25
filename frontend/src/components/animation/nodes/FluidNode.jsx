@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Ctl, { Toggle } from "../../../ui/Ctl.jsx";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
 import { FLUID_PARAMS } from "../../../lib/fluidParams.js";
@@ -121,9 +121,12 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
   const s = node.data.static;
 
   // A wired points card overrides the single-centre source with N source positions.
-  const posSrcId = ctx?.graph ? videoSource(ctx.graph, node.id, "positions") : null;
-  const posNode = posSrcId ? ctx.graph.nodes.find((n) => n.id === posSrcId) : null;
-  const posCount = posNode && posNode.type === "points" ? (posNode.data.points || []).length : 0;
+  // Memoized so this graph walk doesn't re-run on every unrelated re-render.
+  const posCount = useMemo(() => {
+    const srcId = ctx?.graph ? videoSource(ctx.graph, node.id, "positions") : null;
+    const pn = srcId ? ctx.graph.nodes.find((n) => n.id === srcId) : null;
+    return pn && pn.type === "points" ? (pn.data.points || []).length : 0;
+  }, [ctx?.graph, node.id]);
 
   // Collapsing/expanding a group mounts/unmounts ports; ask the canvas to redraw
   // edges so wires re-anchor (to the group header when collapsed, to the row port

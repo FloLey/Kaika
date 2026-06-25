@@ -370,16 +370,19 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     # Medium params -> per-frame series FIRST, so the sim can be seeded from frame 0
     # and a wired pulse (an array) doesn't blow up float() in the constructor. The
     # loop below overwrites these attributes each frame.
-    diss_s = _series(fl.get("dissipation", 0.95), nframes)
-    vdis_s = _series(fl.get("velocity_dissipation", 0.97), nframes)
-    visc_s = _series(fl.get("viscosity", 0.0), nframes)
-    vort_s = _series(fl.get("vorticity", 5.0), nframes)
+    # `.tolist()` converts each float32 series to Python floats ONCE (one vectorized
+    # call) so the per-frame medium update below indexes a list instead of calling
+    # float() on a numpy scalar every frame.
+    diss_l = _series(fl.get("dissipation", 0.95), nframes).tolist()
+    vdis_l = _series(fl.get("velocity_dissipation", 0.97), nframes).tolist()
+    visc_l = _series(fl.get("viscosity", 0.0), nframes).tolist()
+    vort_l = _series(fl.get("vorticity", 5.0), nframes).tolist()
     sim = FluidSim(
         gh, gw,
-        dissipation=float(diss_s[0]),
-        vel_dissipation=float(vdis_s[0]),
-        viscosity=float(visc_s[0]),
-        vorticity=float(vort_s[0]),
+        dissipation=diss_l[0],
+        vel_dissipation=vdis_l[0],
+        viscosity=visc_l[0],
+        vorticity=vort_l[0],
         wrap=vel_wrap,
         dye_modes=dye_modes,
     )
@@ -391,10 +394,10 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     for i in range(nframes):
         # Medium params can change each frame -> set on the sim before stepping.
         # FluidSim.step() reads these attributes each call, so this Just Works.
-        sim.dissipation = float(diss_s[i])
-        sim.vel_dissipation = float(vdis_s[i])
-        sim.viscosity = float(visc_s[i])
-        sim.vorticity = float(vort_s[i])
+        sim.dissipation = diss_l[i]
+        sim.vel_dissipation = vdis_l[i]
+        sim.viscosity = visc_l[i]
+        sim.vorticity = vort_l[i]
         for inject, layer in emitters:
             inject(sim, i, denom, layer)
         sim.step()

@@ -429,10 +429,18 @@ class _Dag:
         self.fps = int(self.output.get("fps", FLUID_FPS))
         self._video: dict = {}
         self._emit: dict = {}
+        self._params: dict = {}
 
     def _fluid_params(self, fluid_node):
-        return build_params(self.job_id, self.segment, self.graph,
-                            self.stem_audio_path, self.output, fluid_node=fluid_node)
+        # Memoized per fluid: a fluid with drawn points resolves params through both
+        # the video path and the emitter path, and each build_params re-extracts the
+        # node's signal curves — cache so the (expensive) resolution runs once.
+        fid = fluid_node["id"]
+        if fid not in self._params:
+            self._params[fid] = build_params(
+                self.job_id, self.segment, self.graph,
+                self.stem_audio_path, self.output, fluid_node=fluid_node)
+        return self._params[fid]
 
     def _points_for(self, fluid_node):
         """The drawn points wired into `fluid.positions` (a `points` node), or None

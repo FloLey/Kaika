@@ -29,7 +29,12 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
 
   // Render key: this output's subgraph + the project render settings. Changes only
   // when THIS output's rendered clip would (see graphModel.outputHash).
-  const renderable = graph ? outputRenderable(graph, node.id) : false;
+  // Memoized: outputRenderable walks the whole contributing DAG; don't redo it on
+  // every unrelated re-render (playhead ticks, sibling-node edits).
+  const renderable = useMemo(
+    () => (graph ? outputRenderable(graph, node.id) : false),
+    [graph, node.id]
+  );
   const renderKey = useMemo(
     () => (graph
       ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals)
