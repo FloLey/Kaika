@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { signalNode, fluidNode, outputNode, combineNode, pointsNode, mkEdgeId } from "../../lib/graphModel";
+import { signalNode, fluidNode, outputNode, mkEdgeId } from "../../lib/graphModel";
+import { paletteSpecs } from "./nodes/registry";
 import { stemColor } from "../../lib/segments.js";
 
 // The add-node toolbar: a bar across the top of the animation panel (not floating
@@ -68,12 +69,16 @@ export default function Palette({
           </div>
         )}
       </div>
-      <button className="btn sm" onClick={() => add((x, y) => fluidNode(x, y))}>+ Fluid</button>
-      <button className="btn sm" title="Draw source points to feed a fluid's positions"
-              onClick={() => add((x, y) => pointsNode(x, y))}>+ Points</button>
-      <button className="btn sm" title="Combine fluids — merge (interact) or layered (stack)"
-              onClick={() => add((x, y) => combineNode(x, y))}>+ Combine</button>
-      <button className="btn sm" onClick={() => add((x, y) => outputNode(x, y))}>+ Output</button>
+      {paletteSpecs().map((spec) => (
+        <button
+          key={spec.type}
+          className="btn sm"
+          title={spec.palette.title}
+          onClick={() => add(spec.factory)}
+        >
+          {spec.palette.label}
+        </button>
+      ))}
       <button className="btn sm" title="Add a fluid + output, pre-wired"
               onClick={addPipeline}>+ Pipeline</button>
 

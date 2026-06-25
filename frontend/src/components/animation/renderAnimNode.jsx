@@ -1,22 +1,13 @@
-import SignalNode from "./nodes/SignalNode.jsx";
-import FluidNode from "./nodes/FluidNode.jsx";
-import OutputNode from "./nodes/OutputNode.jsx";
-import CombineNode from "./nodes/CombineNode.jsx";
-import PointsNode from "./nodes/PointsNode.jsx";
 import MinimizedCard from "./nodes/MinimizedCard.jsx";
+import { NODE_TYPES } from "./nodes/registry";
 
-// The node-type switch (06 §Wiring it to the canvas). 07's container passes this
-// to <GraphCanvas renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}>.
+// Resolves a graph node to its React card via the node-type registry. 07's container
+// passes this to <GraphCanvas renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}>.
 //
-// Signature (07 wires this EXACTLY):
 //   renderAnimNode(node, helpers, ctx)
 //     node    — the graph node ({ id, type, x, y, data })
 //     helpers — from GraphCanvas: { onMove, portRef, startConnect, onTitlePointerDown, selected }
-//     ctx     — { segment, stems, job, videoUrl, busy, error, signals,
-//                 graph, onGraphChange, onDetach }
-//       onGraphChange(updater)        — the canvas's graph-mutation callback
-//       onDetach(fluidId, paramKey)   — disconnect a wired fluid param (graphModel.disconnect)
-//       graph                         — current graph (for resolving wired source labels)
+//     ctx     — { segment, stems, job, signals, graph, onGraphChange, onDetach, minimized, ... }
 //
 // Returns the matching node component, or null for an unknown type.
 export default function renderAnimNode(node, helpers, ctx = {}) {
@@ -32,18 +23,9 @@ export default function renderAnimNode(node, helpers, ctx = {}) {
   if (ctx.minimized && ctx.minimized.has(node.id)) {
     return <MinimizedCard node={node} helpers={helpers} ctx={ctx} onDelete={common.onDelete} />;
   }
-  switch (node.type) {
-    case "signal":
-      return <SignalNode {...common} />;
-    case "fluid":
-      return <FluidNode {...common} onDetach={ctx.onDetach} />;
-    case "combine":
-      return <CombineNode {...common} />;
-    case "points":
-      return <PointsNode {...common} />;
-    case "output":
-      return <OutputNode {...common} />;
-    default:
-      return null;
-  }
+  const spec = NODE_TYPES[node.type];
+  if (!spec) return null;
+  const Card = spec.Component;
+  // onDetach is only meaningful for the fluid card; harmless on the others.
+  return <Card {...common} onDetach={ctx.onDetach} />;
 }

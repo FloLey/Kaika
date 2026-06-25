@@ -1,25 +1,17 @@
 import { useEffect } from "react";
 import NodeFrame, { MultiAnchor } from "./NodeFrame.jsx";
+import { chromeFor } from "./registry";
 import { stemColor } from "../../../lib/segments.js";
 
 // A card collapsed to just its header. All of the node's inbound wires re-route to
 // ONE left anchor and its single `out` to ONE right anchor (both registered via
 // MultiAnchor, the generalisation of FluidNode's GroupAnchor), so links stay
 // connected while the body is hidden. renderAnimNode renders this in place of the
-// full node when ctx.minimized has the node id.
-
-// Per-type header chrome + the node's output-port flow (every node's out port is
-// "out"; only its flow differs). Signal's accent follows its stem colour below.
-const CHROME = {
-  fluid: { title: "fluid", accent: "var(--petale)", outFlow: "video" },
-  output: { title: "output", accent: "var(--text)", outFlow: "video" },
-  combine: { title: "combine", accent: "#c0902e", outFlow: "video" },
-  points: { title: "points", accent: "var(--courant)", outFlow: "points" },
-  signal: { title: "signal", accent: "var(--muted)", outFlow: "value" },
-};
+// full node when ctx.minimized has the node id. Header chrome (title/accent/outFlow)
+// comes from the node-type registry; signal's accent follows its stem colour below.
 
 export default function MinimizedCard({ node, helpers, ctx, onDelete }) {
-  const base = CHROME[node.type] || { title: node.type, accent: "var(--muted)", outFlow: "value" };
+  const base = chromeFor(node.type);
   let accent = base.accent;
   if (node.type === "signal") {
     const sig = (ctx.signals || []).find((s) => s.id === node.data.signalId);
