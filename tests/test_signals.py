@@ -6,7 +6,7 @@ demucs, or a database. Run with: ``.venv/bin/python -m pytest``.
 """
 import numpy as np
 
-from signals import shape
+from backend.signals import shape
 
 
 def _steady(value, n=200):

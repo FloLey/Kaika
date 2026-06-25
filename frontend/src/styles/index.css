@@ -1,0 +1,8 @@
+/* Entry point: split by area, imported base-first so the cascade matches the
+   original single styles.css (base defines :root + shared primitives). */
+@import "./base.css";
+@import "./studio.css";
+@import "./fluid.css";
+@import "./docs.css";
+@import "./animation.css";
+@import "./logs.css";

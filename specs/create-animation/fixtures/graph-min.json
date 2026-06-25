@@ -1,0 +1,65 @@
+{
+  "job_id": "REPLACE_ME_JOB_ID",
+  "_TODO": "Replace job_id with a real project (GET /projects) and segment start/end (GET /projects/<job_id>). signals may stay [] for this minimal all-constant fixture.",
+  "segment": {
+    "start": 0.0,
+    "end": 8.0,
+    "signals": []
+  },
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "n-fluid001",
+        "type": "fluid",
+        "x": 320,
+        "y": 80,
+        "data": {
+          "static": {
+            "duration": 8.0,
+            "grid": 96,
+            "fps": 24,
+            "color": [0.27, 0.69, 1.0],
+            "enabled": true,
+            "radial": false,
+            "points": [[0.5, 0.5]],
+            "path_speed": 1.0,
+            "path_closed": false,
+            "path_pingpong": false
+          },
+          "ports": {
+            "emit": { "binding": { "kind": "const", "value": 0.30 } },
+            "radius": { "binding": { "kind": "const", "value": 0.08 } },
+            "force": { "binding": { "kind": "const", "value": 20.0 } },
+            "angle": { "binding": { "kind": "const", "value": 270.0 } },
+            "rot_speed": { "binding": { "kind": "const", "value": 0.0 } },
+            "rot_accel": { "binding": { "kind": "const", "value": 0.0 } },
+            "intensity": { "binding": { "kind": "const", "value": 1.0 } },
+            "opacity": { "binding": { "kind": "const", "value": 1.0 } },
+            "dissipation": { "binding": { "kind": "const", "value": 0.95 } },
+            "velocity_dissipation": { "binding": { "kind": "const", "value": 0.97 } },
+            "viscosity": { "binding": { "kind": "const", "value": 0.0 } },
+            "vorticity": { "binding": { "kind": "const", "value": 6.0 } }
+          }
+        }
+      },
+      {
+        "id": "n-output01",
+        "type": "output",
+        "x": 600,
+        "y": 80,
+        "data": { "title": "preview" }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-0001",
+        "source": "n-fluid001",
+        "sourcePort": "out",
+        "target": "n-output01",
+        "targetPort": "video"
+      }
+    ],
+    "view": { "tx": 0, "ty": 0, "scale": 1 }
+  }
+}

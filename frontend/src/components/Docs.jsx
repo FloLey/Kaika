@@ -15,13 +15,13 @@ export default function Docs({ section }) {
   return (
     <div className="docs">
       <header className="docs-head">
-        <h1>DEMUCS.STUDIO</h1>
+        <h1>Kaika <span className="kanji">開花</span></h1>
         <span className="sub">user guide</span>
         <a className="back" href="/">← back to the app</a>
       </header>
 
       <p className="lead">
-        Demucs Studio splits a song into musical <strong>segments</strong> (intro,
+        Kaika splits a song into musical <strong>segments</strong> (intro,
         verse, chorus…) and lets you rework each one independently. You upload audio
         (or a YouTube link) and optional lyrics; the app separates the stems,
         proposes a structure, and opens a studio where every segment gets its own
@@ -37,6 +37,7 @@ export default function Docs({ section }) {
           <li><a href="#upload">Upload — file, YouTube, lyrics &amp; stems</a></li>
           <li><a href="#review">Review — the segment structure</a></li>
           <li><a href="#studio">Studio — extracting signals</a></li>
+          <li><a href="#animation">Create animation — the node graph</a></li>
           <li><a href="#fluid-lab">Fluid Lab</a></li>
           <li><a href="#tips">Tips &amp; troubleshooting</a></li>
         </ol>
@@ -45,7 +46,7 @@ export default function Docs({ section }) {
       <section id="getting-started">
         <h2><span className="num">1</span>Getting started</h2>
         <p>
-          Demucs Studio runs locally. Once it's installed (see the project
+          Kaika runs locally. Once it's installed (see the project
           <code>README.md</code>), one command starts everything: <code>make dev</code>.
           That launches Postgres, the Flask API on <code>:5000</code>, and the web
           UI on <code>:5173</code>. Open <code>http://localhost:5173</code> and you'll
@@ -231,8 +232,79 @@ export default function Docs({ section }) {
         <p>Add as many signals per stem as you need, remove the ones you don't, and move between segments using the rail. Every change autosaves.</p>
       </section>
 
+      <section id="animation">
+        <h2><span className="num">6</span>Create animation — the node graph</h2>
+        <p>
+          The Studio has two tabs, switched by the bar at the bottom of the
+          workspace: <strong>extract signals by track</strong> (everything above)
+          and <strong>create animation</strong>. The animation tab is a drag-and-drop
+          <strong> playground</strong> where you wire a segment's signals into a
+          fluid simulation to produce a looping video that reacts to the music. Each
+          segment has its own graph, and it autosaves like everything else.
+        </p>
+
+        <h3>The cards</h3>
+        <p>Use the palette (top-left of the canvas) to drop cards, then wire them together. Every card has a <strong>✕</strong> in its top-right corner to delete it (which also removes its wires); ports sit on the card's sides — inputs on the left, outputs on the right.</p>
+        <table>
+          <tbody>
+            <tr><th>Card</th><th>What it does</th></tr>
+            <tr><td>signal</td><td>Exposes one of this segment's signals (from the other tab) as a 0–1 curve, with a live pulse pad so you can see it move. Pick which signal from the <strong>+ Signal</strong> menu. One output.</td></tr>
+            <tr><td>constant</td><td>A single fixed value (a slider, 0–1). Use it to set a parameter to a steady amount. One output.</td></tr>
+            <tr><td>fluid</td><td>The simulation. Static bits (on/off, radial, a base colour) live on the card; every animatable parameter — force, vorticity, emit, the red/green/blue colour channels, … — is an <strong>input port</strong>, grouped into collapsible <em>source / colour / medium</em> sections. One video output. (One per graph.)</td></tr>
+            <tr><td>output</td><td>Shows the rendered looping video. Wire the fluid's video output into it. (One per graph.)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Wiring &amp; the [lo, hi] range</h3>
+        <ul>
+          <li><strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the fluid's video output onto the output card).</li>
+          <li><strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its 0–1 curve is mapped into a <strong>[lo, hi]</strong> range you set right on that port. So a kick-energy signal on <em>force</em> with range 0–45 makes the jet punch on every kick. Set lo and hi to taste; detach with the ✕.</li>
+          <li><strong>Constants</strong> — a constant (or an un-wired port) just holds a steady value in the parameter's native range.</li>
+          <li><strong>Move / delete</strong> — drag a card by its title bar; pan the canvas by dragging the background and zoom with the scroll wheel. Delete a card with its ✕, or select a card/wire and press Delete.</li>
+        </ul>
+        <p>
+          The fluid parameters are the same ones documented under
+          <a href="#fluid-source"> Fluid Lab</a> — the difference here is that any of
+          them (including the colour channels) can be driven by a signal over the
+          clip instead of being fixed.
+        </p>
+
+        <h3>Rendering — it's automatic</h3>
+        <p>
+          There's no render button: the clip <strong>re-renders on its own</strong>
+          (debounced) whenever you change the graph or a signal, and the result drops
+          into the output card. The clip always spans the <strong>full segment</strong>.
+          An incomplete graph (no output wired yet) just waits quietly; a real failure
+          shows an error on the output card. Identical renders are cached, so repeats
+          are instant.
+        </p>
+        <p>
+          Use the <strong>transport</strong> at the top of the workspace (shared with
+          the signals tab) to preview: <strong>▶ play segment</strong> plays the
+          audio while the output video and every pulse pad animate off the same
+          playhead; drag the <strong>timeline</strong> to scrub, set the
+          <strong>🔊 volume</strong> (the simulation keeps running at any level), and
+          toggle <strong>loop</strong>.
+        </p>
+
+        <h3 id="animation-output">Output settings</h3>
+        <p>
+          The <strong>⚙ output</strong> button opens project-wide render settings
+          (they apply to every segment's animation):
+        </p>
+        <table>
+          <tbody>
+            <tr><th>Setting</th><th>What it does</th></tr>
+            <tr><td>orientation / size</td><td>Portrait 9:16, Landscape 16:9, Square 1:1, or a custom width×height.</td></tr>
+            <tr><td>quality</td><td>Draft (fast) · Normal · High (sharper swirls, slower) — the simulation resolution.</td></tr>
+            <tr><td>fps</td><td>24, 30, or 60 frames per second.</td></tr>
+            <tr><td>background</td><td>The solid colour behind the dye.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
       <section id="fluid-lab">
-        <h2><span className="num">6</span>Fluid Lab</h2>
+        <h2><span className="num">7</span>Fluid Lab</h2>
         <p>
           The Fluid Lab is a standalone visual playground (reach it from the Projects
           screen). It runs a small real-time fluid simulation: a central source
@@ -253,7 +325,6 @@ export default function Docs({ section }) {
             <tr><td>force</td><td>Strength of the jet the source pushes into the fluid.</td></tr>
             <tr><td>angle</td><td>Direction the jet pushes (0° = right, 90° = down, 270° = up). Ignored when <em>radial</em> is on.</td></tr>
             <tr><td>radial</td><td>Push outward in all directions from the centre instead of one heading.</td></tr>
-            <tr><td>rotation</td><td>Spin the jet direction over time (speed and acceleration).</td></tr>
           </tbody>
         </table>
 
@@ -289,7 +360,7 @@ export default function Docs({ section }) {
       </section>
 
       <section id="tips">
-        <h2><span className="num">7</span>Tips &amp; troubleshooting</h2>
+        <h2><span className="num">8</span>Tips &amp; troubleshooting</h2>
         <ul>
           <li><strong>First run is slow.</strong> The first separation downloads the Demucs weights and the first lyric alignment downloads a Whisper model. After that, models are cached and only the audio processing takes time.</li>
           <li><strong>Lyrics give the best structure.</strong> If the proposed segments look off, the single biggest improvement is adding lyrics on upload — even rough plain text.</li>
@@ -301,7 +372,7 @@ export default function Docs({ section }) {
       </section>
 
       <footer className="docs-foot">
-        Demucs Studio — local stem separation, LLM-assisted segmentation, and
+        Kaika — local stem separation, LLM-assisted segmentation, and
         per-segment signal extraction. <a href="/">← back to the app</a>
       </footer>
     </div>

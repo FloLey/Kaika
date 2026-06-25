@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import ProjectList from "./components/ProjectList.jsx";
-import FluidLab from "./components/FluidLab.jsx";
-import UploadStep from "./components/UploadStep.jsx";
-import ReviewStep from "./components/ReviewStep.jsx";
-import Studio from "./components/Studio.jsx";
+import FluidLab from "./components/fluid/FluidLab.jsx";
+import UploadStep from "./components/upload/UploadStep.jsx";
+import ReviewStep from "./components/review/ReviewStep.jsx";
+import Studio from "./components/studio/Studio.jsx";
 import Processing from "./components/Processing.jsx";
-import { hydrateSegments, serializeSegments } from "./segments.js";
-import * as api from "./api.js";
+import LogsPanel from "./components/LogsPanel.jsx";
+import ErrorToast from "./components/ErrorToast.jsx";
+import { hydrateSegments, serializeSegments } from "./lib/segments.js";
+import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output.js";
+import { useLogPoll } from "./lib/useLogPoll.js";
+import * as logbus from "./lib/logbus.js";
+import * as api from "./lib/api.js";
 
 export default function App() {
   // projects | upload | processing | review | studio | error
@@ -25,12 +30,22 @@ export default function App() {
   const [vocalEnvelope, setVocalEnvelope] = useState([]);
   const [envelopeTimes, setEnvelopeTimes] = useState([]);
   const [activeSegId, setActiveSegId] = useState(null);
+  // Project-wide animation output settings (size/quality/fps/background).
+  const [output, setOutput] = useState(OUTPUT_DEFAULTS);
   const lastSaved = useRef("");
+
+  // ---- logs: panel toggle, error badge, backend polling --------------------
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [errCount, setErrCount] = useState(0);
+  useEffect(() => logbus.subscribe(() => setErrCount(logbus.errorCount())), []);
+  // Poll the backend log feed always (slow) so the badge stays current; faster
+  // while the drawer is open.
+  useLogPoll(logsOpen ? 1500 : 8000);
 
   // ---- autosave (debounced) -------------------------------------------------
   useEffect(() => {
     if (!job || (step !== "review" && step !== "studio")) return;
-    const payload = { step, segments: serializeSegments(segments) };
+    const payload = { step, segments: serializeSegments(segments), output };
     const jsonStr = JSON.stringify(payload);
     if (jsonStr === lastSaved.current) return;
     const t = setTimeout(() => {
@@ -44,7 +59,7 @@ export default function App() {
         });
     }, 800);
     return () => clearTimeout(t);
-  }, [segments, step, job]);
+  }, [segments, step, job, output]);
 
   // ---- new track: upload + propose -----------------------------------------
   async function handleUpload({ file, youtubeUrl, lyrics, lyricsFile }) {
@@ -100,12 +115,14 @@ export default function App() {
       const segs = hydrateSegments(p.segments, p.stems || {});
       setSegments(segs);
       setActiveSegId(segs[0]?.id || null);
+      const loadedOutput = withOutputDefaults(p.output);
+      setOutput(loadedOutput);
       // If hydration added missing default signals, leave lastSaved empty so the
       // autosave persists them; otherwise mark as already-saved (no redundant PUT).
       const loadedCount = (p.segments || []).reduce((a, s) => a + ((s.signals || []).length), 0);
       const mergedCount = segs.reduce((a, s) => a + s.signals.length, 0);
       lastSaved.current = mergedCount === loadedCount
-        ? JSON.stringify({ step: p.step || "studio", segments: serializeSegments(segs) })
+        ? JSON.stringify({ step: p.step || "studio", segments: serializeSegments(segs), output: loadedOutput })
         : "";
       setStep(p.step || "studio");
     } catch (e) {
@@ -132,7 +149,7 @@ export default function App() {
     <div className={"wrap" + (step === "studio" ? " wide" : "")}>
       <header>
         <div className="brand">
-          <h1>DEMUCS.STUDIO</h1>
+          <h1>Kaika <span className="kanji">開花</span></h1>
           <span className="sub">{title || "segment · isolate · extract signals"}</span>
         </div>
         <div className="header-actions">
@@ -144,6 +161,13 @@ export default function App() {
           {(step === "review" || step === "studio" || step === "upload") && (
             <button className="btn" onClick={toProjects}>↩ projects</button>
           )}
+          <button className="btn logs-btn" onClick={() => setLogsOpen((v) => !v)}
+                  title="Logs" aria-label="Logs">
+            logs
+            {errCount > 0 && (
+              <span className="logs-badge">{errCount > 99 ? "99+" : errCount}</span>
+            )}
+          </button>
           <a className="help-link"
              href={`/?doc=${step === "upload" || step === "review" || step === "studio" ? step : ""}`}
              target="_blank" rel="noopener noreferrer"
@@ -193,9 +217,14 @@ export default function App() {
           stems={stems}
           duration={duration}
           job={job}
+          output={output}
+          setOutput={setOutput}
           onEditSplit={() => setStep("review")}
         />
       )}
+
+      <ErrorToast onOpenLogs={() => setLogsOpen(true)} />
+      <LogsPanel open={logsOpen} onClose={() => setLogsOpen(false)} />
     </div>
   );
 }

@@ -1,0 +1,560 @@
+/* The "Create animation" node-graph editor (spec 08). Same Kaika paper/petal/teal
+   language as the rest of the app — tokens from base.css. The canvas is a faint
+   paper grid; node cards are white panels with a per-type --accent; edges read as
+   teal "current"; selection + the active mode pill bloom petal. */
+
+/* ---- shell + bottom bar --------------------------------------------------- */
+
+.anim-wrap {
+  position: relative;
+  height: 72vh;
+  min-height: 460px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+
+.mode-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.mode-tab {
+  flex: 1;
+  padding: 9px 14px;
+  font: 600 12px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.mode-tab:hover { color: var(--text); }
+.mode-tab.on {
+  color: #fff;
+  background: var(--petal-grad);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(31, 36, 51, 0.12), 0 6px 18px rgba(184, 74, 116, 0.22);
+}
+
+/* ---- canvas (pan/zoom stage + edge overlay) ------------------------------- */
+
+.gc-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  /* faint paper grid: loose dots in the hairline tone on lifted paper */
+  background-color: var(--panel-2);
+  background-image: radial-gradient(var(--line) 1px, transparent 1.2px);
+  background-size: 26px 26px;
+  background-position: -13px -13px;
+  touch-action: none;
+}
+.gc-root:active { cursor: grabbing; }
+
+.gc-stage { position: absolute; top: 0; left: 0; width: 0; height: 0; }
+.gc-node-pos { position: absolute; }
+
+.gc-edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.gc-edge-line {
+  fill: none;
+  stroke: var(--courant);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.gc-edge-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+.gc-edge.sel .gc-edge-line { stroke: var(--petale); stroke-width: 2.6; opacity: 1; }
+.gc-edge:hover .gc-edge-line { opacity: 1; }
+.gc-wire { stroke: var(--petale-soft); stroke-dasharray: 5 5; opacity: 0.9; }
+.gc-wire.ok { stroke: var(--courant); stroke-dasharray: none; opacity: 1; }
+
+/* ---- ports ---------------------------------------------------------------- */
+
+.gc-port {
+  position: relative;
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent, var(--petale));
+  box-sizing: border-box;
+  cursor: crosshair;
+  transition: transform 0.1s, background 0.1s, box-shadow 0.1s;
+}
+/* Invisible enlarged hit target so a wire is easy to start/drop on the small dot.
+   Part of the same element, so elementFromPoint still resolves to the port. */
+.gc-port::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+}
+.gc-port-out { background: var(--accent, var(--petale)); }
+.gc-port-video { border-color: var(--text); }
+.gc-port-video.gc-port-out { background: var(--text); }
+.gc-port:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(184, 74, 116, 0.16);
+}
+
+/* ---- node cards ----------------------------------------------------------- */
+
+.anim-node {
+  position: relative;
+  width: 230px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  user-select: none;
+}
+.anim-node.sel { outline: 2px solid var(--accent, var(--petale)); outline-offset: 1px; }
+.anim-node-fluid { width: 320px; }
+
+/* Connector dots mounted on the card's side edge, vertically centered on the whole
+   card (not the title bar). translate(±50%) straddles the border so half the dot
+   sits outside the card. */
+.anim-port-side {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: flex;
+}
+.anim-port-side-in { left: 0; transform: translate(-50%, -50%); }
+.anim-port-side-out { right: 0; transform: translate(50%, -50%); }
+
+.anim-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
+  cursor: grab;
+  background: color-mix(in srgb, var(--accent, var(--petale)) 8%, var(--panel));
+}
+.anim-node-head:active { cursor: grabbing; }
+/* input ports lead the head (left of the title); outputs go right via headExtra */
+.anim-node-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.anim-node-head-right { display: flex; align-items: center; gap: 7px; flex: none; }
+.anim-node-del {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.anim-node-del:hover { color: #fff; background: var(--petale); }
+.anim-node-title {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent, var(--petale));
+}
+.anim-node-body { padding: 9px 10px; position: relative; }
+
+/* shared little bits */
+.iconbtn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.iconbtn:hover { color: var(--petale); background: var(--panel-2); }
+
+/* ---- signal node ---------------------------------------------------------- */
+
+.anim-signal-name { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.anim-signal-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.stem-chip {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent, var(--petale));
+  background: color-mix(in srgb, var(--accent, var(--petale)) 12%, var(--panel));
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.anim-signal-feature, .anim-signal-band { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.anim-signal-spark {
+  height: 34px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.anim-signal-missing { padding: 4px 0; }
+.anim-missing-msg { color: var(--petale); font-weight: 600; }
+.anim-missing-hint { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.anim-missing-id { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+/* ---- constant node -------------------------------------------------------- */
+/* uses shared .ctl rows from base.css; nothing extra needed */
+
+/* ---- fluid node ----------------------------------------------------------- */
+
+.anim-static { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+.anim-color { display: flex; align-items: center; gap: 8px; }
+.color-swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); flex: none; }
+.anim-path-note { font-size: 11px; color: var(--muted); font-style: italic; }
+
+.anim-group { margin-top: 6px; position: relative; }
+.anim-group-head {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.anim-group-head:hover { color: var(--text); }
+/* badge: how many wires feed params hidden in this collapsed group */
+.anim-group-wired {
+  font: 600 9px/1 var(--mono);
+  color: var(--petale);
+  background: color-mix(in srgb, var(--petale) 12%, var(--panel));
+  padding: 2px 4px;
+  border-radius: 5px;
+}
+/* the dot the surviving wires anchor to while the group is collapsed; sits on the
+   card's left edge, aligned with where the param input ports would be */
+.anim-group-anchor {
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* the fluid video-out port lives in the head's right side (flows naturally) */
+
+.anim-param-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.anim-param-label { flex: none; width: 64px; font-size: 11px; color: var(--text); }
+/* The param name already lives in `.anim-param-label`, so drop the shared Ctl's
+   own (empty) 52px label column and let the slider fill the row. */
+.anim-param-row .ctl { flex: 1; margin: 0; grid-template-columns: 1fr auto; gap: 8px; }
+.anim-param-row .ctl > .ctl-label { display: none; }
+/* the input port leads the row (left of the label) */
+.anim-param-row > .gc-port { flex: none; }
+
+/* wired param: a dual-thumb range slider (two bullets = lo/hi) + a value readout */
+.anim-range { flex: 1; display: flex; align-items: center; gap: 6px; }
+.anim-range-fmt { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+.anim-detach { flex: none; }
+
+/* Two native range inputs overlaid on one track. Only the thumbs receive pointer
+   events, so whichever bullet is under the cursor grabs — even when they touch. */
+.dual-slider { position: relative; flex: 1; height: 18px; display: flex; align-items: center; }
+.dual-slider::before {
+  content: ""; position: absolute; left: 0; right: 0; height: 4px;
+  border-radius: 2px; background: var(--line);
+}
+.dual-fill {
+  position: absolute; height: 4px; border-radius: 2px;
+  background: var(--accent, var(--petale));
+}
+.dual-thumb {
+  position: absolute; left: 0; width: 100%; height: 18px; margin: 0;
+  -webkit-appearance: none; appearance: none; background: transparent;
+  pointer-events: none;   /* track is inert; re-enabled on the thumbs below */
+}
+.dual-thumb::-webkit-slider-runnable-track { height: 4px; background: transparent; border: none; }
+.dual-thumb::-moz-range-track { height: 4px; background: transparent; border: none; }
+.dual-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; pointer-events: auto;
+  width: 13px; height: 13px; margin-top: -4.5px; border-radius: 50%;
+  background: var(--panel); border: 2px solid var(--accent, var(--petale)); cursor: grab;
+}
+.dual-thumb::-moz-range-thumb {
+  pointer-events: auto; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--panel); border: 2px solid var(--accent, var(--petale)); cursor: grab;
+}
+.dual-thumb:active::-webkit-slider-thumb { cursor: grabbing; }
+.dual-thumb:active::-moz-range-thumb { cursor: grabbing; }
+
+/* ---- output node ---------------------------------------------------------- */
+
+.anim-output-well {
+  position: relative;
+  width: 100%;
+  /* the preview adopts the project output aspect (set per node from ctx.output) */
+  aspect-ratio: var(--out-aspect, 1 / 1);
+  background: #0c0d12;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 6px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.anim-output-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.anim-output-empty, .anim-output-err {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: center;
+  padding: 8px;
+}
+.anim-output-empty { color: #8a93a6; }
+.anim-output-err { color: var(--petale-soft); }
+
+/* rendering state: a flowing petal/teal "fluid" backdrop with bobbing orbs */
+.anim-output-busy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background:
+    radial-gradient(120% 90% at 28% 22%, rgba(184, 74, 116, 0.30), transparent 58%),
+    radial-gradient(120% 90% at 72% 80%, rgba(52, 128, 138, 0.30), transparent 58%),
+    #0c0d12;
+  background-size: 200% 200%, 200% 200%, auto;
+  animation: anim-flow 7s ease-in-out infinite;
+}
+.anim-loader { display: flex; align-items: flex-end; gap: 8px; height: 18px; }
+.anim-loader-orb {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--petale-soft);
+  box-shadow: 0 0 12px rgba(217, 138, 166, 0.75);
+  animation: anim-orb 1.1s ease-in-out infinite;
+}
+.anim-loader-orb:nth-child(2) {
+  animation-delay: 0.16s;
+  background: #5fb3bd;
+  box-shadow: 0 0 12px rgba(95, 179, 189, 0.75);
+}
+.anim-loader-orb:nth-child(3) { animation-delay: 0.32s; }
+.anim-loader-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #dde4f0;
+}
+@keyframes anim-orb {
+  0%, 100% { transform: translateY(0) scale(0.78); opacity: 0.55; }
+  50% { transform: translateY(-9px) scale(1.18); opacity: 1; }
+}
+@keyframes anim-flow {
+  0% { background-position: 0% 50%, 100% 50%, 0 0; }
+  50% { background-position: 100% 50%, 0% 50%, 0 0; }
+  100% { background-position: 0% 50%, 100% 50%, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-output-busy { animation: none; }
+  .anim-loader-orb { animation-duration: 1.8s; }
+}
+
+/* ---- palette + render action (floating overlays) -------------------------- */
+
+.anim-palette {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 240px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-shadow: var(--shadow);
+}
+.anim-signal-picker {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  width: 220px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.anim-picker-empty { font-size: 11px; color: var(--muted); padding: 6px; }
+.anim-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.anim-picker-item:hover { background: var(--panel-2); }
+.anim-picker-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent, var(--petale)); flex: none; }
+
+/* ---- signal node viz: sparkline + live pulse pad, side by side ------------- */
+
+.anim-signal-viz { display: flex; gap: 8px; align-items: stretch; }
+.anim-signal-viz .anim-signal-spark { flex: 1; height: 44px; }
+/* CurveView's `.curve` is 80px tall by default; let it fill the 44px spark box
+   instead of being clipped to its top (same as studio's `.curve-mini .curve`). */
+.anim-signal-viz .anim-signal-spark .curve { height: 100%; }
+.anim-signal-viz .pulse-pad { width: 44px; height: 44px; flex: none; border-radius: 8px; }
+
+/* ---- shared segment transport (Studio results-head, visible in both tabs) -- */
+
+.seg-timeline {
+  flex: 1;
+  min-width: 90px;
+  max-width: 240px;
+  accent-color: var(--petale);
+  cursor: pointer;
+}
+.seg-time { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* speaker button + click-to-open vertical volume popover */
+.seg-volume { position: relative; flex: none; display: flex; }
+.vol-btn { padding: 4px 7px; line-height: 1; }
+.vol-pop {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.vol-pct { font: 600 10px/1 var(--mono); color: var(--muted); }
+/* rotate a horizontal range to vertical — reliable across browsers */
+.vol-track { height: 96px; width: 20px; display: flex; align-items: center; justify-content: center; }
+.vol-track input[type="range"] {
+  width: 96px;
+  transform: rotate(-90deg);
+  accent-color: var(--petale);
+  cursor: pointer;
+}
+
+/* ---- output settings modal ------------------------------------------------ */
+
+.anim-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+  backdrop-filter: blur(2px);
+}
+.anim-modal {
+  width: 340px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.anim-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.anim-modal-title {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+.anim-modal-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+
+.out-preview-wrap { display: flex; justify-content: center; }
+.out-preview {
+  width: auto;
+  height: 110px;
+  max-width: 100%;
+  background: #0c0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.out-preview-dim {
+  font: 600 10px/1 var(--mono);
+  color: #8a93a6;
+  padding: 4px 6px;
+}
+
+.out-field { display: flex; flex-direction: column; gap: 6px; }
+.out-label {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.out-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.out-ratio { font-family: var(--mono); font-size: 10px; opacity: 0.7; }
+.out-size { display: flex; align-items: center; gap: 6px; }
+.out-size .hz-input { width: 84px; }
+.out-x, .out-unit { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.out-bg { display: flex; align-items: center; gap: 8px; }
+.out-color {
+  width: 38px; height: 28px; padding: 0;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel-2); cursor: pointer;
+}
+.out-bg-hex { font-family: var(--mono); font-size: 11px; color: var(--text); text-transform: uppercase; }

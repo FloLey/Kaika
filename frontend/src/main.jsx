@@ -1,7 +1,11 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import Docs from "./components/Docs.jsx";
-import "./styles.css";
+import { installGlobalCapture } from "./lib/logCapture.js";
+import "./styles/index.css";
+
+// Capture uncaught errors / rejections into the log bus before anything renders.
+installGlobalCapture();
 
 // `?doc=<section>` opens the in-app user guide (its own root) instead of the app,
 // so every "?" can deep-link to a section in a new tab. Empty value = top.

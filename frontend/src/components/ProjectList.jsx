@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { listProjects, deleteProject } from "../api.js";
-import { fmtTime } from "../mel.js";
+import { listProjects, deleteProject } from "../lib/api.js";
+import { fmtTime } from "../lib/mel.js";
 
 // Start screen: resume a saved project or begin a new one.
 export default function ProjectList({ onNew, onOpen, onFluidLab }) {
