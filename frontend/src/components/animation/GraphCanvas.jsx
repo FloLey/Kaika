@@ -29,6 +29,7 @@ import { portKey, centerInContainer, edgePath, canConnect } from "./ports.js";
 
 export default function GraphCanvas({
   graph,
+  layoutKey,
   onGraphChange,
   onConnect,
   onNodeDelete,
@@ -64,7 +65,9 @@ export default function GraphCanvas({
   const tick = useCallback(() => forceTick((n) => n + 1), []);
 
   // Recompute edges after layout settles (refs attached) and on the triggers.
-  useLayoutEffect(() => { tick(); }, [graph, view, tick]);
+  // `layoutKey` changes when cards minimize/restore (ports re-anchor to header
+  // anchors), so edges must be re-measured then too.
+  useLayoutEffect(() => { tick(); }, [graph, view, tick, layoutKey]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -190,6 +193,15 @@ export default function GraphCanvas({
   onNodeDeleteRef.current = onNodeDelete;
   onEdgeDeleteRef.current = onEdgeDelete;
 
+  // Remove an edge via the model-aware remover (07's disconnect/unwire) or a raw
+  // edge drop. Shared by the keyboard shortcut and the on-edge ✕ handle.
+  const removeEdge = useCallback((edge) => {
+    if (!edge) return;
+    if (onEdgeDeleteRef.current) onEdgeDeleteRef.current(edge);
+    else onGraphChange?.((g) => ({ ...g, edges: g.edges.filter((ed) => ed.id !== edge.id) }));
+    onSelect?.(null);
+  }, [onGraphChange, onSelect]);
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
@@ -200,9 +212,7 @@ export default function GraphCanvas({
       const edge = (graph.edges || []).find((ed) => ed.id === selected);
       if (edge) {
         e.preventDefault();
-        if (onEdgeDeleteRef.current) onEdgeDeleteRef.current(edge);
-        else onGraphChange?.((g) => ({ ...g, edges: g.edges.filter((ed) => ed.id !== edge.id) }));
-        onSelect?.(null);
+        removeEdge(edge);
         return;
       }
       const node = graph.nodes.find((n) => n.id === selected);
@@ -226,7 +236,10 @@ export default function GraphCanvas({
     const rect = root.getBoundingClientRect();
     const ca = centerInContainer(a, rect);
     const cb = centerInContainer(b, rect);
-    return { id: e.id, d: edgePath(ca.x, ca.y, cb.x, cb.y) };
+    return {
+      id: e.id, edge: e, d: edgePath(ca.x, ca.y, cb.x, cb.y),
+      mx: (ca.x + cb.x) / 2, my: (ca.y + cb.y) / 2,
+    };
   }).filter(Boolean);
 
   const helpers = {
@@ -253,6 +266,29 @@ export default function GraphCanvas({
       onPointerMove={onBackgroundPointerMove}
       onPointerUp={bgPointerUp}
     >
+      {/* Established edges sit BELOW the nodes (screen space, crisp strokes), so a
+          card dragged over a wire occludes it. The live connecting wire is a
+          separate layer above the nodes (below). */}
+      <svg className="gc-edges gc-edges-base" width="100%" height="100%">
+        {edges.map((e) => (
+          <g key={e.id} className={"gc-edge" + (e.id === selected ? " sel" : "")}>
+            <path className="gc-edge-hit" d={e.d}
+                  onPointerDown={(ev) => { ev.stopPropagation(); onSelect?.(e.id); }} />
+            <path className="gc-edge-line" d={e.d} />
+            {/* ✕ handle at the edge midpoint — appears on hover/selection. Click to
+                cut the wire (no need to select + press Delete). */}
+            <g
+              className="gc-edge-del"
+              transform={`translate(${e.mx}, ${e.my})`}
+              onPointerDown={(ev) => { ev.stopPropagation(); removeEdge(e.edge); }}
+            >
+              <circle r="9" />
+              <text textAnchor="middle" dominantBaseline="central">✕</text>
+            </g>
+          </g>
+        ))}
+      </svg>
+
       <div
         className="gc-stage"
         ref={stageRef}
@@ -276,22 +312,15 @@ export default function GraphCanvas({
         ))}
       </div>
 
-      {/* Edge overlay in screen space (crisp, non-scaling strokes). */}
-      <svg className="gc-edges" width="100%" height="100%">
-        {edges.map((e) => (
-          <g key={e.id} className={"gc-edge" + (e.id === selected ? " sel" : "")}>
-            <path className="gc-edge-hit" d={e.d}
-                  onPointerDown={(ev) => { ev.stopPropagation(); onSelect?.(e.id); }} />
-            <path className="gc-edge-line" d={e.d} />
-          </g>
-        ))}
-        {wire && (
+      {/* Live connecting wire — above the nodes so you can see where you're dragging. */}
+      {wire && (
+        <svg className="gc-edges gc-edges-wire" width="100%" height="100%">
           <path
             className={"gc-edge-line gc-wire" + (wire.target ? " ok" : "")}
             d={edgePath(wire.x1, wire.y1, wire.x2, wire.y2)}
           />
-        )}
-      </svg>
+        </svg>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ const HELP = {
   force: "Strength of the jet the source pushes into the fluid.",
   angle: "Starting direction the jet pushes (0°=right, 90°=down, 270°=up). Ignored when radial is on.",
   radial: "Push outward in all directions from the centre instead of one heading.",
+  wrap: "Edges: on = a looping torus (fluid leaving one side re-enters the opposite); off = open (fluid that leaves the frame is gone for good).",
   r: "Red component of the dye color.",
   g: "Green component of the dye color.",
   b: "Blue component of the dye color.",
@@ -29,7 +30,7 @@ const HELP = {
 const SECTION = {
   emit: "fluid-source", radius: "fluid-source", force: "fluid-source",
   angle: "fluid-source",
-  radial: "fluid-source", enabled: "fluid-source", r: "fluid-source",
+  radial: "fluid-source", wrap: "fluid-source", enabled: "fluid-source", r: "fluid-source",
   g: "fluid-source", b: "fluid-source", intensity: "fluid-source",
   opacity: "fluid-source",
   path_speed: "fluid-path", path_closed: "fluid-path", path_pingpong: "fluid-path",
@@ -60,7 +61,7 @@ function Toggle({ label, k, value, onChange }) {
 export default function FluidLab({ onBack }) {
   const [p, setP] = useState({
     duration: 10, enabled: true, emit: 0.3, radius: 0.08, force: 20, angle: 270,
-    radial: false,
+    radial: false, wrap: true,
     r: 70, g: 176, b: 255, intensity: 1.0, opacity: 1.0,
     points: [[0.5, 0.5]], path_speed: 1, path_closed: false, path_pingpong: false,
     dissipation: 0.95, velocity_dissipation: 0.97, viscosity: 0.0, vorticity: 6,
@@ -119,7 +120,7 @@ export default function FluidLab({ onBack }) {
   const params = useMemo(() => ({
     duration: p.duration, fps: 24, grid: 96,
     source: { emit: p.emit, radius: p.radius, force: p.force, angle: p.angle,
-              radial: p.radial,
+              radial: p.radial, wrap: p.wrap,
               enabled: p.enabled, color: [p.r / 255, p.g / 255, p.b / 255],
               intensity: p.intensity, opacity: p.opacity, points: p.points,
               path_speed: p.path_speed, path_closed: p.path_closed,
@@ -156,6 +157,27 @@ export default function FluidLab({ onBack }) {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  // Keep the visible clip looping. Switching macOS Spaces / tabs backgrounds the
+  // page; the browser pauses background <video> and autoPlay won't re-fire, so the
+  // sim comes back frozen. A single wake event isn't reliable across Spaces, so we
+  // also poll: if the visible clip has stalled while the page is visible, nudge it.
+  useEffect(() => {
+    const resume = () => {
+      if (document.visibilityState !== "visible") return;
+      const el = vids[visibleRef.current].current;
+      if (el && el.paused) { const p = el.play && el.play(); if (p && p.catch) p.catch(() => {}); }
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    const watchdog = setInterval(resume, 1000);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
+      clearInterval(watchdog);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="step fluid-lab">
@@ -226,6 +248,7 @@ export default function FluidLab({ onBack }) {
           <Ctl label="angle" k="angle" value={p.angle} min={0} max={360} step={5}
                onChange={set} fmt={(v) => v + "°"} />
           <Toggle label="radial" k="radial" value={p.radial} onChange={set} />
+          <Toggle label="wrap edges" k="wrap" value={p.wrap} onChange={set} />
 
           <div className="ctl-sep">COLOR (4 axes)</div>
           <Ctl label="red" k="r" value={p.r} min={0} max={255} step={1} onChange={set} />

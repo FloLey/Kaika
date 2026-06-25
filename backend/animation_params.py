@@ -38,7 +38,7 @@ PARAMS: dict[str, tuple[str, float, float, float]] = {
 # `duration`, `fps`, `grid` live at the top level of the params dict; the rest are
 # nested under `source.*` in simulate(). Color/path are deliberately static in v1.
 SOURCE_STATIC_KEYS: tuple[str, ...] = (
-    "color", "enabled", "radial", "points",
+    "color", "enabled", "radial", "wrap", "points",
     "path_speed", "path_closed", "path_pingpong",
 )
 

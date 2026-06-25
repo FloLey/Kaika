@@ -3,11 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
 
 import SignalNode from "../components/animation/nodes/SignalNode.jsx";
-import ConstantNode from "../components/animation/nodes/ConstantNode.jsx";
 import FluidNode from "../components/animation/nodes/FluidNode.jsx";
 import OutputNode from "../components/animation/nodes/OutputNode.jsx";
+import CombineNode from "../components/animation/nodes/CombineNode.jsx";
+import PointsNode from "../components/animation/nodes/PointsNode.jsx";
+import MinimizedCard from "../components/animation/nodes/MinimizedCard.jsx";
 import { Port } from "../components/animation/nodes/NodeFrame.jsx";
-import { signalNode, constantNode, fluidNode, outputNode } from "../lib/graphModel.js";
+import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel.js";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
 import { setConstValue, setNodeRange, patchStatic } from "../components/animation/nodes/fluidBindings.js";
 
@@ -22,26 +24,6 @@ const h = (node) => ({
   },
 });
 
-// Recursively invoke hook-free function components to expand to host elements so a
-// control's onChange handler can be located and fired (no jsdom available).
-function deepRender(el) {
-  if (el == null || typeof el !== "object") return el;
-  if (Array.isArray(el)) return el.map(deepRender);
-  if (typeof el.type === "function") return deepRender(el.type(el.props));
-  if (el.props && el.props.children != null) {
-    return { ...el, props: { ...el.props, children: deepRender(el.props.children) } };
-  }
-  return el;
-}
-function findAll(el, pred, out = []) {
-  if (el == null || typeof el !== "object") return out;
-  if (Array.isArray(el)) { el.forEach((c) => findAll(c, pred, out)); return out; }
-  if (pred(el)) out.push(el);
-  const kids = el.props && el.props.children;
-  if (kids != null) findAll(kids, pred, out);
-  return out;
-}
-
 describe("Port", () => {
   it("renders data-node/data-port attributes and a kind+flow class", () => {
     const html = renderToStaticMarkup(
@@ -54,31 +36,6 @@ describe("Port", () => {
     expect(html).toContain('data-port="force"');
     expect(html).toContain("gc-port-in");
     expect(html).toContain("gc-port-value");
-  });
-});
-
-describe("ConstantNode", () => {
-  it("shows the title, a value slider, and one out port", () => {
-    const node = constantNode(0, 0, 0.5);
-    const html = renderToStaticMarkup(React.createElement(ConstantNode, {
-      ...h(node), onGraphChange: () => {},
-    }));
-    expect(html).toContain("constant");
-    expect(html).toContain('data-port="out"');
-    expect(html).toContain("gc-port-out");
-    expect(html).toContain('type="range"');
-  });
-
-  it("a slider change yields an updater that writes data.value", () => {
-    const node = constantNode(0, 0, 0.5);
-    let updater = null;
-    const tree = deepRender(ConstantNode({ ...h(node), onGraphChange: (u) => { updater = u; } }));
-    const range = findAll(tree, (e) => e.type === "input" && e.props.type === "range");
-    expect(range).toHaveLength(1);
-    range[0].props.onChange({ target: { value: "0.8" } });
-    expect(updater).toBeTypeOf("function");
-    const g2 = updater({ nodes: [node], edges: [] });
-    expect(g2.nodes[0].data.value).toBe(0.8);
   });
 });
 
@@ -113,32 +70,34 @@ describe("SignalNode", () => {
 });
 
 describe("OutputNode", () => {
-  it("has one video in port and shows the not-rendered state", () => {
+  // A graph where `out` is wired to a fluid (so the output is renderable).
+  const renderableCtx = (out) => {
+    const fluid = fluidNode(0, 0);
+    const graph = {
+      version: 1,
+      nodes: [fluid, out],
+      edges: [{ id: "e", source: fluid.id, sourcePort: "out", target: out.id, targetPort: "video" }],
+    };
+    return { graph, segment: { start: 0, end: 8, signals: [] }, job: "job", signals: [] };
+  };
+
+  it("has one video in port and prompts to wire a fluid when unwired", () => {
     const node = outputNode(0, 0);
     const html = renderToStaticMarkup(React.createElement(OutputNode, { ...h(node), ctx: {} }));
     expect(html).toContain("output");
     expect(html).toContain('data-port="video"');
     expect(html).toContain("gc-port-in");
-    expect(html).toContain("not rendered yet");
+    // No fluid wired into this output yet.
+    expect(html).toContain("wire a fluid");
   });
 
-  it("plays a passed videoUrl and shows busy/error states", () => {
+  it("shows the not-rendered state once a fluid is wired in", () => {
     const node = outputNode(0, 0);
-    const playing = renderToStaticMarkup(
-      React.createElement(OutputNode, { ...h(node), ctx: { videoUrl: "/x.mp4" } })
+    const html = renderToStaticMarkup(
+      React.createElement(OutputNode, { ...h(node), ctx: renderableCtx(node) })
     );
-    expect(playing).toContain("<video");
-    expect(playing).toContain("/x.mp4");
-
-    const busy = renderToStaticMarkup(
-      React.createElement(OutputNode, { ...h(node), ctx: { busy: true } })
-    );
-    expect(busy).toContain("rendering");
-
-    const err = renderToStaticMarkup(
-      React.createElement(OutputNode, { ...h(node), ctx: { error: "boom" } })
-    );
-    expect(err).toContain("boom");
+    // Initial static render (before the async render effect runs).
+    expect(html).toContain("not rendered yet");
   });
 });
 
@@ -190,5 +149,101 @@ describe("FluidNode", () => {
     const updater = patchStatic(node.id, { duration: 12 });
     const g2 = updater({ nodes: [node], edges: [] });
     expect(g2.nodes[0].data.static.duration).toBe(12);
+  });
+});
+
+describe("CombineNode", () => {
+  it("merge mode: a video out port, one in port per slot, and shared medium controls", () => {
+    const node = combineNode(0, 0);
+    const html = renderToStaticMarkup(
+      React.createElement(CombineNode, { ...h(node), onGraphChange: () => {} })
+    );
+    expect(html).toContain('data-port="out"');                 // video out
+    for (const slot of node.data.inputs) {
+      expect(html).toContain(`data-port="${slot.id}"`);         // each input slot port
+    }
+    expect(html).toContain("MEDIUM");                           // merge medium block
+    expect(html).toContain("merge");
+    expect(html).toContain("layered");
+    expect(html).not.toContain("anim-combine-opacity");         // no opacity in merge
+  });
+
+  it("layered mode: per-input opacity sliders, no shared-medium block", () => {
+    const base = combineNode(0, 0);
+    const node = { ...base, data: { ...base.data, mode: "stack" } };
+    const html = renderToStaticMarkup(
+      React.createElement(CombineNode, { ...h(node), onGraphChange: () => {} })
+    );
+    expect(html).toContain("anim-combine-opacity");             // opacity sliders
+    expect(html).not.toContain("MEDIUM (shared)");
+  });
+});
+
+describe("PointsNode (spec 11)", () => {
+  it("renders a marker per point and a points-flow out port", () => {
+    const node = pointsNode(0, 0);
+    node.data.points = [[0.2, 0.3], [0.7, 0.8]];
+    const html = renderToStaticMarkup(
+      React.createElement(PointsNode, { ...h(node), ctx: {}, onGraphChange: () => {} })
+    );
+    expect(html).toContain('data-port="out"');
+    expect(html).toContain("gc-port-points");
+    expect((html.match(/anim-points-marker/g) || []).length).toBe(2);
+  });
+
+  it("FluidNode shows a positions port and the wired point count", () => {
+    const f = fluidNode(0, 0);
+    const p = pointsNode(0, 0);
+    p.data.points = [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]];
+    const graph = { nodes: [f, p], edges: [
+      { id: "e", source: p.id, sourcePort: "out", target: f.id, targetPort: "positions" },
+    ] };
+    const html = renderToStaticMarkup(
+      React.createElement(FluidNode, { ...h(f), ctx: { graph }, onGraphChange: () => {}, onDetach: () => {} })
+    );
+    expect(html).toContain('data-port="positions"');
+    expect(html).toContain("positions");        // the labelled row
+    expect(html).toContain("3 points");          // wired point count
+  });
+});
+
+describe("MinimizedCard", () => {
+  const fluid = fluidNode(0, 0);
+  const out = outputNode(0, 0);
+  const sig = signalNode({ id: "s1", name: "kick" }, 0, 0);
+  const graph = {
+    version: 1,
+    nodes: [sig, fluid, out],
+    edges: [
+      { id: "e1", source: sig.id, sourcePort: "out", target: fluid.id, targetPort: "force" },
+      { id: "e2", source: sig.id, sourcePort: "out", target: fluid.id, targetPort: "r" },
+      { id: "e3", source: fluid.id, sourcePort: "out", target: out.id, targetPort: "video" },
+    ],
+  };
+  const helpers = {
+    portRef: () => () => {}, startConnect: () => {}, onTitlePointerDown: () => {},
+    onLayoutChange: () => {}, selected: false,
+  };
+
+  it("collapses a fluid card to its header with consolidated in/out anchors", () => {
+    const html = renderToStaticMarkup(React.createElement(MinimizedCard, {
+      node: fluid, helpers, ctx: { graph, signals: [] }, onDelete: () => {},
+    }));
+    expect(html).toContain("anim-node-fluid min");   // collapsed card class
+    expect(html).toContain("fluid");                  // header title kept
+    expect(html).toContain("▢");                      // restore button
+    expect(html).toContain('data-port="out"');        // single output anchor
+    // inbound wires (force + r) consolidate onto ONE input anchor
+    expect(html).toMatch(/data-port="(force|r)"/);
+    expect(html).not.toContain('type="range"');       // body controls hidden
+  });
+
+  it("a node with no inbound wires shows only the output anchor", () => {
+    const html = renderToStaticMarkup(React.createElement(MinimizedCard, {
+      node: sig, helpers, ctx: { graph, signals: [] }, onDelete: () => {},
+    }));
+    expect(html).toContain("anim-node-signal min");
+    expect(html).toContain('data-port="out"');
+    expect(html).not.toContain('gc-port-in');          // no input anchor rendered
   });
 });

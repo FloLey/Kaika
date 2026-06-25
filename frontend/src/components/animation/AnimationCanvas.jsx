@@ -2,40 +2,66 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GraphCanvas from "./GraphCanvas.jsx";
 import Palette from "./Palette.jsx";
 import renderAnimNode from "./renderAnimNode.jsx";
+import { MinimizeContext } from "./nodes/minimizeContext.js";
 import {
-  emptyGraph, normalizeGraph, validate, connect, disconnect, removeNode, mkEdgeId, graphHash,
+  emptyGraph, normalizeGraph, connect, disconnect, removeNode, mkEdgeId,
 } from "../../lib/graphModel.js";
 import { fluidParam } from "../../lib/fluidParams.js";
-import * as api from "../../lib/api.js";
 
-// 07 — the per-segment animation container. Owns render state (busy / url / error,
-// selection) and bridges the graph (lifted to segment.graph) <-> GraphCanvas <->
-// the /animate backend. Mount it keyed by segment.id so state resets per segment.
+// 07 — the per-segment animation container. Bridges the graph (lifted to
+// segment.graph) <-> GraphCanvas. Rendering is per-output: each OutputNode renders
+// its own pipeline (N fluid->output chains per graph), so this container no longer
+// owns a single render. Mount it keyed by segment.id so state resets per segment.
 //
 //   segment        — the active segment ({ id, start, end, signals, graph? })
 //   stems, job     — project context (audio + spectrograms)
 //   onGraphChange  — (graph) => void; commits the whole graph to segment.graph
 export default function AnimationCanvas({
-  segment, stems, job, output, groupClock, groupPlaying, onGraphChange: commitGraph,
+  segment, stems, job, output, groupClock, groupPlaying, onOpenOutput,
+  onGraphChange: commitGraph,
 }) {
   // A stable graph object: segment.graph when present, else a fresh empty graph.
   // normalizeGraph migrates older saves so every fluid node carries the current
   // param ports (e.g. r/g/b colour) — otherwise wiring those ports silently fails.
   const graph = useMemo(() => normalizeGraph(segment.graph || emptyGraph()), [segment.graph]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
   const [selId, setSelId] = useState(null);
 
   const wrapRef = useRef(null);
+  const panelRef = useRef(null);                  // the whole panel (fullscreen target)
   const viewRef = useRef(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
-  const reqId = useRef(0);
+  const [isFull, setIsFull] = useState(false);
+
+  // Fullscreen the playground via the browser Fullscreen API. Track the real state
+  // (so Esc / external exits update the button) by listening for fullscreenchange.
+  useEffect(() => {
+    const onFs = () => setIsFull(document.fullscreenElement === panelRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  const toggleFullscreen = useCallback(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else el.requestFullscreen?.().catch(() => {});
+  }, []);
 
   // Apply a (graph) => graph updater and lift the result to segment.graph.
   const applyUpdater = useCallback(
     (updater) => commitGraph(updater(graph)),
     [commitGraph, graph]
   );
+
+  // Collapsed-to-header cards. Stored ON the graph (`graph.minimized`) so it
+  // persists with the project across reloads, but it's a non-rendering field that
+  // graphHash/outputHash ignore — so toggling it never busts the render cache.
+  const minimized = useMemo(() => new Set(graph.minimized || []), [graph.minimized]);
+  const toggleMinimize = useCallback((id) => {
+    applyUpdater((g) => {
+      const cur = new Set(g.minimized || []);
+      if (cur.has(id)) cur.delete(id); else cur.add(id);
+      return { ...g, minimized: [...cur] };
+    });
+  }, [applyUpdater]);
 
   // Where to drop a new node: center of the viewport in graph space, staggered so
   // repeated adds don't land exactly on top of each other.
@@ -81,79 +107,56 @@ export default function AnimationCanvas({
     setSelId(null);
   }, [applyUpdater]);
 
-  // A content hash of exactly the inputs that change the render: graph topology +
-  // node data, segment bounds, and the defining fields of *referenced* signals.
-  // It excludes pan/zoom/x-y and unreferenced signals, so the key only changes
-  // when the output would — moving a node or editing an unrelated signal is a
-  // no-op (see graphModel.graphHash).
-  // The project output settings (size/quality/fps/background) also change the
-  // rendered clip, so they ride in the render key (and the request) — editing
-  // them re-renders, and the backend caches per (graph + output).
-  const outputKey = JSON.stringify(output || {});
-  const renderKey = useMemo(
-    () => graphHash(graph, job, segment.start, segment.end, segment.signals) + outputKey,
-    [graph, job, segment.start, segment.end, segment.signals, outputKey]
-  );
-
-  // Auto-render: whenever the render key changes, re-run the pipe (debounced).
-  // Same pattern as FluidLab — a request-id guard drops stale responses so the
-  // last edit always wins. Invalid/incomplete graphs (e.g. no output yet) skip
-  // silently; only real backend failures surface an error.
-  useEffect(() => {
-    if (!validate(graph).ok) { setError(""); return undefined; }
-    const id = ++reqId.current;
-    setBusy(true);
-    setError("");
-    const t = setTimeout(async () => {
-      try {
-        const { url } = await api.renderGraph({
-          job_id: job,
-          segment: { start: segment.start, end: segment.end, signals: segment.signals },
-          graph,
-          output,
-        });
-        if (id !== reqId.current) return;        // a newer edit superseded us
-        setVideoUrl(url);
-      } catch (e) {
-        if (id === reqId.current) setError(e.message || String(e));
-      } finally {
-        if (id === reqId.current) setBusy(false);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderKey]);
-
   const ctx = {
-    segment, stems, job, output, videoUrl, busy, error,
+    segment, stems, job, output,
     signals: segment.signals, graph,
     // the shared segment clock (Studio's refAudio) + transport state, so signal
-    // pulse pads and the Output video all animate off one playhead.
+    // pulse pads and every Output video animate off one playhead. Each OutputNode
+    // renders its own pipeline from `graph` + `output` (see OutputNode).
     groupClock, groupPlaying, segStart: segment.start,
+    minimized,            // collapsed cards -> renderAnimNode swaps in MinimizedCard
     onGraphChange: applyUpdater,
     onDetach: (fluidId, key) => applyUpdater((g) => disconnect(g, fluidId, key)),
     onDeleteNode: (id) => { applyUpdater((g) => removeNode(g, id)); setSelId(null); },
   };
 
+  // Provided to every NodeFrame's minimize/restore button (so node components need
+  // no changes). A stable key feeds GraphCanvas so edges re-anchor on toggle.
+  const minimizeCtx = useMemo(() => ({ minimized, toggle: toggleMinimize }), [minimized, toggleMinimize]);
+  const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
+  const allMinimized = graph.nodes.length > 0 && graph.nodes.every((n) => minimized.has(n.id));
+  const toggleMinimizeAll = useCallback(() => {
+    applyUpdater((g) => ({ ...g, minimized: allMinimized ? [] : g.nodes.map((n) => n.id) }));
+  }, [applyUpdater, allMinimized]);
+
   return (
-    <div className="anim-wrap" ref={wrapRef}>
-      <GraphCanvas
-        graph={graph}
-        onGraphChange={applyUpdater}
-        onConnect={onConnect}
-        onNodeDelete={onNodeDelete}
-        onEdgeDelete={onEdgeDelete}
-        selected={selId}
-        onSelect={setSelId}
-        onViewChange={(v) => { viewRef.current = v; }}
-        renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}
-      />
+    <div className={"anim-wrap" + (isFull ? " full" : "")} ref={panelRef}>
       <Palette
-        graph={graph}
         signals={segment.signals}
         centerGraph={centerGraph}
+        onOpenOutput={onOpenOutput}
+        isFullscreen={isFull}
+        onToggleFullscreen={toggleFullscreen}
         onGraphChange={applyUpdater}
+        allMinimized={allMinimized}
+        onToggleMinimizeAll={graph.nodes.length ? toggleMinimizeAll : null}
       />
+      <div className="anim-stage" ref={wrapRef}>
+        <MinimizeContext.Provider value={minimizeCtx}>
+          <GraphCanvas
+            graph={graph}
+            layoutKey={minimizedKey}
+            onGraphChange={applyUpdater}
+            onConnect={onConnect}
+            onNodeDelete={onNodeDelete}
+            onEdgeDelete={onEdgeDelete}
+            selected={selId}
+            onSelect={setSelId}
+            onViewChange={(v) => { viewRef.current = v; }}
+            renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}
+          />
+        </MinimizeContext.Provider>
+      </div>
     </div>
   );
 }

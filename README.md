@@ -35,11 +35,15 @@ Frontend: React + Vite (Web Audio API).
      extract a signal: choose a **feature** (energy, onset, flux, brightness,
      harmonic, chroma, beat/bar phase) and shape it (attack, release, gamma,
      threshold, gain, offset, invert).
-   - **Create animation** — a drag-and-drop **node graph**: wire *signal* and
-     *constant* cards into a *fluid* simulation card (every parameter, incl. the
-     r/g/b colour, is a modulatable input port with a `[lo, hi]` range) → a *video
-     output* card. It **auto-renders** (clip = the full segment) at the project's
-     output size / quality / fps / background.
+   - **Create animation** — a drag-and-drop **node graph**: wire *signal* cards
+     into a *fluid* simulation card (every parameter, incl. the r/g/b colour, is a
+     modulatable input port with a `[lo, hi]` range) → a *video output* card. A
+     *points* card lets you draw source positions (a source at each point) and wire
+     them into a fluid. A *combine* card composes several fluids — **merge** (their
+     sources share one simulation and interact) or **layered** (stacked with
+     per-input transparency); outputs also pass through, so pipelines can branch. It
+     **auto-renders** (clip = the full segment) at the project's output size /
+     quality / fps / background.
 
    Everything is **per segment** and autosaves.
 

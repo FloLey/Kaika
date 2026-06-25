@@ -1,7 +1,9 @@
 import SignalNode from "./nodes/SignalNode.jsx";
-import ConstantNode from "./nodes/ConstantNode.jsx";
 import FluidNode from "./nodes/FluidNode.jsx";
 import OutputNode from "./nodes/OutputNode.jsx";
+import CombineNode from "./nodes/CombineNode.jsx";
+import PointsNode from "./nodes/PointsNode.jsx";
+import MinimizedCard from "./nodes/MinimizedCard.jsx";
 
 // The node-type switch (06 §Wiring it to the canvas). 07's container passes this
 // to <GraphCanvas renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}>.
@@ -26,13 +28,19 @@ export default function renderAnimNode(node, helpers, ctx = {}) {
     onGraphChange: ctx.onGraphChange,
     onDelete: () => ctx.onDeleteNode && ctx.onDeleteNode(node.id),
   };
+  // Collapsed to header only: a generic card with consolidated wire anchors.
+  if (ctx.minimized && ctx.minimized.has(node.id)) {
+    return <MinimizedCard node={node} helpers={helpers} ctx={ctx} onDelete={common.onDelete} />;
+  }
   switch (node.type) {
     case "signal":
       return <SignalNode {...common} />;
-    case "constant":
-      return <ConstantNode {...common} />;
     case "fluid":
       return <FluidNode {...common} onDetach={ctx.onDetach} />;
+    case "combine":
+      return <CombineNode {...common} />;
+    case "points":
+      return <PointsNode {...common} />;
     case "output":
       return <OutputNode {...common} />;
     default:

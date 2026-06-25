@@ -249,9 +249,10 @@ export default function Docs({ section }) {
           <tbody>
             <tr><th>Card</th><th>What it does</th></tr>
             <tr><td>signal</td><td>Exposes one of this segment's signals (from the other tab) as a 0–1 curve, with a live pulse pad so you can see it move. Pick which signal from the <strong>+ Signal</strong> menu. One output.</td></tr>
-            <tr><td>constant</td><td>A single fixed value (a slider, 0–1). Use it to set a parameter to a steady amount. One output.</td></tr>
-            <tr><td>fluid</td><td>The simulation. Static bits (on/off, radial, a base colour) live on the card; every animatable parameter — force, vorticity, emit, the red/green/blue colour channels, … — is an <strong>input port</strong>, grouped into collapsible <em>source / colour / medium</em> sections. One video output. (One per graph.)</td></tr>
-            <tr><td>output</td><td>Shows the rendered looping video. Wire the fluid's video output into it. (One per graph.)</td></tr>
+            <tr><td>fluid</td><td>The simulation. Static bits (on/off, radial, a base colour) live on the card; every animatable parameter — force, vorticity, emit, the red/green/blue colour channels, … — is an <strong>input port</strong>, grouped into collapsible <em>source / colour / medium</em> sections. One video output.</td></tr>
+            <tr><td>points</td><td>A small canvas you draw points on (see below). Wire it into a fluid's <em>positions</em> input and the fluid puts a <strong>source at each point</strong> instead of one in the centre.</td></tr>
+            <tr><td>combine</td><td>Composes several fluids into one (see below): <em>merge</em> = their sources share one simulation and interact; <em>layered</em> = the inputs are stacked with per-input transparency. Dynamic inputs (a <strong>+ input</strong> button), one video output.</td></tr>
+            <tr><td>output</td><td>Shows the rendered looping video — wire a fluid's (or combine's) video output into it. It also <strong>passes its input through</strong> (a video out port), so you can preview a stream <em>and</em> feed it onward. You can have several independent fluid/combine → output pipelines in one graph.</td></tr>
           </tbody>
         </table>
 
@@ -259,7 +260,7 @@ export default function Docs({ section }) {
         <ul>
           <li><strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the fluid's video output onto the output card).</li>
           <li><strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its 0–1 curve is mapped into a <strong>[lo, hi]</strong> range you set right on that port. So a kick-energy signal on <em>force</em> with range 0–45 makes the jet punch on every kick. Set lo and hi to taste; detach with the ✕.</li>
-          <li><strong>Constants</strong> — a constant (or an un-wired port) just holds a steady value in the parameter's native range.</li>
+          <li><strong>Steady values</strong> — an un-wired port just holds a steady value (its slider) in the parameter's native range.</li>
           <li><strong>Move / delete</strong> — drag a card by its title bar; pan the canvas by dragging the background and zoom with the scroll wheel. Delete a card with its ✕, or select a card/wire and press Delete.</li>
         </ul>
         <p>
@@ -267,6 +268,45 @@ export default function Docs({ section }) {
           <a href="#fluid-source"> Fluid Lab</a> — the difference here is that any of
           them (including the colour channels) can be driven by a signal over the
           clip instead of being fixed.
+        </p>
+
+        <h3 id="animation-points">Placing sources — the points card</h3>
+        <p>
+          By default a fluid emits from a single source in the centre. The
+          <strong>points</strong> card lets you place sources wherever you like:
+          drop a <strong>+ Points</strong> card, <strong>click</strong> its canvas to
+          add a point, <strong>drag</strong> a dot to move it, <strong>double-click</strong>
+          a dot to remove it. Then wire the card's output into a fluid's
+          <strong> positions</strong> input (the dot on the fluid's left edge). The
+          fluid now emits <strong>one source at every point</strong> — all sharing the
+          fluid's colour, force, emit, etc. (and any signal modulation), just at
+          different places. The card shows the project's aspect ratio so points land
+          where you draw them.
+        </p>
+        <div className="note">
+          This is the simple first version — a fixed set of points for the whole
+          clip. (Points that move or appear/disappear over time will come later.)
+        </div>
+
+        <h3 id="animation-combine">Combining fluids</h3>
+        <p>
+          A <strong>combine</strong> card composes several fluids into one. Wire each
+          fluid's video output into one of the combine's inputs (use <strong>+ input</strong>
+          for more), then wire the combine's output into an output card. It has two
+          modes:
+        </p>
+        <table>
+          <tbody>
+            <tr><th>Mode</th><th>What it does</th></tr>
+            <tr><td>merge</td><td>The inputs' sources are dropped into <strong>one shared simulation</strong>, so the fluids physically interact (their dye and flow mix). The combine card carries the shared <em>medium</em> (dissipation / viscosity / vorticity); each input fluid contributes only its emitter (colour, force, position, and any signal modulation).</td></tr>
+            <tr><td>layered</td><td>Each input is rendered separately and the clips are <strong>stacked with transparency</strong>. Every input has an <em>opacity</em> slider; a brighter upper layer covers what's beneath it, empty areas let lower layers show through. Input order = top → bottom.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Inputs can be a fluid, another combine, or an <strong>output</strong> (its
+          pass-through port) — so you can preview a stream and also feed it into a
+          combine. (A <em>layered</em> combine can't feed a <em>merge</em> — a stacked
+          video has no single source to merge — the card will tell you.)
         </p>
 
         <h3>Rendering — it's automatic</h3>

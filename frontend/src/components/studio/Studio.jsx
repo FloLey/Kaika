@@ -188,8 +188,13 @@ export default function Studio({
           </span>
           <div className="controls">
             <button className="btn sm" onClick={onEditSplit}>↩ edit split</button>
-            <button className="btn on" onClick={playAll}>
-              {allPlaying ? "❚❚ pause" : "▶ play segment"}
+            <button
+              className="btn on seg-play"
+              onClick={playAll}
+              title={allPlaying ? "Pause" : "Play segment"}
+              aria-label={allPlaying ? "Pause" : "Play segment"}
+            >
+              {allPlaying ? "❚❚" : "▶"}
             </button>
             <input
               className="seg-timeline"
@@ -207,15 +212,6 @@ export default function Studio({
               <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
               loop
             </label>
-            {tab === "animation" && (
-              <button
-                className="btn sm output-gear"
-                title="Output settings (size, quality, fps, background)"
-                onClick={() => setShowOutput(true)}
-              >
-                ⚙ output
-              </button>
-            )}
           </div>
         </div>
 
@@ -263,6 +259,7 @@ export default function Studio({
               output={output}
               groupClock={refAudio}
               groupPlaying={allPlaying}
+              onOpenOutput={() => setShowOutput(true)}
               onGraphChange={setActiveGraph}
             />
           )}

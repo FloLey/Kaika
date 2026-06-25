@@ -20,8 +20,13 @@ def _fluid_node(ports=None, static=None):
     }
 
 
-def _output_node():
-    return {"id": "n-out", "type": "output", "x": 0, "y": 0, "data": {"title": "preview"}}
+def _output_node(node_id="n-out"):
+    return {"id": node_id, "type": "output", "x": 0, "y": 0, "data": {"title": "preview"}}
+
+
+def _video_edge(fluid_id="n-fluid01", out_id="n-out"):
+    return {"id": f"e-{fluid_id}-{out_id}", "source": fluid_id, "sourcePort": "out",
+            "target": out_id, "targetPort": "video"}
 
 
 def _stem_path(job_id, stem):
@@ -32,7 +37,7 @@ def _stem_path(job_id, stem):
 # Validation (01 §3.7)
 # --------------------------------------------------------------------------- #
 def test_validate_ok_minimal():
-    g = {"version": 1, "nodes": [_fluid_node(), _output_node()], "edges": []}
+    g = {"version": 1, "nodes": [_fluid_node(), _output_node()], "edges": [_video_edge()]}
     graph.validate(g)  # no raise
 
 
@@ -43,17 +48,63 @@ def test_validate_rejects_no_output():
 
 
 def test_validate_rejects_no_fluid():
+    # An output with nothing wired in (no fluid/combine) is rejected.
     g = {"version": 1, "nodes": [_output_node()], "edges": []}
-    with pytest.raises(ValueError, match="fluid"):
+    with pytest.raises(ValueError, match="exactly one source"):
+        graph.validate(g)
+
+
+def test_validate_rejects_output_not_wired_to_fluid():
+    g = {"version": 1, "nodes": [_fluid_node(), _output_node()], "edges": []}
+    with pytest.raises(ValueError, match="exactly one source"):
         graph.validate(g)
 
 
 def test_validate_rejects_dangling_node_binding():
     ports = {"force": {"binding": {"kind": "node", "nodeId": "n-ghost",
                                    "lo": 0.0, "hi": 45.0}}}
-    g = {"version": 1, "nodes": [_fluid_node(ports), _output_node()], "edges": []}
+    g = {"version": 1, "nodes": [_fluid_node(ports), _output_node()],
+         "edges": [_video_edge()]}
     with pytest.raises(ValueError, match="unknown node"):
         graph.validate(g)
+
+
+# --------------------------------------------------------------------------- #
+# Multiple independent pipelines (N fluid -> N output)
+# --------------------------------------------------------------------------- #
+def _two_pipeline_graph():
+    """Two fluids (A force=10, B force=40) each wired to its own output."""
+    a = _fluid_node(ports={"force": {"binding": {"kind": "const", "value": 10.0}}})
+    a["id"] = "n-fluidA"
+    b = _fluid_node(ports={"force": {"binding": {"kind": "const", "value": 40.0}}})
+    b["id"] = "n-fluidB"
+    return {
+        "version": 1,
+        "nodes": [a, _output_node("n-outA"), b, _output_node("n-outB")],
+        "edges": [_video_edge("n-fluidA", "n-outA"),
+                  _video_edge("n-fluidB", "n-outB")],
+    }
+
+
+def test_validate_accepts_two_pipelines():
+    graph.validate(_two_pipeline_graph())  # no raise
+
+
+def test_output_hash_differs_per_output():
+    g = _two_pipeline_graph()
+    seg = {"start": 0.0, "end": 2.0, "signals": []}
+    ha = graph.output_hash("job1", seg, g, "n-outA")
+    hb = graph.output_hash("job1", seg, g, "n-outB")
+    assert ha != hb
+
+
+def test_build_params_selects_the_outputs_fluid():
+    g = _two_pipeline_graph()
+    seg = {"start": 0.0, "end": 2.0, "signals": []}
+    pa = graph.build_params("job1", seg, g, _stem_path, output_id="n-outA")
+    pb = graph.build_params("job1", seg, g, _stem_path, output_id="n-outB")
+    assert pa["source"]["force"] == 10.0
+    assert pb["source"]["force"] == 40.0
 
 
 # --------------------------------------------------------------------------- #

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import Ctl, { Toggle } from "../../../ui/Ctl.jsx";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
 import { FLUID_PARAMS } from "../../../lib/fluidParams.js";
+import { videoSource } from "../../../lib/graphModel.js";
 import { setConstValue, setNodeRange, patchStatic } from "./fluidBindings.js";
 
 // The artifact card (06 §FluidNode). Static controls on top; one input-port ROW
@@ -117,6 +118,11 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
   const [open, setOpen] = useState({ source: true, color: true, medium: false });
   const s = node.data.static;
 
+  // A wired points card overrides the single-centre source with N source positions.
+  const posSrcId = ctx?.graph ? videoSource(ctx.graph, node.id, "positions") : null;
+  const posNode = posSrcId ? ctx.graph.nodes.find((n) => n.id === posSrcId) : null;
+  const posCount = posNode && posNode.type === "points" ? (posNode.data.points || []).length : 0;
+
   // Collapsing/expanding a group mounts/unmounts ports; ask the canvas to redraw
   // edges so wires re-anchor (to the group header when collapsed, to the row port
   // when open). `onLayoutChange` is stable, so this only fires when `open` flips.
@@ -156,8 +162,25 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
         />
       }
     >
+      {/* Source positions: a labelled `points` input. Wire a points card here to put
+          a source at each drawn point (otherwise a single source at the centre). */}
+      <div className="anim-pos-row">
+        <Port
+          kind="in"
+          flow="points"
+          nodeId={node.id}
+          portId="positions"
+          portRef={helpers.portRef}
+          title="wire a points card here"
+        />
+        <span className="anim-pos-label">positions</span>
+        <span className="anim-pos-count">
+          {posCount > 0 ? `${posCount} point${posCount === 1 ? "" : "s"}` : "center"}
+        </span>
+      </div>
+
       {/* Static controls (non-port params). The clip always spans the full segment,
-          so there is no duration control. Simplified path: single center point. */}
+          so there is no duration control. */}
       <div className="anim-static">
         <div className="anim-color">
           <span className="ctl-label">color</span>
@@ -165,7 +188,18 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
         </div>
         <Toggle label="enabled" value={s.enabled} onChange={(v) => setStatic({ enabled: v })} />
         <Toggle label="radial" value={s.radial} onChange={(v) => setStatic({ radial: v })} />
-        <div className="anim-path-note">source: center point{s.radial ? " · radial" : ""}</div>
+        <Toggle
+          label="wrap edges"
+          value={s.wrap !== false}
+          help="On: fluid that leaves one edge re-enters the opposite (a looping torus). Off: fluid that leaves the frame is gone for good."
+          onChange={(v) => setStatic({ wrap: v })}
+        />
+        {(s.radial || s.wrap === false) && (
+          <div className="anim-path-note">
+            {s.radial ? "radial" : ""}{s.radial && s.wrap === false ? " · " : ""}
+            {s.wrap === false ? "open edges" : ""}
+          </div>
+        )}
       </div>
 
       {/* Param input ports, grouped + collapsible. */}

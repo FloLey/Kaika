@@ -562,10 +562,11 @@ def animate():
     graph = body.get("graph")
     segment = body.get("segment")  # { start, end, signals: [...] }
     output = body.get("output")    # project render settings (size/quality/fps/bg)
+    output_id = body.get("output_id")  # which output's pipeline to render (N per graph)
     if not job_id or graph is None or segment is None:
         return jsonify({"error": "missing job_id, segment, or graph"}), 400
     try:
-        url = graphmod.render(job_id, segment, graph, stem_audio_path, output)
+        url = graphmod.render(job_id, segment, graph, stem_audio_path, output, output_id)
     except ValueError as e:
         log.warning("animate rejected graph (%s): %s", job_id, e)
         return jsonify({"error": str(e)}), 400

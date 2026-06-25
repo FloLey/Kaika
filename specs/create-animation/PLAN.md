@@ -123,10 +123,13 @@ chain follows; styling rides alongside the UI; tests/docs close it out.
 | 07 | [`07-workspace-integration.md`](./07-workspace-integration.md) | Frontend: bottom-bar mode switch, graph state, Render flow → Output | 03, 06 |
 | 08 | [`08-styling.md`](./08-styling.md) | `styles/animation.css` in the Kaika theme | 06, 07 |
 | 09 | [`09-tests-docs-verification.md`](./09-tests-docs-verification.md) | Unit tests, in-app Docs section, end-to-end checklist | all |
+| 10 | [`10-combine-nodes.md`](./10-combine-nodes.md) | **Combine card** — merge (shared sim) + layered (alpha-over) fluids; video-DAG executor; output pass-through | 01–09 (shipped) |
+| 11 | [`11-source-points.md`](./11-source-points.md) | **Points card** — draw points; a fluid emits one source per point (shares its params); reuses the multi-emitter sim | 01–10 (shipped) |
 
 **Dependency order:** 01 underpins everything · 02→03 is the backend chain ·
 04→05→06→07 is the frontend chain · 03+07 close the end-to-end loop · 08 alongside
-06/07 · 09 last.
+06/07 · 09 last. **10 is a follow-on feature** on top of the shipped editor (its own
+6 internal steps).
 
 ### Suggested milestones (each independently demoable)
 

@@ -1,8 +1,9 @@
 """Graph executor: a per-segment graph (`01`) -> a rendered, cached, looping mp4.
 
-Resolves every fluid input port to a constant or a signal-driven per-frame array
-(native units), builds the `simulate()` params dict, and renders via the
-time-varying `fluid.simulate()` (`02`). Exposed at `POST /animate` (`app.py`).
+Resolves every fluid input port to a constant value (an un-wired port's slider) or
+a signal-driven per-frame array (native units), builds the `simulate()` params
+dict, and renders via the time-varying `fluid.simulate()` (`02`). Exposed at
+`POST /animate` (`app.py`).
 
 Design notes (locked by the spec):
 - Signal definitions ride in the request as `segment.signals` (Issue 1A). The
@@ -36,6 +37,65 @@ _SIGNAL_HASH_FIELDS = (
     "invert", "gamma", "gain", "offset", "threshold",
 )
 
+# Node types that produce a video stream (spec 10). `output` passes its input
+# through, so it's a producer too.
+_VIDEO_PRODUCERS = ("fluid", "combine", "output")
+_MERGE_MEDIUM_DEFAULTS = (
+    ("dissipation", 0.95), ("velocity_dissipation", 0.97),
+    ("viscosity", 0.0), ("vorticity", 6.0),
+)
+
+
+def _video_source(graph: dict, target_id: str, target_port: str):
+    """The node id wired into (target_id, target_port) via an edge, or None."""
+    for e in graph.get("edges", []):
+        if e.get("target") == target_id and e.get("targetPort") == target_port:
+            return e.get("source")
+    return None
+
+
+def _is_emitter_source(graph: dict, node_id, nodes: dict, seen=None) -> bool:
+    """Whether `node_id` resolves to fluid emitter(s) for a MERGE — i.e. no layered
+    (stack) combine sits upstream (a composited video has no single emitter set)."""
+    seen = seen if seen is not None else set()
+    if node_id in seen:
+        return False
+    seen.add(node_id)
+    node = nodes.get(node_id)
+    if node is None:
+        return False
+    t = node.get("type")
+    if t == "fluid":
+        return True
+    if t == "output":
+        src = _video_source(graph, node_id, "video")
+        return src is not None and _is_emitter_source(graph, src, nodes, seen)
+    if t == "combine":
+        if node.get("data", {}).get("mode") == "stack":
+            return False
+        for slot in node.get("data", {}).get("inputs", []):
+            src = _video_source(graph, node_id, slot.get("id"))
+            if src is not None and not _is_emitter_source(graph, src, nodes, seen):
+                return False
+        return True
+    return False
+
+
+def composite(layers: list, opacities: list) -> np.ndarray:
+    """Alpha-over stack of dye-on-transparent uint8 frame stacks (spec 10).
+
+    `layers[0]` is the TOP layer. A layer's coverage (alpha) is its per-pixel
+    brightness (max channel) times its `opacity`, so a bright upper layer hides
+    what's beneath while dim/empty areas let lower layers show through. The result
+    stays dye-on-transparent (the terminal output applies the background)."""
+    acc = np.zeros_like(layers[0], dtype=np.float32)
+    for layer, op in reversed(list(zip(layers, opacities))):   # bottom -> top
+        f = layer.astype(np.float32) / 255.0
+        op = float(op)
+        a = np.clip(f.max(axis=-1, keepdims=True), 0.0, 1.0) * op
+        acc = f * op + acc * (1.0 - a)
+    return (np.clip(acc, 0.0, 1.0) * 255).astype(np.uint8)
+
 
 # --------------------------------------------------------------------------- #
 # Validation (01 §3.7)
@@ -44,44 +104,75 @@ def _nodes_of(graph: dict, ntype: str) -> list[dict]:
     return [n for n in graph.get("nodes", []) if n.get("type") == ntype]
 
 
+def _fluid_for_output(graph: dict, output_id: str) -> dict:
+    """The fluid node feeding `output_id` via its single incoming video edge.
+
+    An output node has only the one `video` in-port, so every edge targeting it is
+    that video edge. Raise ValueError if there isn't exactly one, or its source is
+    not a fluid node.
+    """
+    nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
+    incoming = [e for e in graph.get("edges", []) if e.get("target") == output_id]
+    if len(incoming) != 1:
+        raise ValueError(
+            f"output '{output_id}' must be wired to exactly one fluid "
+            f"(found {len(incoming)} incoming edges)")
+    src = nodes.get(incoming[0].get("source"))
+    if src is None or src.get("type") != "fluid":
+        raise ValueError(f"output '{output_id}' is not wired to a fluid node")
+    return src
+
+
 def validate(graph: dict) -> None:
     """Raise ValueError (surfaced as HTTP 400) if the graph is not renderable.
 
-    Rules: exactly one output, exactly one fluid (v1), every node-binding nodeId
-    resolves to an existing node, and the binding graph is acyclic.
+    Rules: at least one output, each output wired to exactly one fluid, every
+    node-binding nodeId resolves to an existing node, and the binding graph is
+    acyclic. N independent fluid->output pipelines are allowed.
     """
     if not isinstance(graph, dict):
         raise ValueError("graph must be an object")
     nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
 
     outputs = _nodes_of(graph, "output")
-    if len(outputs) != 1:
-        raise ValueError(f"graph must have exactly one output node (found {len(outputs)})")
+    if len(outputs) < 1:
+        raise ValueError("graph must have at least one output node")
+    # Each output must be wired to exactly one video producer (fluid / combine /
+    # output-passthrough) via its single `video` in-port.
+    for out in outputs:
+        incoming = [e for e in graph.get("edges", [])
+                    if e.get("target") == out["id"] and e.get("targetPort") == "video"]
+        if len(incoming) != 1:
+            raise ValueError(
+                f"output '{out['id']}' must be wired to exactly one source "
+                f"(found {len(incoming)})")
+        src = nodes.get(incoming[0].get("source"))
+        if src is None or src.get("type") not in _VIDEO_PRODUCERS:
+            raise ValueError(f"output '{out['id']}' must be wired to a fluid or combine")
+
     fluids = _nodes_of(graph, "fluid")
-    if len(fluids) != 1:
-        raise ValueError(f"graph must have exactly one fluid node (found {len(fluids)})")
 
-    # Every node-kind binding must reference an existing node.
+    # Every fluid node-binding must reference an existing node.
     for fl in fluids:
-        ports = fl.get("data", {}).get("ports", {})
-        for key, port in ports.items():
+        for key, port in fl.get("data", {}).get("ports", {}).items():
             binding = (port or {}).get("binding") or {}
-            if binding.get("kind") == "node":
-                nid = binding.get("nodeId")
-                if nid not in nodes:
-                    raise ValueError(
-                        f"port '{key}' binds to unknown node '{nid}'")
+            if binding.get("kind") == "node" and binding.get("nodeId") not in nodes:
+                raise ValueError(f"port '{key}' binds to unknown node '{binding.get('nodeId')}'")
 
-    # Acyclic check over binding edges (value-source -> fluid). v1 graphs are
-    # trees; assert acyclic for forward-compat (future combine nodes).
+    # A merge combine's inputs must resolve to fluid emitters (no layered/stack
+    # combine upstream — a composited video has no single emitter set).
+    for cb in _nodes_of(graph, "combine"):
+        if cb.get("data", {}).get("mode") == "merge":
+            for slot in cb.get("data", {}).get("inputs", []):
+                src = _video_source(graph, cb["id"], slot.get("id"))
+                if src is not None and not _is_emitter_source(graph, src, nodes):
+                    raise ValueError("a layered (stack) combine can't feed a merge combine")
+
+    # Acyclic over ALL edges (value bindings + video edges).
     adj: dict[str, list[str]] = {nid: [] for nid in nodes}
-    for fl in fluids:
-        for port in fl.get("data", {}).get("ports", {}).values():
-            binding = (port or {}).get("binding") or {}
-            if binding.get("kind") == "node":
-                nid = binding.get("nodeId")
-                if nid in nodes:
-                    adj[fl["id"]].append(nid)
+    for e in graph.get("edges", []):
+        if e.get("target") in adj and e.get("source") in nodes:
+            adj[e["target"]].append(e["source"])
     if _has_cycle(adj):
         raise ValueError("graph contains a cycle")
 
@@ -156,6 +247,67 @@ def graph_hash(job_id: str, segment: dict, graph: dict, output: dict | None = No
     return hashlib.sha1(blob).hexdigest()[:16]
 
 
+def _fluid_value_node_ids(fluid_node: dict) -> set[str]:
+    """The ids of value nodes wired into a fluid node's ports (node bindings)."""
+    ids = set()
+    for port in fluid_node.get("data", {}).get("ports", {}).values():
+        binding = (port or {}).get("binding") or {}
+        if binding.get("kind") == "node" and binding.get("nodeId"):
+            ids.add(binding["nodeId"])
+    return ids
+
+
+def _contributing_ids(graph: dict, output_id: str) -> set:
+    """Every node id upstream of `output_id` — a backward walk over ALL edges
+    (video DAG + value bindings). The output's whole pipeline; disconnected nodes
+    and OTHER outputs' pipelines are excluded, so each output caches independently."""
+    incoming: dict = {}
+    for e in graph.get("edges", []):
+        incoming.setdefault(e.get("target"), []).append(e.get("source"))
+    seen = set()
+    stack = [output_id]
+    while stack:
+        nid = stack.pop()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        stack.extend(incoming.get(nid, ()))
+    return seen
+
+
+def output_hash(job_id: str, segment: dict, graph: dict, output_id: str,
+                output: dict | None = None) -> str:
+    """Stable SHA-1 over ONE output's CONTRIBUTING video DAG (spec 10).
+
+    Covers every node upstream of `output_id` (fluids, combines, output
+    pass-throughs, value/signal nodes), the edges among them, their referenced
+    signal defs, the segment bounds + job id, and the project `output` settings —
+    so each output caches independently and editing one pipeline never busts
+    another's. Excludes node positions/view.
+    """
+    contributing = _contributing_ids(graph, output_id)
+    nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
+    sub_nodes = [nodes[i] for i in sorted(contributing) if i in nodes]
+    signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
+    payload = {
+        # Bump on render-semantics changes. v3: combine nodes + video DAG + the
+        # background is applied at the terminal (was baked per-sim).
+        "render_version": 3,
+        "job_id": job_id,
+        "output_id": output_id,
+        "start": float(segment.get("start", 0.0)),
+        "end": float(segment.get("end", 0.0)),
+        "nodes": [_node_for_hash(n) for n in sub_nodes],
+        "edges": [e for e in graph.get("edges", [])
+                  if e.get("source") in contributing and e.get("target") in contributing],
+        "signals": _referenced_signal_defs(
+            {"nodes": [n for n in sub_nodes if n.get("type") == "signal"]}, signals_by_id),
+        "output": output or {},
+    }
+    blob = json.dumps(payload, sort_keys=True, default=str).encode()
+    return hashlib.sha1(blob).hexdigest()[:16]
+
+
 # --------------------------------------------------------------------------- #
 # Param building
 # --------------------------------------------------------------------------- #
@@ -191,19 +343,24 @@ def _signal_curve(node: dict, job_id: str, start: float, end: float, nframes: in
 
 
 def build_params(job_id: str, segment: dict, graph: dict,
-                 stem_audio_path: Callable, output: dict | None = None) -> dict:
+                 stem_audio_path: Callable, output: dict | None = None,
+                 output_id: str | None = None, fluid_node: dict | None = None) -> dict:
     """Resolve `graph` into a `simulate()` params dict (no render).
 
     Split out from `render` so tests can assert the per-frame arrays without
     encoding an mp4. Each modulatable port becomes a scalar (const binding) or a
     length-nframes native-unit array (node binding mapped lo + (hi-lo)*curve).
 
+    `output_id` selects which output's fluid to build (N pipelines per graph);
+    when omitted, the sole fluid is used (back-compat).
     `output` carries the project render settings (size/quality/fps/background);
     when present it drives the grid + fps (the legacy square `grid` is dropped).
     """
     output = output or {}
     nodes = {n["id"]: n for n in graph["nodes"]}
-    fluid_node = _nodes_of(graph, "fluid")[0]
+    if fluid_node is None:
+        fluid_node = (_fluid_for_output(graph, output_id) if output_id
+                      else _nodes_of(graph, "fluid")[0])
     start, end = float(segment["start"]), float(segment["end"])
     signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
     static = fluid_node["data"].get("static", {})
@@ -220,10 +377,7 @@ def build_params(job_id: str, segment: dict, graph: dict,
         if node_id in cache:
             return cache[node_id]
         node = nodes[node_id]
-        if node["type"] == "constant":
-            v = float(node["data"].get("value", 0.0))
-            out = np.full(nframes, v, np.float32)
-        elif node["type"] == "signal":
+        if node["type"] == "signal":
             out = _signal_curve(node, job_id, start, end, nframes,
                                  signals_by_id, stem_audio_path)
         # elif node["type"] == "combine":   # <- future: resolve inputs, mix
@@ -268,25 +422,158 @@ def build_params(job_id: str, segment: dict, graph: dict,
 # --------------------------------------------------------------------------- #
 # Render
 # --------------------------------------------------------------------------- #
-def render(job_id: str, segment: dict, graph: dict,
-           stem_audio_path: Callable, output: dict | None = None) -> str:
-    """Resolve `graph` for `segment`, render an mp4, return its public URL.
+class _Dag:
+    """Resolves the video DAG feeding an output (spec 10). `video(id)` returns
+    dye-on-transparent frames for any producer; `emitters(id)` returns the emitter
+    list for a merge. Both memoized per render. The terminal applies the bg."""
 
-    `stem_audio_path(job_id, stem)` is injected from app.py (its existing helper).
-    `output` is the project render settings (size/quality/fps/background). Cached
-    by graph+output hash: an identical request returns the existing file's URL.
-    Raises ValueError on a bad graph (surfaced as HTTP 400).
+    def __init__(self, job_id, segment, graph, stem_audio_path, output):
+        self.job_id = job_id
+        self.segment = segment
+        self.graph = graph
+        self.stem_audio_path = stem_audio_path
+        self.output = output or {}
+        self.nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
+        start, end = float(segment["start"]), float(segment["end"])
+        self.duration = max(0.5, end - start)
+        self.fps = int(self.output.get("fps", FLUID_FPS))
+        self._video: dict = {}
+        self._emit: dict = {}
+
+    def _fluid_params(self, fluid_node):
+        return build_params(self.job_id, self.segment, self.graph,
+                            self.stem_audio_path, self.output, fluid_node=fluid_node)
+
+    def _points_for(self, fluid_node):
+        """The drawn points wired into `fluid.positions` (a `points` node), or None
+        when nothing is wired — then the fluid keeps its single source (spec 11)."""
+        pid = _video_source(self.graph, fluid_node["id"], "positions")
+        pnode = self.nodes.get(pid) if pid else None
+        if pnode and pnode.get("type") == "points":
+            pts = pnode.get("data", {}).get("points") or []
+            return [(float(a), float(b)) for a, b in pts] or None
+        return None
+
+    def _fluid_emitters(self, fluid_node) -> list:
+        """A fluid's emitter list: ONE source per drawn point (sharing the fluid's
+        params, static at its position), or the single source when no points wired."""
+        base = self._fluid_params(fluid_node)["source"]
+        pts = self._points_for(fluid_node)
+        if not pts:
+            return [base]
+        return [{**base, "points": [[px, py]], "path_speed": 0} for (px, py) in pts]
+
+    def _fluid_video_params(self, fluid_node) -> dict:
+        """simulate() params for one fluid — `sources` when points are wired, else
+        the single `source` (byte-identical to the prior single-source path)."""
+        params = self._fluid_params(fluid_node)
+        if self._points_for(fluid_node):
+            params = {**params, "sources": self._fluid_emitters(fluid_node)}
+            params.pop("source", None)
+        return params
+
+    def _merge_params(self, emitters, medium):
+        params = {
+            "duration": self.duration, "fps": self.fps, "sources": emitters,
+            "fluid": {k: float(medium.get(k, d)) for k, d in _MERGE_MEDIUM_DEFAULTS},
+        }
+        if self.output:
+            params["output"] = {
+                "width": int(self.output.get("width", 1080)),
+                "height": int(self.output.get("height", 1920)),
+                "quality": self.output.get("quality", "normal"),
+                "fps": self.fps,
+                "background": self.output.get("background", "#000000"),
+            }
+        else:
+            params["grid"] = 96
+        return params
+
+    def emitters(self, node_id) -> list:
+        if node_id in self._emit:
+            return self._emit[node_id]
+        node = self.nodes[node_id]
+        t = node.get("type")
+        if t == "fluid":
+            out = self._fluid_emitters(node)
+        elif t == "output":
+            src = _video_source(self.graph, node_id, "video")
+            out = self.emitters(src) if src else []
+        elif t == "combine":
+            if node.get("data", {}).get("mode") == "stack":
+                raise ValueError("a layered (stack) combine can't feed a merge combine")
+            out = []
+            for slot in node.get("data", {}).get("inputs", []):
+                src = _video_source(self.graph, node_id, slot.get("id"))
+                if src:
+                    out.extend(self.emitters(src))
+        else:
+            raise ValueError(f"node '{node_id}' has no emitter")
+        self._emit[node_id] = out
+        return out
+
+    def video(self, node_id) -> np.ndarray:
+        if node_id in self._video:
+            return self._video[node_id]
+        node = self.nodes[node_id]
+        t = node.get("type")
+        if t == "fluid":
+            frames, _, _ = fluid.simulate(self._fluid_video_params(node), apply_bg=False)
+        elif t == "output":
+            src = _video_source(self.graph, node_id, "video")
+            if src is None:
+                raise ValueError(f"output '{node_id}' has no input to pass through")
+            frames = self.video(src)
+        elif t == "combine":
+            data = node.get("data", {})
+            srcs = [(_video_source(self.graph, node_id, s.get("id")), s)
+                    for s in data.get("inputs", [])]
+            srcs = [(s, slot) for (s, slot) in srcs if s is not None]
+            if not srcs:
+                raise ValueError(f"combine '{node_id}' has no inputs")
+            if data.get("mode") == "stack":
+                layers = [self.video(s) for (s, _) in srcs]
+                opac = [float(slot.get("opacity", 1.0)) for (_, slot) in srcs]
+                frames = composite(layers, opac)
+            else:  # merge
+                # Each emitter keeps its OWN `wrap` (from its source fluid). They
+                # share ONE velocity field (so they interact) but each component's
+                # dye advects with its own edge behaviour — see fluid.simulate().
+                params = self._merge_params(self.emitters(node_id), data.get("medium", {}))
+                frames, _, _ = fluid.simulate(params, apply_bg=False)
+        else:
+            raise ValueError(f"node '{node_id}' is not a video producer")
+        self._video[node_id] = frames
+        return frames
+
+
+def render(job_id: str, segment: dict, graph: dict,
+           stem_audio_path: Callable, output: dict | None = None,
+           output_id: str | None = None) -> str:
+    """Resolve one output's video DAG for `segment`, render an mp4, return its URL.
+
+    Walks the producers feeding `output_id` (fluid / combine / output-passthrough),
+    rendering dye-on-transparent frames, then applies the project background ONCE
+    here at the terminal. `output_id` selects which output (N pipelines per graph).
+    Cached by the per-output contributing-subgraph hash. Raises ValueError on a bad
+    graph (HTTP 400). `stem_audio_path(job_id, stem)` is injected from app.py.
     """
     output = output or {}
     validate(graph)
-    out_path = ANIM_DIR / f"{graph_hash(job_id, segment, graph, output)}.mp4"
+    if output_id is None:
+        output_id = _nodes_of(graph, "output")[0]["id"]
+    out_path = ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
     url = f"/fluid/{out_path.name}"
     if out_path.exists():
         return url
 
-    params = build_params(job_id, segment, graph, stem_audio_path, output)
-    frames, fps, _hw = fluid.simulate(params)
+    src = _video_source(graph, output_id, "video")
+    if src is None:
+        raise ValueError(f"output '{output_id}' has no input")
+    dag = _Dag(job_id, segment, graph, stem_audio_path, output)
+    frames = dag.video(src)
+    frames = fluid.apply_background(frames, output.get("background", "#000000"))
     out_w = int(output.get("width", 0)) or None
     out_h = int(output.get("height", 0)) or None
-    fluid.render_mp4(frames, fps, out_path, out_w, out_h)
+    fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
     return url

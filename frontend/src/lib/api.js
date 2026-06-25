@@ -92,12 +92,12 @@ export async function runFluid(params) {
 
 // Render an animation graph for one segment. The segment's signal defs ride in
 // the request (Issue 1A) so the backend can resolve `signal` node references.
-export async function renderGraph({ job_id, segment, graph, output }) {
+export async function renderGraph({ job_id, segment, graph, output, output_id }) {
   return jsonOrThrow(
     await fetch("/animate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id, segment, graph, output }),
+      body: JSON.stringify({ job_id, segment, graph, output, output_id }),
     })
   );
 }

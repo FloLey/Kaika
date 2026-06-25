@@ -1,19 +1,70 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
+import { outputHash, outputRenderable } from "../../../lib/graphModel.js";
+import * as api from "../../../lib/api.js";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered
-// clip. The video's frame is slaved to the SHARED segment clock (ctx.groupClock =
+// clip. Each output node renders ITS OWN pipeline (the fluid wired into it, N per
+// graph) — it owns its busy/error/url and a debounced /animate request keyed on a
+// per-output subgraph hash, so editing one pipeline re-renders only its output.
+// The video's frame is slaved to the SHARED segment clock (ctx.groupClock =
 // Studio's refAudio) so it plays and scrubs in lock-step with the segment audio and
-// the signal pulse pads — pressing play on the transport animates everything from
-// one playhead; scrubbing the timeline scrubs the video. Shows not-rendered /
-// rendering / error states.
+// the signal pulse pads. Shows not-rendered / rendering / error states.
 export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
-  const { videoUrl, busy, error, groupClock, groupPlaying, segStart = 0, output } = ctx || {};
+  const {
+    graph, segment, job, output, signals,
+    groupClock, groupPlaying, segStart = 0,
+  } = ctx || {};
   const videoRef = useRef(null);
+
+  const [videoUrl, setVideoUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const reqId = useRef(0);
 
   // The preview well adopts the project output aspect so portrait/landscape is
   // visible while editing (the rendered clip matches this exact shape).
   const aspect = output ? `${output.width} / ${output.height}` : "1 / 1";
+
+  // Render key: this output's subgraph + the project render settings. Changes only
+  // when THIS output's rendered clip would (see graphModel.outputHash).
+  const renderable = graph ? outputRenderable(graph, node.id) : false;
+  const renderKey = useMemo(
+    () => (graph
+      ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals)
+        + JSON.stringify(output || {})
+      : ""),
+    [graph, node.id, job, segment?.start, segment?.end, signals, output]
+  );
+
+  // Auto-render this output (debounced) whenever its render key changes. Request-id
+  // guard drops stale responses. Not renderable (no fluid wired yet) → skip
+  // silently and leave the well empty; only real backend failures show an error.
+  useEffect(() => {
+    if (!renderable) { setError(""); return undefined; }
+    const id = ++reqId.current;
+    setBusy(true);
+    setError("");
+    const t = setTimeout(async () => {
+      try {
+        const { url } = await api.renderGraph({
+          job_id: job,
+          segment: { start: segment.start, end: segment.end, signals: segment.signals },
+          graph,
+          output,
+          output_id: node.id,
+        });
+        if (id !== reqId.current) return;        // a newer edit superseded us
+        setVideoUrl(url);
+      } catch (e) {
+        if (id === reqId.current) setError(e.message || String(e));
+      } finally {
+        if (id === reqId.current) setBusy(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderKey, renderable]);
 
   // Two playback modes:
   //  • idle (segment not playing) — the clip loops on its own, so the pulse-driven
@@ -25,12 +76,33 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
     const v = videoRef.current;
     if (!v || !videoUrl) return undefined;
     if (!groupPlaying) {
-      v.loop = true;
-      const p = v.play && v.play();
-      if (p && p.catch) p.catch(() => {});
-      return undefined;
+      // Idle preview: the <video> carries `autoPlay loop` (declarative — see JSX),
+      // so the browser loops every freshly-rendered clip on its own. We still kick
+      // play() here + on `canplay` to cover the playing->idle resume, where the
+      // src is already loaded so the autoPlay attribute won't re-trigger.
+      // Resume the loop whenever it has stalled. Switching macOS Spaces / tabs
+      // backgrounds the page; the browser pauses background <video> and autoPlay
+      // won't re-fire, so previews come back frozen. A single "we're back" event
+      // (visibilitychange) isn't reliable across Spaces, so we also poll: if the
+      // clip is paused while the page is visible, nudge it. play() only runs when
+      // visible, so we never fight the browser's background pause.
+      const play = () => {
+        if (document.visibilityState !== "visible") return;
+        const p = v.play && v.play();
+        if (p && p.catch) p.catch(() => {});
+      };
+      play();
+      v.addEventListener("canplay", play);
+      document.addEventListener("visibilitychange", play);
+      window.addEventListener("focus", play);
+      const watchdog = setInterval(() => { if (v.paused) play(); }, 1000);
+      return () => {
+        v.removeEventListener("canplay", play);
+        document.removeEventListener("visibilitychange", play);
+        window.removeEventListener("focus", play);
+        clearInterval(watchdog);
+      };
     }
-    v.loop = false;
     v.pause();
     let raf;
     const sync = () => {
@@ -63,6 +135,17 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
           title="video in"
         />
       }
+      sideOut={
+        <Port
+          kind="out"
+          flow="video"
+          nodeId={node.id}
+          portId="out"
+          portRef={helpers.portRef}
+          startConnect={helpers.startConnect}
+          title="pass video through"
+        />
+      }
     >
       <div className="anim-output-well" style={{ "--out-aspect": aspect }}>
         {videoUrl ? (
@@ -73,9 +156,15 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
             muted
             playsInline
             preload="auto"
+            loop={!groupPlaying}
+            autoPlay={!groupPlaying}
           />
         ) : (
-          !busy && !error && <div className="anim-output-empty">not rendered yet</div>
+          !busy && !error && (
+            <div className="anim-output-empty">
+              {renderable ? "not rendered yet" : "wire a fluid into this output"}
+            </div>
+          )
         )}
         {busy && (
           <div className="anim-output-busy">

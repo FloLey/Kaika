@@ -26,9 +26,9 @@ export function edgePath(x1, y1, x2, y2) {
 
 // Whether a connect attempt (drag from an out port to an in port) is legal:
 // out -> in, never onto the same node, and the value/video kinds must match.
-// `valueKind` is "value" for signal/constant out ports and the fluid video out;
-// param in ports are "value", the output's in port is "video", the fluid's
-// video out is "video". We encode that as a simple kind string on each side.
+// `valueKind` is "value" for signal out ports; param in ports are "value", the
+// output's in port is "video", and the fluid's video out is "video". We encode
+// that as a simple kind string on each side.
 export function canConnect(source, target) {
   if (!source || !target) return false;
   if (source.kind !== "out" || target.kind !== "in") return false;
