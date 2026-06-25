@@ -8,7 +8,7 @@ import Processing from "./components/Processing.jsx";
 import LogsPanel from "./components/LogsPanel.jsx";
 import ErrorToast from "./components/ErrorToast.jsx";
 import { hydrateSegments, serializeSegments } from "./lib/segments.js";
-import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output.js";
+import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
 import { useLogPoll } from "./lib/useLogPoll.js";
 import * as logbus from "./lib/logbus.js";
 import * as api from "./lib/api.js";

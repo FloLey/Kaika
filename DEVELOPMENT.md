@@ -95,6 +95,33 @@ incremental slices at `GET /logs?since=<seq>`. The frontend Logs panel polls it
 without shell access. It is always on and has no persistence (records reset on
 restart). The `/logs` route must never log (it would feed itself).
 
+## TypeScript (incremental migration)
+
+The frontend is mid-migration to TypeScript, set up to convert **one file at a time**
+with a green build the whole way:
+
+- `tsconfig.json` — `allowJs: true` + `checkJs: false`, so `.js`/`.jsx` coexist with
+  `.ts`/`.tsx`; only the `.ts`/`.tsx` files are type-checked (`strict`).
+- `npm run typecheck` (`tsc --noEmit`) — gated in CI.
+- `src/lib/types.ts` — the core domain types (`Graph`, `GraphNode`, `Edge`,
+  `Binding`, `OutputSettings`, `FluidParam`). Import these as files convert.
+
+**Converted so far:** `lib/output.ts`, `lib/useDragPad.ts`.
+
+**To convert a file** (the established pattern):
+1. Rename `foo.js` → `foo.ts` (or `.jsx` → `.tsx`); add types (import from `types.ts`).
+2. Update its importers' specifiers from `"./foo.js"` to **`"./foo"`** (extensionless)
+   — the production bundler (rollup) won't resolve a `.js` specifier to a `.ts` file,
+   but resolves extensionless to `.ts`.
+3. `npm run typecheck && npm run build && npm test` — all green before committing.
+
+**Remaining tail:** `graphModel.js` (the highest-value target) needs a *discriminated
+union* for `GraphNode.data` (fluid ports/static vs points vs combine) to type its
+`node.data.*` access well rather than with casts — design that first. Then the
+`nodes/*` components and the canvas/studio shells convert leaf-outward (this is also
+where the `Studio`/`FluidLab` sub-component extractions from B5.1 land, since those
+files are being rewritten anyway).
+
 ## Formatting
 
 Black (Python) + Prettier (frontend) are configured (`pyproject.toml`,

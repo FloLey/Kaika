@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
 import { outputHash, outputRenderable } from "../../../lib/graphModel.js";
-import { aspectOf } from "../../../lib/output.js";
+import { aspectOf } from "../../../lib/output";
 import * as api from "../../../lib/api.js";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered

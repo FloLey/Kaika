@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import SharedCtl, { Toggle as SharedToggle } from "../../ui/Ctl.jsx";
-import { useDragPad } from "../../lib/useDragPad.js";
+import { useDragPad } from "../../lib/useDragPad";
 import { runFluid } from "../../lib/api.js";
 
 const HELP = {

@@ -43,6 +43,8 @@ jobs:
       - run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
       # NOTE: `npm run format:check` is intentionally NOT gated yet — the one-time
       # Prettier+Black reformat (make format) lands as its own commit after the TS
       # migration; add the step here once the tree is formatted.

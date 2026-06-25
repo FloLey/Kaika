@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
 import { addPoint, movePoint, removePoint } from "../../../lib/graphModel.js";
-import { useDragPad } from "../../../lib/useDragPad.js";
-import { aspectOf } from "../../../lib/output.js";
+import { useDragPad } from "../../../lib/useDragPad";
+import { aspectOf } from "../../../lib/output";
 
 // The points source card (spec 11): a draw surface where you place points.
 // Wired into a fluid's `positions` input, the fluid emits one source per point.

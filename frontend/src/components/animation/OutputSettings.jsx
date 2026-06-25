@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import {
   ORIENTATION_PRESETS, QUALITY_PRESETS, FPS_OPTIONS, presetFor, aspectOf,
-} from "../../lib/output.js";
+} from "../../lib/output";
 
 // Project-level output settings modal (opened from the CREATE ANIMATION header
 // gear). Edits the one shared `output` object — size/orientation, render quality,
