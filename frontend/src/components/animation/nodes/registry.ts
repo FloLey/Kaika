@@ -14,12 +14,25 @@ import OutputNode from "./OutputNode.jsx";
 import CombineNode from "./CombineNode.jsx";
 import PointsNode from "./PointsNode.jsx";
 import { fluidNode, outputNode, combineNode, pointsNode } from "../../../lib/graphModel";
-import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
+import type { Graph, GraphNode, NodeType, PortFlow } from "../../../lib/types";
 
 export interface NodeChrome {
   title: string;
   accent: string;     // CSS colour; signal overrides with its stem colour
   outFlow: PortFlow;   // the flow of the node's single `out` port
+}
+
+// The props every node card receives. The .jsx components implement this loosely
+// today; as they convert to .tsx (Phase 8 tail) they adopt this type and NodeSpec's
+// Component tightens from ComponentType<any> to ComponentType<NodeProps>.
+export interface NodeProps {
+  node: GraphNode;
+  selected: boolean;
+  helpers: Record<string, unknown>;
+  ctx: Record<string, unknown>;
+  onGraphChange: (updater: (g: Graph) => Graph) => void;
+  onDetach?: (fluidId: string, key: string) => void;
+  onDelete?: () => void;
 }
 
 export interface NodeSpec {

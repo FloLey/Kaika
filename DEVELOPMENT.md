@@ -71,12 +71,24 @@ The param spec is the single source of truth; everything else derives or asserts
 
 ## Checklist — add a node type
 
-1. **Model** (`lib/graphModel.js`): a factory; teach `normalizeGraph` its shape
-   (bump `GRAPH_VERSION` if the persisted shape changes); update `validate`/wiring.
-2. **UI**: a `nodes/<Type>Node.jsx`; a `renderAnimNode` case; a Palette button.
-3. **Executor** (`backend/graph.py`): a `_Dag.video`/`emitters` branch; fold it into
-   `output_hash`'s contributing-DAG walk so its edits bust the cache.
-4. **Tests**: graph model + executor coverage.
+Node types are driven by two registries (frontend + backend), so adding one is a
+component + two registrations — no edits to Palette / renderAnimNode / MinimizedCard
+or the executor's dispatch.
+
+1. **Types** (`lib/types.ts`): add the type to the `NodeType` union + a `<Type>Data`
+   interface, and a member to the `GraphNode` discriminated union.
+2. **Model** (`lib/graphModel.ts`): a `<type>Node(x, y)` factory; teach
+   `normalizeGraph` its shape (bump `GRAPH_VERSION` if the persisted shape changes).
+3. **Card** (`components/animation/nodes/<Type>Node.jsx`) + **register it** in
+   `nodes/registry.ts` (`NODE_TYPES`): `Component`, `chrome` (title/accent/outFlow),
+   and — if it's palette-addable — a `factory` + `palette` entry. That single entry
+   wires the palette button, the canvas dispatch, and the minimized card.
+4. **Executor** (`backend/graph.py`): a `_xxx_video` handler (and `_xxx_emitters` if
+   it can feed a merge) registered in `_VIDEO_HANDLERS` / `_EMITTER_HANDLERS`.
+   `_VIDEO_PRODUCERS` and the output-wiring check pick it up automatically. It's
+   already covered by `output_hash`'s contributing-DAG walk (no edit needed).
+5. **Tests**: `registry.test.jsx` and `test_graph_registry.py` already assert every
+   registered type round-trips; add behaviour tests for the new card/handler.
 
 ## The render cache
 
@@ -103,10 +115,13 @@ with a green build the whole way:
 - `tsconfig.json` — `allowJs: true` + `checkJs: false`, so `.js`/`.jsx` coexist with
   `.ts`/`.tsx`; only the `.ts`/`.tsx` files are type-checked (`strict`).
 - `npm run typecheck` (`tsc --noEmit`) — gated in CI.
-- `src/lib/types.ts` — the core domain types (`Graph`, `GraphNode`, `Edge`,
-  `Binding`, `OutputSettings`, `FluidParam`). Import these as files convert.
+- `src/lib/types.ts` — the core domain types: the **discriminated `GraphNode` union**
+  (`SignalData`/`FluidData`/`CombineData`/`PointsData`/`OutputData`), `Graph`,
+  `GraphEdge`, `Binding`, `OutputSettings`, `FluidParam`. Import these as files convert.
 
-**Converted so far:** `lib/output.ts`, `lib/useDragPad.ts`.
+**Converted so far:** `lib/types.ts`, `lib/graphModel.ts` (the whole graph model),
+`lib/output.ts`, `lib/useDragPad.ts`, `components/animation/nodes/registry.ts`,
+`components/animation/useGraphEditor.ts`.
 
 **To convert a file** (the established pattern):
 1. Rename `foo.js` → `foo.ts` (or `.jsx` → `.tsx`); add types (import from `types.ts`).
@@ -115,12 +130,12 @@ with a green build the whole way:
    but resolves extensionless to `.ts`.
 3. `npm run typecheck && npm run build && npm test` — all green before committing.
 
-**Remaining tail:** `graphModel.js` (the highest-value target) needs a *discriminated
-union* for `GraphNode.data` (fluid ports/static vs points vs combine) to type its
-`node.data.*` access well rather than with casts — design that first. Then the
-`nodes/*` components and the canvas/studio shells convert leaf-outward (this is also
-where the `Studio`/`FluidLab` sub-component extractions from B5.1 land, since those
-files are being rewritten anyway).
+**Remaining tail (mechanical):** the `nodes/*` card components + the canvas/studio
+shells convert `.jsx` → `.tsx` leaf-outward, typed against a shared `NodeProps`
+(`registry.ts`) — at which point `NodeSpec.Component` tightens from `ComponentType<any>`
+to `ComponentType<NodeProps>`. The `Studio`/`FluidLab` sub-component extractions land
+here too (those files are rewritten anyway). Lower priority — the high-value typing
+(the domain model + the registries) is done.
 
 ## Formatting
 
