@@ -124,12 +124,19 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
 ## Tests & linting
 
 ```sh
-.venv/bin/python -m pip install -r requirements-dev.txt   # ruff + pytest
-ruff check .                 # backend lint (bug-catching rules)
-python -m pytest             # backend unit tests (signal shaping)
-cd frontend && npm run lint  # eslint (react-hooks + jsx)
-cd frontend && npm run test  # vitest (segments persistence contract)
+.venv/bin/python -m pip install -r requirements-dev.txt   # ruff + pytest + tools
+make test     # pytest + vitest          make lint      # ruff + eslint
+make build    # vite production build     make coverage  # pytest --cov + vitest --coverage
+make format   # Black + Prettier (run once, as its own commit)
 ```
+
+CI (`.github/workflows/ci.yml`) runs lint + tests + build + the param-spec no-diff
+check on every push/PR. For the architecture map and the add-a-param / add-a-node
+checklists, see [`DEVELOPMENT.md`](DEVELOPMENT.md).
+
+A **Logs panel** (right-side drawer) shows the live backend + browser log stream for
+the session — handy for debugging a render. It's always on and not persisted (resets
+on restart).
 
 ## Storage
 
@@ -139,3 +146,9 @@ cd frontend && npm run test  # vitest (segments persistence contract)
 - **Filesystem** under `data/` (gitignored): `uploads/`, `separated/`,
   `spectrograms/` per `job_id`, plus `analysis/<job>.json` (vocal envelope +
   aligned lyrics, so resume is instant and Whisper doesn't re-run).
+- **Render cache** `data/fluid/<hash>.mp4`: rendered clips keyed by the output's
+  contributing-subgraph hash. Bounded by `render_cache` (LRU + age; tune via
+  `FLUID_CACHE_MAX_BYTES` / `FLUID_CACHE_MAX_AGE_DAYS`); `make clean-cache` drops all.
+
+The project JSONB carries a `schema_version`; graphs carry a `version`, migrated
+forward on load (`normalizeGraph`).

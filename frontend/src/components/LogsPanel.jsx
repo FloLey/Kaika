@@ -42,7 +42,12 @@ export default function LogsPanel({ open, onClose }) {
         aria-label="Logs"
       >
         <header className="logs-head">
-          <span className="logs-title">logs</span>
+          <span
+            className="logs-title"
+            title="Live backend + browser logs for this session (newest at the bottom). Filter by level; nothing is persisted — the stream resets when the server restarts."
+          >
+            logs
+          </span>
           <div className="logs-actions">
             {LEVELS.map((lv) => (
               <button
