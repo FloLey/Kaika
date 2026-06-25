@@ -1,0 +1,82 @@
+"""LRU + age eviction for the rendered-clip cache (data/fluid/*.mp4).
+
+The clips are a pure cache — every file is reproducible from its graph hash — so we
+can bound the directory's growth (it reaches ~1 GB quickly). Policy: drop clips
+unused for longer than an age cutoff, then evict least-recently-used until the
+directory fits a size cap. "Recently used" is the file mtime, refreshed by `touch`
+on every cache hit, so hot clips survive and stale ones age out.
+
+Defaults are generous and overridable via env (FLUID_CACHE_MAX_BYTES / _MAX_AGE_DAYS).
+`evict` is called opportunistically after each render; `make clean-cache` clears all.
+"""
+from __future__ import annotations
+
+import logging
+import os
+import time
+from pathlib import Path
+
+log = logging.getLogger("kaika.cache")
+
+CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(5 * 1024 ** 3)))   # 5 GB
+CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_CACHE_MAX_AGE_DAYS", "30"))
+
+
+def touch(path: Path) -> None:
+    """Mark a clip as just-used (refresh its mtime) so a cache hit keeps it hot."""
+    try:
+        os.utime(path, None)
+    except OSError:
+        pass
+
+
+def _rm(p: Path) -> bool:
+    try:
+        p.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def evict(cache_dir: Path, *, max_bytes: int = CACHE_MAX_BYTES,
+          max_age_days: float = CACHE_MAX_AGE_DAYS, now: float | None = None) -> int:
+    """Age-out then LRU-evict the clip cache; return the count removed.
+
+    `now` is injectable for tests (defaults to time.time())."""
+    now = time.time() if now is None else now
+    entries: list[tuple[Path, float, int]] = []
+    for p in cache_dir.glob("*.mp4"):
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        entries.append((p, st.st_mtime, st.st_size))
+
+    removed = 0
+    # 1. Age-out: drop anything unused for longer than the cutoff.
+    cutoff = now - max_age_days * 86400
+    kept: list[tuple[Path, float, int]] = []
+    for p, mtime, size in entries:
+        if mtime < cutoff and _rm(p):
+            removed += 1
+        else:
+            kept.append((p, mtime, size))
+
+    # 2. Size cap: evict least-recently-used (oldest mtime) until under the cap.
+    total = sum(size for _, _, size in kept)
+    if total > max_bytes:
+        for p, _mtime, size in sorted(kept, key=lambda t: t[1]):   # oldest first
+            if total <= max_bytes:
+                break
+            if _rm(p):
+                removed += 1
+                total -= size
+
+    if removed:
+        log.info("render cache: evicted %d clip(s)", removed)
+    return removed
+
+
+def clear(cache_dir: Path) -> int:
+    """Remove every cached clip (the `make clean-cache` path). Returns the count."""
+    return sum(1 for p in cache_dir.glob("*.mp4") if _rm(p))

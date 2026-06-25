@@ -47,8 +47,14 @@ export function fluidNode(x, y) {
   };
 }
 
+// The current persisted graph schema version. Bump when the saved graph shape
+// changes; normalizeGraph() upgrades any older save to here and re-stamps it.
+//   v1: signal/fluid/output node-graph.
+//   v2: + combine + points nodes, the fluid `positions` input, minimize set.
+export const GRAPH_VERSION = 2;
+
 export function emptyGraph() {
-  return { version: 1, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
+  return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
 }
 
 // ---- combine node (spec 10) --------------------------------------------------
@@ -162,6 +168,11 @@ function isEmitterSource(graph, nodeId, byId, seen = new Set()) {
 // silently fail. Conversely, params since removed (rot_speed/rot_accel) get their
 // stale ports and any dangling edges dropped. Returns the same object when nothing
 // changed, so it's safe to run on every load (idempotent, memo-stable).
+// Upgrade a persisted graph to the current GRAPH_VERSION. The shape pass below is
+// idempotent and cumulative (it fills any missing node fields / drops stale edges),
+// so it IS the v1->v2 migration; the result is re-stamped to GRAPH_VERSION. For a
+// future breaking change, add a targeted step here keyed on the incoming version
+// before the shape pass, then bump GRAPH_VERSION.
 export function normalizeGraph(graph) {
   if (!graph || !Array.isArray(graph.nodes)) return graph;
   let changed = false;
@@ -202,7 +213,8 @@ export function normalizeGraph(graph) {
     (e) => !(fluidIds.has(e.target) && !valid.has(e.targetPort))
   );
   if (edges.length !== (graph.edges || []).length) changed = true;
-  return changed ? { ...graph, nodes, edges } : graph;
+  if (graph.version !== GRAPH_VERSION) changed = true;   // re-stamp after migrating
+  return changed ? { ...graph, version: GRAPH_VERSION, nodes, edges } : graph;
 }
 
 // ---- wiring (keeps the §3.3 binding<->edge invariant) ------------------------

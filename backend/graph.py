@@ -23,7 +23,7 @@ from typing import Callable
 
 import numpy as np
 
-from . import fluid, signals
+from . import fluid, render_cache, signals
 from .animation_params import OUTPUT_DEFAULTS, PARAMS, SOURCE_STATIC_KEYS
 
 log = logging.getLogger("kaika.graph")
@@ -569,6 +569,7 @@ def render(job_id: str, segment: dict, graph: dict,
     out_path = ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
     url = f"/fluid/{out_path.name}"
     if out_path.exists():
+        render_cache.touch(out_path)   # keep this hot clip from aging out (LRU)
         return url
 
     src = _video_source(graph, output_id, "video")
@@ -580,4 +581,5 @@ def render(job_id: str, segment: dict, graph: dict,
     out_w = int(output.get("width", 0)) or None
     out_h = int(output.get("height", 0)) or None
     fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
+    render_cache.evict(ANIM_DIR)       # bound the cache after adding a clip
     return url

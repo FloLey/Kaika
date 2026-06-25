@@ -31,6 +31,22 @@ DBUnavailable = psycopg.OperationalError
 _CONNECT_RETRIES = 3
 _CONNECT_BACKOFF = 0.4  # seconds, multiplied by the attempt number
 
+# Version of the project JSONB document shape ({schema_version, stems, segments,
+# output}). Bump + add a step to `migrate_project_data` when the shape changes, so
+# old saves upgrade on load instead of silently mis-parsing.
+SCHEMA_VERSION = 1
+
+
+def migrate_project_data(data: dict | None) -> dict:
+    """Upgrade a loaded project blob to SCHEMA_VERSION. Currently only stamps the
+    version on pre-versioning saves; future shape changes add a step here."""
+    data = dict(data or {})
+    if data.get("schema_version") == SCHEMA_VERSION:
+        return data
+    # (no breaking transitions yet — a v0/unversioned blob is shape-compatible.)
+    data["schema_version"] = SCHEMA_VERSION
+    return data
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
   job_id     TEXT PRIMARY KEY,
@@ -70,7 +86,7 @@ def create_project(job_id: str, *, title: str, source: str, duration: float,
                    fmin: int, has_lyrics: bool, stems: dict) -> None:
     """Insert (or replace) a project at the 'review' step with its stem map and
     an empty segment list — called right after demucs separation."""
-    data = {"stems": stems, "segments": []}
+    data = {"schema_version": SCHEMA_VERSION, "stems": stems, "segments": []}
     with _connect() as conn:
         conn.execute(
             """
@@ -98,10 +114,12 @@ def save_segments(job_id: str, segments: list, *, step: Optional[str] = None,
             """
             UPDATE projects SET
               data = jsonb_set(
-                       jsonb_set(data, '{segments}', %(segments)s, true),
-                       '{output}',
-                       COALESCE(%(output)s::jsonb, data->'output', '{}'::jsonb),
-                       true),
+                       jsonb_set(
+                         jsonb_set(data, '{segments}', %(segments)s, true),
+                         '{output}',
+                         COALESCE(%(output)s::jsonb, data->'output', '{}'::jsonb),
+                         true),
+                       '{schema_version}', %(schema_version)s, true),
               step = COALESCE(%(step)s, step),
               title = COALESCE(%(title)s, title),
               updated_at = now()
@@ -109,7 +127,7 @@ def save_segments(job_id: str, segments: list, *, step: Optional[str] = None,
             """,
             {"segments": Jsonb(segments), "step": step, "title": title,
              "output": Jsonb(output) if output is not None else None,
-             "job_id": job_id},
+             "schema_version": Jsonb(SCHEMA_VERSION), "job_id": job_id},
         )
         return cur.rowcount > 0
 
@@ -128,9 +146,12 @@ def list_projects() -> list[dict[str, Any]]:
 
 def get_project(job_id: str) -> Optional[dict[str, Any]]:
     with _connect() as conn:
-        return conn.execute(
+        row = conn.execute(
             "SELECT * FROM projects WHERE job_id = %s", (job_id,)
         ).fetchone()
+    if row is not None:
+        row["data"] = migrate_project_data(row.get("data"))
+    return row
 
 
 def delete_project(job_id: str) -> bool:

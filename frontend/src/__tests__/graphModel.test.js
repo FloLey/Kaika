@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  signalNode, outputNode, fluidNode, emptyGraph, normalizeGraph,
+  signalNode, outputNode, fluidNode, emptyGraph, normalizeGraph, GRAPH_VERSION,
   connect, disconnect, removeNode, validate,
   outputHash, videoInput,
   combineNode, connectVideo, videoSource, outputRenderable,
@@ -48,8 +48,8 @@ describe("node factories", () => {
     expect(n.data.static.grid).toBe(96);
   });
 
-  it("emptyGraph is version 1 with no nodes/edges", () => {
-    expect(emptyGraph()).toEqual({ version: 1, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } });
+  it("emptyGraph is the current GRAPH_VERSION with no nodes/edges", () => {
+    expect(emptyGraph()).toEqual({ version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } });
   });
 });
 
@@ -402,6 +402,11 @@ describe("points node (spec 11)", () => {
     const h1 = outputHash(g, out.id, "job", 0, 10, []);
     const g2 = movePoint(g, p.id, 0, [0.1, 0.1]);
     expect(outputHash(g2, out.id, "job", 0, 10, [])).not.toBe(h1);  // point feeds the render
+  });
+
+  it("stamps an older (version 1) save up to the current GRAPH_VERSION", () => {
+    const g = { version: 1, nodes: [fluidNode(0, 0)], edges: [] };
+    expect(normalizeGraph(g).version).toBe(GRAPH_VERSION);
   });
 
   it("normalizeGraph keeps a points -> fluid.positions edge (not a param port)", () => {

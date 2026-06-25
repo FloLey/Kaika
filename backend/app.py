@@ -30,6 +30,7 @@ from . import segment as seg
 from . import signals as sig
 from . import fluid
 from . import graph as graphmod
+from . import render_cache
 from . import db
 from . import jobs
 from . import logbus
@@ -543,13 +544,16 @@ def fluid_route():
         return jsonify({"error": "body must be a JSON object"}), 400
     h = fluid.params_hash(params)
     out = FLUID_DIR / f"{h}.mp4"
-    if not out.exists():
+    if out.exists():
+        render_cache.touch(out)        # keep this hot clip from aging out (LRU)
+    else:
         try:
             frames, fps, _n = fluid.simulate(params)
             fluid.render_mp4(frames, fps, out)
         except Exception as e:  # noqa: BLE001
             log.warning("fluid render failed: %s", e)
             return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+        render_cache.evict(FLUID_DIR)  # bound the cache after adding a clip
     return jsonify({"url": f"/fluid/{h}.mp4"})
 
 
