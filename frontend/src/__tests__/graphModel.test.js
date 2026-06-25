@@ -147,6 +147,18 @@ describe("validate (01 §3.7)", () => {
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/missing node/);
   });
+
+  it("rejects a non-numeric const binding (malformed graph)", () => {
+    const { g, fluidId } = wiredGraph();
+    const g2 = {
+      ...g,
+      nodes: g.nodes.map((n) =>
+        n.id === fluidId
+          ? { ...n, data: { ...n.data, ports: { ...n.data.ports, force: { binding: { kind: "const", value: "loud" } } } } }
+          : n),
+    };
+    expect(validate(g2).ok).toBe(false);
+  });
 });
 
 // Two independent fluid -> output pipelines in one graph.

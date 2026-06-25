@@ -353,12 +353,24 @@ export function validate(graph: Graph): ValidationResult {
     }
   }
 
-  // 2. every fluid's node-bindings resolve to an existing node.
+  // 2. every fluid port binding is well-formed (const numeric / node resolves to an
+  //    existing node with numeric lo/hi). Mirrors backend graph._validate_binding.
   for (const n of nodes.filter((x): x is FluidNode => x.type === "fluid")) {
     for (const [key, port] of Object.entries(n.data.ports || {})) {
-      const b = port.binding;
-      if (b && b.kind === "node" && !byId.has(b.nodeId)) {
-        return { ok: false, error: `port "${key}" is bound to a missing node` };
+      // Loosen the type: validate is the boundary that catches malformed runtime data.
+      const b = port.binding as
+        | { kind?: string; value?: unknown; nodeId?: string; lo?: unknown; hi?: unknown }
+        | undefined;
+      if (!b || !b.kind) continue;   // unbound port -> param default
+      if (b.kind === "const") {
+        if (typeof b.value !== "number") return { ok: false, error: `port "${key}" const binding is not numeric` };
+      } else if (b.kind === "node") {
+        if (!b.nodeId || !byId.has(b.nodeId)) return { ok: false, error: `port "${key}" is bound to a missing node` };
+        if (typeof b.lo !== "number" || typeof b.hi !== "number") {
+          return { ok: false, error: `port "${key}" node binding lo/hi is not numeric` };
+        }
+      } else {
+        return { ok: false, error: `port "${key}" has an unknown binding kind` };
       }
     }
   }

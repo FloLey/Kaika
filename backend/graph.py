@@ -153,12 +153,33 @@ def _fluid_for_output(graph: dict, output_id: str) -> dict:
     return src
 
 
+def _validate_binding(key: str, binding: dict, nodes: dict) -> None:
+    """A fluid port binding must be well-formed: a `const` carries a numeric value; a
+    `node` binding references an existing node with numeric lo/hi. A port with no
+    binding is allowed (build_params falls back to the param default). Raises
+    ValueError so a malformed graph fails at the boundary, not deep in build_params."""
+    kind = binding.get("kind")
+    if kind == "const":
+        if not isinstance(binding.get("value"), (int, float)):
+            raise ValueError(f"port '{key}' const binding has a non-numeric value")
+    elif kind == "node":
+        nid = binding.get("nodeId")
+        if nid not in nodes:
+            raise ValueError(f"port '{key}' binds to unknown node '{nid}'")
+        for b in ("lo", "hi"):
+            if b in binding and not isinstance(binding[b], (int, float)):
+                raise ValueError(f"port '{key}' node binding has a non-numeric {b}")
+    elif kind is not None:
+        raise ValueError(f"port '{key}' has an unknown binding kind '{kind}'")
+
+
 def validate(graph: dict) -> None:
     """Raise ValueError (surfaced as HTTP 400) if the graph is not renderable.
 
-    Rules: at least one output, each output wired to exactly one fluid, every
-    node-binding nodeId resolves to an existing node, and the binding graph is
-    acyclic. N independent fluid->output pipelines are allowed.
+    Rules: at least one output, each output wired to exactly one fluid, every fluid
+    port binding well-formed (const numeric / node resolves to an existing node),
+    combine slots carry ids, and the binding graph is acyclic. N independent
+    fluid->output pipelines are allowed.
     """
     if not isinstance(graph, dict):
         raise ValueError("graph must be an object")
@@ -182,12 +203,16 @@ def validate(graph: dict) -> None:
 
     fluids = _nodes_of(graph, "fluid")
 
-    # Every fluid node-binding must reference an existing node.
+    # Every fluid port binding must be well-formed (const numeric / node resolves).
     for fl in fluids:
         for key, port in fl.get("data", {}).get("ports", {}).items():
-            binding = (port or {}).get("binding") or {}
-            if binding.get("kind") == "node" and binding.get("nodeId") not in nodes:
-                raise ValueError(f"port '{key}' binds to unknown node '{binding.get('nodeId')}'")
+            _validate_binding(key, (port or {}).get("binding") or {}, nodes)
+
+    # Every combine input slot must carry an id (the targetPort a video edge wires to).
+    for cb in _nodes_of(graph, "combine"):
+        for slot in cb.get("data", {}).get("inputs", []):
+            if not slot.get("id"):
+                raise ValueError(f"combine '{cb['id']}' has an input slot with no id")
 
     # A merge combine's inputs must resolve to fluid emitters (no layered/stack
     # combine upstream — a composited video has no single emitter set).
