@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
-import { addPoint, movePoint, removePoint } from "../../../lib/graphModel.js";
+import { addPoint, movePoint, removePoint } from "../../../lib/graphModel";
 import { useDragPad } from "../../../lib/useDragPad";
 import { aspectOf } from "../../../lib/output";
 

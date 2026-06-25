@@ -1,6 +1,7 @@
 // Core domain types for the animation graph + render settings — the typed
-// counterpart to the runtime shapes in graphModel.js / output.js. As modules
-// convert to .ts (Batch 10), they import these instead of re-describing shapes.
+// counterpart to the runtime shapes in lib/graph/* and output.ts. Node `data` is a
+// discriminated union keyed on `type`, so `node.data.*` access is checked once the
+// node's type is narrowed (e.g. `if (node.type === "fluid") node.data.ports`).
 
 export type Quality = "draft" | "normal" | "high";
 
@@ -12,23 +13,90 @@ export interface OutputSettings {
   background: string;
 }
 
-// A fluid param port binding: a constant value, or a value-source node whose 0..1
-// curve maps into [lo, hi] (native units).
+// ---- value-source binding ----------------------------------------------------
+// A fluid param port is a constant value, or a value-source node whose 0..1 curve
+// maps into [lo, hi] (native units).
 export type Binding =
   | { kind: "const"; value: number }
   | { kind: "node"; nodeId: string; lo: number; hi: number };
 
-export type NodeType = "signal" | "fluid" | "combine" | "points" | "output";
+// ---- per-node data shapes ----------------------------------------------------
+export interface SignalData {
+  signalId: string;
+  label?: string;
+}
 
-export interface GraphNode {
+export interface FluidStatic {
+  grid: number;
+  fps: number;
+  color: [number, number, number];
+  intensity: number;
+  opacity: number;
+  enabled: boolean;
+  radial: boolean;
+  wrap: boolean;
+  points: [number, number][];
+  path_speed: number;
+  path_closed: boolean;
+  path_pingpong: boolean;
+}
+export interface FluidPort {
+  binding: Binding;
+}
+export interface FluidData {
+  static: FluidStatic;
+  ports: Record<string, FluidPort>;
+}
+
+export interface CombineSlot {
   id: string;
-  type: NodeType;
+  opacity: number;
+}
+export interface CombineMedium {
+  dissipation: number;
+  velocity_dissipation: number;
+  viscosity: number;
+  vorticity: number;
+}
+export interface CombineData {
+  mode: "merge" | "stack";
+  inputs: CombineSlot[];
+  medium: CombineMedium;
+}
+
+export interface PointsData {
+  points: [number, number][];
+}
+
+export interface OutputData {
+  title: string;
+}
+
+// ---- the discriminated node union --------------------------------------------
+interface NodeBase {
+  id: string;
   x: number;
   y: number;
-  // Per-type payload (ports/static for fluid, points for points, etc.). Kept open
-  // until each node type's data shape is pinned during conversion.
-  data: Record<string, unknown>;
 }
+export interface SignalNode extends NodeBase { type: "signal"; data: SignalData; }
+export interface FluidNode extends NodeBase { type: "fluid"; data: FluidData; }
+export interface CombineNode extends NodeBase { type: "combine"; data: CombineData; }
+export interface PointsNode extends NodeBase { type: "points"; data: PointsData; }
+export interface OutputNode extends NodeBase { type: "output"; data: OutputData; }
+
+export type GraphNode =
+  | SignalNode
+  | FluidNode
+  | CombineNode
+  | PointsNode
+  | OutputNode;
+
+export type NodeType = GraphNode["type"];
+
+// One node's `data` for a given type (e.g. NodeData<"fluid"> = FluidData).
+export type NodeOf<T extends NodeType> = Extract<GraphNode, { type: T }>;
+
+export type PortFlow = "value" | "video" | "points";
 
 export interface GraphEdge {
   id: string;
@@ -45,6 +113,8 @@ export interface Graph {
   view?: { tx: number; ty: number; scale: number };
   minimized?: string[];
 }
+
+export type ValidationResult = { ok: true } | { ok: false; error: string };
 
 // One fluid param spec entry (generated into fluidParams.js from the backend).
 export interface FluidParam {

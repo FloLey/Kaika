@@ -9,7 +9,7 @@ import CombineNode from "../components/animation/nodes/CombineNode.jsx";
 import PointsNode from "../components/animation/nodes/PointsNode.jsx";
 import MinimizedCard from "../components/animation/nodes/MinimizedCard.jsx";
 import { Port } from "../components/animation/nodes/NodeFrame.jsx";
-import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel.js";
+import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
 import { setConstValue, setNodeRange, patchStatic } from "../components/animation/nodes/fluidBindings.js";
 

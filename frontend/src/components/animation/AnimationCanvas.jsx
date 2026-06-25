@@ -5,7 +5,7 @@ import renderAnimNode from "./renderAnimNode.jsx";
 import { MinimizeContext } from "./nodes/minimizeContext.js";
 import {
   emptyGraph, normalizeGraph, connect, disconnect, removeNode, mkEdgeId,
-} from "../../lib/graphModel.js";
+} from "../../lib/graphModel";
 import { fluidParam } from "../../lib/fluidParams.js";
 
 // 07 — the per-segment animation container. Bridges the graph (lifted to

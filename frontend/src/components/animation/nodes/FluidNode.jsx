@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Toggle } from "../../../ui/Ctl.jsx";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
 import { FLUID_PARAMS } from "../../../lib/fluidParams.js";
-import { videoSource } from "../../../lib/graphModel.js";
+import { videoSource } from "../../../lib/graphModel";
 import { patchStatic } from "./fluidBindings.js";
 import { ParamRow, GroupAnchor } from "./FluidParamRow.jsx";
 

@@ -4,7 +4,7 @@ import { fluidParam } from "../../../lib/fluidParams.js";
 import {
   setCombineMode, setCombineOpacity, setCombineMedium,
   addCombineInput, removeCombineInput,
-} from "../../../lib/graphModel.js";
+} from "../../../lib/graphModel";
 
 // The combine card (spec 10): composes N video inputs into one video output.
 //  • merge  — the inputs' emitters share ONE simulation (they interact), using

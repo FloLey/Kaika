@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { signalNode, fluidNode, outputNode, combineNode, pointsNode, mkEdgeId } from "../../lib/graphModel.js";
+import { signalNode, fluidNode, outputNode, combineNode, pointsNode, mkEdgeId } from "../../lib/graphModel";
 import { stemColor } from "../../lib/segments.js";
 
 // The add-node toolbar: a bar across the top of the animation panel (not floating

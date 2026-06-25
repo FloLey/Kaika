@@ -6,7 +6,7 @@ import {
   combineNode, connectVideo, videoSource, outputRenderable,
   addCombineInput, removeCombineInput, setCombineMode, setCombineOpacity, setCombineMedium,
   pointsNode, addPoint, movePoint, removePoint,
-} from "../lib/graphModel.js";
+} from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments.js";
 

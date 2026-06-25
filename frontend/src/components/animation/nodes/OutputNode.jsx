@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
-import { outputHash, outputRenderable } from "../../../lib/graphModel.js";
+import { outputHash, outputRenderable } from "../../../lib/graphModel";
 import { aspectOf } from "../../../lib/output";
 import * as api from "../../../lib/api.js";
 
