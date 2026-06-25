@@ -62,6 +62,8 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }) {
         .catch(() => { setCurve([]); setLoading(false); });
     }, 220);
     return () => clearTimeout(t);
+    // Deliberate: the debounced extract fires on the serialized `extractKey`
+    // (band/feature/shaping), not on every referenced object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extractKey, jobId, segStart, segEnd, winLen]);
 

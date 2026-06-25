@@ -52,6 +52,8 @@ export default function PulsePad({ audioRef, curve, segStart, winLen, color, pla
     // Idle, no loop: settle to the value at the current playhead.
     paint(valueAt(audioRef && audioRef.current ? audioRef.current.currentTime : segStart));
     return undefined;
+    // Deliberate deps: the RAF loop reads audioRef/valueAt/paint imperatively; it
+    // re-runs only when a render-affecting value (playing/curve/window/colour) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, idleLoop, curve, segStart, winLen, color]);
 

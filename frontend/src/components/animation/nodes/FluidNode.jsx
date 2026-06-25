@@ -62,6 +62,8 @@ function GroupAnchor({ nodeId, portKeys, portRef }) {
   const keyStr = portKeys.join(",");
   const ref = useCallback(
     (el) => { for (const k of portKeys) portRef(nodeId, k, "in", "value")(el); },
+    // Deliberate: key on the serialized `keyStr`, not the `portKeys` array identity,
+    // so the ref callback stays stable while the port set is unchanged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodeId, keyStr, portRef]
   );

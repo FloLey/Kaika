@@ -87,7 +87,7 @@ app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB upload cap
 # the error surfaces clearly on the first request that needs the DB.
 try:
     db.init_schema()
-except Exception as e:  # noqa: BLE001
+except db.DBUnavailable as e:
     log.warning("could not init the database (%s). Is Postgres up? "
                 "`docker compose up -d db`", e)
 
@@ -505,6 +505,8 @@ def extract_route():
     shaped by attack/release/invert/gamma/gain/offset/threshold -> {curve,times}.
     The frontend calls this (debounced) as bands/sliders move."""
     b = request.get_json(silent=True) or {}
+    if not isinstance(b, dict):
+        return jsonify({"error": "body must be a JSON object"}), 400
     job_id = b.get("job_id")
     stem = b.get("stem", "original")
     src = stem_audio_path(job_id, stem) if job_id else None
@@ -537,6 +539,8 @@ def fluid_route():
     return its URL. Cached by a params hash so revisiting settings replays
     instantly (the UI loops the clip and re-runs on changes)."""
     params = request.get_json(silent=True) or {}
+    if not isinstance(params, dict):
+        return jsonify({"error": "body must be a JSON object"}), 400
     h = fluid.params_hash(params)
     out = FLUID_DIR / f"{h}.mp4"
     if not out.exists():
@@ -558,6 +562,8 @@ def animate():
     the existing `/fluid/<name>` route. Bad graph -> HTTP 400.
     """
     body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        return jsonify({"error": "body must be a JSON object"}), 400
     job_id = body.get("job_id")
     graph = body.get("graph")
     segment = body.get("segment")  # { start, end, signals: [...] }

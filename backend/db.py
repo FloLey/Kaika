@@ -11,6 +11,7 @@ threaded Flask dev server and a local single-user tool.
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Optional
 
 import psycopg
@@ -20,6 +21,15 @@ from psycopg.types.json import Jsonb
 DSN = os.environ.get(
     "DATABASE_URL", "postgresql://demucs:demucs@localhost:5432/demucs"
 )
+
+# Transient "database is unreachable" error (restart / failover / not-up-yet).
+# Callers that want to degrade gracefully (e.g. schema init at import) catch this
+# specifically, so an unexpected DB error (bad SQL, constraint) still surfaces.
+DBUnavailable = psycopg.OperationalError
+
+# Brief connect retry so a momentary outage doesn't hard-fail a save.
+_CONNECT_RETRIES = 3
+_CONNECT_BACKOFF = 0.4  # seconds, multiplied by the attempt number
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -38,7 +48,17 @@ CREATE TABLE IF NOT EXISTS projects (
 
 
 def _connect():
-    return psycopg.connect(DSN, row_factory=dict_row)
+    """Open a short-lived connection, retrying briefly on a transient outage so a
+    momentary blip (DB restart / failover) doesn't hard-fail the request."""
+    last: DBUnavailable | None = None
+    for attempt in range(_CONNECT_RETRIES):
+        try:
+            return psycopg.connect(DSN, row_factory=dict_row)
+        except DBUnavailable as e:
+            last = e
+            if attempt < _CONNECT_RETRIES - 1:
+                time.sleep(_CONNECT_BACKOFF * (attempt + 1))
+    raise last
 
 
 def init_schema() -> None:

@@ -64,6 +64,8 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
       }
     }, 300);
     return () => clearTimeout(t);
+    // Deliberate: the debounced /animate fires on the serialized `renderKey`
+    // (this output's subgraph hash), not on the graph object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderKey, renderable]);
 

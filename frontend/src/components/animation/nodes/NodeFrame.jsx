@@ -32,6 +32,8 @@ export function MultiAnchor({ nodeId, ports, portRef, startConnect, className = 
   const key = ports.map((p) => `${p.portId}:${p.kind}:${p.flow}`).join(",");
   const ref = useCallback(
     (el) => { for (const p of ports) portRef(nodeId, p.portId, p.kind, p.flow)(el); },
+    // Deliberate: key on the serialized `key`, not the `ports` array identity, so
+    // the ref callback stays stable while the port set is unchanged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodeId, key, portRef]
   );

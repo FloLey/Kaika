@@ -63,9 +63,12 @@ export default function PointsNode({ node, selected, helpers, ctx, onGraphChange
       >
         {points.map(([x, y], i) => {
           const [px, py] = drag && drag.i === i ? drag.coord : [x, y];
+          // Key by the committed coordinate (points are an unordered emitter set,
+          // and a drag previews in local state so data coords are stable mid-drag),
+          // so removing a point doesn't reshuffle the others' DOM identity.
           return (
             <span
-              key={i}
+              key={`${x},${y}`}
               className="anim-points-marker"
               style={{ left: `${px * 100}%`, top: `${py * 100}%` }}
               onPointerDown={(e) => onMarkerDown(i, e)}

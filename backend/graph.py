@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Callable
 
@@ -24,6 +25,8 @@ import numpy as np
 
 from . import fluid, signals
 from .animation_params import OUTPUT_DEFAULTS, PARAMS, SOURCE_STATIC_KEYS
+
+log = logging.getLogger("kaika.graph")
 
 # Output (and serving) reuses the existing fluid dir + `/fluid/<name>` route.
 ANIM_DIR = Path(__file__).resolve().parent.parent / "data" / "fluid"
@@ -314,9 +317,14 @@ def _signal_curve(node: dict, job_id: str, start: float, end: float, nframes: in
     """
     sig = signals_by_id.get(node.get("data", {}).get("signalId"))
     if sig is None:
-        return np.zeros(nframes, np.float32)
+        return np.zeros(nframes, np.float32)   # deleted signal — silent (01 §3.7)
     stem_path = stem_audio_path(job_id, sig["stemKey"])
     if stem_path is None:
+        # The signal exists but its stem doesn't resolve (renamed/missing stem) —
+        # a real misconfiguration, not a deleted signal. Degrade to flat 0 so the
+        # render still completes, but log it rather than failing silently.
+        log.warning("signal '%s' references unresolved stem '%s' (job %s) — using flat 0",
+                    sig.get("id"), sig.get("stemKey"), job_id)
         return np.zeros(nframes, np.float32)
     d = signals.extract(
         str(stem_path), start, end, sig["minHz"], sig["maxHz"],

@@ -143,6 +143,7 @@ export default function FluidLab({ onBack }) {
       }
     }, 300);
     return () => clearTimeout(t);
+    // Deliberate: the debounced /fluid render fires on the serialized params `key`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -164,6 +165,7 @@ export default function FluidLab({ onBack }) {
       window.removeEventListener("focus", resume);
       clearInterval(watchdog);
     };
+    // Deliberate: mount-once watchdog; reads the visible <video> ref imperatively.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -196,6 +198,10 @@ export default function FluidLab({ onBack }) {
                       : <polyline points={pts} fill="none" />;
                   })()}
                 </svg>
+                {/* Index keys are intentional: the markers are stateless, the path
+                    is ORDERED, the visible label is the point number, and a drag
+                    mutates the coord in local state per move (so a coordinate key
+                    would remount the marker every pointermove). */}
                 {p.points.map(([x, y], i) => (
                   <div
                     key={i}
