@@ -1,6 +1,6 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
 .PHONY: dev db-up db-down install rerender-spectrograms \
-	test test-backend test-frontend lint build clean-cache
+	test test-backend test-frontend lint build clean-cache gen-params
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
 dev: db-up
@@ -46,3 +46,8 @@ build:
 clean-cache:
 	rm -f data/fluid/*.mp4
 	@echo "render cache cleared"
+
+# Regenerate frontend/src/lib/fluidParams.js from animation_params.FLUID_PARAM_SPEC.
+# Run after editing the spec; a pytest fails CI if the committed file is stale.
+gen-params:
+	.venv/bin/python -m backend.gen_fluid_params

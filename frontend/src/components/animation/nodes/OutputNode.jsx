@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame.jsx";
 import { outputHash, outputRenderable } from "../../../lib/graphModel.js";
+import { aspectOf } from "../../../lib/output.js";
 import * as api from "../../../lib/api.js";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered
@@ -24,7 +25,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
 
   // The preview well adopts the project output aspect so portrait/landscape is
   // visible while editing (the rendered clip matches this exact shape).
-  const aspect = output ? `${output.width} / ${output.height}` : "1 / 1";
+  const aspect = output ? aspectOf(output) : "1 / 1";
 
   // Render key: this output's subgraph + the project render settings. Changes only
   // when THIS output's rendered clip would (see graphModel.outputHash).

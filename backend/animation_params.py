@@ -11,27 +11,56 @@ can build/validate params without spinning up Flask.
 """
 from __future__ import annotations
 
-# key -> (nested_group, min, max, default)
-#   nested_group in {"source", "fluid"} — where simulate() reads the key.
-#   min/max are the native-unit bounds; default is the native-unit fallback used
-#   when a port has no binding.
-PARAMS: dict[str, tuple[str, float, float, float]] = {
-    "emit": ("source", 0.0, 1.0, 0.30),
-    "radius": ("source", 0.02, 0.3, 0.08),
-    "force": ("source", 0.0, 60.0, 20.0),
-    "angle": ("source", 0.0, 360.0, 270.0),
-    "intensity": ("source", 0.0, 3.0, 1.0),
-    "opacity": ("source", 0.0, 1.0, 1.0),
+# THE source of truth for the fluid param spec. Each entry carries both the
+# simulate() contract (sim_group/min/max/default) and the UI metadata the frontend
+# needs (label, slider step, display group, value formatter). The frontend
+# `fluidParams.js` is GENERATED from this table (`python -m backend.gen_fluid_params`),
+# so there is no hand-maintained mirror to drift — a pytest asserts the committed
+# file matches (see tests/test_fluid_params_codegen.py).
+#
+# Fields:
+#   sim_group  — "source" | "fluid": where simulate() reads the key.
+#   ui_group   — "source" | "color" | "medium": how the card groups the control.
+#   label      — control label shown in the UI.
+#   min/max    — native-unit bounds.  step — slider granularity.  default — fallback.
+#   fmt        — value formatter token: "dp1"/"dp2"/"dp3" (toFixed) | "deg" | None.
+FLUID_PARAM_SPEC: list[dict] = [
+    {"key": "emit", "sim_group": "source", "ui_group": "source", "label": "emit",
+     "min": 0.0, "max": 1.0, "step": 0.02, "default": 0.30, "fmt": "dp2"},
+    {"key": "radius", "sim_group": "source", "ui_group": "source", "label": "radius",
+     "min": 0.02, "max": 0.3, "step": 0.01, "default": 0.08, "fmt": "dp2"},
+    {"key": "force", "sim_group": "source", "ui_group": "source", "label": "force",
+     "min": 0.0, "max": 60.0, "step": 1.0, "default": 20.0, "fmt": None},
+    {"key": "angle", "sim_group": "source", "ui_group": "source", "label": "angle",
+     "min": 0.0, "max": 360.0, "step": 5.0, "default": 270.0, "fmt": "deg"},
     # Per-channel dye colour (0..1). Modulatable so a signal/pulse can drive hue,
     # not just brightness. simulate() falls back to the static `color` vector for
     # any channel left unset (keeps the FluidLab `/fluid` path scalar-only).
-    "r": ("source", 0.0, 1.0, 0.27),
-    "g": ("source", 0.0, 1.0, 0.69),
-    "b": ("source", 0.0, 1.0, 1.0),
-    "dissipation": ("fluid", 0.85, 0.995, 0.95),
-    "velocity_dissipation": ("fluid", 0.85, 0.995, 0.97),
-    "viscosity": ("fluid", 0.0, 0.5, 0.0),
-    "vorticity": ("fluid", 0.0, 10.0, 6.0),
+    {"key": "r", "sim_group": "source", "ui_group": "color", "label": "red",
+     "min": 0.0, "max": 1.0, "step": 0.01, "default": 0.27, "fmt": "dp2"},
+    {"key": "g", "sim_group": "source", "ui_group": "color", "label": "green",
+     "min": 0.0, "max": 1.0, "step": 0.01, "default": 0.69, "fmt": "dp2"},
+    {"key": "b", "sim_group": "source", "ui_group": "color", "label": "blue",
+     "min": 0.0, "max": 1.0, "step": 0.01, "default": 1.0, "fmt": "dp2"},
+    {"key": "intensity", "sim_group": "source", "ui_group": "color", "label": "intensity",
+     "min": 0.0, "max": 3.0, "step": 0.1, "default": 1.0, "fmt": "dp1"},
+    {"key": "opacity", "sim_group": "source", "ui_group": "color", "label": "opacity",
+     "min": 0.0, "max": 1.0, "step": 0.05, "default": 1.0, "fmt": "dp2"},
+    {"key": "dissipation", "sim_group": "fluid", "ui_group": "medium", "label": "dissip.",
+     "min": 0.85, "max": 0.995, "step": 0.005, "default": 0.95, "fmt": "dp3"},
+    {"key": "velocity_dissipation", "sim_group": "fluid", "ui_group": "medium",
+     "label": "vel diss.", "min": 0.85, "max": 0.995, "step": 0.005, "default": 0.97, "fmt": "dp3"},
+    {"key": "viscosity", "sim_group": "fluid", "ui_group": "medium", "label": "viscosity",
+     "min": 0.0, "max": 0.5, "step": 0.02, "default": 0.0, "fmt": "dp2"},
+    {"key": "vorticity", "sim_group": "fluid", "ui_group": "medium", "label": "vorticity",
+     "min": 0.0, "max": 10.0, "step": 0.5, "default": 6.0, "fmt": "dp1"},
+]
+
+# key -> (sim_group, min, max, default), derived from the spec. The graph executor
+# reads this compact view; min/max are the native-unit bounds; default is the
+# native-unit fallback used when a port has no binding.
+PARAMS: dict[str, tuple[str, float, float, float]] = {
+    p["key"]: (p["sim_group"], p["min"], p["max"], p["default"]) for p in FLUID_PARAM_SPEC
 }
 
 # Static params (not ports in v1; set on the fluid card) and where they nest.

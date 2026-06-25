@@ -23,7 +23,7 @@ from typing import Callable
 import numpy as np
 
 from . import fluid, signals
-from .animation_params import PARAMS, SOURCE_STATIC_KEYS
+from .animation_params import OUTPUT_DEFAULTS, PARAMS, SOURCE_STATIC_KEYS
 
 # Output (and serving) reuses the existing fluid dir + `/fluid/<name>` route.
 ANIM_DIR = Path(__file__).resolve().parent.parent / "data" / "fluid"
@@ -51,10 +51,25 @@ _SIGNAL_HASH_FIELDS = (
 # Node types that produce a video stream (spec 10). `output` passes its input
 # through, so it's a producer too.
 _VIDEO_PRODUCERS = ("fluid", "combine", "output")
-_MERGE_MEDIUM_DEFAULTS = (
-    ("dissipation", 0.95), ("velocity_dissipation", 0.97),
-    ("viscosity", 0.0), ("vorticity", 6.0),
+# A merge combine has no fluid card, so its medium params fall back to the canonical
+# `fluid`-group defaults (the single source of truth in animation_params.PARAMS).
+_MERGE_MEDIUM_DEFAULTS = tuple(
+    (k, default) for k, (group, _lo, _hi, default) in PARAMS.items() if group == "fluid"
 )
+
+
+def _output_params(output: dict, fps: int) -> dict:
+    """The simulate() top-level `output` block from project render settings.
+
+    Shared by `build_params` (single-fluid) and `_Dag._merge_params` (merge combine)
+    so the size/quality/fps/background contract lives in one place."""
+    return {
+        "width": int(output.get("width", OUTPUT_DEFAULTS["width"])),
+        "height": int(output.get("height", OUTPUT_DEFAULTS["height"])),
+        "quality": output.get("quality", OUTPUT_DEFAULTS["quality"]),
+        "fps": fps,
+        "background": output.get("background", OUTPUT_DEFAULTS["background"]),
+    }
 
 
 def _video_source(graph: dict, target_id: str, target_port: str):
@@ -380,13 +395,7 @@ def build_params(job_id: str, segment: dict, graph: dict,
         "fluid": fluid_params,
     }
     if output:
-        params["output"] = {
-            "width": int(output.get("width", 1080)),
-            "height": int(output.get("height", 1920)),
-            "quality": output.get("quality", "normal"),
-            "fps": fps,
-            "background": output.get("background", "#000000"),
-        }
+        params["output"] = _output_params(output, fps)
     else:
         params["grid"] = int(static.get("grid", LEGACY_GRID))   # legacy square fallback
     return params
@@ -451,13 +460,7 @@ class _Dag:
             "fluid": {k: float(medium.get(k, d)) for k, d in _MERGE_MEDIUM_DEFAULTS},
         }
         if self.output:
-            params["output"] = {
-                "width": int(self.output.get("width", 1080)),
-                "height": int(self.output.get("height", 1920)),
-                "quality": self.output.get("quality", "normal"),
-                "fps": self.fps,
-                "background": self.output.get("background", "#000000"),
-            }
+            params["output"] = _output_params(self.output, self.fps)
         else:
             params["grid"] = LEGACY_GRID
         return params

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import SharedCtl, { Toggle as SharedToggle } from "../../ui/Ctl.jsx";
-import { clamp } from "../../lib/mel.js";
+import { useDragPad } from "../../lib/useDragPad.js";
 import { runFluid } from "../../lib/api.js";
 
 const HELP = {
@@ -78,39 +78,27 @@ export default function FluidLab({ onBack }) {
 
   // --- source path editor (click stage to add, drag markers, dbl-click remove) ---
   const stageRef = useRef(null);
-  const normCoord = (e) => {
-    const r = stageRef.current.getBoundingClientRect();
-    return [clamp((e.clientX - r.left) / r.width, 0, 1),
-            clamp((e.clientY - r.top) / r.height, 0, 1)];
-  };
+  const { norm: normCoord, startDrag } = useDragPad(stageRef);
   const addPoint = (e) => {
     if (e.target !== e.currentTarget) return;       // ignore clicks on a marker
-    const c = normCoord(e);
-    setP((s) => ({ ...s, points: [...s.points, c] }));
+    setP((s) => ({ ...s, points: [...s.points, normCoord(e)] }));
   };
   const onMarkerDown = (idx, e) => {
-    e.stopPropagation();
-    let moved = false;
-    const move = (ev) => {
-      moved = true;
-      setP((s) => {
+    startDrag(e, {
+      onMove: (coord) => setP((s) => {
         const pts = s.points.slice();
-        pts[idx] = normCoord(ev);
+        pts[idx] = coord;
         return { ...s, points: pts };
-      });
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      // Click (no drag) on the FIRST point closes/opens the loop, like a
-      // polygon tool. Needs at least a triangle.
-      if (!moved && idx === 0) {
-        setP((s) => (s.points.length > 2
-          ? { ...s, path_closed: !s.path_closed } : s));
-      }
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+      }),
+      // Click (no drag) on the FIRST point closes/opens the loop, like a polygon
+      // tool. Needs at least a triangle.
+      onEnd: ({ moved }) => {
+        if (!moved && idx === 0) {
+          setP((s) => (s.points.length > 2
+            ? { ...s, path_closed: !s.path_closed } : s));
+        }
+      },
+    });
   };
   const removePoint = (idx) =>
     setP((s) => (s.points.length > 1
