@@ -114,7 +114,7 @@ describe("FluidNode", () => {
     expect(html).toContain('data-port="out"');
     expect(html).toContain("gc-port-video");
     // static controls
-    expect(html).toContain("color");
+    expect(html).toContain("enabled");
     // group headers
     expect(html).toContain("SOURCE");
     expect(html).toContain("COLOR");

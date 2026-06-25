@@ -42,15 +42,6 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
 
   const detach = (key) => onDetach(node.id, key);
 
-  // The swatch reflects the r/g/b ports (now modulatable, in the COLOR group): a
-  // const channel shows its value; a wired channel shows its range midpoint as a
-  // hint (its real value pulses with the signal at render time).
-  const chanVal = (k) => {
-    const b = node.data.ports[k]?.binding || {};
-    return b.kind === "node" ? (b.lo + b.hi) / 2 : (b.value ?? 0);
-  };
-  const swatchRgb = ["r", "g", "b"].map((k) => Math.round(chanVal(k) * 255)).join(",");
-
   return (
     <NodeFrame
       node={node}
@@ -91,10 +82,6 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
       {/* Static controls (non-port params). The clip always spans the full segment,
           so there is no duration control. */}
       <div className="anim-static">
-        <div className="anim-color">
-          <span className="ctl-label">color</span>
-          <div className="color-swatch" style={{ background: `rgb(${swatchRgb})` }} />
-        </div>
         <Toggle label="enabled" value={s.enabled} onChange={(v) => setStatic({ enabled: v })} />
         <Toggle label="radial" value={s.radial} onChange={(v) => setStatic({ radial: v })} />
         <Toggle
