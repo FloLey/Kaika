@@ -35,6 +35,7 @@ from . import db
 from . import jobs
 from . import logbus
 from .config import N_FFT, HOP as HOP_LENGTH, N_MELS, FMIN
+from .web import json_body, validate_audio_params
 
 logbus.configure()
 log = logging.getLogger("kaika")
@@ -501,25 +502,21 @@ def project_delete(job_id: str):
 
 
 @app.route("/extract", methods=["POST"])
-def extract_route():
+@json_body
+def extract_route(b):
     """Extract one signal's curve: (stem + frequency band + segment window)
     shaped by attack/release/invert/gamma/gain/offset/threshold -> {curve,times}.
     The frontend calls this (debounced) as bands/sliders move."""
-    b = request.get_json(silent=True) or {}
-    if not isinstance(b, dict):
-        return jsonify({"error": "body must be a JSON object"}), 400
     job_id = b.get("job_id")
     stem = b.get("stem", "original")
     src = stem_audio_path(job_id, stem) if job_id else None
     if src is None:
         return jsonify({"error": "unknown job/stem"}), 404
     try:
+        start, end, min_hz, max_hz, fps = validate_audio_params(b)
         out = sig.extract(
-            str(src),
-            float(b.get("start", 0.0)), float(b.get("end", 0.0)),
-            float(b.get("minHz", 20.0)), float(b.get("maxHz", 20000.0)),
-            feature=b.get("feature", "energy"),
-            fps=int(b.get("fps", 30)),
+            str(src), start, end, min_hz, max_hz,
+            feature=b.get("feature", "energy"), fps=fps,
             attack=float(b.get("attack", 5.0)),
             release=float(b.get("release", 250.0)),
             invert=bool(b.get("invert", False)),
@@ -528,20 +525,21 @@ def extract_route():
             offset=float(b.get("offset", 0.0)),
             threshold=float(b.get("threshold", 0.0)),
         )
+    except (ValueError, TypeError) as e:
+        log.warning("extract bad params (%s/%s): %s", job_id, stem, e)
+        return jsonify({"error": str(e)}), 400
     except Exception as e:  # noqa: BLE001
-        log.warning("extract failed (%s/%s): %s", job_id, stem, e)
+        log.error("extract failed (%s/%s)", job_id, stem, exc_info=e)
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
     return jsonify(out)
 
 
 @app.route("/fluid", methods=["POST"])
-def fluid_route():
+@json_body
+def fluid_route(params):
     """Run the centered-source fluid sim for the given params, encode an mp4, and
     return its URL. Cached by a params hash so revisiting settings replays
     instantly (the UI loops the clip and re-runs on changes)."""
-    params = request.get_json(silent=True) or {}
-    if not isinstance(params, dict):
-        return jsonify({"error": "body must be a JSON object"}), 400
     h = fluid.params_hash(params)
     out = FLUID_DIR / f"{h}.mp4"
     if out.exists():
@@ -550,24 +548,25 @@ def fluid_route():
         try:
             frames, fps, _n = fluid.simulate(params)
             fluid.render_mp4(frames, fps, out)
+        except (ValueError, KeyError, TypeError) as e:
+            log.warning("fluid render bad params: %s", e)
+            return jsonify({"error": str(e)}), 400
         except Exception as e:  # noqa: BLE001
-            log.warning("fluid render failed: %s", e)
+            log.error("fluid render failed", exc_info=e)
             return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
         render_cache.evict(FLUID_DIR)  # bound the cache after adding a clip
     return jsonify({"url": f"/fluid/{h}.mp4"})
 
 
 @app.post("/animate")
-def animate():
+@json_body
+def animate(body):
     """Render a per-segment graph (`01`) to a cached, looping mp4 -> {url}.
 
     The request carries the live signal defs (`segment.signals`, Issue 1A) so the
     executor needs no DB read. Output is written under data/fluid/ and served by
     the existing `/fluid/<name>` route. Bad graph -> HTTP 400.
     """
-    body = request.get_json(silent=True) or {}
-    if not isinstance(body, dict):
-        return jsonify({"error": "body must be a JSON object"}), 400
     job_id = body.get("job_id")
     graph = body.get("graph")
     segment = body.get("segment")  # { start, end, signals: [...] }
@@ -581,7 +580,7 @@ def animate():
         log.warning("animate rejected graph (%s): %s", job_id, e)
         return jsonify({"error": str(e)}), 400
     except Exception as e:  # noqa: BLE001
-        log.warning("animate failed (%s): %s", job_id, e)
+        log.error("animate failed (%s)", job_id, exc_info=e)
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
     return jsonify({"url": url})
 
