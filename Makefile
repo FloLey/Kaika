@@ -1,6 +1,7 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
 .PHONY: dev db-up db-down install rerender-spectrograms \
-	test test-backend test-frontend lint build clean-cache gen-params
+	test test-backend test-frontend lint build clean-cache gen-params \
+	format coverage
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
 dev: db-up
@@ -38,6 +39,16 @@ test-frontend:
 lint:
 	.venv/bin/ruff check backend tests
 	cd frontend && npm run lint
+
+# One-time / occasional auto-format (Black for Python, Prettier for the frontend).
+# Land the first bulk run as its OWN commit and add its SHA to .git-blame-ignore-revs.
+format:
+	.venv/bin/black backend tests
+	cd frontend && npm run format
+
+coverage:
+	.venv/bin/python -m pytest --cov 2>/dev/null || .venv/bin/python -m pytest --cov=backend
+	cd frontend && npm run coverage
 
 build:
 	cd frontend && npm run build

@@ -1,5 +1,9 @@
-# Dev-only tooling (linting + tests). Install with:
+# Dev-only tooling (lint, format, tests, coverage) — not needed to run the app.
+# Install on top of requirements.txt:
 #   .venv/bin/python -m pip install -r requirements-dev.txt
-# Then: ruff check .   and   python -m pytest
-ruff
-pytest
+# Then: make lint · make test · make coverage · make format
+ruff==0.15.19
+pytest==9.1.1
+pytest-cov
+black
+pre-commit

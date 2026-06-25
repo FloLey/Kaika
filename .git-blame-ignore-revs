@@ -1,0 +1,5 @@
+# Commits to skip in `git blame` (bulk reformat / mechanical sweeps).
+# Enable locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add the SHA of the one-time `make format` reformat commit here once it lands, so
+# blame keeps pointing at the real authorship, not the whitespace pass.

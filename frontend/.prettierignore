@@ -1,0 +1,4 @@
+dist
+node_modules
+# Generated from backend/animation_params.py — run `make gen-params`, not Prettier.
+src/lib/fluidParams.js

@@ -1,10 +1,16 @@
-flask
-demucs
-torchcodec
-librosa
-matplotlib
-numpy
-mlx-whisper; platform_system == "Darwin" and platform_machine == "arm64"
-faster-whisper
-yt-dlp
-psycopg[binary]
+# Pinned to a known-good environment (torch/librosa/demucs combos are brittle
+# across versions). Refresh with `.venv/bin/python -m pip freeze` after a verified
+# upgrade. Dev-only tools (formatters, coverage) live in requirements-dev.txt.
+flask==3.1.3
+demucs==4.0.1
+torch==2.12.1
+torchcodec==0.14.0
+librosa==0.11.0
+matplotlib==3.11.0
+numpy==2.4.6
+scipy==1.18.0
+soundfile==0.14.0
+mlx-whisper==0.4.3; platform_system == "Darwin" and platform_machine == "arm64"
+faster-whisper==1.2.1
+yt-dlp==2026.6.9
+psycopg[binary]==3.3.4

@@ -1,0 +1,22 @@
+# Optional local hooks. Enable once with: pre-commit install
+# (pip install pre-commit; see requirements-dev.txt). Mirrors the CI checks so a
+# bad commit is caught before it's pushed.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.19
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        files: ^backend/|^tests/
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier (frontend)
+        entry: bash -c 'cd frontend && npx prettier --write "$@"' --
+        language: system
+        files: ^frontend/src/.*\.(js|jsx|css)$
+        exclude: ^frontend/src/lib/fluidParams\.js$

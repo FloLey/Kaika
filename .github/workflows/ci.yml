@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # ruff is static — no runtime deps needed, so lint fast first.
+      - name: Install lint/test tooling
+        run: pip install ruff==0.15.19 pytest==9.1.1 pytest-cov
+      - name: Ruff
+        run: ruff check backend tests
+      # The pure-logic test suite needs these runtime deps (audio/sim libs); the
+      # heavy ML stack (torch/demucs/whisper) is only used by routes, not tests.
+      - name: Install test runtime deps
+        run: pip install numpy scipy librosa matplotlib soundfile
+      - name: Pytest (+ coverage)
+        run: pytest --cov=backend
+      - name: Param spec is in sync (codegen no-diff)
+        run: python -m backend.gen_fluid_params --check
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      # NOTE: `npm run format:check` is intentionally NOT gated yet — the one-time
+      # Prettier+Black reformat (make format) lands as its own commit after the TS
+      # migration; add the step here once the tree is formatted.
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
