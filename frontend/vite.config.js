@@ -20,9 +20,10 @@ export default defineConfig({
       "/spectrogram": "http://127.0.0.1:5000",
     },
   },
-  // `npm run test` — unit tests for the pure logic (no DOM needed).
+  // `npm run test` — pure-logic unit tests default to node; DOM interaction tests
+  // opt into jsdom per-file with `// @vitest-environment jsdom`.
   test: {
     environment: "node",
-    include: ["src/**/*.test.js"],
+    include: ["src/**/*.test.{js,jsx}"],
   },
 });
