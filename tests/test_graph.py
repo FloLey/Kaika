@@ -184,15 +184,19 @@ def test_missing_signal_degrades_to_flat_zero(monkeypatch):
 # Hashing — referenced signal defs change the hash; node position does not.
 # --------------------------------------------------------------------------- #
 def _sig_graph():
+    # Signal wired into the fluid's force (value edge) and the fluid into the
+    # output (video edge) so the contributing-DAG hash reaches the signal.
     sig_node = {"id": "n-sig", "type": "signal", "x": 0, "y": 0,
                 "data": {"signalId": "sig-1"}}
     ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig",
                                    "lo": 0.0, "hi": 45.0}}}
     return {"version": 1, "nodes": [_fluid_node(ports), sig_node, _output_node()],
-            "edges": []}
+            "edges": [_video_edge(),
+                      {"id": "e-sig", "source": "n-sig", "sourcePort": "out",
+                       "target": "n-fluid01", "targetPort": "force"}]}
 
 
-def test_hash_includes_referenced_signal_defs():
+def test_output_hash_includes_referenced_signal_defs():
     g = _sig_graph()
     base_sig = {"id": "sig-1", "stemKey": "drums", "minHz": 40, "maxHz": 120,
                 "feature": "energy", "attack": 5.0, "release": 250.0,
@@ -200,16 +204,17 @@ def test_hash_includes_referenced_signal_defs():
                 "threshold": 0.0}
     seg_a = {"start": 0.0, "end": 2.0, "signals": [dict(base_sig)]}
     seg_b = {"start": 0.0, "end": 2.0, "signals": [dict(base_sig, maxHz=200)]}
-    assert graph.graph_hash("job1", seg_a, g) != graph.graph_hash("job1", seg_b, g)
+    assert (graph.output_hash("job1", seg_a, g, "n-out")
+            != graph.output_hash("job1", seg_b, g, "n-out"))
 
 
-def test_hash_ignores_node_position():
+def test_output_hash_ignores_node_position():
     g = _sig_graph()
     seg = {"start": 0.0, "end": 2.0, "signals": [
         {"id": "sig-1", "stemKey": "drums", "minHz": 40, "maxHz": 120,
          "feature": "energy", "attack": 5.0, "release": 250.0, "invert": False,
          "gamma": 1.0, "gain": 1.0, "offset": 0.0, "threshold": 0.0}]}
-    h1 = graph.graph_hash("job1", seg, g)
+    h1 = graph.output_hash("job1", seg, g, "n-out")
     g["nodes"][0]["x"] = 999
     g["nodes"][0]["y"] = 999
-    assert graph.graph_hash("job1", seg, g) == h1
+    assert graph.output_hash("job1", seg, g, "n-out") == h1

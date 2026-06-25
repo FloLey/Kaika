@@ -74,7 +74,7 @@ function GroupAnchor({ nodeId, portKeys, portRef }) {
   );
 }
 
-function ParamRow({ node, param, helpers, ctx, onGraphChange, onDetach }) {
+function ParamRow({ node, param, helpers, onGraphChange, onDetach }) {
   const port = node.data.ports[param.key];
   const binding = port?.binding || { kind: "const", value: param.def };
 
@@ -229,7 +229,6 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
                 node={node}
                 param={p}
                 helpers={helpers}
-                ctx={ctx}
                 onGraphChange={onGraphChange}
                 onDetach={detach}
               />

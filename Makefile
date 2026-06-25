@@ -1,5 +1,6 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
-.PHONY: dev db-up db-down install rerender-spectrograms
+.PHONY: dev db-up db-down install rerender-spectrograms \
+	test test-backend test-frontend lint build clean-cache
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
 dev: db-up
@@ -24,3 +25,24 @@ install:
 # Re-render existing projects' spectrograms after a theme/colormap change.
 rerender-spectrograms:
 	.venv/bin/python -m backend.rerender_spectrograms
+
+# ---- quality gates (mirror CI) ---------------------------------------------
+test: test-backend test-frontend
+
+test-backend:
+	.venv/bin/python -m pytest -q
+
+test-frontend:
+	cd frontend && npm run test
+
+lint:
+	.venv/bin/ruff check backend tests
+	cd frontend && npm run lint
+
+build:
+	cd frontend && npm run build
+
+# Drop rendered animation clips (data/fluid/*.mp4). The cache rebuilds on demand.
+clean-cache:
+	rm -f data/fluid/*.mp4
+	@echo "render cache cleared"

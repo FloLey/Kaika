@@ -96,16 +96,16 @@ def _graph():
                        "target": "n-o", "targetPort": "video"}]}
 
 
-def test_graph_hash_changes_with_output():
+def test_output_hash_changes_with_output():
     g = _graph()
     seg = {"start": 0.0, "end": 2.0, "signals": []}
     a = {"width": 1080, "height": 1920, "quality": "normal", "fps": 24, "background": "#000000"}
-    h_portrait = graph.graph_hash("job", seg, g, a)
-    h_landscape = graph.graph_hash("job", seg, g, {**a, "width": 1920, "height": 1080})
-    h_quality = graph.graph_hash("job", seg, g, {**a, "quality": "high"})
-    h_bg = graph.graph_hash("job", seg, g, {**a, "background": "#101830"})
+    h_portrait = graph.output_hash("job", seg, g, "n-o", a)
+    h_landscape = graph.output_hash("job", seg, g, "n-o", {**a, "width": 1920, "height": 1080})
+    h_quality = graph.output_hash("job", seg, g, "n-o", {**a, "quality": "high"})
+    h_bg = graph.output_hash("job", seg, g, "n-o", {**a, "background": "#101830"})
     assert len({h_portrait, h_landscape, h_quality, h_bg}) == 4   # all distinct
-    assert graph.graph_hash("job", seg, g, a) == h_portrait        # stable
+    assert graph.output_hash("job", seg, g, "n-o", a) == h_portrait    # stable
 
 
 def test_build_params_drives_grid_and_fps_from_output():

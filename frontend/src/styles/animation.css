@@ -67,6 +67,7 @@
 /* ---- canvas (pan/zoom stage + edge overlay) ------------------------------- */
 
 .gc-root {
+  --gc-grid: 26px;   /* paper-grid dot spacing (offset by half to centre dots) */
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -74,8 +75,8 @@
   /* faint paper grid: loose dots in the hairline tone on lifted paper */
   background-color: var(--panel-2);
   background-image: radial-gradient(var(--line) 1px, transparent 1.2px);
-  background-size: 26px 26px;
-  background-position: -13px -13px;
+  background-size: var(--gc-grid) var(--gc-grid);
+  background-position: calc(var(--gc-grid) / -2) calc(var(--gc-grid) / -2);
   touch-action: none;
 }
 .gc-root:active { cursor: grabbing; }

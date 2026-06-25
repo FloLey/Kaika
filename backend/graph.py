@@ -30,6 +30,17 @@ ANIM_DIR = Path(__file__).resolve().parent.parent / "data" / "fluid"
 
 FLUID_FPS = 24
 
+# Bump when render SEMANTICS change so stale clips (cached under an old meaning of
+# the same graph) are invalidated. Folded into `output_hash`.
+#   v2: clip = full segment (duration dropped) + per-frame medium params + r/g/b.
+#   v3: combine nodes + video DAG + background applied at the terminal (was per-sim).
+RENDER_VERSION = 3
+
+# Legacy square-grid fallback (cells per side) for pre-output-settings saves that
+# carry no project `output`. The live path derives a rectangular grid from the
+# output size (see `fluid.grid_from_output`).
+LEGACY_GRID = 96
+
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
 _SIGNAL_HASH_FIELDS = (
@@ -221,42 +232,6 @@ def _referenced_signal_defs(graph: dict, signals_by_id: dict) -> list[list]:
     return defs
 
 
-def graph_hash(job_id: str, segment: dict, graph: dict, output: dict | None = None) -> str:
-    """Stable SHA-1 over the render-defining graph state (01 §3.6).
-
-    Includes nodes (minus x/y/view), edges, segment start/end + job_id, the
-    defining fields of every referenced signal, and the project `output` settings
-    (size/quality/fps/background). Excludes node positions and view transform so
-    moving a node does not invalidate the cache.
-    """
-    signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
-    payload = {
-        # Bump when render SEMANTICS change so stale clips (cached under an old
-        # meaning of the same graph) are invalidated. v2: clip = full segment
-        # (duration is no longer a graph setting) + per-frame medium params + r/g/b.
-        "render_version": 2,
-        "job_id": job_id,
-        "start": float(segment.get("start", 0.0)),
-        "end": float(segment.get("end", 0.0)),
-        "nodes": [_node_for_hash(n) for n in graph.get("nodes", [])],
-        "edges": graph.get("edges", []),
-        "signals": _referenced_signal_defs(graph, signals_by_id),
-        "output": output or {},
-    }
-    blob = json.dumps(payload, sort_keys=True, default=str).encode()
-    return hashlib.sha1(blob).hexdigest()[:16]
-
-
-def _fluid_value_node_ids(fluid_node: dict) -> set[str]:
-    """The ids of value nodes wired into a fluid node's ports (node bindings)."""
-    ids = set()
-    for port in fluid_node.get("data", {}).get("ports", {}).values():
-        binding = (port or {}).get("binding") or {}
-        if binding.get("kind") == "node" and binding.get("nodeId"):
-            ids.add(binding["nodeId"])
-    return ids
-
-
 def _contributing_ids(graph: dict, output_id: str) -> set:
     """Every node id upstream of `output_id` — a backward walk over ALL edges
     (video DAG + value bindings). The output's whole pipeline; disconnected nodes
@@ -290,9 +265,7 @@ def output_hash(job_id: str, segment: dict, graph: dict, output_id: str,
     sub_nodes = [nodes[i] for i in sorted(contributing) if i in nodes]
     signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
     payload = {
-        # Bump on render-semantics changes. v3: combine nodes + video DAG + the
-        # background is applied at the terminal (was baked per-sim).
-        "render_version": 3,
+        "render_version": RENDER_VERSION,
         "job_id": job_id,
         "output_id": output_id,
         "start": float(segment.get("start", 0.0)),
@@ -415,7 +388,7 @@ def build_params(job_id: str, segment: dict, graph: dict,
             "background": output.get("background", "#000000"),
         }
     else:
-        params["grid"] = int(static.get("grid", 96))   # legacy square fallback
+        params["grid"] = int(static.get("grid", LEGACY_GRID))   # legacy square fallback
     return params
 
 
@@ -486,7 +459,7 @@ class _Dag:
                 "background": self.output.get("background", "#000000"),
             }
         else:
-            params["grid"] = 96
+            params["grid"] = LEGACY_GRID
         return params
 
     def emitters(self, node_id) -> list:

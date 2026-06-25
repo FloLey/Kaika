@@ -258,18 +258,6 @@ export function removeNode(graph, nodeId) {
   return out;
 }
 
-// Patch a wired port's lo/hi mapping (no-op if the port isn't node-bound).
-export function setPortRange(graph, fluidId, paramKey, lo, hi) {
-  const nodes = graph.nodes.map((n) => {
-    if (n.id !== fluidId) return n;
-    const port = n.data.ports[paramKey];
-    if (!port || !port.binding || port.binding.kind !== "node") return n;
-    const ports = { ...n.data.ports, [paramKey]: { ...port, binding: { ...port.binding, lo, hi } } };
-    return { ...n, data: { ...n.data, ports } };
-  });
-  return { ...graph, nodes };
-}
-
 // ---- validation (01 §3.7) ----------------------------------------------------
 
 // The video producer feeding `outputId` via its single `video` in-edge, or null
@@ -279,11 +267,6 @@ export function videoInput(graph, outputId) {
   if (incoming.length !== 1) return null;
   const src = (graph.nodes || []).find((n) => n.id === incoming[0].source);
   return src && VIDEO_PRODUCERS.has(src.type) ? src : null;
-}
-// Back-compat alias (the fluid feeding an output, if it's wired directly to one).
-export function fluidForOutput(graph, outputId) {
-  const src = videoInput(graph, outputId);
-  return src && src.type === "fluid" ? src : null;
 }
 
 export const outputNodes = (graph) =>
@@ -429,65 +412,6 @@ function fnv1a(str) {
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16).padStart(8, "0");
-}
-
-// Ids of the nodes that actually feed the render: walk edges backwards
-// (target -> source) from every output node. Disconnected/orphan nodes don't
-// affect the output, so excluding them means adding or editing one won't bust the
-// render cache — only changes upstream of the output recompute.
-function contributingIds(graph) {
-  const incoming = new Map(); // nodeId -> [source ids]
-  for (const e of graph.edges || []) {
-    if (!incoming.has(e.target)) incoming.set(e.target, []);
-    incoming.get(e.target).push(e.source);
-  }
-  const seen = new Set();
-  const stack = (graph.nodes || []).filter((n) => n.type === "output").map((n) => n.id);
-  while (stack.length) {
-    const id = stack.pop();
-    if (seen.has(id)) continue;
-    seen.add(id);
-    for (const src of incoming.get(id) || []) stack.push(src);
-  }
-  return seen;
-}
-
-// Stable hash over the CONTRIBUTING nodes (type + data, minus x/y/view), the edges
-// among them, the segment bounds + job id, and the defining fields of every signal
-// referenced by a contributing `signal` node. `signals` is the segment's signal
-// list (for resolving refs). Nodes not upstream of the output are ignored, so the
-// key only changes when the rendered output would.
-export function graphHash(graph, jobId, start, end, signals) {
-  const sigById = new Map((signals || []).map((s) => [s.id, s]));
-  const contributing = contributingIds(graph);
-  const referenced = {};
-  const nodes = (graph.nodes || [])
-    .filter((n) => contributing.has(n.id))
-    .map((n) => {
-      if (n.type === "signal") {
-        const sig = sigById.get(n.data.signalId);
-        if (sig) {
-          referenced[n.data.signalId] = Object.fromEntries(
-            SIGNAL_HASH_FIELDS.map((k) => [k, sig[k]])
-          );
-        }
-      }
-      // exclude x/y; keep id, type, data (data carries no transient view fields).
-      return { id: n.id, type: n.type, data: n.data };
-    });
-  const canon = {
-    nodes,
-    edges: (graph.edges || [])
-      .filter((e) => contributing.has(e.source) && contributing.has(e.target))
-      .map((e) => ({
-        source: e.source, sourcePort: e.sourcePort, target: e.target, targetPort: e.targetPort,
-      })),
-    jobId: jobId ?? null,
-    start: start ?? null,
-    end: end ?? null,
-    signals: referenced,
-  };
-  return fnv1a(stableStringify(canon));
 }
 
 // Per-output subgraph hash: gates redundant POSTs for ONE output. Covers the WHOLE

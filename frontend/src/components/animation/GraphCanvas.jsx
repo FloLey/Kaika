@@ -225,7 +225,7 @@ export default function GraphCanvas({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, graph, onGraphChange, onSelect]);
+  }, [selected, graph, onGraphChange, onSelect, removeEdge]);
 
   // --- edge geometry (screen space, recomputed each tick) --------------------
   const edges = (graph.edges || []).map((e) => {

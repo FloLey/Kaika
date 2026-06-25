@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   signalNode, outputNode, fluidNode, emptyGraph, normalizeGraph,
-  connect, disconnect, removeNode, setPortRange, validate, graphHash,
-  outputHash, fluidForOutput,
+  connect, disconnect, removeNode, validate,
+  outputHash, videoInput,
   combineNode, connectVideo, videoSource, outputRenderable,
   addCombineInput, removeCombineInput, setCombineMode, setCombineOpacity, setCombineMedium,
   pointsNode, addPoint, movePoint, removePoint,
@@ -113,12 +113,7 @@ describe("connect / disconnect keep the binding<->edge invariant", () => {
     expect(g2.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(1);
   });
 
-  it("setPortRange patches lo/hi on a wired port", () => {
-    const { g, fluidId, srcId } = wiredGraph();
-    const g2 = setPortRange(connect(g, srcId, fluidId, "force"), fluidId, "force", 0, 45);
-    const fluid = g2.nodes.find((n) => n.id === fluidId);
-    expect(fluid.data.ports.force.binding).toMatchObject({ kind: "node", lo: 0, hi: 45 });
-  });
+  // (port lo/hi patching is covered by the fluidBindings setNodeRange test.)
 });
 
 describe("removeNode", () => {
@@ -183,10 +178,10 @@ describe("multiple fluid -> output pipelines", () => {
     expect(validate(twoPipelines().g)).toEqual({ ok: true });
   });
 
-  it("fluidForOutput resolves each output's own fluid", () => {
+  it("videoInput resolves each output's own fluid", () => {
     const { g, fA, oA, fB, oB } = twoPipelines();
-    expect(fluidForOutput(g, oA).id).toBe(fA);
-    expect(fluidForOutput(g, oB).id).toBe(fB);
+    expect(videoInput(g, oA).id).toBe(fA);
+    expect(videoInput(g, oB).id).toBe(fB);
   });
 
   it("outputHash differs per output and isolates edits to one pipeline", () => {
@@ -208,49 +203,37 @@ describe("multiple fluid -> output pipelines", () => {
   });
 });
 
-describe("graphHash (01 §3.6)", () => {
-  it("is unchanged when only x/y/view change", () => {
-    const { g } = wiredGraph();
-    const h1 = graphHash(g, "job", 0, 8, []);
-    const moved = {
-      ...g,
-      view: { tx: 999, ty: 999, scale: 3 },
-      nodes: g.nodes.map((n) => ({ ...n, x: n.x + 100, y: n.y + 50 })),
-    };
-    const h2 = graphHash(moved, "job", 0, 8, []);
-    expect(h2).toBe(h1);
-  });
-
+describe("outputHash signal + orphan semantics (01 §3.6)", () => {
   it("changes when a referenced signal's defining fields change", () => {
     const sig = { id: "sig-1", stemKey: "drums", minHz: 40, maxHz: 120, feature: "energy", attack: 5, release: 250, invert: false, gamma: 1, gain: 1, offset: 0, threshold: 0 };
-    const { g, fluidId } = wiredGraph();
+    const { g, fluidId, outId } = wiredGraph();
     const sigNode = signalNode(sig, 0, 0);
     g.nodes.push(sigNode);
     // wire it into the fluid so it actually contributes to the render
     const wired = connect(g, sigNode.id, fluidId, "force");
-    const h1 = graphHash(wired, "job", 0, 8, [sig]);
-    const h2 = graphHash(wired, "job", 0, 8, [{ ...sig, gain: 2 }]);
+    const h1 = outputHash(wired, outId, "job", 0, 8, [sig]);
+    const h2 = outputHash(wired, outId, "job", 0, 8, [{ ...sig, gain: 2 }]);
     expect(h2).not.toBe(h1);
   });
 
   it("is unchanged when a disconnected node is added (orphans don't recompute)", () => {
-    const { g } = wiredGraph();
-    const h1 = graphHash(g, "job", 0, 8, []);
+    const { g, outId } = wiredGraph();
+    const h1 = outputHash(g, outId, "job", 0, 8, []);
     const withOrphan = {
       ...g,
       nodes: [...g.nodes, signalNode({ id: "sig-orphan", name: "orphan" }, 0, 0)],
     };
-    const h2 = graphHash(withOrphan, "job", 0, 8, []);
+    const h2 = outputHash(withOrphan, outId, "job", 0, 8, []);
     expect(h2).toBe(h1);
   });
 
   it("changes once a previously-disconnected node is wired into the output", () => {
-    const { g, fluidId } = wiredGraph();
+    const { g, fluidId, outId } = wiredGraph();
     const sigNode = signalNode({ id: "sig-1", name: "kick" }, 0, 0);
     const withOrphan = { ...g, nodes: [...g.nodes, sigNode] };
-    const h1 = graphHash(withOrphan, "job", 0, 8, []);
+    const h1 = outputHash(withOrphan, outId, "job", 0, 8, []);
     const wired = connect(withOrphan, sigNode.id, fluidId, "force");
-    const h2 = graphHash(wired, "job", 0, 8, []);
+    const h2 = outputHash(wired, outId, "job", 0, 8, []);
     expect(h2).not.toBe(h1);
   });
 });
@@ -433,9 +416,9 @@ describe("points node (spec 11)", () => {
 
 describe("graph.minimized (persisted, non-rendering)", () => {
   it("does NOT change the render hash (must never bust the cache)", () => {
-    const { g } = wiredGraph();
-    const h1 = graphHash(g, "job", 0, 8, []);
-    const h2 = graphHash({ ...g, minimized: [g.nodes[0].id] }, "job", 0, 8, []);
+    const { g, outId } = wiredGraph();
+    const h1 = outputHash(g, outId, "job", 0, 8, []);
+    const h2 = outputHash({ ...g, minimized: [g.nodes[0].id] }, outId, "job", 0, 8, []);
     expect(h2).toBe(h1);
   });
 

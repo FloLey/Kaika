@@ -90,7 +90,7 @@ def grid_for(width: int, height: int, short_cells: int) -> tuple[int, int]:
 
 def grid_from_output(out: dict) -> tuple[int, int]:
     """(grid_h, grid_w) from an `output` settings dict (width/height/quality)."""
-    cells = _QUALITY_CELLS.get(str(out.get("quality", "normal")), 96)
+    cells = _QUALITY_CELLS.get(str(out.get("quality", "normal")), _QUALITY_CELLS["normal"])
     return grid_for(int(out.get("width", 1080)), int(out.get("height", 1920)), cells)
 
 

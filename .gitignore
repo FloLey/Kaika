@@ -14,3 +14,11 @@ static/
 
 # Env
 .env
+
+# Machine-specific captured fixtures (embed a local job_id; see fixtures/README.md)
+*.local.json
+
+# Coverage
+htmlcov/
+.coverage
+coverage/
