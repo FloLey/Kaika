@@ -413,9 +413,21 @@ def build_params(job_id: str, segment: dict, graph: dict,
 # Render
 # --------------------------------------------------------------------------- #
 class _Dag:
-    """Resolves the video DAG feeding an output (spec 10). `video(id)` returns
-    dye-on-transparent frames for any producer; `emitters(id)` returns the emitter
-    list for a merge. Both memoized per render. The terminal applies the bg."""
+    """Resolves the video DAG feeding an output (spec 10).
+
+    Two memoized resolvers walk the producers (fluid / combine / output-passthrough)
+    upstream of an output, each dispatching on node `type`:
+
+      video(id)    -> dye-on-transparent frames for ANY producer. fluid: run the
+                      sim; output: pass its input through; combine: composite the
+                      stacked layers (mode="stack") or sim the merged emitters.
+      emitters(id) -> the flat emitter list a MERGE feeds into one shared sim.
+                      fluid: its source(s); output: its input's emitters; combine:
+                      the concatenated inputs (a layered/stack combine has no single
+                      emitter set, so it can't feed a merge — raises).
+
+    Per-render memo dicts (`_video`/`_emit`/`_params`) keep each node's resolution
+    to once. The terminal (`render`) applies the project background after `video`."""
 
     def __init__(self, job_id, segment, graph, stem_audio_path, output):
         self.job_id = job_id
