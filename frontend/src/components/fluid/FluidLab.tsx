@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import SharedCtl, { Toggle as SharedToggle } from "../../ui/Ctl.jsx";
-import { useDragPad } from "../../lib/useDragPad";
+import type { ComponentType } from "react";
+import SharedCtlRaw, { Toggle as SharedToggleRaw } from "../../ui/Ctl.jsx";
+import PathEditor from "./PathEditor";
+import type { Point } from "./PathEditor";
 import { runFluid } from "../../lib/api.js";
 
-const HELP = {
+// Ctl.jsx is still untyped; bridge it as a loose component so this module's prop
+// adapters type-check. (Drop the casts once ui/Ctl converts.)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SharedCtl = SharedCtlRaw as ComponentType<any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SharedToggle = SharedToggleRaw as ComponentType<any>;
+
+const HELP: Record<string, string> = {
   duration: "Length of the simulation (seconds) that gets computed and looped.",
   enabled: "Turn the centre source on/off. Off = no new dye; existing dye drifts and fades.",
   emit: "How much dye the source releases each frame.",
@@ -27,7 +36,7 @@ const HELP = {
 };
 
 // Which guide section each control's "?" deep-links to (see Docs.jsx ids).
-const SECTION = {
+const SECTION: Record<string, string> = {
   emit: "fluid-source", radius: "fluid-source", force: "fluid-source",
   angle: "fluid-source",
   radial: "fluid-source", wrap: "fluid-source", enabled: "fluid-source", r: "fluid-source",
@@ -37,29 +46,59 @@ const SECTION = {
   dissipation: "fluid-medium", velocity_dissipation: "fluid-medium",
   viscosity: "fluid-medium", vorticity: "fluid-medium",
 };
-const sectionFor = (k) => SECTION[k] || "fluid-lab";
+const sectionFor = (k: string) => SECTION[k] || "fluid-lab";
+
+interface CtlProps {
+  label: string;
+  k: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (k: string, v: number) => void;
+  fmt?: (v: number) => string;
+}
+
+interface ToggleProps {
+  label: string;
+  k: string;
+  value: boolean;
+  onChange: (k: string, v: boolean) => void;
+}
 
 // Thin adapters over the shared controls: FluidLab keys every param by `k` and
 // its `onChange` is `(k, value)`, so we bind the key and look up help/section.
-function Ctl({ label, k, value, min, max, step, onChange, fmt }) {
+function Ctl({ label, k, value, min, max, step, onChange, fmt }: CtlProps) {
   return (
     <SharedCtl label={label} value={value} min={min} max={max} step={step} fmt={fmt}
-               help={HELP[k]} section={sectionFor(k)} onChange={(v) => onChange(k, v)} />
+               help={HELP[k]} section={sectionFor(k)} onChange={(v: number) => onChange(k, v)} />
   );
 }
 
-function Toggle({ label, k, value, onChange }) {
+function Toggle({ label, k, value, onChange }: ToggleProps) {
   return (
     <SharedToggle label={label} value={value} help={HELP[k]} section={sectionFor(k)}
-                  onChange={(v) => onChange(k, v)} />
+                  onChange={(v: boolean) => onChange(k, v)} />
   );
 }
 
 // Standalone fluid playground: a centered source in a black square; the sim is
 // computed in the backend and looped here. Controls re-run it (debounced) with a
 // flash-free double-buffered video swap.
-export default function FluidLab({ onBack }) {
-  const [p, setP] = useState({
+interface FluidState {
+  duration: number; enabled: boolean; emit: number; radius: number; force: number; angle: number;
+  radial: boolean; wrap: boolean;
+  r: number; g: number; b: number; intensity: number; opacity: number;
+  points: Point[]; path_speed: number; path_closed: boolean; path_pingpong: boolean;
+  dissipation: number; velocity_dissipation: number; viscosity: number; vorticity: number;
+}
+
+interface FluidLabProps {
+  onBack: () => void;
+}
+
+export default function FluidLab({ onBack }: FluidLabProps) {
+  const [p, setP] = useState<FluidState>({
     duration: 10, enabled: true, emit: 0.3, radius: 0.08, force: 20, angle: 270,
     radial: false, wrap: true,
     r: 70, g: 176, b: 255, intensity: 1.0, opacity: 1.0,
@@ -71,39 +110,30 @@ export default function FluidLab({ onBack }) {
   const [visible, setVisible] = useState(0);
   const [showPath, setShowPath] = useState(true);
   const visibleRef = useRef(0);
-  const vids = [useRef(null), useRef(null)];
+  const vids = [useRef<HTMLVideoElement>(null), useRef<HTMLVideoElement>(null)];
   const reqId = useRef(0);
 
-  const set = (k, v) => setP((s) => ({ ...s, [k]: v }));
+  // Only number/boolean params flow through `set`; arrays (points) go through the
+  // path callbacks below, so the cast back to FluidState is sound.
+  const set = (k: string, v: number | boolean) =>
+    setP((s) => ({ ...s, [k]: v } as FluidState));
 
-  // --- source path editor (click stage to add, drag markers, dbl-click remove) ---
-  const stageRef = useRef(null);
-  const { norm: normCoord, startDrag } = useDragPad(stageRef);
-  const addPoint = (e) => {
-    if (e.target !== e.currentTarget) return;       // ignore clicks on a marker
-    setP((s) => ({ ...s, points: [...s.points, normCoord(e)] }));
-  };
-  const onMarkerDown = (idx, e) => {
-    startDrag(e, {
-      onMove: (coord) => setP((s) => {
-        const pts = s.points.slice();
-        pts[idx] = coord;
-        return { ...s, points: pts };
-      }),
-      // Click (no drag) on the FIRST point closes/opens the loop, like a polygon
-      // tool. Needs at least a triangle.
-      onEnd: ({ moved }) => {
-        if (!moved && idx === 0) {
-          setP((s) => (s.points.length > 2
-            ? { ...s, path_closed: !s.path_closed } : s));
-        }
-      },
+  // --- source path editor (PathEditor owns the drag plumbing; FluidLab owns the
+  // point list and mutates it through these callbacks) ----------------------------
+  const addPoint = (coord: Point) =>
+    setP((s) => ({ ...s, points: [...s.points, coord] }));
+  const movePoint = (idx: number, coord: Point) =>
+    setP((s) => {
+      const pts = s.points.slice();
+      pts[idx] = coord;
+      return { ...s, points: pts };
     });
-  };
-  const removePoint = (idx) =>
+  const toggleClosed = () =>
+    setP((s) => (s.points.length > 2 ? { ...s, path_closed: !s.path_closed } : s));
+  const removePoint = (idx: number) =>
     setP((s) => (s.points.length > 1
       ? { ...s, points: s.points.filter((_, i) => i !== idx) } : s));
-  const resetPath = () => setP((s) => ({ ...s, points: [[0.5, 0.5]] }));
+  const resetPath = () => setP((s) => ({ ...s, points: [[0.5, 0.5]] as Point[] }));
 
   const params = useMemo(() => ({
     duration: p.duration, fps: 24, grid: 96,
@@ -127,6 +157,7 @@ export default function FluidLab({ onBack }) {
         if (id !== reqId.current) return;        // a newer request superseded us
         const back = 1 - visibleRef.current;
         const el = vids[back].current;
+        if (!el) return;
         const onReady = () => {
           el.removeEventListener("canplay", onReady);
           if (id !== reqId.current) return;
@@ -139,7 +170,7 @@ export default function FluidLab({ onBack }) {
         el.load();
         el.play().catch(() => {});
       } catch (e) {
-        if (id === reqId.current) { setError(e.message); setBusy(false); }
+        if (id === reqId.current) { setError((e as Error).message); setBusy(false); }
       }
     }, 300);
     return () => clearTimeout(t);
@@ -189,34 +220,14 @@ export default function FluidLab({ onBack }) {
               />
             ))}
             {showPath && (
-              <div className="fluid-overlay" ref={stageRef} onPointerDown={addPoint}>
-                <svg className="fluid-path" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {p.points.length > 1 && (() => {
-                    const pts = p.points.map(([x, y]) => `${x * 100},${y * 100}`).join(" ");
-                    return p.path_closed
-                      ? <polygon points={pts} fill="none" />
-                      : <polyline points={pts} fill="none" />;
-                  })()}
-                </svg>
-                {/* Index keys are intentional: the markers are stateless, the path
-                    is ORDERED, the visible label is the point number, and a drag
-                    mutates the coord in local state per move (so a coordinate key
-                    would remount the marker every pointermove). */}
-                {p.points.map(([x, y], i) => (
-                  <div
-                    key={i}
-                    className={"fluid-marker" + (i === 0 ? " first" : "")}
-                    style={{ left: x * 100 + "%", top: y * 100 + "%" }}
-                    onPointerDown={(e) => onMarkerDown(i, e)}
-                    onContextMenu={(e) => { e.preventDefault(); removePoint(i); }}
-                    title={i === 0
-                      ? "first point — drag to move · click to close/open the loop · right-click to remove"
-                      : `point ${i + 1} — drag to move · right-click to remove`}
-                  >
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
+              <PathEditor
+                points={p.points}
+                pathClosed={p.path_closed}
+                onAddPoint={addPoint}
+                onMovePoint={movePoint}
+                onToggleClosed={toggleClosed}
+                onRemovePoint={removePoint}
+              />
             )}
             {busy && <div className="fluid-busy">simulating…</div>}
             {error && <div className="fluid-err">{error}</div>}

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import ProjectList from "./components/ProjectList.jsx";
-import FluidLab from "./components/fluid/FluidLab.jsx";
+import FluidLab from "./components/fluid/FluidLab";
 import UploadStep from "./components/upload/UploadStep.jsx";
 import ReviewStep from "./components/review/ReviewStep.jsx";
-import Studio from "./components/studio/Studio.jsx";
+import Studio from "./components/studio/Studio";
 import Processing from "./components/Processing.jsx";
 import LogsPanel from "./components/LogsPanel.jsx";
 import ErrorToast from "./components/ErrorToast.jsx";
