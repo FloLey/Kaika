@@ -10,7 +10,8 @@ import type { NodeProps } from "./nodeProps";
 import type { SignalData } from "../../../lib/types";
 
 const FPS = 30;
-const stemName = (key?: string) => (STEM_META.find((m: { key: string }) => m.key === key) || {}).name || key;
+const stemName = (key?: string) =>
+  (STEM_META.find((m: { key: string }) => m.key === key) || {}).name || key;
 
 // A read-only mirror of a signal defined in the other tab (01 §3.1 signal). It
 // resolves the live signal from the segment's `signals` by `data.signalId`, shows
@@ -28,7 +29,7 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
   // `ctx.job` is the job_id string (AnimationCanvas passes the project's `job`, a
   // string). Tolerate an object form too, in case a caller passes the richer record.
   const jobRec = job as string | { job_id?: string; jobId?: string } | undefined;
-  const jobId = typeof jobRec === "string" ? jobRec : (jobRec?.job_id || jobRec?.jobId);
+  const jobId = typeof jobRec === "string" ? jobRec : jobRec?.job_id || jobRec?.jobId;
 
   const [curve, setCurve] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,9 +39,17 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
   // stable JSON key of the extraction inputs gates the debounced one-shot.
   const extractKey = signal
     ? JSON.stringify([
-        signal.stemKey, signal.minHz, signal.maxHz, signal.feature,
-        signal.attack, signal.release, signal.invert, signal.gamma,
-        signal.gain, signal.offset, signal.threshold,
+        signal.stemKey,
+        signal.minHz,
+        signal.maxHz,
+        signal.feature,
+        signal.attack,
+        signal.release,
+        signal.invert,
+        signal.gamma,
+        signal.gain,
+        signal.offset,
+        signal.threshold,
       ])
     : null;
 
@@ -54,16 +63,30 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
     setLoading(true);
     const t = setTimeout(() => {
       extractSignal({
-        job_id: jobId, stem: signal.stemKey,
-        start: segStart, end: segEnd,
-        minHz: signal.minHz, maxHz: signal.maxHz,
-        feature: signal.feature, fps: FPS,
-        attack: signal.attack, release: signal.release, invert: signal.invert,
-        gamma: signal.gamma, gain: signal.gain, offset: signal.offset,
+        job_id: jobId,
+        stem: signal.stemKey,
+        start: segStart,
+        end: segEnd,
+        minHz: signal.minHz,
+        maxHz: signal.maxHz,
+        feature: signal.feature,
+        fps: FPS,
+        attack: signal.attack,
+        release: signal.release,
+        invert: signal.invert,
+        gamma: signal.gamma,
+        gain: signal.gain,
+        offset: signal.offset,
         threshold: signal.threshold,
       })
-        .then((d: { curve?: number[] }) => { setCurve(d.curve || []); setLoading(false); })
-        .catch(() => { setCurve([]); setLoading(false); });
+        .then((d: { curve?: number[] }) => {
+          setCurve(d.curve || []);
+          setLoading(false);
+        })
+        .catch(() => {
+          setCurve([]);
+          setLoading(false);
+        });
     }, 220);
     return () => clearTimeout(t);
     // Deliberate: the debounced extract fires on the serialized `extractKey`
@@ -104,9 +127,7 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
             <span className="anim-signal-feature">{signal.feature}</span>
           </div>
           <div className="anim-signal-band">
-            {bandIgnored
-              ? "band n/a"
-              : `${fmtHz(signal.minHz)}–${fmtHz(signal.maxHz)}`}
+            {bandIgnored ? "band n/a" : `${fmtHz(signal.minHz)}–${fmtHz(signal.maxHz)}`}
           </div>
           <div className="anim-signal-viz">
             <div className="anim-signal-spark">
@@ -136,7 +157,9 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
             missing signal
             <span className="anim-missing-id">{data.label || data.signalId}</span>
           </div>
-          <div className="anim-missing-hint">re-pick it in the Signals tab, or delete this node.</div>
+          <div className="anim-missing-hint">
+            re-pick it in the Signals tab, or delete this node.
+          </div>
         </div>
       )}
     </NodeFrame>

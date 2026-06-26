@@ -78,18 +78,28 @@ interface NodeBase {
   x: number;
   y: number;
 }
-export interface SignalNode extends NodeBase { type: "signal"; data: SignalData; }
-export interface FluidNode extends NodeBase { type: "fluid"; data: FluidData; }
-export interface CombineNode extends NodeBase { type: "combine"; data: CombineData; }
-export interface PointsNode extends NodeBase { type: "points"; data: PointsData; }
-export interface OutputNode extends NodeBase { type: "output"; data: OutputData; }
+export interface SignalNode extends NodeBase {
+  type: "signal";
+  data: SignalData;
+}
+export interface FluidNode extends NodeBase {
+  type: "fluid";
+  data: FluidData;
+}
+export interface CombineNode extends NodeBase {
+  type: "combine";
+  data: CombineData;
+}
+export interface PointsNode extends NodeBase {
+  type: "points";
+  data: PointsData;
+}
+export interface OutputNode extends NodeBase {
+  type: "output";
+  data: OutputData;
+}
 
-export type GraphNode =
-  | SignalNode
-  | FluidNode
-  | CombineNode
-  | PointsNode
-  | OutputNode;
+export type GraphNode = SignalNode | FluidNode | CombineNode | PointsNode | OutputNode;
 
 export type NodeType = GraphNode["type"];
 

@@ -48,12 +48,20 @@ interface StudioProps {
 // passes setters down. Unmounting (leaving the studio) tears the audio graph
 // down via the cleanup effect, so App never reaches into these internals.
 export default function Studio({
-  segments, setSegments, activeSegId, setActiveSegId, stems, duration, job,
-  output, setOutput, onEditSplit,
+  segments,
+  setSegments,
+  activeSegId,
+  setActiveSegId,
+  stems,
+  duration,
+  job,
+  output,
+  setOutput,
+  onEditSplit,
 }: StudioProps) {
   const [railOpen, setRailOpen] = useState(true);
-  const [tab, setTab] = useState("signals");   // "signals" | "animation"
-  const [showOutput, setShowOutput] = useState(false);   // output-settings modal
+  const [tab, setTab] = useState("signals"); // "signals" | "animation"
+  const [showOutput, setShowOutput] = useState(false); // output-settings modal
 
   // Fullscreen the WHOLE studio panel (timeline + canvas + output modal + tabs), not
   // just the canvas — so the segment transport stays visible and the settings modal,
@@ -83,10 +91,20 @@ export default function Studio({
   // The audio engine + transport (full-mix clock, per-signal registry, play/seek/
   // solo/volume) lives in this hook; Studio just wires its output into the view.
   const {
-    refAudio, audioProps, allPlaying, clockT,
-    volume, setVolume, loop, setLoop,
-    seek, playAll, resetTransport,
-    registerAudio, onPlayingChange, handleSolo,
+    refAudio,
+    audioProps,
+    allPlaying,
+    clockT,
+    volume,
+    setVolume,
+    loop,
+    setLoop,
+    seek,
+    playAll,
+    resetTransport,
+    registerAudio,
+    onPlayingChange,
+    handleSolo,
   } = useStudioPlayback({ activeSeg, winStart, winEnd, segLen });
 
   function selectSegment(id: string) {
@@ -95,38 +113,51 @@ export default function Studio({
   }
 
   // ---- per-segment signal edits --------------------------------------------
-  const editActiveSignals = useCallback((fn: (sigs: Signal[]) => Signal[]) => {
-    setSegments((prev) =>
-      prev.map((s) => (s.id === activeSegId ? { ...s, signals: fn(s.signals) } : s))
-    );
-  }, [activeSegId, setSegments]);
+  const editActiveSignals = useCallback(
+    (fn: (sigs: Signal[]) => Signal[]) => {
+      setSegments((prev) =>
+        prev.map((s) => (s.id === activeSegId ? { ...s, signals: fn(s.signals) } : s))
+      );
+    },
+    [activeSegId, setSegments]
+  );
 
-  const updateSignal = useCallback((id: string, p: Partial<Signal>) => {
-    editActiveSignals((sigs) => sigs.map((s) => (s.id === id ? { ...s, ...p } : s)));
-  }, [editActiveSignals]);
+  const updateSignal = useCallback(
+    (id: string, p: Partial<Signal>) => {
+      editActiveSignals((sigs) => sigs.map((s) => (s.id === id ? { ...s, ...p } : s)));
+    },
+    [editActiveSignals]
+  );
 
-  const addSignal = useCallback((stemKey: string) => {
-    editActiveSignals((sigs) => {
-      const meta = STEM_META.find((m: { key: string }) => m.key === stemKey);
-      const n = sigs.filter((s) => s.stemKey === stemKey).length + 1;
-      const name = `${(meta?.name || stemKey).toLowerCase()} ${n}`;
-      return [...sigs, seedSignal(stems, name, stemKey)];
-    });
-  }, [editActiveSignals, stems]);
+  const addSignal = useCallback(
+    (stemKey: string) => {
+      editActiveSignals((sigs) => {
+        const meta = STEM_META.find((m: { key: string }) => m.key === stemKey);
+        const n = sigs.filter((s) => s.stemKey === stemKey).length + 1;
+        const name = `${(meta?.name || stemKey).toLowerCase()} ${n}`;
+        return [...sigs, seedSignal(stems, name, stemKey)];
+      });
+    },
+    [editActiveSignals, stems]
+  );
 
-  const removeSignal = useCallback((id: string) => {
-    engine.remove(id);
-    registerAudio(id, null);   // drop it from the playback registry
-    editActiveSignals((sigs) => sigs.filter((s) => s.id !== id));
-  }, [editActiveSignals, registerAudio]);
+  const removeSignal = useCallback(
+    (id: string) => {
+      engine.remove(id);
+      registerAudio(id, null); // drop it from the playback registry
+      editActiveSignals((sigs) => sigs.filter((s) => s.id !== id));
+    },
+    [editActiveSignals, registerAudio]
+  );
 
   // The animation graph is a whole-segment field (segment.graph); patch it and let
   // App's autosave persist it alongside signals.
-  const setActiveGraph = useCallback((graph: Graph) => {
-    setSegments((prev) =>
-      prev.map((s) => (s.id === activeSegId ? { ...s, graph } : s))
-    );
-  }, [activeSegId, setSegments]);
+  const setActiveGraph = useCallback(
+    (graph: Graph) => {
+      setSegments((prev) => prev.map((s) => (s.id === activeSegId ? { ...s, graph } : s)));
+    },
+    [activeSegId, setSegments]
+  );
 
   return (
     <div className={"studio" + (railOpen ? "" : " rail-collapsed")}>
@@ -155,7 +186,9 @@ export default function Studio({
             {tab === "signals" ? "EXTRACT SIGNALS BY TRACK" : "CREATE ANIMATION"}
           </span>
           <div className="controls">
-            <button className="btn sm edit-split" onClick={onEditSplit}>↩ edit split</button>
+            <button className="btn sm edit-split" onClick={onEditSplit}>
+              ↩ edit split
+            </button>
             <button
               className="btn on seg-play"
               onClick={playAll}
@@ -174,65 +207,85 @@ export default function Studio({
               onChange={(e: ChangeEvent<HTMLInputElement>) => seek(parseFloat(e.target.value))}
               title="segment timeline — scrub to navigate"
             />
-            <span className="seg-time">{fmtTime(clockT)} / {fmtTime(segLen)}</span>
+            <span className="seg-time">
+              {fmtTime(clockT)} / {fmtTime(segLen)}
+            </span>
             <VolumeControl value={volume} onChange={setVolume} />
             <label className="loop-toggle" title="Loop the segment">
-              <input type="checkbox" checked={loop} onChange={(e: ChangeEvent<HTMLInputElement>) => setLoop(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={loop}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setLoop(e.target.checked)}
+              />
               loop
             </label>
           </div>
         </div>
 
         {tab === "signals"
-          ? activeSeg && STEM_META.filter((m: { key: string }) => stems[m.key]).map((stem: { key: string; name: string; color: string }) => {
-            const sigs = activeSeg.signals.filter((s) => s.stemKey === stem.key);
-            return (
-              <div className="track-group" key={stem.key} style={{ "--accent": stem.color } as CSSProperties}>
-                <div className="track-group-head">
-                  <span className="track-name"><span className="dot" />{stem.name}</span>
-                  <button className="btn sm" onClick={() => addSignal(stem.key)}>+ add band</button>
-                </div>
-                {sigs.length === 0 && (
-                  <div className="track-empty">no signals — add a frequency band to extract one</div>
-                )}
-                <div className="signals">
-                  {sigs.map((sg) => (
-                    <SignalCard
-                      key={sg.id}
-                      signal={sg}
-                      stems={stems}
-                      segStart={activeSeg.start}
-                      segEnd={activeSeg.end}
-                      duration={duration}
-                      jobId={job}
-                      onChange={updateSignal}
-                      onRemove={removeSignal}
-                      registerAudio={registerAudio}
-                      onSolo={handleSolo}
-                      onPlayingChange={onPlayingChange}
-                      groupClock={refAudio}
-                      groupPlaying={allPlaying}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })
+          ? activeSeg &&
+            STEM_META.filter((m: { key: string }) => stems[m.key]).map(
+              (stem: { key: string; name: string; color: string }) => {
+                const sigs = activeSeg.signals.filter((s) => s.stemKey === stem.key);
+                return (
+                  <div
+                    className="track-group"
+                    key={stem.key}
+                    style={{ "--accent": stem.color } as CSSProperties}
+                  >
+                    <div className="track-group-head">
+                      <span className="track-name">
+                        <span className="dot" />
+                        {stem.name}
+                      </span>
+                      <button className="btn sm" onClick={() => addSignal(stem.key)}>
+                        + add band
+                      </button>
+                    </div>
+                    {sigs.length === 0 && (
+                      <div className="track-empty">
+                        no signals — add a frequency band to extract one
+                      </div>
+                    )}
+                    <div className="signals">
+                      {sigs.map((sg) => (
+                        <SignalCard
+                          key={sg.id}
+                          signal={sg}
+                          stems={stems}
+                          segStart={activeSeg.start}
+                          segEnd={activeSeg.end}
+                          duration={duration}
+                          jobId={job}
+                          onChange={updateSignal}
+                          onRemove={removeSignal}
+                          registerAudio={registerAudio}
+                          onSolo={handleSolo}
+                          onPlayingChange={onPlayingChange}
+                          groupClock={refAudio}
+                          groupPlaying={allPlaying}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+            )
           : activeSeg && (
-            <AnimationCanvas
-              key={activeSeg.id}
-              segment={activeSeg as unknown as AnimSegment}
-              stems={stems}
-              job={job}
-              output={output}
-              groupClock={refAudio}
-              groupPlaying={allPlaying}
-              isFullscreen={isFull}
-              onToggleFullscreen={toggleFullscreen}
-              onOpenOutput={() => setShowOutput(true)}
-              onGraphChange={setActiveGraph}
-            />
-          )}
+              <AnimationCanvas
+                key={activeSeg.id}
+                segment={activeSeg as unknown as AnimSegment}
+                stems={stems}
+                job={job}
+                output={output}
+                groupClock={refAudio}
+                groupPlaying={allPlaying}
+                isFullscreen={isFull}
+                onToggleFullscreen={toggleFullscreen}
+                onOpenOutput={() => setShowOutput(true)}
+                onGraphChange={setActiveGraph}
+              />
+            )}
 
         {showOutput && (
           <OutputSettings

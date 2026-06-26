@@ -21,9 +21,14 @@ interface PaletteProps {
 }
 
 export default function Palette({
-  signals = [], centerGraph, onOpenOutput,
-  isFullscreen, onToggleFullscreen, onGraphChange,
-  allMinimized, onToggleMinimizeAll,
+  signals = [],
+  centerGraph,
+  onOpenOutput,
+  isFullscreen,
+  onToggleFullscreen,
+  onGraphChange,
+  allMinimized,
+  onToggleMinimizeAll,
 }: PaletteProps) {
   const [picking, setPicking] = useState(false);
 
@@ -41,8 +46,13 @@ export default function Palette({
       const { x, y } = where();
       const fluid = fluidNode(x, y);
       const output = outputNode(x + 330, y);
-      const edge = { id: mkEdgeId(), source: fluid.id, sourcePort: "out",
-                     target: output.id, targetPort: "video" };
+      const edge = {
+        id: mkEdgeId(),
+        source: fluid.id,
+        sourcePort: "out",
+        target: output.id,
+        targetPort: "video",
+      };
       return { ...g, nodes: [...g.nodes, fluid, output], edges: [...g.edges, edge] };
     });
 
@@ -57,10 +67,14 @@ export default function Palette({
   return (
     <div className="anim-toolbar">
       <div className="anim-add-signal">
-        <button className="btn sm" onClick={() => setPicking((p) => !p)}>+ Signal</button>
+        <button className="btn sm" onClick={() => setPicking((p) => !p)}>
+          + Signal
+        </button>
         {picking && (
           <div className="anim-signal-picker">
-            {signals.length === 0 && <div className="anim-picker-empty">no signals in this segment</div>}
+            {signals.length === 0 && (
+              <div className="anim-picker-empty">no signals in this segment</div>
+            )}
             {signals.map((s) => (
               <button
                 key={s.id}
@@ -85,8 +99,9 @@ export default function Palette({
           {spec.palette!.label}
         </button>
       ))}
-      <button className="btn sm" title="Add a fluid + output, pre-wired"
-              onClick={addPipeline}>+ Pipeline</button>
+      <button className="btn sm" title="Add a fluid + output, pre-wired" onClick={addPipeline}>
+        + Pipeline
+      </button>
 
       <span className="anim-toolbar-spacer" />
 

@@ -10,6 +10,7 @@ the backend lands here automatically. A monotonic ``_SEQ`` counter keeps climbin
 independently of the deque's eviction, so a client cursor stays valid even after
 old entries fall off the end.
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,10 +40,17 @@ def append(level: str, msg: str, *, logger: str = "app", trace: str | None = Non
     global _SEQ
     with _LOCK:
         _SEQ += 1
-        _BUF.append({
-            "seq": _SEQ, "ts": time.time(), "level": level,
-            "source": "backend", "logger": logger, "msg": msg, "trace": trace,
-        })
+        _BUF.append(
+            {
+                "seq": _SEQ,
+                "ts": time.time(),
+                "level": level,
+                "source": "backend",
+                "logger": logger,
+                "msg": msg,
+                "trace": trace,
+            }
+        )
 
 
 def since(seq: int) -> tuple[list[dict], int]:
@@ -68,10 +76,12 @@ class RingBufferHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            trace = (logging.Formatter().formatException(record.exc_info)
-                     if record.exc_info else None)
-            append(_level_name(record.levelno), record.getMessage(),
-                   logger=record.name, trace=trace)
+            trace = (
+                logging.Formatter().formatException(record.exc_info) if record.exc_info else None
+            )
+            append(
+                _level_name(record.levelno), record.getMessage(), logger=record.name, trace=trace
+            )
         except Exception:  # noqa: BLE001 — logging must never raise
             self.handleError(record)
 
@@ -89,9 +99,7 @@ def configure(level: int = logging.INFO) -> None:
     root.setLevel(level)
     if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
         stream = logging.StreamHandler()
-        stream.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-        )
+        stream.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
         root.addHandler(stream)
     root.addHandler(RingBufferHandler())
     root._kaika_log_configured = True  # type: ignore[attr-defined]

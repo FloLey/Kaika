@@ -4,6 +4,7 @@ Imports the full app (ML stack), so it skips where torch isn't installed (e.g. t
 minimal CI image). Hits only routes that don't need a DB or audio on disk: presence
 of routes, the json_body 400 guard, and the not-found paths.
 """
+
 import pytest
 
 pytest.importorskip("torch")
@@ -48,6 +49,7 @@ def test_jobs_unknown_is_404(client):
 
 
 # --- one smoke per blueprint after the spec-03 split (no DB / no audio needed) ---
+
 
 def test_upload_without_file_or_url_is_400(client):
     # uploads blueprint: the request-context validation runs before any work.

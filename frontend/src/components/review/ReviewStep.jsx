@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fmtTime } from "../../lib/mel.js";
-import {
-  LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary,
-} from "../../lib/segments.js";
+import { LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary } from "../../lib/segments.js";
 
 // Step 2 — review and edit the proposed split before opening the studio.
 // The full-mix spectrogram + vocal-activity envelope are the backdrop; play the
@@ -10,8 +8,15 @@ import {
 // and split at the playhead (or double-click) to add a cut. Each segment can be
 // relabelled or merged into its neighbor.
 export default function ReviewStep({
-  specUrl, audioUrl, duration, segments, setSegments,
-  vocalEnvelope, envelopeTimes, onValidate, onBack,
+  specUrl,
+  audioUrl,
+  duration,
+  segments,
+  setSegments,
+  vocalEnvelope,
+  envelopeTimes,
+  onValidate,
+  onBack,
 }) {
   const railRef = useRef(null);
   const audioRef = useRef(null);
@@ -32,8 +37,7 @@ export default function ReviewStep({
   // Space toggles play/pause from anywhere on this screen.
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.key === " " || e.code === "Space") &&
-          e.target.tagName !== "SELECT") {
+      if ((e.key === " " || e.code === "Space") && e.target.tagName !== "SELECT") {
         e.preventDefault();
         togglePlay();
       }
@@ -82,13 +86,19 @@ export default function ReviewStep({
       <div className="results-head">
         <span className="section-title">REVIEW SPLIT · {segments.length} segments</span>
         <div className="controls">
-          <button className="btn sm" onClick={onBack}>↩ back</button>
-          <button className="btn on" onClick={onValidate}>✓ validate split</button>
+          <button className="btn sm" onClick={onBack}>
+            ↩ back
+          </button>
+          <button className="btn on" onClick={onValidate}>
+            ✓ validate split
+          </button>
         </div>
       </div>
 
       <div className="review-transport">
-        <button className="play" onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
+        <button className="play" onClick={togglePlay}>
+          {playing ? "❚❚" : "▶"}
+        </button>
         <div
           className="bar"
           onClick={(e) => {
@@ -98,15 +108,17 @@ export default function ReviewStep({
         >
           <div className="fill" style={{ width: playFrac + "%" }} />
         </div>
-        <div className="time">{fmtTime(cur)} / {fmtTime(duration)}</div>
+        <div className="time">
+          {fmtTime(cur)} / {fmtTime(duration)}
+        </div>
         <button className="btn sm" onClick={splitHere} title="Add a cut at the playhead">
           ✂ split at playhead
         </button>
       </div>
 
       <div className="hint">
-        Play to listen · click the timeline to seek · drag a boundary to move it ·
-        double-click (or “split at playhead”) to add a cut.
+        Play to listen · click the timeline to seek · drag a boundary to move it · double-click (or
+        “split at playhead”) to add a cut.
       </div>
 
       <div
@@ -159,7 +171,10 @@ export default function ReviewStep({
             <button
               className="seg-play"
               title="Play from here"
-              onClick={() => { seekTo(s.start); audioRef.current?.play().catch(() => {}); }}
+              onClick={() => {
+                seekTo(s.start);
+                audioRef.current?.play().catch(() => {});
+              }}
             >
               ▶
             </button>
@@ -173,10 +188,14 @@ export default function ReviewStep({
               }
             >
               {LABELS.map((l) => (
-                <option key={l} value={l}>{l}</option>
+                <option key={l} value={l}>
+                  {l}
+                </option>
               ))}
             </select>
-            <span className="seg-range">{fmtTime(s.start)} – {fmtTime(s.end)}</span>
+            <span className="seg-range">
+              {fmtTime(s.start)} – {fmtTime(s.end)}
+            </span>
             <span className="seg-dur">{fmtTime(s.end - s.start)}</span>
             <button
               className="iconbtn"

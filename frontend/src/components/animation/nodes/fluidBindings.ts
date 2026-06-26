@@ -8,10 +8,12 @@ import type { Binding, FluidNode, Graph, GraphNode } from "../../../lib/types";
 
 type Updater = (g: Graph) => Graph;
 
-const mapNode = (nodeId: string, fn: (n: FluidNode) => GraphNode): Updater => (g) => ({
-  ...g,
-  nodes: g.nodes.map((n) => (n.id === nodeId && n.type === "fluid" ? fn(n) : n)),
-});
+const mapNode =
+  (nodeId: string, fn: (n: FluidNode) => GraphNode): Updater =>
+  (g) => ({
+    ...g,
+    nodes: g.nodes.map((n) => (n.id === nodeId && n.type === "fluid" ? fn(n) : n)),
+  });
 
 // Patch a port's binding.<field> = value (keeps the rest of the binding/port).
 function patchBinding(nodeId: string, key: string, patch: Record<string, unknown>): Updater {
@@ -21,7 +23,10 @@ function patchBinding(nodeId: string, key: string, patch: Record<string, unknown
       ...n,
       data: {
         ...n.data,
-        ports: { ...n.data.ports, [key]: { ...port, binding: { ...port.binding, ...patch } as Binding } },
+        ports: {
+          ...n.data.ports,
+          [key]: { ...port, binding: { ...port.binding, ...patch } as Binding },
+        },
       },
     };
   });

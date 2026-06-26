@@ -6,7 +6,10 @@ import type { Graph, GraphNode, OutputSettings } from "../../../lib/types";
 
 // A ref callback the canvas hands each port so it can measure the port's centre.
 export type PortRef = (
-  nodeId: string, portId: string, kind: string, flow: string,
+  nodeId: string,
+  portId: string,
+  kind: string,
+  flow: string
 ) => (el: Element | null) => void;
 
 // Canvas helpers passed to every card (from GraphCanvas via renderAnimNode).
@@ -33,7 +36,10 @@ export interface SignalDef {
 // guard with `ctx?.x`).
 export interface NodeCtx {
   graph?: Graph;
-  segment?: { id?: string; start?: number; end?: number; signals?: SignalDef[] } & Record<string, unknown>;
+  segment?: { id?: string; start?: number; end?: number; signals?: SignalDef[] } & Record<
+    string,
+    unknown
+  >;
   stems?: Record<string, unknown>;
   job?: unknown;
   output?: OutputSettings | null;

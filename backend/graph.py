@@ -13,6 +13,7 @@ Design notes (locked by the spec):
 - The render cache hash folds in the defining fields of every *referenced* signal
   (01 §3.6) so editing a referenced signal busts the cache.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -47,8 +48,17 @@ LEGACY_GRID = 96
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
 _SIGNAL_HASH_FIELDS = (
-    "stemKey", "minHz", "maxHz", "feature", "attack", "release",
-    "invert", "gamma", "gain", "offset", "threshold",
+    "stemKey",
+    "minHz",
+    "maxHz",
+    "feature",
+    "attack",
+    "release",
+    "invert",
+    "gamma",
+    "gain",
+    "offset",
+    "threshold",
 )
 
 # Node types that produce a video stream are DERIVED from the video-handler registry
@@ -119,7 +129,7 @@ def composite(layers: list, opacities: list) -> np.ndarray:
     what's beneath while dim/empty areas let lower layers show through. The result
     stays dye-on-transparent (the terminal output applies the background)."""
     acc = np.zeros_like(layers[0], dtype=np.float32)
-    for layer, op in reversed(list(zip(layers, opacities))):   # bottom -> top
+    for layer, op in reversed(list(zip(layers, opacities))):  # bottom -> top
         f = layer.astype(np.float32) / 255.0
         op = float(op)
         a = np.clip(f.max(axis=-1, keepdims=True), 0.0, 1.0) * op
@@ -146,7 +156,8 @@ def _fluid_for_output(graph: dict, output_id: str) -> dict:
     if len(incoming) != 1:
         raise ValueError(
             f"output '{output_id}' must be wired to exactly one fluid "
-            f"(found {len(incoming)} incoming edges)")
+            f"(found {len(incoming)} incoming edges)"
+        )
     src = nodes.get(incoming[0].get("source"))
     if src is None or src.get("type") != "fluid":
         raise ValueError(f"output '{output_id}' is not wired to a fluid node")
@@ -191,12 +202,16 @@ def validate(graph: dict) -> None:
     # Each output must be wired to exactly one video producer (fluid / combine /
     # output-passthrough) via its single `video` in-port.
     for out in outputs:
-        incoming = [e for e in graph.get("edges", [])
-                    if e.get("target") == out["id"] and e.get("targetPort") == "video"]
+        incoming = [
+            e
+            for e in graph.get("edges", [])
+            if e.get("target") == out["id"] and e.get("targetPort") == "video"
+        ]
         if len(incoming) != 1:
             raise ValueError(
                 f"output '{out['id']}' must be wired to exactly one source "
-                f"(found {len(incoming)})")
+                f"(found {len(incoming)})"
+            )
         src = nodes.get(incoming[0].get("source"))
         if src is None or src.get("type") not in _VIDEO_PRODUCERS:
             raise ValueError(f"output '{out['id']}' must be wired to a fluid or combine")
@@ -294,8 +309,9 @@ def _contributing_ids(graph: dict, output_id: str) -> set:
     return seen
 
 
-def output_hash(job_id: str, segment: dict, graph: dict, output_id: str,
-                output: dict | None = None) -> str:
+def output_hash(
+    job_id: str, segment: dict, graph: dict, output_id: str, output: dict | None = None
+) -> str:
     """Stable SHA-1 over ONE output's CONTRIBUTING video DAG (spec 10).
 
     Covers every node upstream of `output_id` (fluids, combines, output
@@ -315,10 +331,14 @@ def output_hash(job_id: str, segment: dict, graph: dict, output_id: str,
         "start": float(segment.get("start", 0.0)),
         "end": float(segment.get("end", 0.0)),
         "nodes": [_node_for_hash(n) for n in sub_nodes],
-        "edges": [e for e in graph.get("edges", [])
-                  if e.get("source") in contributing and e.get("target") in contributing],
+        "edges": [
+            e
+            for e in graph.get("edges", [])
+            if e.get("source") in contributing and e.get("target") in contributing
+        ],
         "signals": _referenced_signal_defs(
-            {"nodes": [n for n in sub_nodes if n.get("type") == "signal"]}, signals_by_id),
+            {"nodes": [n for n in sub_nodes if n.get("type") == "signal"]}, signals_by_id
+        ),
         "output": output or {},
     }
     blob = json.dumps(payload, sort_keys=True, default=str).encode()
@@ -333,8 +353,15 @@ def _source_statics(static: dict) -> dict:
     return {k: static[k] for k in SOURCE_STATIC_KEYS if k in static}
 
 
-def _signal_curve(node: dict, job_id: str, start: float, end: float, nframes: int,
-                  signals_by_id: dict, stem_audio_path: Callable) -> np.ndarray:
+def _signal_curve(
+    node: dict,
+    job_id: str,
+    start: float,
+    end: float,
+    nframes: int,
+    signals_by_id: dict,
+    stem_audio_path: Callable,
+) -> np.ndarray:
     """A signal node -> its 0..1 curve, length nframes, from posted segment.signals.
 
     Reuses `signals.extract` at the fluid fps so no resample is needed (the safety
@@ -343,30 +370,48 @@ def _signal_curve(node: dict, job_id: str, start: float, end: float, nframes: in
     """
     sig = signals_by_id.get(node.get("data", {}).get("signalId"))
     if sig is None:
-        return np.zeros(nframes, np.float32)   # deleted signal — silent (01 §3.7)
+        return np.zeros(nframes, np.float32)  # deleted signal — silent (01 §3.7)
     stem_path = stem_audio_path(job_id, sig["stemKey"])
     if stem_path is None:
         # The signal exists but its stem doesn't resolve (renamed/missing stem) —
         # a real misconfiguration, not a deleted signal. Degrade to flat 0 so the
         # render still completes, but log it rather than failing silently.
-        log.warning("signal '%s' references unresolved stem '%s' (job %s) — using flat 0",
-                    sig.get("id"), sig.get("stemKey"), job_id)
+        log.warning(
+            "signal '%s' references unresolved stem '%s' (job %s) — using flat 0",
+            sig.get("id"),
+            sig.get("stemKey"),
+            job_id,
+        )
         return np.zeros(nframes, np.float32)
     d = signals.extract(
-        str(stem_path), start, end, sig["minHz"], sig["maxHz"],
-        feature=sig.get("feature", "energy"), fps=FLUID_FPS,
-        attack=sig.get("attack", 5.0), release=sig.get("release", 250.0),
-        invert=sig.get("invert", False), gamma=sig.get("gamma", 1.0),
-        gain=sig.get("gain", 1.0), offset=sig.get("offset", 0.0),
+        str(stem_path),
+        start,
+        end,
+        sig["minHz"],
+        sig["maxHz"],
+        feature=sig.get("feature", "energy"),
+        fps=FLUID_FPS,
+        attack=sig.get("attack", 5.0),
+        release=sig.get("release", 250.0),
+        invert=sig.get("invert", False),
+        gamma=sig.get("gamma", 1.0),
+        gain=sig.get("gain", 1.0),
+        offset=sig.get("offset", 0.0),
         threshold=sig.get("threshold", 0.0),
     )
     curve = np.asarray(d["curve"], np.float32)
     return fluid._series(curve, nframes)
 
 
-def build_params(job_id: str, segment: dict, graph: dict,
-                 stem_audio_path: Callable, output: dict | None = None,
-                 output_id: str | None = None, fluid_node: dict | None = None) -> dict:
+def build_params(
+    job_id: str,
+    segment: dict,
+    graph: dict,
+    stem_audio_path: Callable,
+    output: dict | None = None,
+    output_id: str | None = None,
+    fluid_node: dict | None = None,
+) -> dict:
     """Resolve `graph` into a `simulate()` params dict (no render).
 
     Split out from `render` so tests can assert the per-frame arrays without
@@ -381,8 +426,9 @@ def build_params(job_id: str, segment: dict, graph: dict,
     output = output or {}
     nodes = {n["id"]: n for n in graph["nodes"]}
     if fluid_node is None:
-        fluid_node = (_fluid_for_output(graph, output_id) if output_id
-                      else _nodes_of(graph, "fluid")[0])
+        fluid_node = (
+            _fluid_for_output(graph, output_id) if output_id else _nodes_of(graph, "fluid")[0]
+        )
     start, end = float(segment["start"]), float(segment["end"])
     signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
     static = fluid_node["data"].get("static", {})
@@ -400,8 +446,7 @@ def build_params(job_id: str, segment: dict, graph: dict,
             return cache[node_id]
         node = nodes[node_id]
         if node["type"] == "signal":
-            out = _signal_curve(node, job_id, start, end, nframes,
-                                 signals_by_id, stem_audio_path)
+            out = _signal_curve(node, job_id, start, end, nframes, signals_by_id, stem_audio_path)
         # elif node["type"] == "combine":   # <- future: resolve inputs, mix
         else:
             out = np.zeros(nframes, np.float32)
@@ -419,8 +464,8 @@ def build_params(job_id: str, segment: dict, graph: dict,
         else:  # kind == "node"
             lo = float(binding.get("lo", pmin))
             hi = float(binding.get("hi", pmax))
-            curve = resolve_source(binding["nodeId"])         # 0..1, len nframes
-            target[key] = (lo + (hi - lo) * curve).tolist()   # native-unit array
+            curve = resolve_source(binding["nodeId"])  # 0..1, len nframes
+            target[key] = (lo + (hi - lo) * curve).tolist()  # native-unit array
 
     params = {
         "duration": duration,
@@ -431,7 +476,7 @@ def build_params(job_id: str, segment: dict, graph: dict,
     if output:
         params["output"] = _output_params(output, fps)
     else:
-        params["grid"] = int(static.get("grid", LEGACY_GRID))   # legacy square fallback
+        params["grid"] = int(static.get("grid", LEGACY_GRID))  # legacy square fallback
     return params
 
 
@@ -476,8 +521,13 @@ class _Dag:
         fid = fluid_node["id"]
         if fid not in self._params:
             self._params[fid] = build_params(
-                self.job_id, self.segment, self.graph,
-                self.stem_audio_path, self.output, fluid_node=fluid_node)
+                self.job_id,
+                self.segment,
+                self.graph,
+                self.stem_audio_path,
+                self.output,
+                fluid_node=fluid_node,
+            )
         return self._params[fid]
 
     def _points_for(self, fluid_node):
@@ -510,7 +560,9 @@ class _Dag:
 
     def _merge_params(self, emitters, medium):
         params = {
-            "duration": self.duration, "fps": self.fps, "sources": emitters,
+            "duration": self.duration,
+            "fps": self.fps,
+            "sources": emitters,
             "fluid": {k: float(medium.get(k, d)) for k, d in _MERGE_MEDIUM_DEFAULTS},
         }
         if self.output:
@@ -554,6 +606,7 @@ class _Dag:
 # `dag.video` / `dag.emitters`. Adding a producing node type = write a handler +
 # register it here; `_Dag.video`/`emitters` and `_VIDEO_PRODUCERS` pick it up.
 
+
 def _fluid_video(dag: "_Dag", node: dict) -> np.ndarray:
     frames, _, _ = fluid.simulate(dag._fluid_video_params(node), apply_bg=False)
     return frames
@@ -568,8 +621,7 @@ def _output_video(dag: "_Dag", node: dict) -> np.ndarray:
 
 def _combine_video(dag: "_Dag", node: dict) -> np.ndarray:
     data = node.get("data", {})
-    srcs = [(_video_source(dag.graph, node["id"], s.get("id")), s)
-            for s in data.get("inputs", [])]
+    srcs = [(_video_source(dag.graph, node["id"], s.get("id")), s) for s in data.get("inputs", [])]
     srcs = [(s, slot) for (s, slot) in srcs if s is not None]
     if not srcs:
         raise ValueError(f"combine '{node['id']}' has no inputs")
@@ -619,9 +671,14 @@ _EMITTER_HANDLERS = {
 _VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)
 
 
-def render(job_id: str, segment: dict, graph: dict,
-           stem_audio_path: Callable, output: dict | None = None,
-           output_id: str | None = None) -> str:
+def render(
+    job_id: str,
+    segment: dict,
+    graph: dict,
+    stem_audio_path: Callable,
+    output: dict | None = None,
+    output_id: str | None = None,
+) -> str:
     """Resolve one output's video DAG for `segment`, render an mp4, return its URL.
 
     Walks the producers feeding `output_id` (fluid / combine / output-passthrough),
@@ -637,7 +694,7 @@ def render(job_id: str, segment: dict, graph: dict,
     out_path = ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
     url = f"/fluid/{out_path.name}"
     if out_path.exists():
-        render_cache.touch(out_path)   # keep this hot clip from aging out (LRU)
+        render_cache.touch(out_path)  # keep this hot clip from aging out (LRU)
         return url
 
     src = _video_source(graph, output_id, "video")
@@ -649,5 +706,5 @@ def render(job_id: str, segment: dict, graph: dict,
     out_w = int(output.get("width", 0)) or None
     out_h = int(output.get("height", 0)) or None
     fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
-    render_cache.evict(ANIM_DIR)       # bound the cache after adding a clip
+    render_cache.evict(ANIM_DIR)  # bound the cache after adding a clip
     return url

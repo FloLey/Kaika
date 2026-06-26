@@ -33,7 +33,7 @@ describe("VolumeControl", () => {
   it("opens a volume slider on click and reports changes", () => {
     const onChange = vi.fn();
     const { container, getByLabelText } = render(<VolumeControl value={0.5} onChange={onChange} />);
-    expect(container.querySelector("input[type=range]")).toBeFalsy();   // closed
+    expect(container.querySelector("input[type=range]")).toBeFalsy(); // closed
     fireEvent.click(getByLabelText("Volume"));
     const slider = container.querySelector("input[type=range]");
     expect(slider).toBeTruthy();
@@ -59,7 +59,14 @@ describe("SegmentRail", () => {
 });
 
 describe("Spectrogram", () => {
-  const track = { specUrl: "/x.png", minHz: 40, maxHz: 12000, fmin: 20, fmax: 22050, color: "#abc" };
+  const track = {
+    specUrl: "/x.png",
+    minHz: 40,
+    maxHz: 12000,
+    fmin: 20,
+    fmax: 22050,
+    color: "#abc",
+  };
   it("renders the image, both band handles, and a playhead", () => {
     const { container } = render(
       <Spectrogram track={track} frac={0.5} onSeek={() => {}} onBandChange={() => {}} />

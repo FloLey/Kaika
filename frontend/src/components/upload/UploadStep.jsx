@@ -23,7 +23,9 @@ export default function UploadStep({ onSubmit }) {
       {!file ? (
         <>
           <UploadZone onFile={setFile} />
-          <div className="or-sep"><span>or</span></div>
+          <div className="or-sep">
+            <span>or</span>
+          </div>
           <div className="yt-box">
             <span className="yt-ico">▶</span>
             <input
@@ -50,15 +52,10 @@ export default function UploadStep({ onSubmit }) {
         <div className="lyrics-head">
           <span className="section-title">LYRICS (optional)</span>
           <div className="controls">
-            <button
-              className="btn sm"
-              onClick={() => lyricsInput.current.click()}
-            >
+            <button className="btn sm" onClick={() => lyricsInput.current.click()}>
               ⇪ load .txt / .lrc
             </button>
-            {lyricsFile && (
-              <span className="time">{lyricsFile.name}</span>
-            )}
+            {lyricsFile && <span className="time">{lyricsFile.name}</span>}
             <input
               ref={lyricsInput}
               type="file"
@@ -74,7 +71,10 @@ export default function UploadStep({ onSubmit }) {
           className="lyrics-area"
           placeholder="Paste the song lyrics here (one line per lyric line). Leave empty for an instrumental — we'll segment from vocal activity instead."
           value={lyrics}
-          onChange={(e) => { setLyrics(e.target.value); setLyricsFile(null); }}
+          onChange={(e) => {
+            setLyrics(e.target.value);
+            setLyricsFile(null);
+          }}
           rows={10}
         />
       </div>

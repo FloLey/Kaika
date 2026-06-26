@@ -45,7 +45,7 @@ describe("GraphCanvas interactions (jsdom)", () => {
     const { container } = setup({ selected: "e1", onEdgeDelete });
     const input = document.createElement("input");
     container.appendChild(input);
-    fireEvent.keyDown(input, { key: "Delete" });   // bubbles to the window handler
+    fireEvent.keyDown(input, { key: "Delete" }); // bubbles to the window handler
     expect(onEdgeDelete).not.toHaveBeenCalled();
   });
 });

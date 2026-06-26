@@ -49,8 +49,12 @@ export default function App() {
     const jsonStr = JSON.stringify(payload);
     if (jsonStr === lastSaved.current) return;
     const t = setTimeout(() => {
-      api.saveProject(job, payload)
-        .then(() => { lastSaved.current = jsonStr; setSaveError(false); })
+      api
+        .saveProject(job, payload)
+        .then(() => {
+          lastSaved.current = jsonStr;
+          setSaveError(false);
+        })
         .catch((e) => {
           // lastSaved stays stale, so the next edit retries automatically; we
           // just flag it so the user knows the latest change isn't persisted.
@@ -119,11 +123,16 @@ export default function App() {
       setOutput(loadedOutput);
       // If hydration added missing default signals, leave lastSaved empty so the
       // autosave persists them; otherwise mark as already-saved (no redundant PUT).
-      const loadedCount = (p.segments || []).reduce((a, s) => a + ((s.signals || []).length), 0);
+      const loadedCount = (p.segments || []).reduce((a, s) => a + (s.signals || []).length, 0);
       const mergedCount = segs.reduce((a, s) => a + s.signals.length, 0);
-      lastSaved.current = mergedCount === loadedCount
-        ? JSON.stringify({ step: p.step || "studio", segments: serializeSegments(segs), output: loadedOutput })
-        : "";
+      lastSaved.current =
+        mergedCount === loadedCount
+          ? JSON.stringify({
+              step: p.step || "studio",
+              segments: serializeSegments(segs),
+              output: loadedOutput,
+            })
+          : "";
       setStep(p.step || "studio");
     } catch (e) {
       setError(e.message);
@@ -149,29 +158,44 @@ export default function App() {
     <div className={"wrap" + (step === "studio" ? " wide" : "")}>
       <header>
         <div className="brand">
-          <h1>Kaika <span className="kanji">開花</span></h1>
+          <h1>
+            Kaika <span className="kanji">開花</span>
+          </h1>
           <span className="sub">{title || "segment · isolate · extract signals"}</span>
         </div>
         <div className="header-actions">
           {saveError && (step === "review" || step === "studio") && (
-            <span className="save-warn" title="The latest change hasn't been saved — it will retry on your next edit.">
+            <span
+              className="save-warn"
+              title="The latest change hasn't been saved — it will retry on your next edit."
+            >
               ⚠ save failed
             </span>
           )}
           {(step === "review" || step === "studio" || step === "upload") && (
-            <button className="btn" onClick={toProjects}>↩ projects</button>
+            <button className="btn" onClick={toProjects}>
+              ↩ projects
+            </button>
           )}
-          <button className="btn logs-btn" onClick={() => setLogsOpen((v) => !v)}
-                  title="Logs" aria-label="Logs">
+          <button
+            className="btn logs-btn"
+            onClick={() => setLogsOpen((v) => !v)}
+            title="Logs"
+            aria-label="Logs"
+          >
             logs
-            {errCount > 0 && (
-              <span className="logs-badge">{errCount > 99 ? "99+" : errCount}</span>
-            )}
+            {errCount > 0 && <span className="logs-badge">{errCount > 99 ? "99+" : errCount}</span>}
           </button>
-          <a className="help-link"
-             href={`/?doc=${step === "upload" || step === "review" || step === "studio" ? step : ""}`}
-             target="_blank" rel="noopener noreferrer"
-             title="User guide" aria-label="User guide">?</a>
+          <a
+            className="help-link"
+            href={`/?doc=${step === "upload" || step === "review" || step === "studio" ? step : ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="User guide"
+            aria-label="User guide"
+          >
+            ?
+          </a>
         </div>
       </header>
 
@@ -189,7 +213,9 @@ export default function App() {
         <div className="error">
           Error: {error}
           <div style={{ marginTop: 12 }}>
-            <button className="btn sm" onClick={toProjects}>↩ back to projects</button>
+            <button className="btn sm" onClick={toProjects}>
+              ↩ back to projects
+            </button>
           </div>
         </div>
       )}

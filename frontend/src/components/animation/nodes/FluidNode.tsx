@@ -11,7 +11,7 @@ import type { FluidData, FluidParam } from "../../../lib/types";
 
 const FLUID_PARAMS = RAW_FLUID_PARAMS as FluidParam[];
 // Bridge: ui/Ctl is still .jsx — cast until it converts (optional sweep).
-const Toggle = ToggleJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
+const Toggle = ToggleJsx as ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // The artifact card (06 §FluidNode). Static controls on top; one input-port ROW
 // per FLUID_PARAMS entry, grouped source/color/medium (rows + the collapsed-group
@@ -27,9 +27,21 @@ const GROUPS = [
   { key: "medium", label: "MEDIUM" },
 ];
 
-export default function FluidNode({ node, selected, helpers, ctx, onGraphChange, onDetach, onDelete }: NodeProps) {
-  const data = node.data as FluidData;   // this card only renders for a fluid node
-  const [open, setOpen] = useState<Record<string, boolean>>({ source: true, color: true, medium: false });
+export default function FluidNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDetach,
+  onDelete,
+}: NodeProps) {
+  const data = node.data as FluidData; // this card only renders for a fluid node
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    source: true,
+    color: true,
+    medium: false,
+  });
   const s = data.static;
 
   // A wired points card overrides the single-centre source with N source positions.
@@ -46,7 +58,9 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
   // edges so wires re-anchor (to the group header when collapsed, to the row port
   // when open). `onLayoutChange` is stable, so this only fires when `open` flips.
   const { onLayoutChange } = helpers;
-  useEffect(() => { onLayoutChange?.(); }, [open, onLayoutChange]);
+  useEffect(() => {
+    onLayoutChange?.();
+  }, [open, onLayoutChange]);
 
   const setStatic = (patch: Record<string, unknown>) => onGraphChange(patchStatic(node.id, patch));
 
@@ -92,8 +106,16 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
       {/* Static controls (non-port params). The clip always spans the full segment,
           so there is no duration control. */}
       <div className="anim-static">
-        <Toggle label="enabled" value={s.enabled} onChange={(v: boolean) => setStatic({ enabled: v })} />
-        <Toggle label="radial" value={s.radial} onChange={(v: boolean) => setStatic({ radial: v })} />
+        <Toggle
+          label="enabled"
+          value={s.enabled}
+          onChange={(v: boolean) => setStatic({ enabled: v })}
+        />
+        <Toggle
+          label="radial"
+          value={s.radial}
+          onChange={(v: boolean) => setStatic({ radial: v })}
+        />
         <Toggle
           label="wrap edges"
           value={s.wrap !== false}
@@ -102,7 +124,8 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
         />
         {(s.radial || s.wrap === false) && (
           <div className="anim-path-note">
-            {s.radial ? "radial" : ""}{s.radial && s.wrap === false ? " · " : ""}
+            {s.radial ? "radial" : ""}
+            {s.radial && s.wrap === false ? " · " : ""}
             {s.wrap === false ? "open edges" : ""}
           </div>
         )}
@@ -129,16 +152,17 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
             {!isOpen && wiredKeys.length > 0 && (
               <GroupAnchor nodeId={node.id} portKeys={wiredKeys} portRef={helpers.portRef} />
             )}
-            {isOpen && params.map((p) => (
-              <ParamRow
-                key={p.key}
-                node={node}
-                param={p}
-                helpers={helpers}
-                onGraphChange={onGraphChange}
-                onDetach={detach}
-              />
-            ))}
+            {isOpen &&
+              params.map((p) => (
+                <ParamRow
+                  key={p.key}
+                  node={node}
+                  param={p}
+                  helpers={helpers}
+                  onGraphChange={onGraphChange}
+                  onDetach={detach}
+                />
+              ))}
           </div>
         );
       })}

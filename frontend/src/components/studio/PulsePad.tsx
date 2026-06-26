@@ -18,7 +18,13 @@ interface PulsePadProps {
 // own so the signal reads as "alive" without driving the transport. Studio leaves
 // it off (the pad settles to the playhead); the animation tab turns it on.
 export default function PulsePad({
-  audioRef, curve, segStart = 0, winLen = 1, color, playing, idleLoop = false,
+  audioRef,
+  curve,
+  segStart = 0,
+  winLen = 1,
+  color,
+  playing,
+  idleLoop = false,
 }: PulsePadProps) {
   const dotRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +61,7 @@ export default function PulsePad({
       let t0: number | null = null;
       const tick = (ts: number) => {
         if (t0 == null) t0 = ts;
-        const phase = winLen > 0 ? (((ts - t0) / 1000) / winLen) % 1 : 0;
+        const phase = winLen > 0 ? ((ts - t0) / 1000 / winLen) % 1 : 0;
         paint(curve[Math.min(curve.length - 1, Math.round(phase * (curve.length - 1)))] || 0);
         raf = requestAnimationFrame(tick);
       };

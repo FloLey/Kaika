@@ -4,6 +4,7 @@
 no database is reachable (CI without a DB service), so it exercises real SQL locally
 without failing elsewhere.
 """
+
 import pytest
 
 from backend import db
@@ -36,8 +37,15 @@ def live_db():
 def test_project_round_trip(live_db):
     job = "test-rt-0001"
     db.delete_project(job)
-    db.create_project(job, title="t", source="s", duration=1.0, fmin=20,
-                      has_lyrics=False, stems={"drums": {"sr": 44100}})
+    db.create_project(
+        job,
+        title="t",
+        source="s",
+        duration=1.0,
+        fmin=20,
+        has_lyrics=False,
+        stems={"drums": {"sr": 44100}},
+    )
     try:
         row = db.get_project(job)
         assert row["title"] == "t"

@@ -1,11 +1,30 @@
 import { describe, it, expect } from "vitest";
 import {
-  signalNode, outputNode, fluidNode, emptyGraph, normalizeGraph, GRAPH_VERSION,
-  connect, disconnect, removeNode, validate,
-  outputHash, videoInput,
-  combineNode, connectVideo, videoSource, outputRenderable,
-  addCombineInput, removeCombineInput, setCombineMode, setCombineOpacity, setCombineMedium,
-  pointsNode, addPoint, movePoint, removePoint,
+  signalNode,
+  outputNode,
+  fluidNode,
+  emptyGraph,
+  normalizeGraph,
+  GRAPH_VERSION,
+  connect,
+  disconnect,
+  removeNode,
+  validate,
+  outputHash,
+  videoInput,
+  combineNode,
+  connectVideo,
+  videoSource,
+  outputRenderable,
+  addCombineInput,
+  removeCombineInput,
+  setCombineMode,
+  setCombineOpacity,
+  setCombineMedium,
+  pointsNode,
+  addPoint,
+  movePoint,
+  removePoint,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments.js";
@@ -20,7 +39,13 @@ function wiredGraph() {
   const src = signalNode({ id: "sig-src", name: "src" }, 0, 0);
   g.nodes.push(fluid, out, src);
   // wire fluid -> output (the validate() requirement)
-  g.edges.push({ id: "e-out", source: fluid.id, sourcePort: "out", target: out.id, targetPort: "video" });
+  g.edges.push({
+    id: "e-out",
+    source: fluid.id,
+    sourcePort: "out",
+    target: out.id,
+    targetPort: "video",
+  });
   return { g, fluidId: fluid.id, outId: out.id, srcId: src.id };
 }
 
@@ -49,7 +74,12 @@ describe("node factories", () => {
   });
 
   it("emptyGraph is the current GRAPH_VERSION with no nodes/edges", () => {
-    expect(emptyGraph()).toEqual({ version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } });
+    expect(emptyGraph()).toEqual({
+      version: GRAPH_VERSION,
+      nodes: [],
+      edges: [],
+      view: { tx: 0, ty: 0, scale: 1 },
+    });
   });
 });
 
@@ -69,15 +99,23 @@ describe("normalizeGraph migrates older saves", () => {
 
     // The previously-broken path (would throw on undefined port) now works.
     const wired = connect(out, srcId, fluidId, "r");
-    expect(wired.nodes.find((n) => n.id === fluidId).data.ports.r.binding)
-      .toMatchObject({ kind: "node", nodeId: srcId });
+    expect(wired.nodes.find((n) => n.id === fluidId).data.ports.r.binding).toMatchObject({
+      kind: "node",
+      nodeId: srcId,
+    });
   });
 
   it("drops stale ports + dangling edges for removed params", () => {
     const { g, fluidId, srcId } = wiredGraph();
     const fluid = g.nodes.find((n) => n.id === fluidId);
     fluid.data.ports.rot_speed = { binding: { kind: "node", nodeId: srcId, lo: 0, hi: 1 } };
-    g.edges.push({ id: "e-rot", source: srcId, sourcePort: "out", target: fluidId, targetPort: "rot_speed" });
+    g.edges.push({
+      id: "e-rot",
+      source: srcId,
+      sourcePort: "out",
+      target: fluidId,
+      targetPort: "rot_speed",
+    });
 
     const out = normalizeGraph(g);
     const f = out.nodes.find((n) => n.id === fluidId);
@@ -98,19 +136,30 @@ describe("connect / disconnect keep the binding<->edge invariant", () => {
 
     const g2 = connect(g, srcId, fluidId, "force");
     const fluid2 = g2.nodes.find((n) => n.id === fluidId);
-    expect(fluid2.data.ports.force.binding).toEqual({ kind: "node", nodeId: srcId, lo: p.min, hi: p.max });
-    expect(g2.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(1);
+    expect(fluid2.data.ports.force.binding).toEqual({
+      kind: "node",
+      nodeId: srcId,
+      lo: p.min,
+      hi: p.max,
+    });
+    expect(g2.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(
+      1
+    );
 
     const g3 = disconnect(g2, fluidId, "force");
     const fluid3 = g3.nodes.find((n) => n.id === fluidId);
     expect(fluid3.data.ports.force.binding).toEqual({ kind: "const", value: p.def });
-    expect(g3.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(0);
+    expect(g3.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(
+      0
+    );
   });
 
   it("connecting a port twice replaces the prior edge (no duplicates)", () => {
     const { g, fluidId, srcId } = wiredGraph();
     const g2 = connect(connect(g, srcId, fluidId, "force"), srcId, fluidId, "force");
-    expect(g2.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(1);
+    expect(g2.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(
+      1
+    );
   });
 
   // (port lo/hi patching is covered by the fluidBindings setNodeRange test.)
@@ -124,7 +173,10 @@ describe("removeNode", () => {
     expect(g3.nodes.find((n) => n.id === srcId)).toBeUndefined();
     expect(g3.edges.some((e) => e.source === srcId || e.target === srcId)).toBe(false);
     const fluid = g3.nodes.find((n) => n.id === fluidId);
-    expect(fluid.data.ports.force.binding).toEqual({ kind: "const", value: fluidParam("force").def });
+    expect(fluid.data.ports.force.binding).toEqual({
+      kind: "const",
+      value: fluidParam("force").def,
+    });
   });
 });
 
@@ -154,8 +206,15 @@ describe("validate (01 §3.7)", () => {
       ...g,
       nodes: g.nodes.map((n) =>
         n.id === fluidId
-          ? { ...n, data: { ...n.data, ports: { ...n.data.ports, force: { binding: { kind: "const", value: "loud" } } } } }
-          : n),
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                ports: { ...n.data.ports, force: { binding: { kind: "const", value: "loud" } } },
+              },
+            }
+          : n
+      ),
     };
     expect(validate(g2).ok).toBe(false);
   });
@@ -171,7 +230,7 @@ function twoPipelines() {
   g.nodes.push(fA, oA, fB, oB);
   g.edges.push(
     { id: "eA", source: fA.id, sourcePort: "out", target: oA.id, targetPort: "video" },
-    { id: "eB", source: fB.id, sourcePort: "out", target: oB.id, targetPort: "video" },
+    { id: "eB", source: fB.id, sourcePort: "out", target: oB.id, targetPort: "video" }
   );
   return { g, fA: fA.id, oA: oA.id, fB: fB.id, oB: oB.id };
 }
@@ -181,8 +240,15 @@ const setForce = (g, fluidId, value) => ({
   ...g,
   nodes: g.nodes.map((n) =>
     n.id === fluidId
-      ? { ...n, data: { ...n.data, ports: { ...n.data.ports, force: { binding: { kind: "const", value } } } } }
-      : n),
+      ? {
+          ...n,
+          data: {
+            ...n.data,
+            ports: { ...n.data.ports, force: { binding: { kind: "const", value } } },
+          },
+        }
+      : n
+  ),
 });
 
 describe("multiple fluid -> output pipelines", () => {
@@ -217,7 +283,20 @@ describe("multiple fluid -> output pipelines", () => {
 
 describe("outputHash signal + orphan semantics (01 §3.6)", () => {
   it("changes when a referenced signal's defining fields change", () => {
-    const sig = { id: "sig-1", stemKey: "drums", minHz: 40, maxHz: 120, feature: "energy", attack: 5, release: 250, invert: false, gamma: 1, gain: 1, offset: 0, threshold: 0 };
+    const sig = {
+      id: "sig-1",
+      stemKey: "drums",
+      minHz: 40,
+      maxHz: 120,
+      feature: "energy",
+      attack: 5,
+      release: 250,
+      invert: false,
+      gamma: 1,
+      gain: 1,
+      offset: 0,
+      threshold: 0,
+    };
     const { g, fluidId, outId } = wiredGraph();
     const sigNode = signalNode(sig, 0, 0);
     g.nodes.push(sigNode);
@@ -253,7 +332,14 @@ describe("outputHash signal + orphan semantics (01 §3.6)", () => {
 describe("segments graph persistence + split (01 §3.8)", () => {
   it("round-trips a segment graph and a signalNode's signalId still resolves", () => {
     const seg0 = hydrateSegments(
-      [{ start: 0, end: 10, label: "verse", signals: [{ name: "kick", stemKey: "drums", feature: "energy" }] }],
+      [
+        {
+          start: 0,
+          end: 10,
+          label: "verse",
+          signals: [{ name: "kick", stemKey: "drums", feature: "energy" }],
+        },
+      ],
       STEMS
     )[0];
     const sigId = seg0.signals[0].id;
@@ -270,7 +356,14 @@ describe("segments graph persistence + split (01 §3.8)", () => {
 
   it("splitAt gives the cloned half fresh ids + remaps its graph, with distinct graph objects", () => {
     const seg = hydrateSegments(
-      [{ start: 0, end: 10, label: "verse", signals: [{ name: "kick", stemKey: "drums", feature: "energy" }] }],
+      [
+        {
+          start: 0,
+          end: 10,
+          label: "verse",
+          signals: [{ name: "kick", stemKey: "drums", feature: "energy" }],
+        },
+      ],
       STEMS
     )[0];
     seg.graph = { ...emptyGraph(), nodes: [signalNode(seg.signals[0], 0, 0)] };
@@ -292,7 +385,10 @@ describe("combine nodes (spec 10)", () => {
   // fluidA + fluidB -> combine -> output
   function pipeline() {
     let g = emptyGraph();
-    const a = fluidNode(0, 0), b = fluidNode(100, 0), cb = combineNode(50, 50), out = outputNode(200, 0);
+    const a = fluidNode(0, 0),
+      b = fluidNode(100, 0),
+      cb = combineNode(50, 50),
+      out = outputNode(200, 0);
     g = { ...g, nodes: [a, b, cb, out] };
     g = connectVideo(g, a.id, "out", cb.id, cb.data.inputs[0].id);
     g = connectVideo(g, b.id, "out", cb.id, cb.data.inputs[1].id);
@@ -317,7 +413,10 @@ describe("combine nodes (spec 10)", () => {
 
   it("a stack combine feeding a merge combine is rejected", () => {
     let g = emptyGraph();
-    const f = fluidNode(0, 0), stack = combineNode(0, 0), merge = combineNode(0, 0), out = outputNode(0, 0);
+    const f = fluidNode(0, 0),
+      stack = combineNode(0, 0),
+      merge = combineNode(0, 0),
+      out = outputNode(0, 0);
     g = { ...g, nodes: [f, stack, merge, out] };
     g = setCombineMode(g, stack.id, "stack");
     g = connectVideo(g, f.id, "out", stack.id, stack.data.inputs[0].id);
@@ -328,7 +427,10 @@ describe("combine nodes (spec 10)", () => {
 
   it("output passthrough: fluid -> output -> combine -> output2 validates + renderable", () => {
     let g = emptyGraph();
-    const f = fluidNode(0, 0), o1 = outputNode(0, 0), cb = combineNode(0, 0), o2 = outputNode(0, 0);
+    const f = fluidNode(0, 0),
+      o1 = outputNode(0, 0),
+      cb = combineNode(0, 0),
+      o2 = outputNode(0, 0);
     g = { ...g, nodes: [f, o1, cb, o2] };
     g = connectVideo(g, f.id, "out", o1.id, "video");
     g = connectVideo(g, o1.id, "video", cb.id, cb.data.inputs[0].id);
@@ -339,7 +441,8 @@ describe("combine nodes (spec 10)", () => {
 
   it("outputRenderable false when a combine has no wired input", () => {
     let g = emptyGraph();
-    const cb = combineNode(0, 0), out = outputNode(0, 0);
+    const cb = combineNode(0, 0),
+      out = outputNode(0, 0);
     g = { ...g, nodes: [cb, out] };
     g = connectVideo(g, cb.id, "out", out.id, "video");
     expect(outputRenderable(g, out.id)).toBe(false);
@@ -347,8 +450,12 @@ describe("combine nodes (spec 10)", () => {
 
   it("outputHash isolates pipelines: editing combine B doesn't change output A's hash", () => {
     let g = emptyGraph();
-    const fa = fluidNode(0, 0), ca = combineNode(0, 0), oa = outputNode(0, 0);
-    const fb = fluidNode(0, 0), cb = combineNode(0, 0), ob = outputNode(0, 0);
+    const fa = fluidNode(0, 0),
+      ca = combineNode(0, 0),
+      oa = outputNode(0, 0);
+    const fb = fluidNode(0, 0),
+      cb = combineNode(0, 0),
+      ob = outputNode(0, 0);
     g = { ...g, nodes: [fa, ca, oa, fb, cb, ob] };
     g = connectVideo(g, fa.id, "out", ca.id, ca.data.inputs[0].id);
     g = connectVideo(g, ca.id, "out", oa.id, "video");
@@ -356,9 +463,14 @@ describe("combine nodes (spec 10)", () => {
     g = connectVideo(g, cb.id, "out", ob.id, "video");
     const hA = outputHash(g, oa.id, "job", 0, 10, []);
     const hB = outputHash(g, ob.id, "job", 0, 10, []);
-    const g2 = setCombineOpacity(setCombineMode(g, cb.id, "stack"), cb.id, cb.data.inputs[0].id, 0.5);
-    expect(outputHash(g2, oa.id, "job", 0, 10, [])).toBe(hA);          // A unchanged
-    expect(outputHash(g2, ob.id, "job", 0, 10, [])).not.toBe(hB);      // B changed
+    const g2 = setCombineOpacity(
+      setCombineMode(g, cb.id, "stack"),
+      cb.id,
+      cb.data.inputs[0].id,
+      0.5
+    );
+    expect(outputHash(g2, oa.id, "job", 0, 10, [])).toBe(hA); // A unchanged
+    expect(outputHash(g2, ob.id, "job", 0, 10, [])).not.toBe(hB); // B changed
   });
 
   it("add/remove combine input slot + medium setter patch correctly", () => {
@@ -394,7 +506,10 @@ describe("points node (spec 11)", () => {
     let g = { ...emptyGraph(), nodes: [pointsNode(0, 0)] };
     const id = g.nodes[0].id;
     g = addPoint(g, id, [0.2, 0.3]);
-    expect(g.nodes[0].data.points).toEqual([[0.5, 0.5], [0.2, 0.3]]);
+    expect(g.nodes[0].data.points).toEqual([
+      [0.5, 0.5],
+      [0.2, 0.3],
+    ]);
     g = movePoint(g, id, 0, [0.9, 0.9]);
     expect(g.nodes[0].data.points[0]).toEqual([0.9, 0.9]);
     g = removePoint(g, id, 0);
@@ -403,7 +518,9 @@ describe("points node (spec 11)", () => {
 
   it("points -> fluid.positions validates, and moving a point busts the output hash", () => {
     let g = emptyGraph();
-    const p = pointsNode(0, 0), f = fluidNode(100, 0), out = outputNode(200, 0);
+    const p = pointsNode(0, 0),
+      f = fluidNode(100, 0),
+      out = outputNode(200, 0);
     g = { ...g, nodes: [p, f, out] };
     g = connectVideo(g, p.id, "out", f.id, "positions");
     g = connectVideo(g, f.id, "out", out.id, "video");
@@ -413,7 +530,7 @@ describe("points node (spec 11)", () => {
 
     const h1 = outputHash(g, out.id, "job", 0, 10, []);
     const g2 = movePoint(g, p.id, 0, [0.1, 0.1]);
-    expect(outputHash(g2, out.id, "job", 0, 10, [])).not.toBe(h1);  // point feeds the render
+    expect(outputHash(g2, out.id, "job", 0, 10, [])).not.toBe(h1); // point feeds the render
   });
 
   it("stamps an older (version 1) save up to the current GRAPH_VERSION", () => {
@@ -423,11 +540,12 @@ describe("points node (spec 11)", () => {
 
   it("normalizeGraph keeps a points -> fluid.positions edge (not a param port)", () => {
     let g = emptyGraph();
-    const p = pointsNode(0, 0), f = fluidNode(0, 0);
+    const p = pointsNode(0, 0),
+      f = fluidNode(0, 0);
     g = { ...g, nodes: [p, f] };
     g = connectVideo(g, p.id, "out", f.id, "positions");
     expect(g.edges).toHaveLength(1);
-    expect(normalizeGraph(g).edges).toHaveLength(1);   // must NOT be dropped
+    expect(normalizeGraph(g).edges).toHaveLength(1); // must NOT be dropped
   });
 });
 

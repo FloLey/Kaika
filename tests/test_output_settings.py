@@ -4,6 +4,7 @@ non-square simulate path, and the render-cache hash folding in `output`.
 The original Kaika solver was rectangular; `backend.fluid` is now ported back to a
 rectangular grid driven by the output size. These guard that port + the plumbing.
 """
+
 import numpy as np
 
 from backend import fluid, graph
@@ -46,8 +47,7 @@ def test_grid_from_output_quality_presets():
 # Non-square simulate
 # --------------------------------------------------------------------------- #
 def _params(output):
-    return {"duration": 0.4, "output": output,
-            "source": {"emit": 0.4, "force": 20}, "fluid": {}}
+    return {"duration": 0.4, "output": output, "source": {"emit": 0.4, "force": 20}, "fluid": {}}
 
 
 def test_simulate_portrait_frames_are_taller_than_wide():
@@ -55,7 +55,7 @@ def test_simulate_portrait_frames_are_taller_than_wide():
     frames, fps, (h, w) = fluid.simulate(_params(out))
     assert frames.ndim == 4 and frames.shape[3] == 3
     assert frames.shape[1] == h and frames.shape[2] == w
-    assert h > w                      # portrait: taller than wide
+    assert h > w  # portrait: taller than wide
     assert fps == 10
 
 
@@ -68,17 +68,23 @@ def test_simulate_landscape_is_wider_than_tall():
 def test_legacy_square_grid_still_square():
     # FluidLab `/fluid` path: no `output`, a square `grid` -> square frames.
     frames, _fps, (h, w) = fluid.simulate(
-        {"grid": 48, "fps": 10, "duration": 0.4,
-         "source": {"color": [0.3, 0.7, 1.0], "emit": 0.4}, "fluid": {}})
+        {
+            "grid": 48,
+            "fps": 10,
+            "duration": 0.4,
+            "source": {"color": [0.3, 0.7, 1.0], "emit": 0.4},
+            "fluid": {},
+        }
+    )
     assert h == w == 48
 
 
 def test_background_color_shows_through_empty_frame():
     # A disabled source emits no dye; the background color should fill the frame.
-    out = {"width": 64, "height": 64, "quality": "draft", "fps": 8,
-           "background": "#ff0000"}
+    out = {"width": 64, "height": 64, "quality": "draft", "fps": 8, "background": "#ff0000"}
     frames, _fps, _hw = fluid.simulate(
-        {"duration": 0.3, "output": out, "source": {"enabled": False}, "fluid": {}})
+        {"duration": 0.3, "output": out, "source": {"enabled": False}, "fluid": {}}
+    )
     # Red channel high, green/blue low across the (dye-free) frame.
     f0 = frames[0]
     assert f0[..., 0].mean() > 200 and f0[..., 1].mean() < 40 and f0[..., 2].mean() < 40
@@ -88,12 +94,21 @@ def test_background_color_shows_through_empty_frame():
 # Cache hash folds in output
 # --------------------------------------------------------------------------- #
 def _graph():
-    fluid_node = {"id": "n-f", "type": "fluid", "x": 0, "y": 0,
-                  "data": {"static": {}, "ports": {}}}
+    fluid_node = {"id": "n-f", "type": "fluid", "x": 0, "y": 0, "data": {"static": {}, "ports": {}}}
     out_node = {"id": "n-o", "type": "output", "x": 0, "y": 0, "data": {}}
-    return {"version": 1, "nodes": [fluid_node, out_node],
-            "edges": [{"id": "e", "source": "n-f", "sourcePort": "out",
-                       "target": "n-o", "targetPort": "video"}]}
+    return {
+        "version": 1,
+        "nodes": [fluid_node, out_node],
+        "edges": [
+            {
+                "id": "e",
+                "source": "n-f",
+                "sourcePort": "out",
+                "target": "n-o",
+                "targetPort": "video",
+            }
+        ],
+    }
 
 
 def test_output_hash_changes_with_output():
@@ -104,8 +119,8 @@ def test_output_hash_changes_with_output():
     h_landscape = graph.output_hash("job", seg, g, "n-o", {**a, "width": 1920, "height": 1080})
     h_quality = graph.output_hash("job", seg, g, "n-o", {**a, "quality": "high"})
     h_bg = graph.output_hash("job", seg, g, "n-o", {**a, "background": "#101830"})
-    assert len({h_portrait, h_landscape, h_quality, h_bg}) == 4   # all distinct
-    assert graph.output_hash("job", seg, g, "n-o", a) == h_portrait    # stable
+    assert len({h_portrait, h_landscape, h_quality, h_bg}) == 4  # all distinct
+    assert graph.output_hash("job", seg, g, "n-o", a) == h_portrait  # stable
 
 
 def test_build_params_drives_grid_and_fps_from_output():
@@ -114,4 +129,4 @@ def test_build_params_drives_grid_and_fps_from_output():
     out = {"width": 1080, "height": 1920, "quality": "draft", "fps": 30, "background": "#000000"}
     p = graph.build_params("job", seg, g, lambda j, s: None, out)
     assert p["fps"] == 30 and p["output"]["quality"] == "draft"
-    assert "grid" not in p                       # output supersedes the legacy square grid
+    assert "grid" not in p  # output supersedes the legacy square grid

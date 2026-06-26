@@ -30,13 +30,30 @@ interface AnimationCanvasProps {
 //   stems, job     — project context (audio + spectrograms)
 //   onGraphChange  — (graph) => void; commits the whole graph to segment.graph
 export default function AnimationCanvas({
-  segment, stems, job, output, groupClock, groupPlaying, onOpenOutput,
-  isFullscreen, onToggleFullscreen, onGraphChange: commitGraph,
+  segment,
+  stems,
+  job,
+  output,
+  groupClock,
+  groupPlaying,
+  onOpenOutput,
+  isFullscreen,
+  onToggleFullscreen,
+  onGraphChange: commitGraph,
 }: AnimationCanvasProps) {
   const {
-    graph, selId, setSelId, applyUpdater, ctx,
-    minimizeCtx, minimizedKey, allMinimized, toggleMinimizeAll,
-    onConnect, onEdgeDelete, onNodeDelete,
+    graph,
+    selId,
+    setSelId,
+    applyUpdater,
+    ctx,
+    minimizeCtx,
+    minimizedKey,
+    allMinimized,
+    toggleMinimizeAll,
+    onConnect,
+    onEdgeDelete,
+    onNodeDelete,
   } = useGraphEditor({ segment, stems, job, output, groupClock, groupPlaying, commitGraph });
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -82,7 +99,9 @@ export default function AnimationCanvas({
             onEdgeDelete={onEdgeDelete}
             selected={selId}
             onSelect={setSelId}
-            onViewChange={(v) => { viewRef.current = v; }}
+            onViewChange={(v) => {
+              viewRef.current = v;
+            }}
             renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}
           />
         </MinimizeContext.Provider>

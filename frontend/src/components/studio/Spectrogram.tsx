@@ -26,14 +26,20 @@ interface SpectrogramProps {
 // Reusable spectrogram with band overlay, draggable min/max handles, playhead,
 // and click-to-seek. Used both as a row thumbnail and (large) in the modal.
 export default function Spectrogram({
-  track, frac, onSeek, onBandChange, large, onExpand,
-  winStart, winEnd, duration,
+  track,
+  frac,
+  onSeek,
+  onBandChange,
+  large,
+  onExpand,
+  winStart,
+  winEnd,
+  duration,
 }: SpectrogramProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { specUrl, minHz, maxHz, fmin, fmax, color } = track;
 
-  const win = duration && winEnd != null && winStart != null
-    ? winEnd - winStart : null;
+  const win = duration && winEnd != null && winStart != null ? winEnd - winStart : null;
   const cropped = win != null && win > 0 && win < duration!;
   // The image (full track) is scaled to duration/win of the container width;
   // translateX is a percentage of the IMAGE's own width, so the shift that puts
@@ -114,7 +120,10 @@ export default function Spectrogram({
         <button
           className="expand"
           title="Open large view"
-          onClick={(e) => { e.stopPropagation(); onExpand(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onExpand();
+          }}
         >
           ⤢
         </button>

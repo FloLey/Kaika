@@ -4,6 +4,7 @@
 small contract test here catches the breakage-prone bit without needing audio,
 demucs, or a database. Run with: ``.venv/bin/python -m pytest``.
 """
+
 import numpy as np
 
 from backend.signals import shape

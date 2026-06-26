@@ -5,6 +5,7 @@ update projects that were separated before the theme change:
 
     python -m backend.rerender_spectrograms
 """
+
 from __future__ import annotations
 
 from .media import make_spectrogram, stem_audio_path

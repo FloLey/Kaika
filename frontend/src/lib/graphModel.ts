@@ -3,10 +3,24 @@
 // and a stable hash for the render cache (§3.6). Node `data` is the discriminated
 // union from types.ts, so per-type access is checked after narrowing on `type`.
 
-import { FLUID_PARAMS as RAW_FLUID_PARAMS, FLUID_PARAM_KEYS, fluidParam as rawFluidParam } from "./fluidParams.js";
+import {
+  FLUID_PARAMS as RAW_FLUID_PARAMS,
+  FLUID_PARAM_KEYS,
+  fluidParam as rawFluidParam,
+} from "./fluidParams.js";
 import type {
-  Binding, Graph, GraphEdge, GraphNode, CombineSlot, CombineMedium, FluidNode,
-  PointsNode, CombineNode, OutputNode, SignalNode, ValidationResult,
+  Binding,
+  Graph,
+  GraphEdge,
+  GraphNode,
+  CombineSlot,
+  CombineMedium,
+  FluidNode,
+  PointsNode,
+  CombineNode,
+  OutputNode,
+  SignalNode,
+  ValidationResult,
 } from "./types";
 
 // fluidParams.js is untyped JS; pin the shapes graphModel relies on.
@@ -26,9 +40,16 @@ export const mkEdgeId = (): string => rid("e");
 
 // ---- node factories (01 §3.1) ------------------------------------------------
 
-export function signalNode(signal: { id: string; name?: string }, x: number, y: number): SignalNode {
+export function signalNode(
+  signal: { id: string; name?: string },
+  x: number,
+  y: number
+): SignalNode {
   return {
-    id: mkNodeId(), type: "signal", x, y,
+    id: mkNodeId(),
+    type: "signal",
+    x,
+    y,
     data: { signalId: signal.id, label: signal.name },
   };
 }
@@ -41,13 +62,25 @@ export function fluidNode(x: number, y: number): FluidNode {
   const ports: Record<string, { binding: Binding }> = {};
   for (const p of FLUID_PARAMS) ports[p.key] = { binding: { kind: "const", value: p.def } };
   return {
-    id: mkNodeId(), type: "fluid", x, y,
+    id: mkNodeId(),
+    type: "fluid",
+    x,
+    y,
     data: {
       // No `duration`: the clip always spans the full segment (set by the executor).
       static: {
-        grid: 96, fps: 24, color: [0.27, 0.69, 1], intensity: 1, opacity: 1,
-        enabled: true, radial: false, wrap: true, points: [[0.5, 0.5]], path_speed: 1,
-        path_closed: false, path_pingpong: false,
+        grid: 96,
+        fps: 24,
+        color: [0.27, 0.69, 1],
+        intensity: 1,
+        opacity: 1,
+        enabled: true,
+        radial: false,
+        wrap: true,
+        points: [[0.5, 0.5]],
+        path_speed: 1,
+        path_closed: false,
+        path_pingpong: false,
       },
       ports,
     },
@@ -71,11 +104,19 @@ export function emptyGraph(): Graph {
 // slots; a video edge targets a slot by its id (targetPort).
 const mkSlotId = (): string => rid("slot");
 export const combineSlot = (opacity = 1): CombineSlot => ({ id: mkSlotId(), opacity });
-const COMBINE_MEDIUM: CombineMedium = { dissipation: 0.95, velocity_dissipation: 0.97, viscosity: 0.0, vorticity: 6.0 };
+const COMBINE_MEDIUM: CombineMedium = {
+  dissipation: 0.95,
+  velocity_dissipation: 0.97,
+  viscosity: 0.0,
+  vorticity: 6.0,
+};
 
 export function combineNode(x: number, y: number): CombineNode {
   return {
-    id: mkNodeId(), type: "combine", x, y,
+    id: mkNodeId(),
+    type: "combine",
+    x,
+    y,
     data: { mode: "merge", inputs: [combineSlot(), combineSlot()], medium: { ...COMBINE_MEDIUM } },
   };
 }
@@ -94,7 +135,8 @@ const patchPoints = (graph: Graph, id: string, fn: (pts: Point[]) => Point[]): G
   nodes: graph.nodes.map((n) =>
     n.id === id && n.type === "points"
       ? { ...n, data: { ...n.data, points: fn(n.data.points || []) } }
-      : n),
+      : n
+  ),
 });
 export function addPoint(graph: Graph, id: string, p: Point): Graph {
   return patchPoints(graph, id, (pts) => [...pts, [p[0], p[1]]]);
@@ -116,39 +158,74 @@ export function videoSource(graph: Graph, targetId: string, targetPort: string):
 
 // Wire a video producer into a target port (output "video" or a combine slot id);
 // last-wins (replaces any existing edge into that port).
-export function connectVideo(graph: Graph, sourceId: string, sourcePort: string, targetId: string, targetPort: string): Graph {
-  const edges = (graph.edges || []).filter((e) => !(e.target === targetId && e.targetPort === targetPort));
+export function connectVideo(
+  graph: Graph,
+  sourceId: string,
+  sourcePort: string,
+  targetId: string,
+  targetPort: string
+): Graph {
+  const edges = (graph.edges || []).filter(
+    (e) => !(e.target === targetId && e.targetPort === targetPort)
+  );
   edges.push({ id: mkEdgeId(), source: sourceId, sourcePort, target: targetId, targetPort });
   return { ...graph, edges };
 }
 
-const patchCombine = (graph: Graph, combineId: string, fn: (d: CombineNode["data"]) => CombineNode["data"]): Graph => ({
+const patchCombine = (
+  graph: Graph,
+  combineId: string,
+  fn: (d: CombineNode["data"]) => CombineNode["data"]
+): Graph => ({
   ...graph,
   nodes: graph.nodes.map((n) =>
-    n.id === combineId && n.type === "combine" ? { ...n, data: fn(n.data) } : n),
+    n.id === combineId && n.type === "combine" ? { ...n, data: fn(n.data) } : n
+  ),
 });
 
 export function addCombineInput(graph: Graph, combineId: string): Graph {
   return patchCombine(graph, combineId, (d) => ({ ...d, inputs: [...d.inputs, combineSlot()] }));
 }
 export function removeCombineInput(graph: Graph, combineId: string, slotId: string): Graph {
-  const g = patchCombine(graph, combineId, (d) => ({ ...d, inputs: d.inputs.filter((s) => s.id !== slotId) }));
-  return { ...g, edges: g.edges.filter((e) => !(e.target === combineId && e.targetPort === slotId)) };
+  const g = patchCombine(graph, combineId, (d) => ({
+    ...d,
+    inputs: d.inputs.filter((s) => s.id !== slotId),
+  }));
+  return {
+    ...g,
+    edges: g.edges.filter((e) => !(e.target === combineId && e.targetPort === slotId)),
+  };
 }
 export function setCombineMode(graph: Graph, combineId: string, mode: "merge" | "stack"): Graph {
   return patchCombine(graph, combineId, (d) => ({ ...d, mode }));
 }
-export function setCombineOpacity(graph: Graph, combineId: string, slotId: string, opacity: number): Graph {
+export function setCombineOpacity(
+  graph: Graph,
+  combineId: string,
+  slotId: string,
+  opacity: number
+): Graph {
   return patchCombine(graph, combineId, (d) => ({
-    ...d, inputs: d.inputs.map((s) => (s.id === slotId ? { ...s, opacity } : s)),
+    ...d,
+    inputs: d.inputs.map((s) => (s.id === slotId ? { ...s, opacity } : s)),
   }));
 }
-export function setCombineMedium(graph: Graph, combineId: string, key: keyof CombineMedium, value: number): Graph {
+export function setCombineMedium(
+  graph: Graph,
+  combineId: string,
+  key: keyof CombineMedium,
+  value: number
+): Graph {
   return patchCombine(graph, combineId, (d) => ({ ...d, medium: { ...d.medium, [key]: value } }));
 }
 
 // Whether `nodeId` resolves to fluid emitter(s) for a merge (no stack upstream).
-function isEmitterSource(graph: Graph, nodeId: string, byId: Map<string, GraphNode>, seen = new Set<string>()): boolean {
+function isEmitterSource(
+  graph: Graph,
+  nodeId: string,
+  byId: Map<string, GraphNode>,
+  seen = new Set<string>()
+): boolean {
   if (seen.has(nodeId)) return false;
   seen.add(nodeId);
   const node = byId.get(nodeId);
@@ -188,11 +265,14 @@ export function normalizeGraph(graph: Graph): Graph {
     if (n.type === "combine") {
       // Ensure a combine carries mode / inputs / medium (older/partial saves).
       const d = (n.data || {}) as Partial<CombineNode["data"]>;
-      const inputs: CombineSlot[] = Array.isArray(d.inputs) && d.inputs.length
-        ? d.inputs.map((s) => ({ id: s.id || mkSlotId(), opacity: s.opacity ?? 1 }))
-        : [combineSlot(), combineSlot()];
+      const inputs: CombineSlot[] =
+        Array.isArray(d.inputs) && d.inputs.length
+          ? d.inputs.map((s) => ({ id: s.id || mkSlotId(), opacity: s.opacity ?? 1 }))
+          : [combineSlot(), combineSlot()];
       const data: CombineNode["data"] = {
-        mode: d.mode || "merge", inputs, medium: { ...COMBINE_MEDIUM, ...(d.medium || {}) },
+        mode: d.mode || "merge",
+        inputs,
+        medium: { ...COMBINE_MEDIUM, ...(d.medium || {}) },
       };
       if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
       return { ...n, data };
@@ -204,8 +284,7 @@ export function normalizeGraph(graph: Graph): Graph {
       ports[p.key] = old[p.key] || { binding: { kind: "const", value: p.def } };
     }
     const sameKeys =
-      Object.keys(old).length === FLUID_PARAMS.length &&
-      FLUID_PARAMS.every((p) => old[p.key]);
+      Object.keys(old).length === FLUID_PARAMS.length && FLUID_PARAMS.every((p) => old[p.key]);
     if (!sameKeys) changed = true;
     return { ...n, data: { ...n.data, ports } };
   });
@@ -218,7 +297,7 @@ export function normalizeGraph(graph: Graph): Graph {
     (e) => !(fluidIds.has(e.target) && !valid.has(e.targetPort))
   );
   if (edges.length !== (graph.edges || []).length) changed = true;
-  if (graph.version !== GRAPH_VERSION) changed = true;   // re-stamp after migrating
+  if (graph.version !== GRAPH_VERSION) changed = true; // re-stamp after migrating
   return changed ? { ...graph, version: GRAPH_VERSION, nodes, edges } : graph;
 }
 
@@ -230,9 +309,17 @@ export function connect(graph: Graph, sourceId: string, fluidId: string, paramKe
   const p = fluidParam(paramKey);
   const fluid = graph.nodes.find((n) => n.id === fluidId);
   if (!fluid || fluid.type !== "fluid") return graph;
-  fluid.data.ports[paramKey] = { binding: { kind: "node", nodeId: sourceId, lo: p.min, hi: p.max } };
+  fluid.data.ports[paramKey] = {
+    binding: { kind: "node", nodeId: sourceId, lo: p.min, hi: p.max },
+  };
   const edges = graph.edges.filter((e) => !(e.target === fluidId && e.targetPort === paramKey));
-  edges.push({ id: mkEdgeId(), source: sourceId, sourcePort: "out", target: fluidId, targetPort: paramKey });
+  edges.push({
+    id: mkEdgeId(),
+    source: sourceId,
+    sourcePort: "out",
+    target: fluidId,
+    targetPort: paramKey,
+  });
   return { ...graph, edges };
 }
 
@@ -242,7 +329,10 @@ export function disconnect(graph: Graph, fluidId: string, paramKey: string): Gra
   const fluid = graph.nodes.find((n) => n.id === fluidId);
   if (!fluid || fluid.type !== "fluid") return graph;
   fluid.data.ports[paramKey] = { binding: { kind: "const", value: p.def } };
-  return { ...graph, edges: graph.edges.filter((e) => !(e.target === fluidId && e.targetPort === paramKey)) };
+  return {
+    ...graph,
+    edges: graph.edges.filter((e) => !(e.target === fluidId && e.targetPort === paramKey)),
+  };
 }
 
 // Drop a node, its incident edges, and reset any fluid port bound to it back to
@@ -280,7 +370,9 @@ export function removeNode(graph: Graph, nodeId: string): Graph {
 // The video producer feeding `outputId` via its single `video` in-edge, or null
 // (mirrors backend validate). A producer is a fluid, combine, or output-passthrough.
 export function videoInput(graph: Graph, outputId: string): GraphNode | null {
-  const incoming = (graph.edges || []).filter((e) => e.target === outputId && e.targetPort === "video");
+  const incoming = (graph.edges || []).filter(
+    (e) => e.target === outputId && e.targetPort === "video"
+  );
   if (incoming.length !== 1) return null;
   const src = (graph.nodes || []).find((n) => n.id === incoming[0].source);
   return src && VIDEO_PRODUCERS.has(src.type) ? src : null;
@@ -361,11 +453,13 @@ export function validate(graph: Graph): ValidationResult {
       const b = port.binding as
         | { kind?: string; value?: unknown; nodeId?: string; lo?: unknown; hi?: unknown }
         | undefined;
-      if (!b || !b.kind) continue;   // unbound port -> param default
+      if (!b || !b.kind) continue; // unbound port -> param default
       if (b.kind === "const") {
-        if (typeof b.value !== "number") return { ok: false, error: `port "${key}" const binding is not numeric` };
+        if (typeof b.value !== "number")
+          return { ok: false, error: `port "${key}" const binding is not numeric` };
       } else if (b.kind === "node") {
-        if (!b.nodeId || !byId.has(b.nodeId)) return { ok: false, error: `port "${key}" is bound to a missing node` };
+        if (!b.nodeId || !byId.has(b.nodeId))
+          return { ok: false, error: `port "${key}" is bound to a missing node` };
         if (typeof b.lo !== "number" || typeof b.hi !== "number") {
           return { ok: false, error: `port "${key}" node binding lo/hi is not numeric` };
         }
@@ -419,8 +513,17 @@ function hasCycle(nodes: GraphNode[], edges: GraphEdge[]): boolean {
 
 // Defining fields of a referenced signal that change the render output.
 const SIGNAL_HASH_FIELDS = [
-  "stemKey", "minHz", "maxHz", "feature", "attack",
-  "release", "invert", "gamma", "gain", "offset", "threshold",
+  "stemKey",
+  "minHz",
+  "maxHz",
+  "feature",
+  "attack",
+  "release",
+  "invert",
+  "gamma",
+  "gain",
+  "offset",
+  "threshold",
 ];
 
 // Stable JSON: sorted keys, recursive. Callers hand it an already-canonicalized
@@ -450,9 +553,12 @@ function fnv1a(str: string): string {
 // editing pipeline B never busts A's cache; moving a node / unrelated signal is a
 // no-op. Mirrors backend `output_hash`.
 export function outputHash(
-  graph: Graph, outputId: string, jobId: string | null | undefined,
-  start: number | null | undefined, end: number | null | undefined,
-  signals: { id: string; [k: string]: unknown }[] | undefined,
+  graph: Graph,
+  outputId: string,
+  jobId: string | null | undefined,
+  start: number | null | undefined,
+  end: number | null | undefined,
+  signals: { id: string; [k: string]: unknown }[] | undefined
 ): string {
   const contributing = outputContributing(graph, outputId);
   const sigById = new Map((signals || []).map((s) => [s.id, s]));
@@ -476,7 +582,10 @@ export function outputHash(
     edges: (graph.edges || [])
       .filter((e) => contributing.has(e.source) && contributing.has(e.target))
       .map((e) => ({
-        source: e.source, sourcePort: e.sourcePort, target: e.target, targetPort: e.targetPort,
+        source: e.source,
+        sourcePort: e.sourcePort,
+        target: e.target,
+        targetPort: e.targetPort,
       })),
     jobId: jobId ?? null,
     start: start ?? null,

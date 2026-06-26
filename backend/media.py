@@ -3,6 +3,7 @@
 Extracted verbatim from app.py (spec 03) so the blueprints can import them without
 a cycle back through the Flask app object. Signatures are unchanged.
 """
+
 import re
 import subprocess
 import sys
@@ -21,7 +22,11 @@ from flask import Response, abort, request, send_file
 from . import segment as seg
 from .config import N_FFT, HOP as HOP_LENGTH, N_MELS, FMIN
 from .paths import (
-    UPLOAD_DIR, SEPARATED_DIR, STEMS, BG_COLOR, YTDLP_TIMEOUT,
+    UPLOAD_DIR,
+    SEPARATED_DIR,
+    STEMS,
+    BG_COLOR,
+    YTDLP_TIMEOUT,
 )
 
 # Apple Silicon GPU (M5) via PyTorch MPS, with CPU fallback.
@@ -46,8 +51,14 @@ def make_spectrogram(audio_path: Path, png_path: Path, cmap: str):
     fig.patch.set_facecolor(BG_COLOR)
     ax.set_facecolor(BG_COLOR)
     librosa.display.specshow(
-        mel_db, sr=sr, hop_length=HOP_LENGTH, x_axis=None, y_axis=None,
-        fmin=FMIN, cmap=cmap, ax=ax,
+        mel_db,
+        sr=sr,
+        hop_length=HOP_LENGTH,
+        x_axis=None,
+        y_axis=None,
+        fmin=FMIN,
+        cmap=cmap,
+        ax=ax,
     )
     ax.set_axis_off()
     ax.set_aspect("auto")
@@ -103,11 +114,17 @@ def download_youtube_audio(url: str, out_dir: Path) -> Path:
     """
     out_tmpl = str(out_dir / "original.%(ext)s")
     cmd = [
-        sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio/best",     # best audio-only stream, else best overall
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "-f",
+        "bestaudio/best",  # best audio-only stream, else best overall
         "--no-playlist",
-        "--print-to-file", "%(title)s", str(out_dir / "yt_title.txt"),
-        "-o", out_tmpl,
+        "--print-to-file",
+        "%(title)s",
+        str(out_dir / "yt_title.txt"),
+        "-o",
+        out_tmpl,
         url,
     ]
     try:
@@ -116,8 +133,9 @@ def download_youtube_audio(url: str, out_dir: Path) -> Path:
         raise RuntimeError(f"yt-dlp timed out after {YTDLP_TIMEOUT}s") from None
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout)[-2000:])
-    hits = [p for p in sorted(out_dir.glob("original.*"))
-            if p.suffix.lower() not in (".txt", ".lrc")]
+    hits = [
+        p for p in sorted(out_dir.glob("original.*")) if p.suffix.lower() not in (".txt", ".lrc")
+    ]
     if not hits:
         raise RuntimeError("yt-dlp finished but produced no audio file")
     return hits[0]

@@ -16,7 +16,9 @@ export default function ProjectList({ onNew, onOpen, onFluidLab }) {
     }
   }
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+  }, []);
 
   async function remove(e, id) {
     e.stopPropagation();
@@ -30,8 +32,12 @@ export default function ProjectList({ onNew, onOpen, onFluidLab }) {
       <div className="results-head">
         <span className="section-title">PROJECTS</span>
         <div className="controls">
-          <button className="btn sm" onClick={onFluidLab}>🌀 fluid lab</button>
-          <button className="btn on" onClick={onNew}>+ new track</button>
+          <button className="btn sm" onClick={onFluidLab}>
+            🌀 fluid lab
+          </button>
+          <button className="btn on" onClick={onNew}>
+            + new track
+          </button>
         </div>
       </div>
 
@@ -50,7 +56,10 @@ export default function ProjectList({ onNew, onOpen, onFluidLab }) {
             tabIndex={0}
             onClick={() => onOpen(p.job_id)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(p.job_id); }
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen(p.job_id);
+              }
             }}
           >
             <div className="project-title">{p.title || p.job_id}</div>
@@ -59,7 +68,9 @@ export default function ProjectList({ onNew, onOpen, onFluidLab }) {
               <span>{fmtTime(p.duration || 0)}</span>
               {p.has_lyrics && <span className="pill pill-lyr">lyrics</span>}
             </div>
-            <div className="project-sub">{(p.updated_at || "").replace("T", " ").replace("Z", "")}</div>
+            <div className="project-sub">
+              {(p.updated_at || "").replace("T", " ").replace("Z", "")}
+            </div>
             <span
               className="project-del"
               title="Delete"

@@ -6,6 +6,7 @@ must agree on the STFT geometry — the band-select overlay's frequency<->pixel
 mapping only stays correct while ``N_FFT``/``HOP``/``FMIN`` match across all
 three. Keep them here, import everywhere.
 """
+
 from __future__ import annotations
 
 import numpy as np

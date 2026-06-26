@@ -17,7 +17,11 @@
   background: var(--panel-2);
 }
 /* the canvas area below the toolbar; anchors the absolute .gc-root */
-.anim-stage { position: relative; flex: 1 1 auto; min-height: 0; }
+.anim-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 /* fullscreen: Studio fullscreens the WHOLE panel (.studio-main) — not just the
    canvas — so the segment transport (timeline) stays on top and the output-settings
@@ -39,12 +43,18 @@
   margin-top: 12px;
   border-radius: 0;
 }
-.studio-main:fullscreen .anim-toolbar { border-radius: 0; }
+.studio-main:fullscreen .anim-toolbar {
+  border-radius: 0;
+}
 /* no tab bar in fullscreen — the toolbar's ✕/exit handles leaving */
-.studio-main:fullscreen .mode-bar { display: none; }
+.studio-main:fullscreen .mode-bar {
+  display: none;
+}
 /* trim the header to just the transport: drop the segment label + edit-split */
 .studio-main:fullscreen .results-head .section-title,
-.studio-main:fullscreen .results-head .edit-split { display: none; }
+.studio-main:fullscreen .results-head .edit-split {
+  display: none;
+}
 
 .mode-bar {
   position: sticky;
@@ -69,20 +79,27 @@
   border: 1px solid var(--line);
   border-radius: 9px;
   cursor: pointer;
-  transition: color 0.12s, background 0.12s, box-shadow 0.12s;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    box-shadow 0.12s;
 }
-.mode-tab:hover { color: var(--text); }
+.mode-tab:hover {
+  color: var(--text);
+}
 .mode-tab.on {
   color: #fff;
   background: var(--petal-grad);
   border-color: transparent;
-  box-shadow: 0 1px 2px rgba(31, 36, 51, 0.12), 0 6px 18px rgba(184, 74, 116, 0.22);
+  box-shadow:
+    0 1px 2px rgba(31, 36, 51, 0.12),
+    0 6px 18px rgba(184, 74, 116, 0.22);
 }
 
 /* ---- canvas (pan/zoom stage + edge overlay) ------------------------------- */
 
 .gc-root {
-  --gc-grid: 26px;   /* paper-grid dot spacing (offset by half to centre dots) */
+  --gc-grid: 26px; /* paper-grid dot spacing (offset by half to centre dots) */
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -94,12 +111,27 @@
   background-position: calc(var(--gc-grid) / -2) calc(var(--gc-grid) / -2);
   touch-action: none;
 }
-.gc-root:active { cursor: grabbing; }
+.gc-root:active {
+  cursor: grabbing;
+}
 
-.gc-stage { position: absolute; top: 0; left: 0; width: 0; height: 0; }
-.gc-node-pos { position: absolute; }
+.gc-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+.gc-node-pos {
+  position: absolute;
+}
 
-.gc-edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.gc-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
 .gc-edge-line {
   fill: none;
   stroke: var(--courant);
@@ -107,22 +139,61 @@
   stroke-linecap: round;
   opacity: 0.8;
 }
-.gc-edge-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
-.gc-edge.sel .gc-edge-line { stroke: var(--petale); stroke-width: 2.6; opacity: 1; }
-.gc-edge:hover .gc-edge-line { opacity: 1; }
-.gc-wire { stroke: var(--petale-soft); stroke-dasharray: 5 5; opacity: 0.9; }
-.gc-wire.ok { stroke: var(--courant); stroke-dasharray: none; opacity: 1; }
+.gc-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.gc-edge.sel .gc-edge-line {
+  stroke: var(--petale);
+  stroke-width: 2.6;
+  opacity: 1;
+}
+.gc-edge:hover .gc-edge-line {
+  opacity: 1;
+}
+.gc-wire {
+  stroke: var(--petale-soft);
+  stroke-dasharray: 5 5;
+  opacity: 0.9;
+}
+.gc-wire.ok {
+  stroke: var(--courant);
+  stroke-dasharray: none;
+  opacity: 1;
+}
 
 /* ✕ handle to cut a wire — hidden until the edge is hovered or selected. */
-.gc-edge-del { opacity: 0; pointer-events: none; cursor: pointer; transition: opacity 0.1s; }
-.gc-edge:hover .gc-edge-del,
-.gc-edge.sel .gc-edge-del { opacity: 1; pointer-events: auto; }
-.gc-edge-del circle { fill: var(--panel); stroke: var(--petale); stroke-width: 1.5; }
-.gc-edge-del text {
-  fill: var(--petale); font: 700 11px/1 var(--mono); pointer-events: none; user-select: none;
+.gc-edge-del {
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 0.1s;
 }
-.gc-edge-del:hover circle { fill: var(--petale); }
-.gc-edge-del:hover text { fill: #fff; }
+.gc-edge:hover .gc-edge-del,
+.gc-edge.sel .gc-edge-del {
+  opacity: 1;
+  pointer-events: auto;
+}
+.gc-edge-del circle {
+  fill: var(--panel);
+  stroke: var(--petale);
+  stroke-width: 1.5;
+}
+.gc-edge-del text {
+  fill: var(--petale);
+  font: 700 11px/1 var(--mono);
+  pointer-events: none;
+  user-select: none;
+}
+.gc-edge-del:hover circle {
+  fill: var(--petale);
+}
+.gc-edge-del:hover text {
+  fill: #fff;
+}
 
 /* ---- ports ---------------------------------------------------------------- */
 
@@ -136,7 +207,10 @@
   border: 2px solid var(--accent, var(--petale));
   box-sizing: border-box;
   cursor: crosshair;
-  transition: transform 0.1s, background 0.1s, box-shadow 0.1s;
+  transition:
+    transform 0.1s,
+    background 0.1s,
+    box-shadow 0.1s;
 }
 /* Invisible enlarged hit target so a wire is easy to start/drop on the small dot.
    Part of the same element, so elementFromPoint still resolves to the port. */
@@ -146,9 +220,15 @@
   inset: -8px;
   border-radius: 50%;
 }
-.gc-port-out { background: var(--accent, var(--petale)); }
-.gc-port-video { border-color: var(--text); }
-.gc-port-video.gc-port-out { background: var(--text); }
+.gc-port-out {
+  background: var(--accent, var(--petale));
+}
+.gc-port-video {
+  border-color: var(--text);
+}
+.gc-port-video.gc-port-out {
+  background: var(--text);
+}
 .gc-port:hover {
   transform: scale(1.35);
   box-shadow: 0 0 0 4px rgba(184, 74, 116, 0.16);
@@ -166,8 +246,13 @@
   font-size: 13px;
   user-select: none;
 }
-.anim-node.sel { outline: 2px solid var(--accent, var(--petale)); outline-offset: 1px; }
-.anim-node-fluid { width: 320px; }
+.anim-node.sel {
+  outline: 2px solid var(--accent, var(--petale));
+  outline-offset: 1px;
+}
+.anim-node-fluid {
+  width: 320px;
+}
 
 /* Connector dots mounted on the card's side edge, vertically centered on the whole
    card (not the title bar). translate(±50%) straddles the border so half the dot
@@ -178,8 +263,14 @@
   z-index: 3;
   display: flex;
 }
-.anim-port-side-in { left: 0; transform: translate(-50%, -50%); }
-.anim-port-side-out { right: 0; transform: translate(50%, -50%); }
+.anim-port-side-in {
+  left: 0;
+  transform: translate(-50%, -50%);
+}
+.anim-port-side-out {
+  right: 0;
+  transform: translate(50%, -50%);
+}
 
 .anim-node-head {
   display: flex;
@@ -192,10 +283,22 @@
   cursor: grab;
   background: color-mix(in srgb, var(--accent, var(--petale)) 8%, var(--panel));
 }
-.anim-node-head:active { cursor: grabbing; }
+.anim-node-head:active {
+  cursor: grabbing;
+}
 /* input ports lead the head (left of the title); outputs go right via headExtra */
-.anim-node-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.anim-node-head-right { display: flex; align-items: center; gap: 7px; flex: none; }
+.anim-node-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.anim-node-head-right {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
 .anim-node-del {
   border: none;
   background: transparent;
@@ -206,7 +309,10 @@
   padding: 2px 4px;
   border-radius: 6px;
 }
-.anim-node-del:hover { color: #fff; background: var(--petale); }
+.anim-node-del:hover {
+  color: #fff;
+  background: var(--petale);
+}
 /* minimize / restore toggle — same chrome as delete, neutral hover */
 .anim-node-min {
   border: none;
@@ -218,20 +324,35 @@
   padding: 2px 4px;
   border-radius: 6px;
 }
-.anim-node-min:hover { color: var(--text); background: var(--panel-2); }
+.anim-node-min:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
 /* A card collapsed to just its header: no body, fully-rounded, shrink to content.
    The header anchors sit on the left/right edges, vertically centered on the head
    (reusing .anim-port-side), so all wires converge there. */
-.anim-node.min { width: auto; min-width: 130px; max-width: 260px; }
-.anim-node.min .anim-node-head { border-bottom: none; border-radius: 12px; }
-.anim-min-anchor { pointer-events: auto; }
+.anim-node.min {
+  width: auto;
+  min-width: 130px;
+  max-width: 260px;
+}
+.anim-node.min .anim-node-head {
+  border-bottom: none;
+  border-radius: 12px;
+}
+.anim-min-anchor {
+  pointer-events: auto;
+}
 .anim-node-title {
   font: 600 11px/1 var(--mono);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--accent, var(--petale));
 }
-.anim-node-body { padding: 9px 10px; position: relative; }
+.anim-node-body {
+  padding: 9px 10px;
+  position: relative;
+}
 
 /* shared little bits */
 .iconbtn {
@@ -244,12 +365,25 @@
   padding: 2px 4px;
   border-radius: 6px;
 }
-.iconbtn:hover { color: var(--petale); background: var(--panel-2); }
+.iconbtn:hover {
+  color: var(--petale);
+  background: var(--panel-2);
+}
 
 /* ---- signal node ---------------------------------------------------------- */
 
-.anim-signal-name { font-weight: 600; color: var(--text); margin-bottom: 4px; }
-.anim-signal-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.anim-signal-name {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.anim-signal-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
 .stem-chip {
   font: 600 10px/1 var(--mono);
   letter-spacing: 0.06em;
@@ -259,7 +393,12 @@
   padding: 3px 6px;
   border-radius: 6px;
 }
-.anim-signal-feature, .anim-signal-band { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.anim-signal-feature,
+.anim-signal-band {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
 .anim-signal-spark {
   height: 34px;
   background: var(--panel-2);
@@ -267,19 +406,56 @@
   border-radius: 8px;
   overflow: hidden;
 }
-.anim-signal-missing { padding: 4px 0; }
-.anim-missing-msg { color: var(--petale); font-weight: 600; }
-.anim-missing-hint { color: var(--muted); font-size: 11px; margin-top: 2px; }
-.anim-missing-id { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.anim-signal-missing {
+  padding: 4px 0;
+}
+.anim-missing-msg {
+  color: var(--petale);
+  font-weight: 600;
+}
+.anim-missing-hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.anim-missing-id {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
 
 /* ---- fluid node ----------------------------------------------------------- */
 
-.anim-static { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
-.anim-color { display: flex; align-items: center; gap: 8px; }
-.color-swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); flex: none; }
-.anim-path-note { font-size: 11px; color: var(--muted); font-style: italic; }
+.anim-static {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: 8px;
+}
+.anim-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  flex: none;
+}
+.anim-path-note {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
 
-.anim-group { margin-top: 6px; position: relative; }
+.anim-group {
+  margin-top: 6px;
+  position: relative;
+}
 .anim-group-head {
   font: 600 10px/1 var(--mono);
   letter-spacing: 0.09em;
@@ -291,7 +467,9 @@
   align-items: center;
   gap: 6px;
 }
-.anim-group-head:hover { color: var(--text); }
+.anim-group-head:hover {
+  color: var(--text);
+}
 /* badge: how many wires feed params hidden in this collapsed group */
 .anim-group-wired {
   font: 600 9px/1 var(--mono);
@@ -319,48 +497,118 @@
   gap: 8px;
   padding: 3px 0;
 }
-.anim-param-label { flex: none; width: 64px; font-size: 11px; color: var(--text); }
+.anim-param-label {
+  flex: none;
+  width: 64px;
+  font-size: 11px;
+  color: var(--text);
+}
 /* The param name already lives in `.anim-param-label`, so drop the shared Ctl's
    own (empty) 52px label column and let the slider fill the row. */
-.anim-param-row .ctl { flex: 1; margin: 0; grid-template-columns: 1fr auto; gap: 8px; }
-.anim-param-row .ctl > .ctl-label { display: none; }
+.anim-param-row .ctl {
+  flex: 1;
+  margin: 0;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.anim-param-row .ctl > .ctl-label {
+  display: none;
+}
 /* the input port leads the row (left of the label) */
-.anim-param-row > .gc-port { flex: none; }
+.anim-param-row > .gc-port {
+  flex: none;
+}
 
 /* wired param: a dual-thumb range slider (two bullets = lo/hi) + a value readout */
-.anim-range { flex: 1; display: flex; align-items: center; gap: 6px; }
-.anim-range-fmt { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
-.anim-detach { flex: none; }
+.anim-range {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.anim-range-fmt {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.anim-detach {
+  flex: none;
+}
 
 /* Two native range inputs overlaid on one track. Only the thumbs receive pointer
    events, so whichever bullet is under the cursor grabs — even when they touch. */
-.dual-slider { position: relative; flex: 1; height: 18px; display: flex; align-items: center; }
+.dual-slider {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
 .dual-slider::before {
-  content: ""; position: absolute; left: 0; right: 0; height: 4px;
-  border-radius: 2px; background: var(--line);
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
 }
 .dual-fill {
-  position: absolute; height: 4px; border-radius: 2px;
+  position: absolute;
+  height: 4px;
+  border-radius: 2px;
   background: var(--accent, var(--petale));
 }
 .dual-thumb {
-  position: absolute; left: 0; width: 100%; height: 18px; margin: 0;
-  -webkit-appearance: none; appearance: none; background: transparent;
-  pointer-events: none;   /* track is inert; re-enabled on the thumbs below */
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none; /* track is inert; re-enabled on the thumbs below */
 }
-.dual-thumb::-webkit-slider-runnable-track { height: 4px; background: transparent; border: none; }
-.dual-thumb::-moz-range-track { height: 4px; background: transparent; border: none; }
+.dual-thumb::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+  border: none;
+}
+.dual-thumb::-moz-range-track {
+  height: 4px;
+  background: transparent;
+  border: none;
+}
 .dual-thumb::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; pointer-events: auto;
-  width: 13px; height: 13px; margin-top: -4.5px; border-radius: 50%;
-  background: var(--panel); border: 2px solid var(--accent, var(--petale)); cursor: grab;
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 13px;
+  height: 13px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent, var(--petale));
+  cursor: grab;
 }
 .dual-thumb::-moz-range-thumb {
-  pointer-events: auto; width: 13px; height: 13px; border-radius: 50%;
-  background: var(--panel); border: 2px solid var(--accent, var(--petale)); cursor: grab;
+  pointer-events: auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent, var(--petale));
+  cursor: grab;
 }
-.dual-thumb:active::-webkit-slider-thumb { cursor: grabbing; }
-.dual-thumb:active::-moz-range-thumb { cursor: grabbing; }
+.dual-thumb:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+.dual-thumb:active::-moz-range-thumb {
+  cursor: grabbing;
+}
 
 /* ---- output node ---------------------------------------------------------- */
 
@@ -377,15 +625,25 @@
   align-items: center;
   justify-content: center;
 }
-.anim-output-video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.anim-output-empty, .anim-output-err {
+.anim-output-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.anim-output-empty,
+.anim-output-err {
   font-family: var(--mono);
   font-size: 11px;
   text-align: center;
   padding: 8px;
 }
-.anim-output-empty { color: #8a93a6; }
-.anim-output-err { color: var(--petale-soft); }
+.anim-output-empty {
+  color: #8a93a6;
+}
+.anim-output-err {
+  color: var(--petale-soft);
+}
 
 /* rendering state: a flowing petal/teal "fluid" backdrop with bobbing orbs */
 .anim-output-busy {
@@ -397,13 +655,20 @@
   justify-content: center;
   gap: 14px;
   background:
-    radial-gradient(120% 90% at 28% 22%, rgba(184, 74, 116, 0.30), transparent 58%),
-    radial-gradient(120% 90% at 72% 80%, rgba(52, 128, 138, 0.30), transparent 58%),
-    #0c0d12;
-  background-size: 200% 200%, 200% 200%, auto;
+    radial-gradient(120% 90% at 28% 22%, rgba(184, 74, 116, 0.3), transparent 58%),
+    radial-gradient(120% 90% at 72% 80%, rgba(52, 128, 138, 0.3), transparent 58%), #0c0d12;
+  background-size:
+    200% 200%,
+    200% 200%,
+    auto;
   animation: anim-flow 7s ease-in-out infinite;
 }
-.anim-loader { display: flex; align-items: flex-end; gap: 8px; height: 18px; }
+.anim-loader {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 18px;
+}
 .anim-loader-orb {
   width: 9px;
   height: 9px;
@@ -417,7 +682,9 @@
   background: #5fb3bd;
   box-shadow: 0 0 12px rgba(95, 179, 189, 0.75);
 }
-.anim-loader-orb:nth-child(3) { animation-delay: 0.32s; }
+.anim-loader-orb:nth-child(3) {
+  animation-delay: 0.32s;
+}
 .anim-loader-label {
   font-family: var(--mono);
   font-size: 10.5px;
@@ -426,24 +693,50 @@
   color: #dde4f0;
 }
 @keyframes anim-orb {
-  0%, 100% { transform: translateY(0) scale(0.78); opacity: 0.55; }
-  50% { transform: translateY(-9px) scale(1.18); opacity: 1; }
+  0%,
+  100% {
+    transform: translateY(0) scale(0.78);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-9px) scale(1.18);
+    opacity: 1;
+  }
 }
 @keyframes anim-flow {
-  0% { background-position: 0% 50%, 100% 50%, 0 0; }
-  50% { background-position: 100% 50%, 0% 50%, 0 0; }
-  100% { background-position: 0% 50%, 100% 50%, 0 0; }
+  0% {
+    background-position:
+      0% 50%,
+      100% 50%,
+      0 0;
+  }
+  50% {
+    background-position:
+      100% 50%,
+      0% 50%,
+      0 0;
+  }
+  100% {
+    background-position:
+      0% 50%,
+      100% 50%,
+      0 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .anim-output-busy { animation: none; }
-  .anim-loader-orb { animation-duration: 1.8s; }
+  .anim-output-busy {
+    animation: none;
+  }
+  .anim-loader-orb {
+    animation-duration: 1.8s;
+  }
 }
 
 /* ---- add-node toolbar (top of the panel, not on the canvas) --------------- */
 
 .anim-toolbar {
   position: relative;
-  z-index: 20;   /* keep the toolbar (and its + Signal dropdown) above the canvas */
+  z-index: 20; /* keep the toolbar (and its + Signal dropdown) above the canvas */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -451,11 +744,16 @@
   padding: 8px 10px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  border-radius: 14px 14px 0 0;   /* match .anim-wrap's rounded top */
+  border-radius: 14px 14px 0 0; /* match .anim-wrap's rounded top */
 }
-.anim-toolbar-spacer { flex: 1 1 auto; }
+.anim-toolbar-spacer {
+  flex: 1 1 auto;
+}
 /* anchors the + Signal picker dropdown */
-.anim-add-signal { position: relative; display: flex; }
+.anim-add-signal {
+  position: relative;
+  display: flex;
+}
 
 .anim-signal-picker {
   position: absolute;
@@ -474,7 +772,11 @@
   border-radius: 10px;
   box-shadow: var(--shadow);
 }
-.anim-picker-empty { font-size: 11px; color: var(--muted); padding: 6px; }
+.anim-picker-empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px;
+}
 .anim-picker-item {
   display: flex;
   align-items: center;
@@ -488,26 +790,56 @@
   border-radius: 7px;
   cursor: pointer;
 }
-.anim-picker-item:hover { background: var(--panel-2); }
-.anim-picker-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent, var(--petale)); flex: none; }
+.anim-picker-item:hover {
+  background: var(--panel-2);
+}
+.anim-picker-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, var(--petale));
+  flex: none;
+}
 
 /* ---- signal node viz: sparkline + live pulse pad, side by side ------------- */
 
-.anim-signal-viz { display: flex; gap: 8px; align-items: stretch; }
-.anim-signal-viz .anim-signal-spark { flex: 1; height: 44px; }
+.anim-signal-viz {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.anim-signal-viz .anim-signal-spark {
+  flex: 1;
+  height: 44px;
+}
 /* CurveView's `.curve` is 80px tall by default; let it fill the 44px spark box
    instead of being clipped to its top (same as studio's `.curve-mini .curve`). */
-.anim-signal-viz .anim-signal-spark .curve { height: 100%; }
-.anim-signal-viz .pulse-pad { width: 44px; height: 44px; flex: none; border-radius: 8px; }
+.anim-signal-viz .anim-signal-spark .curve {
+  height: 100%;
+}
+.anim-signal-viz .pulse-pad {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 8px;
+}
 
 /* ---- shared segment transport (Studio results-head, visible in both tabs) -- */
 
 /* Let the transport row fill the width to the right of the section title so the
    timeline has room to stretch (scoped to the studio so Review is untouched). */
-.studio-main .results-head .controls { flex: 1 1 auto; }
+.studio-main .results-head .controls {
+  flex: 1 1 auto;
+}
 
 /* Fixed-width icon play/pause so toggling ▶ <-> ❚❚ never reflows the timeline. */
-.seg-play { flex: none; width: 40px; text-align: center; padding-left: 0; padding-right: 0; }
+.seg-play {
+  flex: none;
+  width: 40px;
+  text-align: center;
+  padding-left: 0;
+  padding-right: 0;
+}
 
 .seg-timeline {
   flex: 1 1 auto;
@@ -515,11 +847,23 @@
   accent-color: var(--petale);
   cursor: pointer;
 }
-.seg-time { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.seg-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 
 /* speaker button + click-to-open vertical volume popover */
-.seg-volume { position: relative; flex: none; display: flex; }
-.vol-btn { padding: 4px 7px; line-height: 1; }
+.seg-volume {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+.vol-btn {
+  padding: 4px 7px;
+  line-height: 1;
+}
 .vol-pop {
   position: absolute;
   bottom: 100%;
@@ -537,9 +881,18 @@
   border-radius: 10px;
   box-shadow: var(--shadow);
 }
-.vol-pct { font: 600 10px/1 var(--mono); color: var(--muted); }
+.vol-pct {
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+}
 /* rotate a horizontal range to vertical — reliable across browsers */
-.vol-track { height: 96px; width: 20px; display: flex; align-items: center; justify-content: center; }
+.vol-track {
+  height: 96px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .vol-track input[type="range"] {
   width: 96px;
   transform: rotate(-90deg);
@@ -582,9 +935,17 @@
   letter-spacing: 0.1em;
   color: var(--text);
 }
-.anim-modal-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.anim-modal-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
-.out-preview-wrap { display: flex; justify-content: center; }
+.out-preview-wrap {
+  display: flex;
+  justify-content: center;
+}
 .out-preview {
   width: auto;
   height: 110px;
@@ -602,32 +963,74 @@
   padding: 4px 6px;
 }
 
-.out-field { display: flex; flex-direction: column; gap: 6px; }
+.out-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .out-label {
   font: 600 10px/1 var(--mono);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.out-presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.out-ratio { font-family: var(--mono); font-size: 10px; opacity: 0.7; }
-.out-size { display: flex; align-items: center; gap: 6px; }
-.out-size .hz-input { width: 84px; }
-.out-x, .out-unit { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.out-bg { display: flex; align-items: center; gap: 8px; }
-.out-color {
-  width: 38px; height: 28px; padding: 0;
-  border: 1px solid var(--line); border-radius: 6px;
-  background: var(--panel-2); cursor: pointer;
+.out-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.out-bg-hex { font-family: var(--mono); font-size: 11px; color: var(--text); text-transform: uppercase; }
+.out-ratio {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.7;
+}
+.out-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.out-size .hz-input {
+  width: 84px;
+}
+.out-x,
+.out-unit {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.out-bg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.out-color {
+  width: 38px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.out-bg-hex {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  text-transform: uppercase;
+}
 
 /* ---- combine node (spec 10) ----------------------------------------------- */
 
-.anim-node-combine { width: 250px; }
+.anim-node-combine {
+  width: 250px;
+}
 
 /* merge / layered segmented toggle */
-.anim-combine-modes { display: flex; gap: 0; margin-bottom: 4px; }
+.anim-combine-modes {
+  display: flex;
+  gap: 0;
+  margin-bottom: 4px;
+}
 .anim-mode-btn {
   flex: 1;
   padding: 5px 8px;
@@ -639,35 +1042,84 @@
   border: 1px solid var(--line);
   cursor: pointer;
 }
-.anim-mode-btn:first-child { border-radius: 7px 0 0 7px; }
-.anim-mode-btn:last-child { border-radius: 0 7px 7px 0; border-left: none; }
-.anim-mode-btn:hover { color: var(--text); }
-.anim-mode-btn.on { color: #fff; background: #c0902e; border-color: transparent; }
-.anim-combine-hint { font-size: 10.5px; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+.anim-mode-btn:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.anim-mode-btn:last-child {
+  border-radius: 0 7px 7px 0;
+  border-left: none;
+}
+.anim-mode-btn:hover {
+  color: var(--text);
+}
+.anim-mode-btn.on {
+  color: #fff;
+  background: #c0902e;
+  border-color: transparent;
+}
+.anim-combine-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 8px;
+}
 
 /* input slots */
 .anim-combine-inputs {
-  display: flex; flex-direction: column; gap: 4px;
-  padding-bottom: 8px; border-bottom: 1px dashed var(--line); margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: 8px;
 }
-.anim-combine-row { position: relative; display: flex; align-items: center; gap: 8px; }
-.anim-combine-row > .gc-port { flex: none; }
-.anim-combine-slot { flex: none; width: 34px; font-size: 11px; color: var(--text); }
-.anim-combine-opacity { flex: 1; accent-color: #c0902e; cursor: pointer; }
-.anim-combine-rm { flex: none; margin-left: auto; }
-.anim-combine-add { align-self: flex-start; margin-top: 2px; }
+.anim-combine-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.anim-combine-row > .gc-port {
+  flex: none;
+}
+.anim-combine-slot {
+  flex: none;
+  width: 34px;
+  font-size: 11px;
+  color: var(--text);
+}
+.anim-combine-opacity {
+  flex: 1;
+  accent-color: #c0902e;
+  cursor: pointer;
+}
+.anim-combine-rm {
+  flex: none;
+  margin-left: auto;
+}
+.anim-combine-add {
+  align-self: flex-start;
+  margin-top: 2px;
+}
 
 /* merge medium block */
 .anim-combine-medium-head {
-  font: 600 10px/1 var(--mono); letter-spacing: 0.09em; text-transform: uppercase;
-  color: var(--muted); padding: 2px 0 4px;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 2px 0 4px;
 }
 
 /* ---- points node (spec 11) ------------------------------------------------ */
 
 /* points-flow ports read teal ("current") to distinguish from value/video. */
-.gc-port-points { border-color: var(--courant); }
-.gc-port-points.gc-port-out { background: var(--courant); }
+.gc-port-points {
+  border-color: var(--courant);
+}
+.gc-port-points.gc-port-out {
+  background: var(--courant);
+}
 
 .anim-points-pad {
   position: relative;
@@ -696,9 +1148,17 @@
   transform: translate(-50%, -50%);
   cursor: grab;
 }
-.anim-points-marker:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--courant) 40%, transparent); }
-.anim-points-marker:active { cursor: grabbing; }
-.anim-points-hint { font-size: 10px; color: var(--muted); line-height: 1.3; }
+.anim-points-marker:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--courant) 40%, transparent);
+}
+.anim-points-marker:active {
+  cursor: grabbing;
+}
+.anim-points-hint {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.3;
+}
 
 /* fluid's labelled `positions` input row (spec 11) */
 .anim-pos-row {
@@ -710,9 +1170,17 @@
   border-bottom: 1px dashed var(--line);
   margin-bottom: 8px;
 }
-.anim-pos-row > .gc-port { flex: none; }
+.anim-pos-row > .gc-port {
+  flex: none;
+}
 .anim-pos-label {
-  font: 600 11px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--courant);
 }
-.anim-pos-count { margin-left: auto; font: 10px/1 var(--mono); color: var(--muted); }
+.anim-pos-count {
+  margin-left: auto;
+  font: 10px/1 var(--mono);
+  color: var(--muted);
+}

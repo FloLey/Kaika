@@ -8,6 +8,7 @@ JSONB document, plus a few scalar columns for the project list.
 Connections are short-lived (opened per call): simplest correct choice for the
 threaded Flask dev server and a local single-user tool.
 """
+
 from __future__ import annotations
 
 import os
@@ -18,9 +19,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-DSN = os.environ.get(
-    "DATABASE_URL", "postgresql://demucs:demucs@localhost:5432/demucs"
-)
+DSN = os.environ.get("DATABASE_URL", "postgresql://demucs:demucs@localhost:5432/demucs")
 
 # Transient "database is unreachable" error (restart / failover / not-up-yet).
 # Callers that want to degrade gracefully (e.g. schema init at import) catch this
@@ -46,6 +45,7 @@ def migrate_project_data(data: dict | None) -> dict:
     # (no breaking transitions yet — a v0/unversioned blob is shape-compatible.)
     data["schema_version"] = SCHEMA_VERSION
     return data
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -82,8 +82,16 @@ def init_schema() -> None:
         conn.execute(_SCHEMA)
 
 
-def create_project(job_id: str, *, title: str, source: str, duration: float,
-                   fmin: int, has_lyrics: bool, stems: dict) -> None:
+def create_project(
+    job_id: str,
+    *,
+    title: str,
+    source: str,
+    duration: float,
+    fmin: int,
+    has_lyrics: bool,
+    stems: dict,
+) -> None:
     """Insert (or replace) a project at the 'review' step with its stem map and
     an empty segment list — called right after demucs separation."""
     data = {"schema_version": SCHEMA_VERSION, "stems": stems, "segments": []}
@@ -103,8 +111,14 @@ def create_project(job_id: str, *, title: str, source: str, duration: float,
         )
 
 
-def save_segments(job_id: str, segments: list, *, step: Optional[str] = None,
-                  title: Optional[str] = None, output: Optional[dict] = None) -> bool:
+def save_segments(
+    job_id: str,
+    segments: list,
+    *,
+    step: Optional[str] = None,
+    title: Optional[str] = None,
+    output: Optional[dict] = None,
+) -> bool:
     """Update the editable tree (segments + per-segment tracks), and optionally
     the step/title and the project-wide `output` render settings. Used by /segment
     to seed the proposal and by the frontend autosave. `output=None` preserves the
@@ -125,30 +139,31 @@ def save_segments(job_id: str, segments: list, *, step: Optional[str] = None,
               updated_at = now()
             WHERE job_id = %(job_id)s
             """,
-            {"segments": Jsonb(segments), "step": step, "title": title,
-             "output": Jsonb(output) if output is not None else None,
-             "schema_version": Jsonb(SCHEMA_VERSION), "job_id": job_id},
+            {
+                "segments": Jsonb(segments),
+                "step": step,
+                "title": title,
+                "output": Jsonb(output) if output is not None else None,
+                "schema_version": Jsonb(SCHEMA_VERSION),
+                "job_id": job_id,
+            },
         )
         return cur.rowcount > 0
 
 
 def list_projects() -> list[dict[str, Any]]:
     with _connect() as conn:
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT job_id, title, source, duration, has_lyrics, step,
                    to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS updated_at
             FROM projects ORDER BY updated_at DESC
-            """
-        ).fetchall()
+            """).fetchall()
     return rows
 
 
 def get_project(job_id: str) -> Optional[dict[str, Any]]:
     with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM projects WHERE job_id = %s", (job_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM projects WHERE job_id = %s", (job_id,)).fetchone()
     if row is not None:
         row["data"] = migrate_project_data(row.get("data"))
     return row

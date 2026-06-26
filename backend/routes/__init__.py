@@ -4,6 +4,7 @@
 same absolute URLs the routes had on the monolithic app (no `url_prefix`), so the
 frontend contract is unchanged.
 """
+
 from .uploads import bp as uploads_bp
 from .projects import bp as projects_bp
 from .animation import bp as animation_bp

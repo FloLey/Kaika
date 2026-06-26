@@ -8,6 +8,7 @@ the default of one worker keeps two demucs separations from fighting over the
 GPU at once, and means matplotlib's pyplot state is only ever touched by one
 (consistent) worker thread.
 """
+
 from __future__ import annotations
 
 import logging

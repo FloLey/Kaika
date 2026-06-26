@@ -11,6 +11,7 @@ what later drives the in-project simulation.
 chroma / beat / bar); every feature returns a per-frame 0..1 curve and goes
 through the same :func:`shape` pipeline. Pure + model-free.
 """
+
 from __future__ import annotations
 
 import math
@@ -146,9 +147,9 @@ def raw_onset(stem_path, start, end, min_hz, max_hz, fps=30):
         return _EMPTY
     rows, _lo, _hi = _band_rows(freqs, min_hz, max_hz)
     env = librosa.onset.onset_strength(
-        S=librosa.amplitude_to_db(S[rows], ref=np.max), sr=sr, hop_length=hop)
-    frames = librosa.onset.onset_detect(
-        onset_envelope=env, sr=sr, hop_length=hop, backtrack=False)
+        S=librosa.amplitude_to_db(S[rows], ref=np.max), sr=sr, hop_length=hop
+    )
+    frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop, backtrack=False)
     out = np.zeros(S.shape[1])
     sel = frames[(frames >= f0) & (frames < f1)]
     out[sel] = 1.0
@@ -228,14 +229,15 @@ def raw_bar(stem_path, start, end, min_hz, max_hz, fps=30):
     return _phase(stem_path, start, end, fps, True)
 
 
-def _follower(x: np.ndarray, attack_ms: float, release_ms: float,
-              fps: int) -> np.ndarray:
+def _follower(x: np.ndarray, attack_ms: float, release_ms: float, fps: int) -> np.ndarray:
     """Asymmetric one-pole envelope follower. Rising edges use ``attack``,
     falling edges use ``release``; ms→per-frame smoothing coefficient."""
+
     def coeff(ms: float) -> float:
         if ms <= 0:
-            return 0.0                       # instant
+            return 0.0  # instant
         return math.exp(-1.0 / (fps * (ms / 1000.0)))
+
     ca, cr = coeff(attack_ms), coeff(release_ms)
     out = np.empty_like(x)
     env = 0.0
@@ -246,10 +248,18 @@ def _follower(x: np.ndarray, attack_ms: float, release_ms: float,
     return out
 
 
-def shape(raw: np.ndarray, *, attack: float = 5.0, release: float = 250.0,
-          invert: bool = False, gamma: float = 1.0, gain: float = 1.0,
-          offset: float = 0.0, threshold: float = 0.0,
-          fps: int = 30) -> np.ndarray:
+def shape(
+    raw: np.ndarray,
+    *,
+    attack: float = 5.0,
+    release: float = 250.0,
+    invert: bool = False,
+    gamma: float = 1.0,
+    gain: float = 1.0,
+    offset: float = 0.0,
+    threshold: float = 0.0,
+    fps: int = 30,
+) -> np.ndarray:
     """raw 0..1 -> invert -> follower(attack,release) -> threshold -> gamma ->
     gain/offset -> clamp 0..1 (the fixed shaping order).
 
@@ -283,27 +293,52 @@ _RAW = {
 FEATURES = list(_RAW)
 
 
-def extract(stem_path: str | Path, start: float, end: float,
-            min_hz: float, max_hz: float, *, feature: str = "energy",
-            fps: int = 30, attack: float = 5.0, release: float = 250.0,
-            invert: bool = False, gamma: float = 1.0, gain: float = 1.0,
-            offset: float = 0.0, threshold: float = 0.0) -> dict:
+def extract(
+    stem_path: str | Path,
+    start: float,
+    end: float,
+    min_hz: float,
+    max_hz: float,
+    *,
+    feature: str = "energy",
+    fps: int = 30,
+    attack: float = 5.0,
+    release: float = 250.0,
+    invert: bool = False,
+    gamma: float = 1.0,
+    gain: float = 1.0,
+    offset: float = 0.0,
+    threshold: float = 0.0,
+) -> dict:
     """Full extraction for one signal -> ``{curve, times, fps}``."""
     raw_fn = _RAW.get(feature, raw_energy)
     raw, times = raw_fn(stem_path, start, end, min_hz, max_hz, fps)
-    curve = shape(raw, attack=attack, release=release, invert=invert,
-                  gamma=gamma, gain=gain, offset=offset, threshold=threshold,
-                  fps=fps)
-    return {"curve": [round(float(v), 4) for v in curve],
-            "times": [round(float(t), 3) for t in times],
-            "fps": fps}
+    curve = shape(
+        raw,
+        attack=attack,
+        release=release,
+        invert=invert,
+        gamma=gamma,
+        gain=gain,
+        offset=offset,
+        threshold=threshold,
+        fps=fps,
+    )
+    return {
+        "curve": [round(float(v), 4) for v in curve],
+        "times": [round(float(t), 3) for t in times],
+        "fps": fps,
+    }
 
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) < 6:
-        print("usage: python signals.py <stem.wav> <start> <end> <minHz> <maxHz> "
-              "[--invert] [--attack ms] [--release ms]")
+        print(
+            "usage: python signals.py <stem.wav> <start> <end> <minHz> <maxHz> "
+            "[--invert] [--attack ms] [--release ms]"
+        )
         raise SystemExit(1)
     path = sys.argv[1]
     start, end, lo, hi = map(float, sys.argv[2:6])
@@ -314,8 +349,10 @@ if __name__ == "__main__":
             kw[flag] = float(args[args.index(f"--{flag}") + 1])
     out = extract(path, start, end, lo, hi, **kw)
     c = out["curve"]
-    print(f"frames={len(c)} fps={out['fps']} "
-          f"min={min(c):.3f} max={max(c):.3f} mean={sum(c)/max(1,len(c)):.3f}")
+    print(
+        f"frames={len(c)} fps={out['fps']} "
+        f"min={min(c):.3f} max={max(c):.3f} mean={sum(c)/max(1,len(c)):.3f}"
+    )
     blocks = "▁▂▃▄▅▆▇█"
     step = max(1, len(c) // 100)
     spark = "".join(blocks[min(7, int(v * 8))] for v in c[::step])

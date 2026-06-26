@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 
-const MESSAGES = [
-  "Running Demucs…",
-  "Separating stems…",
-  "Generating spectrograms…",
-];
+const MESSAGES = ["Running Demucs…", "Separating stems…", "Generating spectrograms…"];
 
 export default function Processing({ status }) {
   const [i, setI] = useState(0);

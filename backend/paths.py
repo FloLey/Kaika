@@ -4,6 +4,7 @@ A cycle-free home for the paths and constants the routes share. Imported by the
 blueprints and the media helpers; imports nothing heavy itself (just stdlib), so
 it's safe to pull in anywhere.
 """
+
 import os
 from pathlib import Path
 

@@ -6,7 +6,11 @@ import type { PointerEvent, RefObject, WheelEvent } from "react";
 // a clamped scale range, and a background-drag pan. Persists the transform back
 // up (debounced) so 07 can autosave it onto `graph.view`.
 
-export interface View { tx: number; ty: number; scale: number; }
+export interface View {
+  tx: number;
+  ty: number;
+  scale: number;
+}
 
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.0;
@@ -15,7 +19,7 @@ const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
 export default function usePanZoom(
   graph: { view?: View } | null | undefined,
   onViewChange: ((v: View) => void) | undefined,
-  rootRef: RefObject<HTMLElement | null>,
+  rootRef: RefObject<HTMLElement | null>
 ) {
   const seed = (graph && graph.view) || { tx: 0, ty: 0, scale: 1 };
   const [view, setView] = useState<View>({
@@ -34,7 +38,9 @@ export default function usePanZoom(
     persistTimer.current = setTimeout(() => {
       onViewChangeRef.current?.(view);
     }, 300);
-    return () => { if (persistTimer.current) clearTimeout(persistTimer.current); };
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
   }, [view]);
 
   // Wheel = zoom toward the cursor. Keep the graph point under the cursor fixed:
@@ -90,7 +96,10 @@ export default function usePanZoom(
 
   // Screen point -> graph point, for dropping new nodes at the canvas center.
   const screenToGraph = useCallback(
-    (sx: number, sy: number) => ({ x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale }),
+    (sx: number, sy: number) => ({
+      x: (sx - view.tx) / view.scale,
+      y: (sy - view.ty) / view.scale,
+    }),
     [view]
   );
 

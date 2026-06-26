@@ -13,7 +13,12 @@ import type { NodeHelpers } from "./nodes/nodeProps";
 // (supplied by 06/07) draws the cards; the canvas reports mutations up via
 // `onGraphChange(updater)`.
 
-interface PortMeta { nodeId: string; portId: string; kind: string; flow: string; }
+interface PortMeta {
+  nodeId: string;
+  portId: string;
+  kind: string;
+  flow: string;
+}
 type Updater = (g: Graph) => Graph;
 
 interface GraphCanvasProps {
@@ -43,31 +48,34 @@ export default function GraphCanvas({
 }: GraphCanvasProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const {
-    view, onWheel,
-    onBackgroundPointerDown, onBackgroundPointerMove, onBackgroundPointerUp,
-  } = usePanZoom(graph, onViewChange, rootRef);
+  const { view, onWheel, onBackgroundPointerDown, onBackgroundPointerMove, onBackgroundPointerUp } =
+    usePanZoom(graph, onViewChange, rootRef);
 
   // --- port registry: portKey -> DOM element ---------------------------------
   const portEls = useRef(new Map<string, Element>());
   const portMeta = useRef(new Map<string, PortMeta>());
-  const portRef = useCallback((nodeId: string, portId: string, kind: string, flow: string) => (el: Element | null) => {
-    const key = portKey(nodeId, portId);
-    if (el) {
-      portEls.current.set(key, el);
-      portMeta.current.set(key, { nodeId, portId, kind, flow });
-    } else {
-      portEls.current.delete(key);
-      portMeta.current.delete(key);
-    }
-  }, []);
+  const portRef = useCallback(
+    (nodeId: string, portId: string, kind: string, flow: string) => (el: Element | null) => {
+      const key = portKey(nodeId, portId);
+      if (el) {
+        portEls.current.set(key, el);
+        portMeta.current.set(key, { nodeId, portId, kind, flow });
+      } else {
+        portEls.current.delete(key);
+        portMeta.current.delete(key);
+      }
+    },
+    []
+  );
 
   // A render tick to recompute edge geometry on graph / pan / zoom / resize.
   const [, forceTick] = useState(0);
   const tick = useCallback(() => forceTick((n) => n + 1), []);
 
   // Recompute edges after layout settles (refs attached) and on the triggers.
-  useLayoutEffect(() => { tick(); }, [graph, view, tick, layoutKey]);
+  useLayoutEffect(() => {
+    tick();
+  }, [graph, view, tick, layoutKey]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -78,20 +86,29 @@ export default function GraphCanvas({
   }, [tick]);
 
   // --- node dragging ---------------------------------------------------------
-  interface Drag { id: string; startX: number; startY: number; origX: number; origY: number; }
+  interface Drag {
+    id: string;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  }
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   dragRef.current = drag;
   const scaleRef = useRef(view.scale);
   scaleRef.current = view.scale;
 
-  const onTitlePointerDown = useCallback((node: GraphNode) => (e: RPointerEvent) => {
-    if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest?.(".no-drag")) return;
-    e.stopPropagation();
-    onSelect?.(node.id);
-    setDrag({ id: node.id, startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y });
-  }, [onSelect]);
+  const onTitlePointerDown = useCallback(
+    (node: GraphNode) => (e: RPointerEvent) => {
+      if (e.button !== 0) return;
+      if ((e.target as HTMLElement).closest?.(".no-drag")) return;
+      e.stopPropagation();
+      onSelect?.(node.id);
+      setDrag({ id: node.id, startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y });
+    },
+    [onSelect]
+  );
 
   useEffect(() => {
     if (!drag) return undefined;
@@ -102,9 +119,7 @@ export default function GraphCanvas({
       const dy = (e.clientY - d.startY) / scaleRef.current;
       onGraphChange?.((g) => ({
         ...g,
-        nodes: g.nodes.map((n) =>
-          n.id === d.id ? { ...n, x: d.origX + dx, y: d.origY + dy } : n
-        ),
+        nodes: g.nodes.map((n) => (n.id === d.id ? { ...n, x: d.origX + dx, y: d.origY + dy } : n)),
       }));
     };
     const up = () => setDrag(null);
@@ -117,25 +132,39 @@ export default function GraphCanvas({
   }, [drag, onGraphChange]);
 
   // --- connecting (drag from an out port to an in port) ----------------------
-  interface Wire { source: PortMeta; x1: number; y1: number; x2: number; y2: number; target: PortMeta | null; }
+  interface Wire {
+    source: PortMeta;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    target: PortMeta | null;
+  }
   const [wire, setWire] = useState<Wire | null>(null);
   const wireRef = useRef<Wire | null>(null);
   wireRef.current = wire;
 
-  const startConnect = useCallback((nodeId: string, portId: string, flow: string, e: RPointerEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const root = rootRef.current;
-    const el = portEls.current.get(portKey(nodeId, portId));
-    if (!root || !el) return;
-    const rect = root.getBoundingClientRect();
-    const c = centerInContainer(el, rect);
-    setWire({
-      source: { nodeId, portId, kind: "out", flow },
-      x1: c.x, y1: c.y, x2: c.x, y2: c.y, target: null,
-    });
-    (el as HTMLElement).setPointerCapture?.(e.pointerId);
-  }, []);
+  const startConnect = useCallback(
+    (nodeId: string, portId: string, flow: string, e: RPointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const root = rootRef.current;
+      const el = portEls.current.get(portKey(nodeId, portId));
+      if (!root || !el) return;
+      const rect = root.getBoundingClientRect();
+      const c = centerInContainer(el, rect);
+      setWire({
+        source: { nodeId, portId, kind: "out", flow },
+        x1: c.x,
+        y1: c.y,
+        x2: c.x,
+        y2: c.y,
+        target: null,
+      });
+      (el as HTMLElement).setPointerCapture?.(e.pointerId);
+    },
+    []
+  );
 
   // Track the cursor and highlight an eligible in-port under it.
   useEffect(() => {
@@ -150,7 +179,10 @@ export default function GraphCanvas({
       const hit = document.elementFromPoint(e.clientX, e.clientY);
       const portDom = hit?.closest("[data-port]");
       if (portDom) {
-        const key = portKey(portDom.getAttribute("data-node") || "", portDom.getAttribute("data-port") || "");
+        const key = portKey(
+          portDom.getAttribute("data-node") || "",
+          portDom.getAttribute("data-port") || ""
+        );
         const meta = portMeta.current.get(key);
         if (meta && canConnect(wireRef.current?.source, meta)) target = meta;
       }
@@ -172,15 +204,21 @@ export default function GraphCanvas({
   }, [wire, onConnect]);
 
   // --- background interactions (pan + clear selection) -----------------------
-  const bgPointerDown = useCallback((e: RPointerEvent) => {
-    if (e.target !== e.currentTarget) return; // only the bare background
-    onBackgroundPointerDown(e);
-  }, [onBackgroundPointerDown]);
+  const bgPointerDown = useCallback(
+    (e: RPointerEvent) => {
+      if (e.target !== e.currentTarget) return; // only the bare background
+      onBackgroundPointerDown(e);
+    },
+    [onBackgroundPointerDown]
+  );
 
-  const bgPointerUp = useCallback((e: RPointerEvent) => {
-    const moved = onBackgroundPointerUp(e);
-    if (!moved && e.target === e.currentTarget) onSelect?.(null);
-  }, [onBackgroundPointerUp, onSelect]);
+  const bgPointerUp = useCallback(
+    (e: RPointerEvent) => {
+      const moved = onBackgroundPointerUp(e);
+      if (!moved && e.target === e.currentTarget) onSelect?.(null);
+    },
+    [onBackgroundPointerUp, onSelect]
+  );
 
   // --- delete (node or edge) -------------------------------------------------
   const onNodeDeleteRef = useRef(onNodeDelete);
@@ -188,12 +226,15 @@ export default function GraphCanvas({
   onNodeDeleteRef.current = onNodeDelete;
   onEdgeDeleteRef.current = onEdgeDelete;
 
-  const removeEdge = useCallback((edge: GraphEdge) => {
-    if (!edge) return;
-    if (onEdgeDeleteRef.current) onEdgeDeleteRef.current(edge);
-    else onGraphChange?.((g) => ({ ...g, edges: g.edges.filter((ed) => ed.id !== edge.id) }));
-    onSelect?.(null);
-  }, [onGraphChange, onSelect]);
+  const removeEdge = useCallback(
+    (edge: GraphEdge) => {
+      if (!edge) return;
+      if (onEdgeDeleteRef.current) onEdgeDeleteRef.current(edge);
+      else onGraphChange?.((g) => ({ ...g, edges: g.edges.filter((ed) => ed.id !== edge.id) }));
+      onSelect?.(null);
+    },
+    [onGraphChange, onSelect]
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -220,19 +261,24 @@ export default function GraphCanvas({
   }, [selected, graph, onGraphChange, onSelect, removeEdge]);
 
   // --- edge geometry (screen space, recomputed each tick) --------------------
-  const edges = (graph.edges || []).map((e) => {
-    const a = portEls.current.get(portKey(e.source, e.sourcePort));
-    const b = portEls.current.get(portKey(e.target, e.targetPort));
-    const root = rootRef.current;
-    if (!a || !b || !root) return null;
-    const rect = root.getBoundingClientRect();
-    const ca = centerInContainer(a, rect);
-    const cb = centerInContainer(b, rect);
-    return {
-      id: e.id, edge: e, d: edgePath(ca.x, ca.y, cb.x, cb.y),
-      mx: (ca.x + cb.x) / 2, my: (ca.y + cb.y) / 2,
-    };
-  }).filter((e): e is NonNullable<typeof e> => e !== null);
+  const edges = (graph.edges || [])
+    .map((e) => {
+      const a = portEls.current.get(portKey(e.source, e.sourcePort));
+      const b = portEls.current.get(portKey(e.target, e.targetPort));
+      const root = rootRef.current;
+      if (!a || !b || !root) return null;
+      const rect = root.getBoundingClientRect();
+      const ca = centerInContainer(a, rect);
+      const cb = centerInContainer(b, rect);
+      return {
+        id: e.id,
+        edge: e,
+        d: edgePath(ca.x, ca.y, cb.x, cb.y),
+        mx: (ca.x + cb.x) / 2,
+        my: (ca.y + cb.y) / 2,
+      };
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== null);
 
   const helpers = {
     onMove: (id: string, x: number, y: number) =>
@@ -258,16 +304,27 @@ export default function GraphCanvas({
       <svg className="gc-edges gc-edges-base" width="100%" height="100%">
         {edges.map((e) => (
           <g key={e.id} className={"gc-edge" + (e.id === selected ? " sel" : "")}>
-            <path className="gc-edge-hit" d={e.d}
-                  onPointerDown={(ev) => { ev.stopPropagation(); onSelect?.(e.id); }} />
+            <path
+              className="gc-edge-hit"
+              d={e.d}
+              onPointerDown={(ev) => {
+                ev.stopPropagation();
+                onSelect?.(e.id);
+              }}
+            />
             <path className="gc-edge-line" d={e.d} />
             <g
               className="gc-edge-del"
               transform={`translate(${e.mx}, ${e.my})`}
-              onPointerDown={(ev) => { ev.stopPropagation(); removeEdge(e.edge); }}
+              onPointerDown={(ev) => {
+                ev.stopPropagation();
+                removeEdge(e.edge);
+              }}
             >
               <circle r="9" />
-              <text textAnchor="middle" dominantBaseline="central">✕</text>
+              <text textAnchor="middle" dominantBaseline="central">
+                ✕
+              </text>
             </g>
           </g>
         ))}

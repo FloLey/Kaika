@@ -3,6 +3,7 @@
 The frame pipeline runs without ffmpeg; the mp4 encode is gated on ffmpeg being
 present so the suite still passes in a minimal CI image.
 """
+
 import shutil
 
 import numpy as np
@@ -11,20 +12,35 @@ import pytest
 from backend import fluid, graph
 
 _OUTPUT = {"width": 64, "height": 64, "quality": "draft", "fps": 12, "background": "#000000"}
-_SEG = {"start": 0.0, "end": 0.5, "signals": []}   # 0.5s @ 12fps -> 6 frames
+_SEG = {"start": 0.0, "end": 0.5, "signals": []}  # 0.5s @ 12fps -> 6 frames
 
 
 def _stem_path(job_id, stem):
-    return None   # const-only graph: no signals, so no audio is read
+    return None  # const-only graph: no signals, so no audio is read
 
 
 def _const_graph():
-    fluid_node = {"id": "n-f", "type": "fluid", "x": 0, "y": 0,
-                  "data": {"static": {"enabled": True, "color": [0.3, 0.7, 1.0]}, "ports": {}}}
+    fluid_node = {
+        "id": "n-f",
+        "type": "fluid",
+        "x": 0,
+        "y": 0,
+        "data": {"static": {"enabled": True, "color": [0.3, 0.7, 1.0]}, "ports": {}},
+    }
     out_node = {"id": "n-o", "type": "output", "x": 0, "y": 0, "data": {"title": "preview"}}
-    return {"version": 2, "nodes": [fluid_node, out_node],
-            "edges": [{"id": "e", "source": "n-f", "sourcePort": "out",
-                       "target": "n-o", "targetPort": "video"}]}
+    return {
+        "version": 2,
+        "nodes": [fluid_node, out_node],
+        "edges": [
+            {
+                "id": "e",
+                "source": "n-f",
+                "sourcePort": "out",
+                "target": "n-o",
+                "targetPort": "video",
+            }
+        ],
+    }
 
 
 def test_dag_resolves_fluid_to_uint8_frames():

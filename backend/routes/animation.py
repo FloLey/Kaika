@@ -1,6 +1,7 @@
 """Synchronous render routes: signal extraction, the fluid playground, and the
 per-segment animation graph. Each catches its own errors and returns JSON before
 reaching the global handler."""
+
 import logging
 
 from flask import Blueprint, jsonify
@@ -32,8 +33,13 @@ def extract_route(b):
     try:
         start, end, min_hz, max_hz, fps = validate_audio_params(b)
         out = sig.extract(
-            str(src), start, end, min_hz, max_hz,
-            feature=b.get("feature", "energy"), fps=fps,
+            str(src),
+            start,
+            end,
+            min_hz,
+            max_hz,
+            feature=b.get("feature", "energy"),
+            fps=fps,
             attack=float(b.get("attack", 5.0)),
             release=float(b.get("release", 250.0)),
             invert=bool(b.get("invert", False)),
@@ -60,7 +66,7 @@ def fluid_route(params):
     h = fluid.params_hash(params)
     out = FLUID_DIR / f"{h}.mp4"
     if out.exists():
-        render_cache.touch(out)        # keep this hot clip from aging out (LRU)
+        render_cache.touch(out)  # keep this hot clip from aging out (LRU)
     else:
         try:
             frames, fps, _n = fluid.simulate(params)
@@ -87,7 +93,7 @@ def animate(body):
     job_id = body.get("job_id")
     graph = body.get("graph")
     segment = body.get("segment")  # { start, end, signals: [...] }
-    output = body.get("output")    # project render settings (size/quality/fps/bg)
+    output = body.get("output")  # project render settings (size/quality/fps/bg)
     output_id = body.get("output_id")  # which output's pipeline to render (N per graph)
     if not job_id or graph is None or segment is None:
         return jsonify({"error": "missing job_id, segment, or graph"}), 400

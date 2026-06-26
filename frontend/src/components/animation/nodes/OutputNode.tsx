@@ -15,8 +15,14 @@ import type { NodeProps } from "./nodeProps";
 // the signal pulse pads. Shows not-rendered / rendering / error states.
 export default function OutputNode({ node, selected, helpers, ctx, onDelete }: NodeProps) {
   const {
-    graph, segment, job, output, signals,
-    groupClock, groupPlaying, segStart = 0,
+    graph,
+    segment,
+    job,
+    output,
+    signals,
+    groupClock,
+    groupPlaying,
+    segStart = 0,
   } = ctx || {};
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -38,10 +44,17 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     [graph, node.id]
   );
   const renderKey = useMemo(
-    () => (graph
-      ? outputHash(graph, node.id, job as string | undefined, segment?.start, segment?.end, signals)
-        + JSON.stringify(output || {})
-      : ""),
+    () =>
+      graph
+        ? outputHash(
+            graph,
+            node.id,
+            job as string | undefined,
+            segment?.start,
+            segment?.end,
+            signals
+          ) + JSON.stringify(output || {})
+        : "",
     [graph, node.id, job, segment?.start, segment?.end, signals, output]
   );
 
@@ -49,7 +62,10 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
   // guard drops stale responses. Not renderable (no fluid wired yet) → skip
   // silently and leave the well empty; only real backend failures show an error.
   useEffect(() => {
-    if (!renderable) { setError(""); return undefined; }
+    if (!renderable) {
+      setError("");
+      return undefined;
+    }
     const id = ++reqId.current;
     setBusy(true);
     setError("");
@@ -62,7 +78,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
           output,
           output_id: node.id,
         });
-        if (id !== reqId.current) return;        // a newer edit superseded us
+        if (id !== reqId.current) return; // a newer edit superseded us
         setVideoUrl(url);
       } catch (e) {
         if (id === reqId.current) setError((e as Error)?.message || String(e));
@@ -105,7 +121,9 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
       v.addEventListener("canplay", play);
       document.addEventListener("visibilitychange", play);
       window.addEventListener("focus", play);
-      const watchdog = setInterval(() => { if (v.paused) play(); }, 1000);
+      const watchdog = setInterval(() => {
+        if (v.paused) play();
+      }, 1000);
       return () => {
         v.removeEventListener("canplay", play);
         document.removeEventListener("visibilitychange", play);
@@ -170,7 +188,8 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
             autoPlay={!groupPlaying}
           />
         ) : (
-          !busy && !error && (
+          !busy &&
+          !error && (
             <div className="anim-output-empty">
               {renderable ? "not rendered yet" : "wire a fluid into this output"}
             </div>

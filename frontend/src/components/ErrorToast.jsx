@@ -19,7 +19,10 @@ export default function ErrorToast({ onOpenLogs }) {
       if (!latest || latest.id === seen.current) return;
       // On the very first subscribe call, adopt the latest without toasting a
       // backlog of pre-existing errors.
-      if (seen.current === null) { seen.current = latest.id; return; }
+      if (seen.current === null) {
+        seen.current = latest.id;
+        return;
+      }
       seen.current = latest.id;
       setToasts((ts) => [...ts, { id: latest.id, msg: latest.msg }].slice(-MAX));
     });
@@ -42,14 +45,20 @@ export default function ErrorToast({ onOpenLogs }) {
           key={t.id}
           className="toast toast-error"
           role="alert"
-          onClick={() => { onOpenLogs?.(); dismiss(t.id); }}
+          onClick={() => {
+            onOpenLogs?.();
+            dismiss(t.id);
+          }}
           title="Open logs"
         >
           <span className="toast-icon">⚠</span>
           <span className="toast-msg">{t.msg}</span>
           <button
             className="toast-close"
-            onClick={(e) => { e.stopPropagation(); dismiss(t.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              dismiss(t.id);
+            }}
             title="dismiss"
           >
             ✕

@@ -3,6 +3,7 @@
 Stage 1 (`/upload`) and stage 2 (`/segment`) submit slow work to the job manager
 and return a job id; the UI polls `/jobs/<id>` (and `/logs` for the backend feed).
 """
+
 import json
 import os
 import subprocess
@@ -18,10 +19,19 @@ from .. import db
 from .. import logbus
 from ..config import FMIN
 from ..media import (
-    stem_audio_path, lyrics_path, make_spectrogram, download_youtube_audio, DEVICE,
+    stem_audio_path,
+    lyrics_path,
+    make_spectrogram,
+    download_youtube_audio,
+    DEVICE,
 )
 from ..paths import (
-    UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, STEMS, COLORMAPS,
+    UPLOAD_DIR,
+    SEPARATED_DIR,
+    SPECTRO_DIR,
+    ANALYSIS_DIR,
+    STEMS,
+    COLORMAPS,
     DEMUCS_TIMEOUT,
 )
 
@@ -66,13 +76,17 @@ def upload():
         has_lyrics = True
 
     first_step = "separating" if input_path is not None else "downloading"
-    jobs.submit(job_id, first_step, lambda: _process_upload(
-        job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename))
+    jobs.submit(
+        job_id,
+        first_step,
+        lambda: _process_upload(
+            job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename
+        ),
+    )
     return jsonify({"job_id": job_id})
 
 
-def _process_upload(job_id, input_path, youtube_url, job_upload_dir,
-                    has_lyrics, upload_filename):
+def _process_upload(job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename):
     """Background worker for /upload. Returns the stems payload; raises on any
     failure (the job manager turns that into the job's error)."""
     # 1. Source audio: uploaded file already on disk, else download it.
@@ -87,8 +101,7 @@ def _process_upload(job_id, input_path, youtube_url, job_upload_dir,
     env = dict(os.environ, PYTORCH_ENABLE_MPS_FALLBACK="1")
     cmd = [sys.executable, "-m", "demucs", "-d", DEVICE, "-o", str(job_out), str(input_path)]
     try:
-        proc = subprocess.run(cmd, env=env, capture_output=True, text=True,
-                              timeout=DEMUCS_TIMEOUT)
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=DEMUCS_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"demucs separation exceeded {DEMUCS_TIMEOUT}s") from None
     if proc.returncode != 0:
@@ -119,13 +132,25 @@ def _process_upload(job_id, input_path, youtube_url, job_upload_dir,
     else:
         title_file = job_upload_dir / "yt_title.txt"
         source = youtube_url
-        title = (title_file.read_text().strip()
-                 if title_file.exists() else youtube_url)
+        title = title_file.read_text().strip() if title_file.exists() else youtube_url
 
-    db.create_project(job_id, title=title, source=source, duration=duration,
-                      fmin=FMIN, has_lyrics=has_lyrics, stems=stems)
-    return {"job_id": job_id, "fmin": FMIN, "duration": duration,
-            "has_lyrics": has_lyrics, "title": title, "stems": stems}
+    db.create_project(
+        job_id,
+        title=title,
+        source=source,
+        duration=duration,
+        fmin=FMIN,
+        has_lyrics=has_lyrics,
+        stems=stems,
+    )
+    return {
+        "job_id": job_id,
+        "fmin": FMIN,
+        "duration": duration,
+        "has_lyrics": has_lyrics,
+        "title": title,
+        "stems": stems,
+    }
 
 
 @bp.route("/segment", methods=["POST"])
@@ -159,8 +184,9 @@ def _process_segment(job_id):
     if lyr is not None:
         text = lyr.read_text(errors="replace")
         # .lrc carries [mm:ss] tags — reduce to plain lines for alignment.
-        lyrics_text = ("\n".join(l.text for l in seg.parse_lrc(text))
-                       if lyr.suffix == ".lrc" else text)
+        lyrics_text = (
+            "\n".join(l.text for l in seg.parse_lrc(text)) if lyr.suffix == ".lrc" else text
+        )
 
     result = seg.propose_segments(str(original), stems, lyrics_text)
     return _finalize_proposal(job_id, result)
@@ -200,10 +226,14 @@ def _finalize_proposal(job_id: str, result: dict) -> dict:
         s["id"] = f"seg-{i}"
         s.setdefault("signals", [])
 
-    (ANALYSIS_DIR / f"{job_id}.json").write_text(json.dumps({
-        "vocal_envelope": result.get("vocal_envelope", []),
-        "envelope_times": result.get("envelope_times", []),
-        "lyric_lines": result.get("lyric_lines", []),
-    }))
+    (ANALYSIS_DIR / f"{job_id}.json").write_text(
+        json.dumps(
+            {
+                "vocal_envelope": result.get("vocal_envelope", []),
+                "envelope_times": result.get("envelope_times", []),
+                "lyric_lines": result.get("lyric_lines", []),
+            }
+        )
+    )
     db.save_segments(job_id, result["segments"], step="review")
     return result

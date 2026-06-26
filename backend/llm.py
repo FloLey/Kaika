@@ -5,6 +5,7 @@ landing in each bar, the model splits the song into sections and labels them,
 choosing boundaries on the bar grid. We only trust its grouping/labels — the
 times come from the precomputed downbeats — so it can't drift off the beat.
 """
+
 from __future__ import annotations
 
 import json
@@ -74,8 +75,10 @@ def structure_sections(bars: list, timeout: float = 180.0) -> list:
         "format": _SCHEMA,
         "messages": [
             {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": "Per-bar table:\n" + _table(bars)
-             + "\n\nReturn the sections."},
+            {
+                "role": "user",
+                "content": "Per-bar table:\n" + _table(bars) + "\n\nReturn the sections.",
+            },
         ],
     }
     req = urllib.request.Request(

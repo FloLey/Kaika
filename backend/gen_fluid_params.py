@@ -8,6 +8,7 @@ is no hand-maintained mirror to drift. Run after editing the spec:
 
 `make gen-params` wraps the rewrite; CI / a pytest run the check (no-diff guard).
 """
+
 from __future__ import annotations
 
 import sys
@@ -71,8 +72,7 @@ def main(argv: list[str]) -> int:
     if "--check" in argv:
         current = _OUT.read_text() if _OUT.exists() else ""
         if current != text:
-            print("fluidParams.js is stale — run `make gen-params` and commit.",
-                  file=sys.stderr)
+            print("fluidParams.js is stale — run `make gen-params` and commit.", file=sys.stderr)
             return 1
         print("fluidParams.js is up to date.")
         return 0

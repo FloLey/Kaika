@@ -13,6 +13,4 @@ const doc = new URLSearchParams(window.location.search).get("doc");
 
 // No StrictMode: it double-invokes effects in dev, which conflicts with
 // Web Audio's "one MediaElementSource per <audio> element" rule.
-createRoot(document.getElementById("root")).render(
-  doc !== null ? <Docs section={doc} /> : <App />
-);
+createRoot(document.getElementById("root")).render(doc !== null ? <Docs section={doc} /> : <App />);

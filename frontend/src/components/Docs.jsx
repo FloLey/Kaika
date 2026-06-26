@@ -15,133 +15,223 @@ export default function Docs({ section }) {
   return (
     <div className="docs">
       <header className="docs-head">
-        <h1>Kaika <span className="kanji">開花</span></h1>
+        <h1>
+          Kaika <span className="kanji">開花</span>
+        </h1>
         <span className="sub">user guide</span>
-        <a className="back" href="/">← back to the app</a>
+        <a className="back" href="/">
+          ← back to the app
+        </a>
       </header>
 
       <p className="lead">
-        Kaika splits a song into musical <strong>segments</strong> (intro,
-        verse, chorus…) and lets you rework each one independently. You upload audio
-        (or a YouTube link) and optional lyrics; the app separates the stems,
-        proposes a structure, and opens a studio where every segment gets its own
-        per-stem, per-frequency-band <strong>signal extraction</strong>. Everything
+        Kaika splits a song into musical <strong>segments</strong> (intro, verse, chorus…) and lets
+        you rework each one independently. You upload audio (or a YouTube link) and optional lyrics;
+        the app separates the stems, proposes a structure, and opens a studio where every segment
+        gets its own per-stem, per-frequency-band <strong>signal extraction</strong>. Everything
         autosaves, so you can close the tab and resume later.
       </p>
 
       <nav className="toc">
         <div className="toc-title">Contents</div>
         <ol>
-          <li><a href="#getting-started">Getting started</a></li>
-          <li><a href="#projects">Projects &amp; resuming</a></li>
-          <li><a href="#upload">Upload — file, YouTube, lyrics &amp; stems</a></li>
-          <li><a href="#review">Review — the segment structure</a></li>
-          <li><a href="#studio">Studio — extracting signals</a></li>
-          <li><a href="#animation">Create animation — the node graph</a></li>
-          <li><a href="#fluid-lab">Fluid Lab</a></li>
-          <li><a href="#tips">Tips &amp; troubleshooting</a></li>
+          <li>
+            <a href="#getting-started">Getting started</a>
+          </li>
+          <li>
+            <a href="#projects">Projects &amp; resuming</a>
+          </li>
+          <li>
+            <a href="#upload">Upload — file, YouTube, lyrics &amp; stems</a>
+          </li>
+          <li>
+            <a href="#review">Review — the segment structure</a>
+          </li>
+          <li>
+            <a href="#studio">Studio — extracting signals</a>
+          </li>
+          <li>
+            <a href="#animation">Create animation — the node graph</a>
+          </li>
+          <li>
+            <a href="#fluid-lab">Fluid Lab</a>
+          </li>
+          <li>
+            <a href="#tips">Tips &amp; troubleshooting</a>
+          </li>
         </ol>
       </nav>
 
       <section id="getting-started">
-        <h2><span className="num">1</span>Getting started</h2>
+        <h2>
+          <span className="num">1</span>Getting started
+        </h2>
         <p>
           Kaika runs locally. Once it's installed (see the project
-          <code>README.md</code>), one command starts everything: <code>make dev</code>.
-          That launches Postgres, the Flask API on <code>:5000</code>, and the web
-          UI on <code>:5173</code>. Open <code>http://localhost:5173</code> and you'll
-          land on the <strong>Projects</strong> screen.
+          <code>README.md</code>), one command starts everything: <code>make dev</code>. That
+          launches Postgres, the Flask API on <code>:5000</code>, and the web UI on{" "}
+          <code>:5173</code>. Open <code>http://localhost:5173</code> and you'll land on the{" "}
+          <strong>Projects</strong> screen.
         </p>
         <p>The workflow has three stages, always in this order:</p>
         <ul>
-          <li><span className="stage">1</span><strong>Upload</strong> — bring in audio + optional lyrics; the app separates stems.</li>
-          <li><span className="stage">2</span><strong>Review</strong> — check and edit the proposed segment structure.</li>
-          <li><span className="stage">3</span><strong>Studio</strong> — extract and shape a signal from each stem, per segment.</li>
+          <li>
+            <span className="stage">1</span>
+            <strong>Upload</strong> — bring in audio + optional lyrics; the app separates stems.
+          </li>
+          <li>
+            <span className="stage">2</span>
+            <strong>Review</strong> — check and edit the proposed segment structure.
+          </li>
+          <li>
+            <span className="stage">3</span>
+            <strong>Studio</strong> — extract and shape a signal from each stem, per segment.
+          </li>
         </ul>
         <div className="note">
-          The <strong>?</strong> in the app's top-right corner opens this guide at
-          the section for whatever screen you're on. The smaller <span className="pill">?</span>
-          badges next to individual controls show a one-line explanation on hover,
-          and clicking one jumps straight to the matching part of this guide.
+          The <strong>?</strong> in the app's top-right corner opens this guide at the section for
+          whatever screen you're on. The smaller <span className="pill">?</span>
+          badges next to individual controls show a one-line explanation on hover, and clicking one
+          jumps straight to the matching part of this guide.
         </div>
       </section>
 
       <section id="projects">
-        <h2><span className="num">2</span>Projects &amp; resuming</h2>
+        <h2>
+          <span className="num">2</span>Projects &amp; resuming
+        </h2>
         <p>
-          The Projects screen lists every track you've worked on, most recent first.
-          Each row shows the title, source, and how far you got (Review or Studio).
+          The Projects screen lists every track you've worked on, most recent first. Each row shows
+          the title, source, and how far you got (Review or Studio).
         </p>
         <ul>
-          <li><strong>+ new track</strong> — start a fresh upload.</li>
-          <li><strong>Open a project</strong> — click a row to jump back to where you left off; your segments and per-segment edits load exactly as you saved them.</li>
-          <li><strong>Delete</strong> — removes the project <em>and</em> its audio, stems, and spectrograms from disk. This can't be undone.</li>
-          <li><strong>🌀 fluid lab</strong> — opens the standalone <a href="#fluid-lab">Fluid Lab</a> playground.</li>
+          <li>
+            <strong>+ new track</strong> — start a fresh upload.
+          </li>
+          <li>
+            <strong>Open a project</strong> — click a row to jump back to where you left off; your
+            segments and per-segment edits load exactly as you saved them.
+          </li>
+          <li>
+            <strong>Delete</strong> — removes the project <em>and</em> its audio, stems, and
+            spectrograms from disk. This can't be undone.
+          </li>
+          <li>
+            <strong>🌀 fluid lab</strong> — opens the standalone <a href="#fluid-lab">Fluid Lab</a>{" "}
+            playground.
+          </li>
         </ul>
-        <p>Work is saved automatically as you go, so there is no “save” button — just leave when you're done.</p>
+        <p>
+          Work is saved automatically as you go, so there is no “save” button — just leave when
+          you're done.
+        </p>
       </section>
 
       <section id="upload">
-        <h2><span className="num">3</span>Upload — file, YouTube, lyrics &amp; stems</h2>
-        <p>This is where a track enters the studio. You provide one source of audio, plus optional lyrics.</p>
+        <h2>
+          <span className="num">3</span>Upload — file, YouTube, lyrics &amp; stems
+        </h2>
+        <p>
+          This is where a track enters the studio. You provide one source of audio, plus optional
+          lyrics.
+        </p>
 
         <h3>Audio source</h3>
         <ul>
-          <li><strong>Drop a file</strong> — drag an audio file onto the drop zone, or click to pick one (mp3, wav, flac, m4a, ogg…).</li>
-          <li><strong>YouTube URL</strong> — paste a link and the app downloads the audio. The video title becomes the project name.</li>
+          <li>
+            <strong>Drop a file</strong> — drag an audio file onto the drop zone, or click to pick
+            one (mp3, wav, flac, m4a, ogg…).
+          </li>
+          <li>
+            <strong>YouTube URL</strong> — paste a link and the app downloads the audio. The video
+            title becomes the project name.
+          </li>
         </ul>
 
         <h3>Lyrics (optional, but recommended)</h3>
         <p>
           Paste lyrics into the text box or upload a <code>.txt</code> or
-          <code>.lrc</code> file. Lyrics dramatically improve the segment structure:
-          the app aligns the words to the actual singing (using Whisper) so it can
-          tell a repeated <em>chorus</em> from a unique <em>verse</em> and find the
-          instrumental gaps between them. Plain text is fine — section markers like
-          <code>[Chorus]</code> and ad-lib asides in parentheses are ignored
-          automatically. Timestamped <code>.lrc</code> files are used as-is.
+          <code>.lrc</code> file. Lyrics dramatically improve the segment structure: the app aligns
+          the words to the actual singing (using Whisper) so it can tell a repeated <em>chorus</em>{" "}
+          from a unique <em>verse</em> and find the instrumental gaps between them. Plain text is
+          fine — section markers like
+          <code>[Chorus]</code> and ad-lib asides in parentheses are ignored automatically.
+          Timestamped <code>.lrc</code> files are used as-is.
         </p>
 
         <h3>What happens next</h3>
         <p>
-          When you submit, the app runs <strong>Demucs</strong> (on the
-          Apple-Silicon GPU when available) to separate the song into stems, and
-          renders a spectrogram for each. This is the slow step — expect a wait
-          proportional to the track length. The five stems are:
+          When you submit, the app runs <strong>Demucs</strong> (on the Apple-Silicon GPU when
+          available) to separate the song into stems, and renders a spectrogram for each. This is
+          the slow step — expect a wait proportional to the track length. The five stems are:
         </p>
         <table>
           <tbody>
-            <tr><th>Stem</th><th>What it is</th></tr>
-            <tr><td>original</td><td>The untouched full mix you uploaded.</td></tr>
-            <tr><td>vocals</td><td>Isolated lead and backing vocals.</td></tr>
-            <tr><td>drums</td><td>The drum kit — kick, snare, hats, cymbals, toms.</td></tr>
-            <tr><td>bass</td><td>Bass guitar / synth bass and low end.</td></tr>
-            <tr><td>other</td><td>Everything else — keys, guitars, strings, synths, FX.</td></tr>
+            <tr>
+              <th>Stem</th>
+              <th>What it is</th>
+            </tr>
+            <tr>
+              <td>original</td>
+              <td>The untouched full mix you uploaded.</td>
+            </tr>
+            <tr>
+              <td>vocals</td>
+              <td>Isolated lead and backing vocals.</td>
+            </tr>
+            <tr>
+              <td>drums</td>
+              <td>The drum kit — kick, snare, hats, cymbals, toms.</td>
+            </tr>
+            <tr>
+              <td>bass</td>
+              <td>Bass guitar / synth bass and low end.</td>
+            </tr>
+            <tr>
+              <td>other</td>
+              <td>Everything else — keys, guitars, strings, synths, FX.</td>
+            </tr>
           </tbody>
         </table>
         <div className="note">
-          The very first separation downloads the Demucs model weights (~80&nbsp;MB)
-          and the first lyric alignment downloads a Whisper model. These one-time
-          downloads happen automatically; later runs are faster.
+          The very first separation downloads the Demucs model weights (~80&nbsp;MB) and the first
+          lyric alignment downloads a Whisper model. These one-time downloads happen automatically;
+          later runs are faster.
         </div>
       </section>
 
       <section id="review">
-        <h2><span className="num">4</span>Review — the segment structure</h2>
+        <h2>
+          <span className="num">4</span>Review — the segment structure
+        </h2>
         <p>
-          Before the studio, the app proposes a split of the song into labelled
-          sections and lets you correct it. You see the full-mix spectrogram with
-          the vocal-activity envelope and aligned lyrics drawn over it, plus
-          coloured bands marking each proposed segment.
+          Before the studio, the app proposes a split of the song into labelled sections and lets
+          you correct it. You see the full-mix spectrogram with the vocal-activity envelope and
+          aligned lyrics drawn over it, plus coloured bands marking each proposed segment.
         </p>
 
         <h3>How the structure is proposed</h3>
         <p>The app combines several signals, in order of trust:</p>
         <ul>
-          <li><strong>Lyrics alignment</strong> — when you supplied lyrics, Whisper transcribes the vocals and the words are matched to your lyric lines, so cuts land at the instrumental gaps between sung lines and repeated choruses are recognised.</li>
-          <li><strong>Vocal activity</strong> — the loudness of the vocals stem over time; used to find where singing starts and stops when there are no lyrics.</li>
-          <li><strong>Timbre clustering</strong> — groups the song into sections that <em>sound</em> alike, even in purely instrumental passages.</li>
-          <li><strong>Beat grid + LLM labelling</strong> — the app builds a per-bar table of energy, per-stem levels and lyrics and asks a local language model to name each section. If the model isn't available, it falls back to a built-in heuristic — the result is still sensible.</li>
+          <li>
+            <strong>Lyrics alignment</strong> — when you supplied lyrics, Whisper transcribes the
+            vocals and the words are matched to your lyric lines, so cuts land at the instrumental
+            gaps between sung lines and repeated choruses are recognised.
+          </li>
+          <li>
+            <strong>Vocal activity</strong> — the loudness of the vocals stem over time; used to
+            find where singing starts and stops when there are no lyrics.
+          </li>
+          <li>
+            <strong>Timbre clustering</strong> — groups the song into sections that <em>sound</em>{" "}
+            alike, even in purely instrumental passages.
+          </li>
+          <li>
+            <strong>Beat grid + LLM labelling</strong> — the app builds a per-bar table of energy,
+            per-stem levels and lyrics and asks a local language model to name each section. If the
+            model isn't available, it falls back to a built-in heuristic — the result is still
+            sensible.
+          </li>
         </ul>
         <p>Sections are labelled with the usual song-structure terms:</p>
         <p>
@@ -154,266 +244,564 @@ export default function Docs({ section }) {
 
         <h3>Editing the split</h3>
         <ul>
-          <li><strong>Play / seek</strong> — press play or click anywhere on the timeline to move the playhead.</li>
-          <li><strong>Add a cut</strong> — click <strong>✂ split at playhead</strong>, or double-click the timeline, to split a segment in two.</li>
-          <li><strong>Move a boundary</strong> — drag the handle between two segments to slide where one ends and the next begins.</li>
-          <li><strong>Relabel</strong> — pick a different label from the dropdown on any segment row.</li>
-          <li><strong>Merge</strong> — merge a segment into the one before it to remove a boundary.</li>
-          <li><strong>Play a segment</strong> — the play button on a segment row starts playback from that segment's start.</li>
+          <li>
+            <strong>Play / seek</strong> — press play or click anywhere on the timeline to move the
+            playhead.
+          </li>
+          <li>
+            <strong>Add a cut</strong> — click <strong>✂ split at playhead</strong>, or double-click
+            the timeline, to split a segment in two.
+          </li>
+          <li>
+            <strong>Move a boundary</strong> — drag the handle between two segments to slide where
+            one ends and the next begins.
+          </li>
+          <li>
+            <strong>Relabel</strong> — pick a different label from the dropdown on any segment row.
+          </li>
+          <li>
+            <strong>Merge</strong> — merge a segment into the one before it to remove a boundary.
+          </li>
+          <li>
+            <strong>Play a segment</strong> — the play button on a segment row starts playback from
+            that segment's start.
+          </li>
         </ul>
         <p>
-          When the structure looks right, press <strong>✓ validate split</strong> to
-          open the Studio. You can always come back to Review later.
+          When the structure looks right, press <strong>✓ validate split</strong> to open the
+          Studio. You can always come back to Review later.
         </p>
       </section>
 
       <section id="studio">
-        <h2><span className="num">5</span>Studio — extracting signals</h2>
+        <h2>
+          <span className="num">5</span>Studio — extracting signals
+        </h2>
         <p>
-          The Studio is where the real work happens. The idea: for any segment, pick
-          a stem, isolate a <strong>frequency band</strong> inside it, and turn its
-          movement into a clean <strong>0–1 curve</strong> — a “signal” you can
-          shape precisely. One song can carry many signals (a low-end thump from the
-          bass, a vocal shimmer, a hi-hat tick…), each scoped to a single segment.
+          The Studio is where the real work happens. The idea: for any segment, pick a stem, isolate
+          a <strong>frequency band</strong> inside it, and turn its movement into a clean{" "}
+          <strong>0–1 curve</strong> — a “signal” you can shape precisely. One song can carry many
+          signals (a low-end thump from the bass, a vocal shimmer, a hi-hat tick…), each scoped to a
+          single segment.
         </p>
 
         <h3>Layout</h3>
         <ul>
-          <li><strong>Segment rail</strong> (left) — every segment as a clickable chip with its time range and duration. Pick one to edit it; the rail can be collapsed to widen the workspace.</li>
-          <li><strong>Signal cards</strong> (main area) — grouped per stem. Each card is one signal: its spectrogram band selector, the extracted curve, a live pulse pad, and the shaping controls.</li>
+          <li>
+            <strong>Segment rail</strong> (left) — every segment as a clickable chip with its time
+            range and duration. Pick one to edit it; the rail can be collapsed to widen the
+            workspace.
+          </li>
+          <li>
+            <strong>Signal cards</strong> (main area) — grouped per stem. Each card is one signal:
+            its spectrogram band selector, the extracted curve, a live pulse pad, and the shaping
+            controls.
+          </li>
         </ul>
 
         <h3>Choosing the band</h3>
         <p>
-          Each card shows that stem's spectrogram for the current segment. Drag the
-          two horizontal handles to set the low and high edge of the band you care
-          about. The curve underneath updates live as you drag. (For the
+          Each card shows that stem's spectrogram for the current segment. Drag the two horizontal
+          handles to set the low and high edge of the band you care about. The curve underneath
+          updates live as you drag. (For the
           <em>beat phase</em> and <em>bar phase</em> features the band is ignored.)
         </p>
 
         <h3 id="studio-features">Feature — what the signal measures</h3>
-        <p>The <strong>feature</strong> dropdown decides <em>what</em> about the band becomes the curve:</p>
+        <p>
+          The <strong>feature</strong> dropdown decides <em>what</em> about the band becomes the
+          curve:
+        </p>
         <table>
           <tbody>
-            <tr><th>Feature</th><th>What it tracks</th></tr>
-            <tr><td>energy</td><td>Loudness of the band over time — the default driver.</td></tr>
-            <tr><td>onset</td><td>A spike on each hit in the band (add a tail with <em>release</em>). Great for discrete events.</td></tr>
-            <tr><td>flux</td><td>How fast the band is changing — its “busy-ness”.</td></tr>
-            <tr><td>brightness</td><td>Where the energy sits in the band (low = dull, high = bright).</td></tr>
-            <tr><td>harmonic</td><td>Tonal / sustained share vs percussive / noisy content.</td></tr>
-            <tr><td>chroma</td><td>Dominant pitch class in the band (stepped) — handy for driving colour.</td></tr>
-            <tr><td>beat phase</td><td>A 0→1 ramp locked to each beat (sawtooth). The band is ignored.</td></tr>
-            <tr><td>bar phase</td><td>A 0→1 ramp locked to each 4-beat bar. The band is ignored.</td></tr>
+            <tr>
+              <th>Feature</th>
+              <th>What it tracks</th>
+            </tr>
+            <tr>
+              <td>energy</td>
+              <td>Loudness of the band over time — the default driver.</td>
+            </tr>
+            <tr>
+              <td>onset</td>
+              <td>
+                A spike on each hit in the band (add a tail with <em>release</em>). Great for
+                discrete events.
+              </td>
+            </tr>
+            <tr>
+              <td>flux</td>
+              <td>How fast the band is changing — its “busy-ness”.</td>
+            </tr>
+            <tr>
+              <td>brightness</td>
+              <td>Where the energy sits in the band (low = dull, high = bright).</td>
+            </tr>
+            <tr>
+              <td>harmonic</td>
+              <td>Tonal / sustained share vs percussive / noisy content.</td>
+            </tr>
+            <tr>
+              <td>chroma</td>
+              <td>Dominant pitch class in the band (stepped) — handy for driving colour.</td>
+            </tr>
+            <tr>
+              <td>beat phase</td>
+              <td>A 0→1 ramp locked to each beat (sawtooth). The band is ignored.</td>
+            </tr>
+            <tr>
+              <td>bar phase</td>
+              <td>A 0→1 ramp locked to each 4-beat bar. The band is ignored.</td>
+            </tr>
           </tbody>
         </table>
 
         <h3 id="studio-shaping">Shaping the curve</h3>
-        <p>Once the feature is chosen, these controls sculpt the raw signal into exactly the motion you want:</p>
+        <p>
+          Once the feature is chosen, these controls sculpt the raw signal into exactly the motion
+          you want:
+        </p>
         <table>
           <tbody>
-            <tr><th>Control</th><th>Effect</th></tr>
-            <tr><td>attack</td><td>How fast the curve <em>rises</em> when the sound gets louder. Low = snaps up instantly; high = a gentle swell.</td></tr>
-            <tr><td>release</td><td>How fast the curve <em>falls</em> when the sound quietens. Low = drops instantly; high = a long smooth tail.</td></tr>
-            <tr><td>gamma</td><td>Contrast. Above 1 emphasises peaks (only the loud moments register); below 1 lifts the quiet detail.</td></tr>
-            <tr><td>thresh</td><td>Gate: ignore everything below this level so the signal reacts only to strong hits, not background.</td></tr>
-            <tr><td>gain</td><td>Scales the whole curve up or down (multiplies the value).</td></tr>
-            <tr><td>offset</td><td>Shifts the whole curve up or down (adds a constant) — e.g. so it never quite reaches zero.</td></tr>
-            <tr><td>invert</td><td>Flips it: loud → low instead of loud → high. Invert + slow attack + fast release gives the classic sidechain pump (drops on the kick, swells between).</td></tr>
+            <tr>
+              <th>Control</th>
+              <th>Effect</th>
+            </tr>
+            <tr>
+              <td>attack</td>
+              <td>
+                How fast the curve <em>rises</em> when the sound gets louder. Low = snaps up
+                instantly; high = a gentle swell.
+              </td>
+            </tr>
+            <tr>
+              <td>release</td>
+              <td>
+                How fast the curve <em>falls</em> when the sound quietens. Low = drops instantly;
+                high = a long smooth tail.
+              </td>
+            </tr>
+            <tr>
+              <td>gamma</td>
+              <td>
+                Contrast. Above 1 emphasises peaks (only the loud moments register); below 1 lifts
+                the quiet detail.
+              </td>
+            </tr>
+            <tr>
+              <td>thresh</td>
+              <td>
+                Gate: ignore everything below this level so the signal reacts only to strong hits,
+                not background.
+              </td>
+            </tr>
+            <tr>
+              <td>gain</td>
+              <td>Scales the whole curve up or down (multiplies the value).</td>
+            </tr>
+            <tr>
+              <td>offset</td>
+              <td>
+                Shifts the whole curve up or down (adds a constant) — e.g. so it never quite reaches
+                zero.
+              </td>
+            </tr>
+            <tr>
+              <td>invert</td>
+              <td>
+                Flips it: loud → low instead of loud → high. Invert + slow attack + fast release
+                gives the classic sidechain pump (drops on the kick, swells between).
+              </td>
+            </tr>
           </tbody>
         </table>
 
         <h3>Hearing &amp; seeing it</h3>
         <ul>
-          <li><strong>Curve view</strong> — the shaped 0–1 signal drawn over the segment, with a playhead. Click it to seek.</li>
-          <li><strong>Pulse pad</strong> — a live square whose dot scales and glows with the curve's value at the playhead, so you can <em>feel</em> the motion.</li>
-          <li><strong>Play one signal</strong> — the play button on a card auditions just that band; playing one pauses the others (solo).</li>
-          <li><strong>Play the whole segment</strong> — plays the full mix for the segment while every pulse pad animates together off the same clock.</li>
+          <li>
+            <strong>Curve view</strong> — the shaped 0–1 signal drawn over the segment, with a
+            playhead. Click it to seek.
+          </li>
+          <li>
+            <strong>Pulse pad</strong> — a live square whose dot scales and glows with the curve's
+            value at the playhead, so you can <em>feel</em> the motion.
+          </li>
+          <li>
+            <strong>Play one signal</strong> — the play button on a card auditions just that band;
+            playing one pauses the others (solo).
+          </li>
+          <li>
+            <strong>Play the whole segment</strong> — plays the full mix for the segment while every
+            pulse pad animates together off the same clock.
+          </li>
         </ul>
-        <p>Add as many signals per stem as you need, remove the ones you don't, and move between segments using the rail. Every change autosaves.</p>
+        <p>
+          Add as many signals per stem as you need, remove the ones you don't, and move between
+          segments using the rail. Every change autosaves.
+        </p>
       </section>
 
       <section id="animation">
-        <h2><span className="num">6</span>Create animation — the node graph</h2>
+        <h2>
+          <span className="num">6</span>Create animation — the node graph
+        </h2>
         <p>
-          The Studio has two tabs, switched by the bar at the bottom of the
-          workspace: <strong>extract signals by track</strong> (everything above)
-          and <strong>create animation</strong>. The animation tab is a drag-and-drop
-          <strong> playground</strong> where you wire a segment's signals into a
-          fluid simulation to produce a looping video that reacts to the music. Each
-          segment has its own graph, and it autosaves like everything else.
+          The Studio has two tabs, switched by the bar at the bottom of the workspace:{" "}
+          <strong>extract signals by track</strong> (everything above) and{" "}
+          <strong>create animation</strong>. The animation tab is a drag-and-drop
+          <strong> playground</strong> where you wire a segment's signals into a fluid simulation to
+          produce a looping video that reacts to the music. Each segment has its own graph, and it
+          autosaves like everything else.
         </p>
 
         <h3>The cards</h3>
-        <p>Use the palette (top-left of the canvas) to drop cards, then wire them together. Every card has a <strong>✕</strong> in its top-right corner to delete it (which also removes its wires); ports sit on the card's sides — inputs on the left, outputs on the right.</p>
+        <p>
+          Use the palette (top-left of the canvas) to drop cards, then wire them together. Every
+          card has a <strong>✕</strong> in its top-right corner to delete it (which also removes its
+          wires); ports sit on the card's sides — inputs on the left, outputs on the right.
+        </p>
         <table>
           <tbody>
-            <tr><th>Card</th><th>What it does</th></tr>
-            <tr><td>signal</td><td>Exposes one of this segment's signals (from the other tab) as a 0–1 curve, with a live pulse pad so you can see it move. Pick which signal from the <strong>+ Signal</strong> menu. One output.</td></tr>
-            <tr><td>fluid</td><td>The simulation. Static bits (on/off, radial, a base colour) live on the card; every animatable parameter — force, vorticity, emit, the red/green/blue colour channels, … — is an <strong>input port</strong>, grouped into collapsible <em>source / colour / medium</em> sections. One video output.</td></tr>
-            <tr><td>points</td><td>A small canvas you draw points on (see below). Wire it into a fluid's <em>positions</em> input and the fluid puts a <strong>source at each point</strong> instead of one in the centre.</td></tr>
-            <tr><td>combine</td><td>Composes several fluids into one (see below): <em>merge</em> = their sources share one simulation and interact; <em>layered</em> = the inputs are stacked with per-input transparency. Dynamic inputs (a <strong>+ input</strong> button), one video output.</td></tr>
-            <tr><td>output</td><td>Shows the rendered looping video — wire a fluid's (or combine's) video output into it. It also <strong>passes its input through</strong> (a video out port), so you can preview a stream <em>and</em> feed it onward. You can have several independent fluid/combine → output pipelines in one graph.</td></tr>
+            <tr>
+              <th>Card</th>
+              <th>What it does</th>
+            </tr>
+            <tr>
+              <td>signal</td>
+              <td>
+                Exposes one of this segment's signals (from the other tab) as a 0–1 curve, with a
+                live pulse pad so you can see it move. Pick which signal from the{" "}
+                <strong>+ Signal</strong> menu. One output.
+              </td>
+            </tr>
+            <tr>
+              <td>fluid</td>
+              <td>
+                The simulation. Static bits (on/off, radial, a base colour) live on the card; every
+                animatable parameter — force, vorticity, emit, the red/green/blue colour channels, …
+                — is an <strong>input port</strong>, grouped into collapsible{" "}
+                <em>source / colour / medium</em> sections. One video output.
+              </td>
+            </tr>
+            <tr>
+              <td>points</td>
+              <td>
+                A small canvas you draw points on (see below). Wire it into a fluid's{" "}
+                <em>positions</em> input and the fluid puts a <strong>source at each point</strong>{" "}
+                instead of one in the centre.
+              </td>
+            </tr>
+            <tr>
+              <td>combine</td>
+              <td>
+                Composes several fluids into one (see below): <em>merge</em> = their sources share
+                one simulation and interact; <em>layered</em> = the inputs are stacked with
+                per-input transparency. Dynamic inputs (a <strong>+ input</strong> button), one
+                video output.
+              </td>
+            </tr>
+            <tr>
+              <td>output</td>
+              <td>
+                Shows the rendered looping video — wire a fluid's (or combine's) video output into
+                it. It also <strong>passes its input through</strong> (a video out port), so you can
+                preview a stream <em>and</em> feed it onward. You can have several independent
+                fluid/combine → output pipelines in one graph.
+              </td>
+            </tr>
           </tbody>
         </table>
 
         <h3>Wiring &amp; the [lo, hi] range</h3>
         <ul>
-          <li><strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the fluid's video output onto the output card).</li>
-          <li><strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its 0–1 curve is mapped into a <strong>[lo, hi]</strong> range you set right on that port. So a kick-energy signal on <em>force</em> with range 0–45 makes the jet punch on every kick. Set lo and hi to taste; detach with the ✕.</li>
-          <li><strong>Steady values</strong> — an un-wired port just holds a steady value (its slider) in the parameter's native range.</li>
-          <li><strong>Move / delete</strong> — drag a card by its title bar; pan the canvas by dragging the background and zoom with the scroll wheel. Delete a card with its ✕, or select a card/wire and press Delete.</li>
+          <li>
+            <strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the
+            fluid's video output onto the output card).
+          </li>
+          <li>
+            <strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its
+            0–1 curve is mapped into a <strong>[lo, hi]</strong> range you set right on that port.
+            So a kick-energy signal on <em>force</em> with range 0–45 makes the jet punch on every
+            kick. Set lo and hi to taste; detach with the ✕.
+          </li>
+          <li>
+            <strong>Steady values</strong> — an un-wired port just holds a steady value (its slider)
+            in the parameter's native range.
+          </li>
+          <li>
+            <strong>Move / delete</strong> — drag a card by its title bar; pan the canvas by
+            dragging the background and zoom with the scroll wheel. Delete a card with its ✕, or
+            select a card/wire and press Delete.
+          </li>
         </ul>
         <p>
           The fluid parameters are the same ones documented under
-          <a href="#fluid-source"> Fluid Lab</a> — the difference here is that any of
-          them (including the colour channels) can be driven by a signal over the
-          clip instead of being fixed.
+          <a href="#fluid-source"> Fluid Lab</a> — the difference here is that any of them
+          (including the colour channels) can be driven by a signal over the clip instead of being
+          fixed.
         </p>
 
         <h3 id="animation-points">Placing sources — the points card</h3>
         <p>
           By default a fluid emits from a single source in the centre. The
-          <strong>points</strong> card lets you place sources wherever you like:
-          drop a <strong>+ Points</strong> card, <strong>click</strong> its canvas to
-          add a point, <strong>drag</strong> a dot to move it, <strong>double-click</strong>
-          a dot to remove it. Then wire the card's output into a fluid's
-          <strong> positions</strong> input (the dot on the fluid's left edge). The
-          fluid now emits <strong>one source at every point</strong> — all sharing the
-          fluid's colour, force, emit, etc. (and any signal modulation), just at
-          different places. The card shows the project's aspect ratio so points land
-          where you draw them.
+          <strong>points</strong> card lets you place sources wherever you like: drop a{" "}
+          <strong>+ Points</strong> card, <strong>click</strong> its canvas to add a point,{" "}
+          <strong>drag</strong> a dot to move it, <strong>double-click</strong>a dot to remove it.
+          Then wire the card's output into a fluid's
+          <strong> positions</strong> input (the dot on the fluid's left edge). The fluid now emits{" "}
+          <strong>one source at every point</strong> — all sharing the fluid's colour, force, emit,
+          etc. (and any signal modulation), just at different places. The card shows the project's
+          aspect ratio so points land where you draw them.
         </p>
         <div className="note">
-          This is the simple first version — a fixed set of points for the whole
-          clip. (Points that move or appear/disappear over time will come later.)
+          This is the simple first version — a fixed set of points for the whole clip. (Points that
+          move or appear/disappear over time will come later.)
         </div>
 
         <h3 id="animation-combine">Combining fluids</h3>
         <p>
-          A <strong>combine</strong> card composes several fluids into one. Wire each
-          fluid's video output into one of the combine's inputs (use <strong>+ input</strong>
-          for more), then wire the combine's output into an output card. It has two
-          modes:
+          A <strong>combine</strong> card composes several fluids into one. Wire each fluid's video
+          output into one of the combine's inputs (use <strong>+ input</strong>
+          for more), then wire the combine's output into an output card. It has two modes:
         </p>
         <table>
           <tbody>
-            <tr><th>Mode</th><th>What it does</th></tr>
-            <tr><td>merge</td><td>The inputs' sources are dropped into <strong>one shared simulation</strong>, so the fluids physically interact (their dye and flow mix). The combine card carries the shared <em>medium</em> (dissipation / viscosity / vorticity); each input fluid contributes only its emitter (colour, force, position, and any signal modulation).</td></tr>
-            <tr><td>layered</td><td>Each input is rendered separately and the clips are <strong>stacked with transparency</strong>. Every input has an <em>opacity</em> slider; a brighter upper layer covers what's beneath it, empty areas let lower layers show through. Input order = top → bottom.</td></tr>
+            <tr>
+              <th>Mode</th>
+              <th>What it does</th>
+            </tr>
+            <tr>
+              <td>merge</td>
+              <td>
+                The inputs' sources are dropped into <strong>one shared simulation</strong>, so the
+                fluids physically interact (their dye and flow mix). The combine card carries the
+                shared <em>medium</em> (dissipation / viscosity / vorticity); each input fluid
+                contributes only its emitter (colour, force, position, and any signal modulation).
+              </td>
+            </tr>
+            <tr>
+              <td>layered</td>
+              <td>
+                Each input is rendered separately and the clips are{" "}
+                <strong>stacked with transparency</strong>. Every input has an <em>opacity</em>{" "}
+                slider; a brighter upper layer covers what's beneath it, empty areas let lower
+                layers show through. Input order = top → bottom.
+              </td>
+            </tr>
           </tbody>
         </table>
         <p>
-          Inputs can be a fluid, another combine, or an <strong>output</strong> (its
-          pass-through port) — so you can preview a stream and also feed it into a
-          combine. (A <em>layered</em> combine can't feed a <em>merge</em> — a stacked
-          video has no single source to merge — the card will tell you.)
+          Inputs can be a fluid, another combine, or an <strong>output</strong> (its pass-through
+          port) — so you can preview a stream and also feed it into a combine. (A <em>layered</em>{" "}
+          combine can't feed a <em>merge</em> — a stacked video has no single source to merge — the
+          card will tell you.)
         </p>
 
         <h3>Rendering — it's automatic</h3>
         <p>
           There's no render button: the clip <strong>re-renders on its own</strong>
-          (debounced) whenever you change the graph or a signal, and the result drops
-          into the output card. The clip always spans the <strong>full segment</strong>.
-          An incomplete graph (no output wired yet) just waits quietly; a real failure
-          shows an error on the output card. Identical renders are cached, so repeats
-          are instant.
+          (debounced) whenever you change the graph or a signal, and the result drops into the
+          output card. The clip always spans the <strong>full segment</strong>. An incomplete graph
+          (no output wired yet) just waits quietly; a real failure shows an error on the output
+          card. Identical renders are cached, so repeats are instant.
         </p>
         <p>
-          Use the <strong>transport</strong> at the top of the workspace (shared with
-          the signals tab) to preview: <strong>▶ play segment</strong> plays the
-          audio while the output video and every pulse pad animate off the same
-          playhead; drag the <strong>timeline</strong> to scrub, set the
-          <strong>🔊 volume</strong> (the simulation keeps running at any level), and
-          toggle <strong>loop</strong>.
+          Use the <strong>transport</strong> at the top of the workspace (shared with the signals
+          tab) to preview: <strong>▶ play segment</strong> plays the audio while the output video
+          and every pulse pad animate off the same playhead; drag the <strong>timeline</strong> to
+          scrub, set the
+          <strong>🔊 volume</strong> (the simulation keeps running at any level), and toggle{" "}
+          <strong>loop</strong>.
         </p>
 
         <h3 id="animation-output">Output settings</h3>
         <p>
-          The <strong>⚙ output</strong> button opens project-wide render settings
-          (they apply to every segment's animation):
+          The <strong>⚙ output</strong> button opens project-wide render settings (they apply to
+          every segment's animation):
         </p>
         <table>
           <tbody>
-            <tr><th>Setting</th><th>What it does</th></tr>
-            <tr><td>orientation / size</td><td>Portrait 9:16, Landscape 16:9, Square 1:1, or a custom width×height.</td></tr>
-            <tr><td>quality</td><td>Draft (fast) · Normal · High (sharper swirls, slower) — the simulation resolution.</td></tr>
-            <tr><td>fps</td><td>24, 30, or 60 frames per second.</td></tr>
-            <tr><td>background</td><td>The solid colour behind the dye.</td></tr>
+            <tr>
+              <th>Setting</th>
+              <th>What it does</th>
+            </tr>
+            <tr>
+              <td>orientation / size</td>
+              <td>Portrait 9:16, Landscape 16:9, Square 1:1, or a custom width×height.</td>
+            </tr>
+            <tr>
+              <td>quality</td>
+              <td>
+                Draft (fast) · Normal · High (sharper swirls, slower) — the simulation resolution.
+              </td>
+            </tr>
+            <tr>
+              <td>fps</td>
+              <td>24, 30, or 60 frames per second.</td>
+            </tr>
+            <tr>
+              <td>background</td>
+              <td>The solid colour behind the dye.</td>
+            </tr>
           </tbody>
         </table>
       </section>
 
       <section id="fluid-lab">
-        <h2><span className="num">7</span>Fluid Lab</h2>
+        <h2>
+          <span className="num">7</span>Fluid Lab
+        </h2>
         <p>
-          The Fluid Lab is a standalone visual playground (reach it from the Projects
-          screen). It runs a small real-time fluid simulation: a central source
-          injects coloured dye and pushes the fluid around, and the result is
-          rendered to a short looping video — a sandbox for visuals the extracted
-          signals can eventually drive.
+          The Fluid Lab is a standalone visual playground (reach it from the Projects screen). It
+          runs a small real-time fluid simulation: a central source injects coloured dye and pushes
+          the fluid around, and the result is rendered to a short looping video — a sandbox for
+          visuals the extracted signals can eventually drive.
         </p>
 
         <h3 id="fluid-source">The source — the dye emitter</h3>
         <table>
           <tbody>
-            <tr><th>Control</th><th>Effect</th></tr>
-            <tr><td>colour (R/G/B)</td><td>The dye colour the source releases.</td></tr>
-            <tr><td>intensity</td><td>Brightness of the dye (an HDR multiplier — higher glows harder).</td></tr>
-            <tr><td>opacity</td><td>How strongly the dye shows over the background (lower = fainter).</td></tr>
-            <tr><td>emit</td><td>How much dye the source releases each frame.</td></tr>
-            <tr><td>radius</td><td>Size of the source splat (as a fraction of the canvas).</td></tr>
-            <tr><td>force</td><td>Strength of the jet the source pushes into the fluid.</td></tr>
-            <tr><td>angle</td><td>Direction the jet pushes (0° = right, 90° = down, 270° = up). Ignored when <em>radial</em> is on.</td></tr>
-            <tr><td>radial</td><td>Push outward in all directions from the centre instead of one heading.</td></tr>
+            <tr>
+              <th>Control</th>
+              <th>Effect</th>
+            </tr>
+            <tr>
+              <td>colour (R/G/B)</td>
+              <td>The dye colour the source releases.</td>
+            </tr>
+            <tr>
+              <td>intensity</td>
+              <td>Brightness of the dye (an HDR multiplier — higher glows harder).</td>
+            </tr>
+            <tr>
+              <td>opacity</td>
+              <td>How strongly the dye shows over the background (lower = fainter).</td>
+            </tr>
+            <tr>
+              <td>emit</td>
+              <td>How much dye the source releases each frame.</td>
+            </tr>
+            <tr>
+              <td>radius</td>
+              <td>Size of the source splat (as a fraction of the canvas).</td>
+            </tr>
+            <tr>
+              <td>force</td>
+              <td>Strength of the jet the source pushes into the fluid.</td>
+            </tr>
+            <tr>
+              <td>angle</td>
+              <td>
+                Direction the jet pushes (0° = right, 90° = down, 270° = up). Ignored when{" "}
+                <em>radial</em> is on.
+              </td>
+            </tr>
+            <tr>
+              <td>radial</td>
+              <td>Push outward in all directions from the centre instead of one heading.</td>
+            </tr>
           </tbody>
         </table>
 
         <h3 id="fluid-path">The path — moving the source</h3>
         <p>
-          The source can travel along a path instead of staying put. Click the stage
-          to add points, drag markers to move them, and double-click a marker to
-          remove it.
+          The source can travel along a path instead of staying put. Click the stage to add points,
+          drag markers to move them, and double-click a marker to remove it.
         </p>
         <table>
           <tbody>
-            <tr><th>Control</th><th>Effect</th></tr>
-            <tr><td>path speed</td><td>How many full trips along the points the source makes over the clip (0 = stay on the first point).</td></tr>
-            <tr><td>closed</td><td>Link the last point back to the first so it loops round and round.</td></tr>
-            <tr><td>ping-pong</td><td>Travel back and forth along the points instead of looping (ignored when closed).</td></tr>
+            <tr>
+              <th>Control</th>
+              <th>Effect</th>
+            </tr>
+            <tr>
+              <td>path speed</td>
+              <td>
+                How many full trips along the points the source makes over the clip (0 = stay on the
+                first point).
+              </td>
+            </tr>
+            <tr>
+              <td>closed</td>
+              <td>Link the last point back to the first so it loops round and round.</td>
+            </tr>
+            <tr>
+              <td>ping-pong</td>
+              <td>
+                Travel back and forth along the points instead of looping (ignored when closed).
+              </td>
+            </tr>
           </tbody>
         </table>
 
         <h3 id="fluid-medium">The medium — how the fluid behaves</h3>
         <table>
           <tbody>
-            <tr><th>Control</th><th>Effect</th></tr>
-            <tr><td>dissipation</td><td>How fast the dye fades (lower = fades faster).</td></tr>
-            <tr><td>velocity dissipation</td><td>How fast the flow loses momentum (lower = calms faster).</td></tr>
-            <tr><td>viscosity</td><td>Thickness — smooths the velocity field (higher = gooier).</td></tr>
-            <tr><td>vorticity</td><td>Swirl — re-energises little vortices (higher = more curl).</td></tr>
+            <tr>
+              <th>Control</th>
+              <th>Effect</th>
+            </tr>
+            <tr>
+              <td>dissipation</td>
+              <td>How fast the dye fades (lower = fades faster).</td>
+            </tr>
+            <tr>
+              <td>velocity dissipation</td>
+              <td>How fast the flow loses momentum (lower = calms faster).</td>
+            </tr>
+            <tr>
+              <td>viscosity</td>
+              <td>Thickness — smooths the velocity field (higher = gooier).</td>
+            </tr>
+            <tr>
+              <td>vorticity</td>
+              <td>Swirl — re-energises little vortices (higher = more curl).</td>
+            </tr>
           </tbody>
         </table>
         <p>
-          Set the clip length, render, and you get a seamless looping video.
-          Identical settings are cached, so re-rendering the same look is instant.
+          Set the clip length, render, and you get a seamless looping video. Identical settings are
+          cached, so re-rendering the same look is instant.
         </p>
       </section>
 
       <section id="tips">
-        <h2><span className="num">8</span>Tips &amp; troubleshooting</h2>
+        <h2>
+          <span className="num">8</span>Tips &amp; troubleshooting
+        </h2>
         <ul>
-          <li><strong>First run is slow.</strong> The first separation downloads the Demucs weights and the first lyric alignment downloads a Whisper model. After that, models are cached and only the audio processing takes time.</li>
-          <li><strong>Lyrics give the best structure.</strong> If the proposed segments look off, the single biggest improvement is adding lyrics on upload — even rough plain text.</li>
-          <li><strong>No language model? No problem.</strong> Section labelling prefers a local LLM (Ollama), but if it isn't running the app falls back to a heuristic and still proposes a full structure. You can always relabel by hand in Review.</li>
-          <li><strong>GPU.</strong> On Apple Silicon, separation uses the Metal (MPS) GPU automatically; elsewhere it runs on CPU (slower but identical results).</li>
-          <li><strong>Nothing is lost.</strong> Edits autosave continuously. Close the tab whenever you like and reopen the project from the Projects screen to pick up where you stopped.</li>
-          <li><strong>Deleting is permanent.</strong> Deleting a project also removes its audio, stems and spectrograms from disk — there's no undo.</li>
+          <li>
+            <strong>First run is slow.</strong> The first separation downloads the Demucs weights
+            and the first lyric alignment downloads a Whisper model. After that, models are cached
+            and only the audio processing takes time.
+          </li>
+          <li>
+            <strong>Lyrics give the best structure.</strong> If the proposed segments look off, the
+            single biggest improvement is adding lyrics on upload — even rough plain text.
+          </li>
+          <li>
+            <strong>No language model? No problem.</strong> Section labelling prefers a local LLM
+            (Ollama), but if it isn't running the app falls back to a heuristic and still proposes a
+            full structure. You can always relabel by hand in Review.
+          </li>
+          <li>
+            <strong>GPU.</strong> On Apple Silicon, separation uses the Metal (MPS) GPU
+            automatically; elsewhere it runs on CPU (slower but identical results).
+          </li>
+          <li>
+            <strong>Nothing is lost.</strong> Edits autosave continuously. Close the tab whenever
+            you like and reopen the project from the Projects screen to pick up where you stopped.
+          </li>
+          <li>
+            <strong>Deleting is permanent.</strong> Deleting a project also removes its audio, stems
+            and spectrograms from disk — there's no undo.
+          </li>
         </ul>
       </section>
 
       <footer className="docs-foot">
-        Kaika — local stem separation, LLM-assisted segmentation, and
-        per-segment signal extraction. <a href="/">← back to the app</a>
+        Kaika — local stem separation, LLM-assisted segmentation, and per-segment signal extraction.{" "}
+        <a href="/">← back to the app</a>
       </footer>
     </div>
   );

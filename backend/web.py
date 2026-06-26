@@ -2,6 +2,7 @@
 parameter validation. Keeping these here (not in app.py) means routes — and a future
 blueprint split — can import them without a cycle back through the app object.
 """
+
 from __future__ import annotations
 
 from functools import wraps
@@ -17,12 +18,14 @@ def json_body(fn):
         @json_body
         def handler(body): ...
     """
+
     @wraps(fn)
     def wrapper(*args, **kwargs):
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify({"error": "body must be a JSON object"}), 400
         return fn(body, *args, **kwargs)
+
     return wrapper
 
 

@@ -29,7 +29,7 @@ describe("node-type registry", () => {
     const specs = paletteSpecs();
     expect(specs.length).toBeGreaterThan(0);
     const orders = specs.map((s) => s.palette.order);
-    expect([...orders]).toEqual([...orders].sort((a, b) => a - b));   // sorted
+    expect([...orders]).toEqual([...orders].sort((a, b) => a - b)); // sorted
     for (const spec of specs) {
       const node = spec.factory(0, 0);
       expect(node.type).toBe(spec.type);
@@ -44,7 +44,12 @@ describe("node-type registry", () => {
     };
     for (const type of Object.keys(NODE_TYPES)) {
       const node = make[type]();
-      const ctx = { graph: { nodes: [node], edges: [] }, signals: [], segment: { start: 0, end: 8 }, onGraphChange: () => {} };
+      const ctx = {
+        graph: { nodes: [node], edges: [] },
+        signals: [],
+        segment: { start: 0, end: 8 },
+        onGraphChange: () => {},
+      };
       const html = renderToStaticMarkup(renderAnimNode(node, helpers, ctx));
       expect(html, `${type} should render`).toContain('data-port="out"');
     }

@@ -59,8 +59,12 @@ export default function LogsPanel({ open, onClose }) {
                 {lv}
               </button>
             ))}
-            <button className="btn sm" onClick={logbus.clear}>clear</button>
-            <button className="btn sm" onClick={onClose} title="close">✕</button>
+            <button className="btn sm" onClick={logbus.clear}>
+              clear
+            </button>
+            <button className="btn sm" onClick={onClose} title="close">
+              ✕
+            </button>
           </div>
         </header>
         <div className="logs-body" ref={bodyRef} onScroll={onScroll}>

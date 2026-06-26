@@ -4,6 +4,7 @@ These exercise the pure logic — param building, validation, hashing — withou
 live DB or real audio. `signals.extract` is monkeypatched to return a known ramp,
 and `stem_audio_path` is a stub. Run with: ``.venv/bin/python -m pytest``.
 """
+
 import numpy as np
 import pytest
 
@@ -13,10 +14,14 @@ from backend.animation_params import PARAMS
 
 def _fluid_node(ports=None, static=None):
     return {
-        "id": "n-fluid01", "type": "fluid", "x": 0, "y": 0,
-        "data": {"static": static or {"duration": 2.0, "grid": 48, "fps": 24,
-                                       "color": [0.3, 0.7, 1.0]},
-                 "ports": ports or {}},
+        "id": "n-fluid01",
+        "type": "fluid",
+        "x": 0,
+        "y": 0,
+        "data": {
+            "static": static or {"duration": 2.0, "grid": 48, "fps": 24, "color": [0.3, 0.7, 1.0]},
+            "ports": ports or {},
+        },
     }
 
 
@@ -25,8 +30,13 @@ def _output_node(node_id="n-out"):
 
 
 def _video_edge(fluid_id="n-fluid01", out_id="n-out"):
-    return {"id": f"e-{fluid_id}-{out_id}", "source": fluid_id, "sourcePort": "out",
-            "target": out_id, "targetPort": "video"}
+    return {
+        "id": f"e-{fluid_id}-{out_id}",
+        "source": fluid_id,
+        "sourcePort": "out",
+        "target": out_id,
+        "targetPort": "video",
+    }
 
 
 def _stem_path(job_id, stem):
@@ -61,10 +71,8 @@ def test_validate_rejects_output_not_wired_to_fluid():
 
 
 def test_validate_rejects_dangling_node_binding():
-    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-ghost",
-                                   "lo": 0.0, "hi": 45.0}}}
-    g = {"version": 1, "nodes": [_fluid_node(ports), _output_node()],
-         "edges": [_video_edge()]}
+    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-ghost", "lo": 0.0, "hi": 45.0}}}
+    g = {"version": 1, "nodes": [_fluid_node(ports), _output_node()], "edges": [_video_edge()]}
     with pytest.raises(ValueError, match="unknown node"):
         graph.validate(g)
 
@@ -81,8 +89,7 @@ def _two_pipeline_graph():
     return {
         "version": 1,
         "nodes": [a, _output_node("n-outA"), b, _output_node("n-outB")],
-        "edges": [_video_edge("n-fluidA", "n-outA"),
-                  _video_edge("n-fluidB", "n-outB")],
+        "edges": [_video_edge("n-fluidA", "n-outA"), _video_edge("n-fluidB", "n-outB")],
     }
 
 
@@ -141,17 +148,35 @@ def test_signal_bound_param_is_per_frame_array(monkeypatch):
 
     monkeypatch.setattr(graph.signals, "extract", fake_extract)
 
-    sig_node = {"id": "n-sig", "type": "signal", "x": 0, "y": 0,
-                "data": {"signalId": "sig-1", "label": "drums"}}
-    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig",
-                                   "lo": 0.0, "hi": 45.0}}}
-    g = {"version": 1, "nodes": [_fluid_node(ports), sig_node, _output_node()],
-         "edges": []}
-    seg = {"start": 0.0, "end": 2.0, "signals": [
-        {"id": "sig-1", "stemKey": "drums", "minHz": 40, "maxHz": 120,
-         "feature": "energy", "attack": 5.0, "release": 250.0, "invert": False,
-         "gamma": 1.0, "gain": 1.0, "offset": 0.0, "threshold": 0.0},
-    ]}
+    sig_node = {
+        "id": "n-sig",
+        "type": "signal",
+        "x": 0,
+        "y": 0,
+        "data": {"signalId": "sig-1", "label": "drums"},
+    }
+    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig", "lo": 0.0, "hi": 45.0}}}
+    g = {"version": 1, "nodes": [_fluid_node(ports), sig_node, _output_node()], "edges": []}
+    seg = {
+        "start": 0.0,
+        "end": 2.0,
+        "signals": [
+            {
+                "id": "sig-1",
+                "stemKey": "drums",
+                "minHz": 40,
+                "maxHz": 120,
+                "feature": "energy",
+                "attack": 5.0,
+                "release": 250.0,
+                "invert": False,
+                "gamma": 1.0,
+                "gain": 1.0,
+                "offset": 0.0,
+                "threshold": 0.0,
+            },
+        ],
+    }
     params = graph.build_params("job1", seg, g, _stem_path)
     force = params["source"]["force"]
     assert isinstance(force, list) and len(force) == nframes
@@ -167,12 +192,9 @@ def test_missing_signal_degrades_to_flat_zero(monkeypatch):
 
     monkeypatch.setattr(graph.signals, "extract", boom)
 
-    sig_node = {"id": "n-sig", "type": "signal", "x": 0, "y": 0,
-                "data": {"signalId": "sig-gone"}}
-    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig",
-                                   "lo": 10.0, "hi": 45.0}}}
-    g = {"version": 1, "nodes": [_fluid_node(ports), sig_node, _output_node()],
-         "edges": []}
+    sig_node = {"id": "n-sig", "type": "signal", "x": 0, "y": 0, "data": {"signalId": "sig-gone"}}
+    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig", "lo": 10.0, "hi": 45.0}}}
+    g = {"version": 1, "nodes": [_fluid_node(ports), sig_node, _output_node()], "edges": []}
     seg = {"start": 0.0, "end": 2.0, "signals": []}
     params = graph.build_params("job1", seg, g, _stem_path)
     force = params["source"]["force"]
@@ -186,34 +208,69 @@ def test_missing_signal_degrades_to_flat_zero(monkeypatch):
 def _sig_graph():
     # Signal wired into the fluid's force (value edge) and the fluid into the
     # output (video edge) so the contributing-DAG hash reaches the signal.
-    sig_node = {"id": "n-sig", "type": "signal", "x": 0, "y": 0,
-                "data": {"signalId": "sig-1"}}
-    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig",
-                                   "lo": 0.0, "hi": 45.0}}}
-    return {"version": 1, "nodes": [_fluid_node(ports), sig_node, _output_node()],
-            "edges": [_video_edge(),
-                      {"id": "e-sig", "source": "n-sig", "sourcePort": "out",
-                       "target": "n-fluid01", "targetPort": "force"}]}
+    sig_node = {"id": "n-sig", "type": "signal", "x": 0, "y": 0, "data": {"signalId": "sig-1"}}
+    ports = {"force": {"binding": {"kind": "node", "nodeId": "n-sig", "lo": 0.0, "hi": 45.0}}}
+    return {
+        "version": 1,
+        "nodes": [_fluid_node(ports), sig_node, _output_node()],
+        "edges": [
+            _video_edge(),
+            {
+                "id": "e-sig",
+                "source": "n-sig",
+                "sourcePort": "out",
+                "target": "n-fluid01",
+                "targetPort": "force",
+            },
+        ],
+    }
 
 
 def test_output_hash_includes_referenced_signal_defs():
     g = _sig_graph()
-    base_sig = {"id": "sig-1", "stemKey": "drums", "minHz": 40, "maxHz": 120,
-                "feature": "energy", "attack": 5.0, "release": 250.0,
-                "invert": False, "gamma": 1.0, "gain": 1.0, "offset": 0.0,
-                "threshold": 0.0}
+    base_sig = {
+        "id": "sig-1",
+        "stemKey": "drums",
+        "minHz": 40,
+        "maxHz": 120,
+        "feature": "energy",
+        "attack": 5.0,
+        "release": 250.0,
+        "invert": False,
+        "gamma": 1.0,
+        "gain": 1.0,
+        "offset": 0.0,
+        "threshold": 0.0,
+    }
     seg_a = {"start": 0.0, "end": 2.0, "signals": [dict(base_sig)]}
     seg_b = {"start": 0.0, "end": 2.0, "signals": [dict(base_sig, maxHz=200)]}
-    assert (graph.output_hash("job1", seg_a, g, "n-out")
-            != graph.output_hash("job1", seg_b, g, "n-out"))
+    assert graph.output_hash("job1", seg_a, g, "n-out") != graph.output_hash(
+        "job1", seg_b, g, "n-out"
+    )
 
 
 def test_output_hash_ignores_node_position():
     g = _sig_graph()
-    seg = {"start": 0.0, "end": 2.0, "signals": [
-        {"id": "sig-1", "stemKey": "drums", "minHz": 40, "maxHz": 120,
-         "feature": "energy", "attack": 5.0, "release": 250.0, "invert": False,
-         "gamma": 1.0, "gain": 1.0, "offset": 0.0, "threshold": 0.0}]}
+    seg = {
+        "start": 0.0,
+        "end": 2.0,
+        "signals": [
+            {
+                "id": "sig-1",
+                "stemKey": "drums",
+                "minHz": 40,
+                "maxHz": 120,
+                "feature": "energy",
+                "attack": 5.0,
+                "release": 250.0,
+                "invert": False,
+                "gamma": 1.0,
+                "gain": 1.0,
+                "offset": 0.0,
+                "threshold": 0.0,
+            }
+        ],
+    }
     h1 = graph.output_hash("job1", seg, g, "n-out")
     g["nodes"][0]["x"] = 999
     g["nodes"][0]["y"] = 999

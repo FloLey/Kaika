@@ -33,7 +33,11 @@ export interface Signal {
   offset: number;
   threshold: number;
 }
-interface StemInfo { sr?: number; spectrogram?: string; audio?: string; }
+interface StemInfo {
+  sr?: number;
+  spectrogram?: string;
+  audio?: string;
+}
 
 interface SignalCardProps {
   signal: Signal;
@@ -54,36 +58,77 @@ interface SignalCardProps {
 // Feature types (must match signals.py `_RAW`) with a one-line explanation.
 const FEATURES = [
   { key: "energy", label: "energy", help: "Loudness of the band over time — the default driver." },
-  { key: "onset", label: "onset", help: "A spike on each hit in the band (use release to add the decay). Great for discrete events." },
+  {
+    key: "onset",
+    label: "onset",
+    help: "A spike on each hit in the band (use release to add the decay). Great for discrete events.",
+  },
   { key: "flux", label: "flux", help: "How fast the band is changing — its 'busy-ness'." },
-  { key: "brightness", label: "brightness", help: "Where the energy sits in the band (low=dull, high=bright)." },
-  { key: "harmonic", label: "harmonic", help: "Tonal/sustained share vs percussive/noisy in the band." },
-  { key: "chroma", label: "chroma", help: "Dominant pitch class in the band (stepped) — handy for driving color." },
-  { key: "beat", label: "beat phase", help: "A 0→1 ramp locked to each beat (sawtooth). The frequency band is ignored." },
-  { key: "bar", label: "bar phase", help: "A 0→1 ramp locked to each 4-beat bar. The frequency band is ignored." },
+  {
+    key: "brightness",
+    label: "brightness",
+    help: "Where the energy sits in the band (low=dull, high=bright).",
+  },
+  {
+    key: "harmonic",
+    label: "harmonic",
+    help: "Tonal/sustained share vs percussive/noisy in the band.",
+  },
+  {
+    key: "chroma",
+    label: "chroma",
+    help: "Dominant pitch class in the band (stepped) — handy for driving color.",
+  },
+  {
+    key: "beat",
+    label: "beat phase",
+    help: "A 0→1 ramp locked to each beat (sawtooth). The frequency band is ignored.",
+  },
+  {
+    key: "bar",
+    label: "bar phase",
+    help: "A 0→1 ramp locked to each 4-beat bar. The frequency band is ignored.",
+  },
 ];
-const FEATURE_HELP: Record<string, string> = Object.fromEntries(FEATURES.map((f) => [f.key, f.help]));
+const FEATURE_HELP: Record<string, string> = Object.fromEntries(
+  FEATURES.map((f) => [f.key, f.help])
+);
 
 const HELP = {
   signal:
     "A signal = this track's loudness in the chosen frequency band, over this " +
     "segment, shaped into a 0–1 curve that drives the simulation. Drag the band " +
     "edges on the spectrogram; the curve below updates live.",
-  attack: "How fast the curve RISES when the sound gets louder. Low = snaps up instantly on a hit; high = eases up slowly (a gentle swell).",
-  release: "How fast the curve FALLS when the sound gets quieter. Low = drops instantly; high = long smooth tail (e.g. a kick that fades out).",
-  gamma: "Contrast of the curve. >1 emphasizes peaks (only the loud moments register); <1 lifts the quiet detail.",
-  thresh: "Gate: ignore everything below this level, so the signal reacts only to strong hits and not to background.",
+  attack:
+    "How fast the curve RISES when the sound gets louder. Low = snaps up instantly on a hit; high = eases up slowly (a gentle swell).",
+  release:
+    "How fast the curve FALLS when the sound gets quieter. Low = drops instantly; high = long smooth tail (e.g. a kick that fades out).",
+  gamma:
+    "Contrast of the curve. >1 emphasizes peaks (only the loud moments register); <1 lifts the quiet detail.",
+  thresh:
+    "Gate: ignore everything below this level, so the signal reacts only to strong hits and not to background.",
   gain: "Scales the whole curve up/down (multiplies the value).",
   offset: "Shifts the whole curve up/down (adds a constant) — e.g. so it never reaches zero.",
-  invert: "Flips the curve: loud → low instead of loud → high. Invert + slow attack + fast release = the sidechain pump.",
+  invert:
+    "Flips the curve: loud → low instead of loud → high. Invert + slow attack + fast release = the sidechain pump.",
 };
 
 // One signal: a stem + frequency band (drawn on the spectrogram) shaped into a
 // curve. Re-extracts (debounced) whenever the band/segment/shaping change.
 export default function SignalCard({
-  signal, stems, segStart, segEnd, duration, jobId,
-  onChange, onRemove, registerAudio, onSolo, onPlayingChange,
-  groupClock, groupPlaying,
+  signal,
+  stems,
+  segStart,
+  segEnd,
+  duration,
+  jobId,
+  onChange,
+  onRemove,
+  registerAudio,
+  onSolo,
+  onPlayingChange,
+  groupClock,
+  groupPlaying,
 }: SignalCardProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [curve, setCurve] = useState<number[]>([]);
@@ -110,8 +155,11 @@ export default function SignalCard({
 
   const specTrack = {
     specUrl: info.spectrogram || "",
-    minHz: signal.minHz, maxHz: signal.maxHz,
-    fmin: 20, fmax: sr / 2, color,
+    minHz: signal.minHz,
+    maxHz: signal.maxHz,
+    fmin: 20,
+    fmax: sr / 2,
+    color,
   };
 
   // During "play segment", every pad reads the one shared clock so all pulses move
@@ -144,22 +192,48 @@ export default function SignalCard({
     setLoading(true);
     const t = setTimeout(() => {
       extractSignal({
-        job_id: jobId, stem: signal.stemKey,
-        start: segStart, end: segEnd,
-        minHz: signal.minHz, maxHz: signal.maxHz,
-        feature: signal.feature, fps: FPS,
-        attack: signal.attack, release: signal.release, invert: signal.invert,
-        gamma: signal.gamma, gain: signal.gain, offset: signal.offset,
+        job_id: jobId,
+        stem: signal.stemKey,
+        start: segStart,
+        end: segEnd,
+        minHz: signal.minHz,
+        maxHz: signal.maxHz,
+        feature: signal.feature,
+        fps: FPS,
+        attack: signal.attack,
+        release: signal.release,
+        invert: signal.invert,
+        gamma: signal.gamma,
+        gain: signal.gain,
+        offset: signal.offset,
         threshold: signal.threshold,
       })
-        .then((d: { curve?: number[] }) => { setCurve(d.curve || []); setLoading(false); })
-        .catch(() => { setCurve([]); setLoading(false); });
+        .then((d: { curve?: number[] }) => {
+          setCurve(d.curve || []);
+          setLoading(false);
+        })
+        .catch(() => {
+          setCurve([]);
+          setLoading(false);
+        });
     }, 220);
     return () => clearTimeout(t);
   }, [
-    jobId, signal.stemKey, signal.minHz, signal.maxHz, signal.feature,
-    signal.attack, signal.release, signal.invert, signal.gamma, signal.gain,
-    signal.offset, signal.threshold, segStart, segEnd, winLen,
+    jobId,
+    signal.stemKey,
+    signal.minHz,
+    signal.maxHz,
+    signal.feature,
+    signal.attack,
+    signal.release,
+    signal.invert,
+    signal.gamma,
+    signal.gain,
+    signal.offset,
+    signal.threshold,
+    segStart,
+    segEnd,
+    winLen,
   ]);
 
   function togglePlay() {
@@ -180,7 +254,10 @@ export default function SignalCard({
   function onTime() {
     const el = audioRef.current;
     if (!el) return;
-    if (el.currentTime >= segEnd) { el.pause(); el.currentTime = segEnd; }
+    if (el.currentTime >= segEnd) {
+      el.pause();
+      el.currentTime = segEnd;
+    }
     setFrac(Math.max(0, Math.min(1, (el.currentTime - segStart) / winLen)));
   }
 
@@ -196,7 +273,10 @@ export default function SignalCard({
   }
 
   return (
-    <div className={"signal" + (collapsed ? " collapsed" : "")} style={{ "--accent": color } as CSSProperties}>
+    <div
+      className={"signal" + (collapsed ? " collapsed" : "")}
+      style={{ "--accent": color } as CSSProperties}
+    >
       <div className="signal-head">
         <button
           className="iconbtn sm"
@@ -205,7 +285,9 @@ export default function SignalCard({
         >
           {collapsed ? "▸" : "▾"}
         </button>
-        <button className="play" onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
+        <button className="play" onClick={togglePlay}>
+          {playing ? "❚❚" : "▶"}
+        </button>
         <input
           className="signal-name"
           value={signal.name}
@@ -219,7 +301,9 @@ export default function SignalCard({
           title="What to measure from this band"
         >
           {FEATURES.map((f) => (
-            <option key={f.key} value={f.key}>{f.label}</option>
+            <option key={f.key} value={f.key}>
+              {f.label}
+            </option>
           ))}
         </select>
         <Info text={FEATURE_HELP[signal.feature] || HELP.signal} section="studio-features" />
@@ -229,22 +313,39 @@ export default function SignalCard({
           </span>
         )}
         {!collapsed && (
-          <span className="time">{fmtTime(frac * winLen)} / {fmtTime(winLen)}</span>
+          <span className="time">
+            {fmtTime(frac * winLen)} / {fmtTime(winLen)}
+          </span>
         )}
         {collapsed && (
           <>
             <div className="curve-mini">
-              <CurveView curve={curve} color={color} loading={loading}
-                         audioRef={padClock} segStart={segStart} winLen={winLen} playing={padPlaying}
-                         onSeek={seekCurve} />
+              <CurveView
+                curve={curve}
+                color={color}
+                loading={loading}
+                audioRef={padClock}
+                segStart={segStart}
+                winLen={winLen}
+                playing={padPlaying}
+                onSeek={seekCurve}
+              />
             </div>
             <div className="pulse-mini">
-              <PulsePad audioRef={padClock} curve={curve} segStart={segStart}
-                        winLen={winLen} color={color} playing={padPlaying} />
+              <PulsePad
+                audioRef={padClock}
+                curve={curve}
+                segStart={segStart}
+                winLen={winLen}
+                color={color}
+                playing={padPlaying}
+              />
             </div>
           </>
         )}
-        <button className="iconbtn" title="Remove signal" onClick={() => onRemove(signal.id)}>✕</button>
+        <button className="iconbtn" title="Remove signal" onClick={() => onRemove(signal.id)}>
+          ✕
+        </button>
       </div>
 
       {!collapsed && (
@@ -252,18 +353,30 @@ export default function SignalCard({
           <div className="band-edit">
             <span className="ctl-label">band</span>
             <input
-              type="number" className="hz-input" value={Math.round(signal.minHz)}
-              min={0} max={nyq} step={10} disabled={bandIgnored}
+              type="number"
+              className="hz-input"
+              value={Math.round(signal.minHz)}
+              min={0}
+              max={nyq}
+              step={10}
+              disabled={bandIgnored}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setBandMin(e.target.value)}
             />
             <span className="hz-dash">–</span>
             <input
-              type="number" className="hz-input" value={Math.round(signal.maxHz)}
-              min={0} max={nyq} step={10} disabled={bandIgnored}
+              type="number"
+              className="hz-input"
+              value={Math.round(signal.maxHz)}
+              min={0}
+              max={nyq}
+              step={10}
+              disabled={bandIgnored}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setBandMax(e.target.value)}
             />
             <span className="hz-unit">Hz</span>
-            {bandIgnored && <span className="hz-note">band ignored for {signal.feature} phase</span>}
+            {bandIgnored && (
+              <span className="hz-note">band ignored for {signal.feature} phase</span>
+            )}
           </div>
           <div className="signal-body">
             <div className={"signal-graphs" + (bandIgnored ? " band-ignored" : "")}>
@@ -276,9 +389,16 @@ export default function SignalCard({
                 winEnd={segEnd}
                 duration={duration}
               />
-              <CurveView curve={curve} color={color} loading={loading}
-                     audioRef={padClock} segStart={segStart} winLen={winLen} playing={padPlaying}
-                     onSeek={seekCurve} />
+              <CurveView
+                curve={curve}
+                color={color}
+                loading={loading}
+                audioRef={padClock}
+                segStart={segStart}
+                winLen={winLen}
+                playing={padPlaying}
+                onSeek={seekCurve}
+              />
             </div>
             <PulsePad
               audioRef={padClock}
@@ -291,18 +411,66 @@ export default function SignalCard({
           </div>
 
           <div className="signal-ctls">
-            <Ctl label="attack" value={signal.attack} min={0} max={1000} step={1}
-                 onChange={(v: number) => patch({ attack: v })} fmt={(v: number) => v + "ms"} help={HELP.attack} />
-            <Ctl label="release" value={signal.release} min={0} max={2000} step={5}
-                 onChange={(v: number) => patch({ release: v })} fmt={(v: number) => v + "ms"} help={HELP.release} />
-            <Ctl label="gamma" value={signal.gamma} min={0.2} max={4} step={0.05}
-                 onChange={(v: number) => patch({ gamma: v })} fmt={(v: number) => v.toFixed(2)} help={HELP.gamma} />
-            <Ctl label="thresh" value={signal.threshold} min={0} max={0.9} step={0.02}
-                 onChange={(v: number) => patch({ threshold: v })} fmt={(v: number) => v.toFixed(2)} help={HELP.thresh} />
-            <Ctl label="gain" value={signal.gain} min={0} max={2} step={0.05}
-                 onChange={(v: number) => patch({ gain: v })} fmt={(v: number) => v.toFixed(2)} help={HELP.gain} />
-            <Ctl label="offset" value={signal.offset} min={-0.5} max={0.5} step={0.02}
-                 onChange={(v: number) => patch({ offset: v })} fmt={(v: number) => v.toFixed(2)} help={HELP.offset} />
+            <Ctl
+              label="attack"
+              value={signal.attack}
+              min={0}
+              max={1000}
+              step={1}
+              onChange={(v: number) => patch({ attack: v })}
+              fmt={(v: number) => v + "ms"}
+              help={HELP.attack}
+            />
+            <Ctl
+              label="release"
+              value={signal.release}
+              min={0}
+              max={2000}
+              step={5}
+              onChange={(v: number) => patch({ release: v })}
+              fmt={(v: number) => v + "ms"}
+              help={HELP.release}
+            />
+            <Ctl
+              label="gamma"
+              value={signal.gamma}
+              min={0.2}
+              max={4}
+              step={0.05}
+              onChange={(v: number) => patch({ gamma: v })}
+              fmt={(v: number) => v.toFixed(2)}
+              help={HELP.gamma}
+            />
+            <Ctl
+              label="thresh"
+              value={signal.threshold}
+              min={0}
+              max={0.9}
+              step={0.02}
+              onChange={(v: number) => patch({ threshold: v })}
+              fmt={(v: number) => v.toFixed(2)}
+              help={HELP.thresh}
+            />
+            <Ctl
+              label="gain"
+              value={signal.gain}
+              min={0}
+              max={2}
+              step={0.05}
+              onChange={(v: number) => patch({ gain: v })}
+              fmt={(v: number) => v.toFixed(2)}
+              help={HELP.gain}
+            />
+            <Ctl
+              label="offset"
+              value={signal.offset}
+              min={-0.5}
+              max={0.5}
+              step={0.02}
+              onChange={(v: number) => patch({ offset: v })}
+              fmt={(v: number) => v.toFixed(2)}
+              help={HELP.offset}
+            />
             <div className="ctl ctl-toggle">
               <button
                 className={"btn sm" + (signal.invert ? " on" : "")}
@@ -321,9 +489,18 @@ export default function SignalCard({
         src={info.audio}
         preload="metadata"
         onTimeUpdate={onTime}
-        onPlay={() => { setPlaying(true); onPlayingChange(signal.id, true); }}
-        onPause={() => { setPlaying(false); onPlayingChange(signal.id, false); }}
-        onEnded={() => { setPlaying(false); onPlayingChange(signal.id, false); }}
+        onPlay={() => {
+          setPlaying(true);
+          onPlayingChange(signal.id, true);
+        }}
+        onPause={() => {
+          setPlaying(false);
+          onPlayingChange(signal.id, false);
+        }}
+        onEnded={() => {
+          setPlaying(false);
+          onPlayingChange(signal.id, false);
+        }}
       />
     </div>
   );

@@ -9,6 +9,7 @@ on every cache hit, so hot clips survive and stale ones age out.
 Defaults are generous and overridable via env (FLUID_CACHE_MAX_BYTES / _MAX_AGE_DAYS).
 `evict` is called opportunistically after each render; `make clean-cache` clears all.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +19,7 @@ from pathlib import Path
 
 log = logging.getLogger("kaika.cache")
 
-CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(5 * 1024 ** 3)))   # 5 GB
+CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(5 * 1024**3)))  # 5 GB
 CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_CACHE_MAX_AGE_DAYS", "30"))
 
 
@@ -38,8 +39,13 @@ def _rm(p: Path) -> bool:
         return False
 
 
-def evict(cache_dir: Path, *, max_bytes: int = CACHE_MAX_BYTES,
-          max_age_days: float = CACHE_MAX_AGE_DAYS, now: float | None = None) -> int:
+def evict(
+    cache_dir: Path,
+    *,
+    max_bytes: int = CACHE_MAX_BYTES,
+    max_age_days: float = CACHE_MAX_AGE_DAYS,
+    now: float | None = None,
+) -> int:
     """Age-out then LRU-evict the clip cache; return the count removed.
 
     `now` is injectable for tests (defaults to time.time())."""
@@ -65,7 +71,7 @@ def evict(cache_dir: Path, *, max_bytes: int = CACHE_MAX_BYTES,
     # 2. Size cap: evict least-recently-used (oldest mtime) until under the cap.
     total = sum(size for _, _, size in kept)
     if total > max_bytes:
-        for p, _mtime, size in sorted(kept, key=lambda t: t[1]):   # oldest first
+        for p, _mtime, size in sorted(kept, key=lambda t: t[1]):  # oldest first
             if total <= max_bytes:
                 break
             if _rm(p):

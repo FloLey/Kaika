@@ -9,7 +9,11 @@ afterEach(cleanup);
 // in spec 02 step 2 — previously inline + untested).
 describe("PathEditor", () => {
   const base = {
-    points: [[0.5, 0.5], [0.2, 0.8], [0.8, 0.3]],
+    points: [
+      [0.5, 0.5],
+      [0.2, 0.8],
+      [0.8, 0.3],
+    ],
     pathClosed: false,
     onAddPoint: () => {},
     onMovePoint: () => {},
@@ -38,9 +42,9 @@ describe("PathEditor", () => {
     const onAddPoint = vi.fn();
     const { container } = render(<PathEditor {...base} onAddPoint={onAddPoint} />);
     const overlay = container.querySelector(".fluid-overlay");
-    fireEvent.pointerDown(overlay);   // target === currentTarget → an add
+    fireEvent.pointerDown(overlay); // target === currentTarget → an add
     expect(onAddPoint).toHaveBeenCalledTimes(1);
-    expect(onAddPoint.mock.calls[0][0]).toHaveLength(2);   // a [x, y] coord
+    expect(onAddPoint.mock.calls[0][0]).toHaveLength(2); // a [x, y] coord
   });
 
   it("ignores a pointer-down that lands on a marker (no stray add)", () => {

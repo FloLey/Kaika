@@ -17,12 +17,12 @@ import { fluidNode, outputNode, combineNode, pointsNode } from "../../../lib/gra
 import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
 import type { NodeProps } from "./nodeProps";
 
-export type { NodeProps };   // re-export so existing importers keep working
+export type { NodeProps }; // re-export so existing importers keep working
 
 export interface NodeChrome {
   title: string;
-  accent: string;     // CSS colour; signal overrides with its stem colour
-  outFlow: PortFlow;   // the flow of the node's single `out` port
+  accent: string; // CSS colour; signal overrides with its stem colour
+  outFlow: PortFlow; // the flow of the node's single `out` port
 }
 
 export interface NodeSpec {
@@ -55,14 +55,22 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
     Component: PointsNode,
     chrome: { title: "points", accent: "var(--courant)", outFlow: "points" },
     factory: pointsNode,
-    palette: { label: "+ Points", title: "Draw source points to feed a fluid's positions", order: 2 },
+    palette: {
+      label: "+ Points",
+      title: "Draw source points to feed a fluid's positions",
+      order: 2,
+    },
   },
   combine: {
     type: "combine",
     Component: CombineNode,
     chrome: { title: "combine", accent: "#c0902e", outFlow: "video" },
     factory: combineNode,
-    palette: { label: "+ Combine", title: "Combine fluids — merge (interact) or layered (stack)", order: 3 },
+    palette: {
+      label: "+ Combine",
+      title: "Combine fluids — merge (interact) or layered (stack)",
+      order: 3,
+    },
   },
   output: {
     type: "output",
@@ -77,7 +85,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
 export const paletteSpecs = (): NodeSpec[] =>
   Object.values(NODE_TYPES)
     .filter((s) => s.palette && s.factory)
-    .sort((a, b) => (a.palette!.order - b.palette!.order));
+    .sort((a, b) => a.palette!.order - b.palette!.order);
 
 // Header chrome for a node type, with a safe fallback for unknown types.
 export const chromeFor = (type: string): NodeChrome =>

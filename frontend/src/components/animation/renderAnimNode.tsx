@@ -8,7 +8,9 @@ import type { GraphNode } from "../../lib/types";
 // passes this to <GraphCanvas renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}>.
 // Returns the matching node component, or null for an unknown type.
 export default function renderAnimNode(
-  node: GraphNode, helpers: NodeHelpers, ctx: NodeCtx = {},
+  node: GraphNode,
+  helpers: NodeHelpers,
+  ctx: NodeCtx = {}
 ): ReactElement | null {
   const common = {
     node,

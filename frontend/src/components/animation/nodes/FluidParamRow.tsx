@@ -7,7 +7,7 @@ import type { NodeHelpers, PortRef } from "./nodeProps";
 import type { Binding, FluidData, FluidParam, Graph, GraphNode } from "../../../lib/types";
 
 // Bridge: ui/Ctl is still .jsx — cast until it converts (optional sweep).
-const Ctl = CtlJsx as ComponentType<any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+const Ctl = CtlJsx as ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // One fluid param's input-port ROW and the collapsed-group anchor, extracted from
 // FluidNode. A const-bound row shows a single-thumb Ctl (the value IS the field); a
@@ -36,18 +36,36 @@ function RangeControl({ param, binding, onRange, onDetach }: RangeControlProps) 
           style={{ left: pct(binding.lo), right: `calc(100% - ${pct(binding.hi)})` }}
         />
         <input
-          type="range" className="dual-thumb" title="lo"
-          min={param.min} max={param.max} step={param.step} value={binding.lo}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => onRange(Math.min(parseFloat(e.target.value), binding.hi), binding.hi)}
+          type="range"
+          className="dual-thumb"
+          title="lo"
+          min={param.min}
+          max={param.max}
+          step={param.step}
+          value={binding.lo}
+          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+            onRange(Math.min(parseFloat(e.target.value), binding.hi), binding.hi)
+          }
         />
         <input
-          type="range" className="dual-thumb" title="hi"
-          min={param.min} max={param.max} step={param.step} value={binding.hi}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => onRange(binding.lo, Math.max(parseFloat(e.target.value), binding.lo))}
+          type="range"
+          className="dual-thumb"
+          title="hi"
+          min={param.min}
+          max={param.max}
+          step={param.step}
+          value={binding.hi}
+          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+            onRange(binding.lo, Math.max(parseFloat(e.target.value), binding.lo))
+          }
         />
       </div>
-      <span className="anim-range-fmt">{fmt(binding.lo)}–{fmt(binding.hi)}</span>
-      <button className="iconbtn sm anim-detach" title="detach" onClick={onDetach}>✕</button>
+      <span className="anim-range-fmt">
+        {fmt(binding.lo)}–{fmt(binding.hi)}
+      </span>
+      <button className="iconbtn sm anim-detach" title="detach" onClick={onDetach}>
+        ✕
+      </button>
     </div>
   );
 }
@@ -65,7 +83,9 @@ interface GroupAnchorProps {
 export function GroupAnchor({ nodeId, portKeys, portRef }: GroupAnchorProps) {
   const keyStr = portKeys.join(",");
   const ref = useCallback(
-    (el: Element | null) => { for (const k of portKeys) portRef(nodeId, k, "in", "value")(el); },
+    (el: Element | null) => {
+      for (const k of portKeys) portRef(nodeId, k, "in", "value")(el);
+    },
     // Deliberate: key on the serialized `keyStr`, not the `portKeys` array identity,
     // so the ref callback stays stable while the port set is unchanged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,7 +114,8 @@ export function ParamRow({ node, param, helpers, onGraphChange, onDetach }: Para
   const binding: Binding = port?.binding || { kind: "const", value: param.def };
 
   const setConst = (v: number) => onGraphChange(setConstValue(node.id, param.key, v));
-  const setRange = (lo: number, hi: number) => onGraphChange(setNodeRange(node.id, param.key, lo, hi));
+  const setRange = (lo: number, hi: number) =>
+    onGraphChange(setNodeRange(node.id, param.key, lo, hi));
 
   return (
     <div className="anim-param-row">

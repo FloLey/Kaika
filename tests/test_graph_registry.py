@@ -4,6 +4,7 @@ Guards that the video/emitter dispatch is driven by the registries and that
 `_VIDEO_PRODUCERS` is derived from them — so adding a producing node type is one
 handler + one registration, with nothing left to hand-sync.
 """
+
 from backend import graph
 
 

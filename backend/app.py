@@ -10,6 +10,7 @@ global JSON error handler, and registers the domain blueprints (see
 (``backend/media.py``), and the path/constant tree (``backend/paths.py``) live
 in their own modules so adding an endpoint never means scrolling this file.
 """
+
 import logging
 import os
 import shutil
@@ -34,8 +35,7 @@ app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB upload cap
 try:
     db.init_schema()
 except db.DBUnavailable as e:
-    log.warning("could not init the database (%s). Is Postgres up? "
-                "`docker compose up -d db`", e)
+    log.warning("could not init the database (%s). Is Postgres up? " "`docker compose up -d db`", e)
 
 
 # Every error path returns JSON (never Werkzeug's HTML page) so the frontend's

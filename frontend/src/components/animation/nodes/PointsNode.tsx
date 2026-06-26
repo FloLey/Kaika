@@ -14,7 +14,14 @@ type Point = [number, number];
 // Click empty space to add a point, drag a marker to move it, double-click a marker
 // to remove it. The pad adopts the project output aspect so points land where drawn.
 // One `out` port (flow "points"). v1 = static points; edits go through graphModel.
-export default function PointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function PointsNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const padRef = useRef<HTMLDivElement>(null);
   const { norm, startDrag } = useDragPad(padRef);
   const points = (node.data as PointsData).points || [];
@@ -26,7 +33,7 @@ export default function PointsNode({ node, selected, helpers, ctx, onGraphChange
   const [drag, setDrag] = useState<{ i: number; coord: Point } | null>(null);
 
   const onPadDown = (e: PointerEvent) => {
-    if (e.target !== e.currentTarget) return;     // ignore clicks landing on a marker
+    if (e.target !== e.currentTarget) return; // ignore clicks landing on a marker
     onGraphChange((g) => addPoint(g, node.id, norm(e)));
   };
 
@@ -77,7 +84,10 @@ export default function PointsNode({ node, selected, helpers, ctx, onGraphChange
               className="anim-points-marker"
               style={{ left: `${px * 100}%`, top: `${py * 100}%` }}
               onPointerDown={(e) => onMarkerDown(i, e)}
-              onDoubleClick={(e) => { e.stopPropagation(); onGraphChange((g) => removePoint(g, node.id, i)); }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onGraphChange((g) => removePoint(g, node.id, i));
+              }}
               title="drag to move · double-click to remove"
             />
           );

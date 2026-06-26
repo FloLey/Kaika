@@ -1,5 +1,6 @@
 """Media-serving routes: the API index, fluid clips, stem audio, and spectrogram
 images. All static-ish reads off disk (range-served where <audio>/<video> seek)."""
+
 from flask import Blueprint, abort, jsonify, send_file
 
 from ..media import serve_range, stem_audio_path
@@ -11,8 +12,7 @@ bp = Blueprint("media", __name__)
 @bp.route("/")
 def index():
     # Pure API: the UI is the Vite dev server on :5173.
-    return jsonify({"service": "kaika api",
-                    "ui": "http://localhost:5173 (npm run dev)"})
+    return jsonify({"service": "kaika api", "ui": "http://localhost:5173 (npm run dev)"})
 
 
 @bp.route("/fluid/<name>")
@@ -33,8 +33,11 @@ def audio(job_id: str, stem: str):
     # Pick a sensible mimetype for the original (may be mp3/flac/etc.).
     ext = path.suffix.lower()
     mimetype = {
-        ".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac",
-        ".ogg": "audio/ogg", ".m4a": "audio/mp4",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".flac": "audio/flac",
+        ".ogg": "audio/ogg",
+        ".m4a": "audio/mp4",
     }.get(ext, "audio/wav")
     return serve_range(path, mimetype=mimetype)
 

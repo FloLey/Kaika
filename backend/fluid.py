@@ -10,6 +10,7 @@ source at the centre injects dye + force every frame.
 Kept small + vectorized so a 10 s clip renders in a fraction of a second, then
 the UI loops the mp4. numpy + scipy + system ffmpeg only (no new deps).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -45,7 +46,7 @@ def _hex_rgb(s: str) -> np.ndarray:
     s = (s or "#ffffff").lstrip("#")
     if len(s) != 6:
         s = "ffffff"
-    return np.array([int(s[i:i + 2], 16) for i in (0, 2, 4)], np.float32) / 255.0
+    return np.array([int(s[i : i + 2], 16) for i in (0, 2, 4)], np.float32) / 255.0
 
 
 # Render-quality presets -> cells on the SHORT side of the grid. The long side is
@@ -57,6 +58,7 @@ _QUALITY_CELLS = {"draft": 64, "normal": 96, "high": 144}
 def fft_friendly(n: int) -> int:
     """Round `n` to the nearest integer whose only prime factors are 2/3/5, so the
     FFT Poisson projection stays fast on rectangular grids (ported from Kaika)."""
+
     def ok(k: int) -> bool:
         for p in (2, 3, 5):
             while k % p == 0:
@@ -95,9 +97,17 @@ def grid_from_output(out: dict) -> tuple[int, int]:
 
 
 class FluidSim:
-    def __init__(self, h: int, w: int, dissipation: float, vel_dissipation: float,
-                 viscosity: float, vorticity: float, wrap: bool = True,
-                 dye_modes: list | None = None):
+    def __init__(
+        self,
+        h: int,
+        w: int,
+        dissipation: float,
+        vel_dissipation: float,
+        viscosity: float,
+        vorticity: float,
+        wrap: bool = True,
+        dye_modes: list | None = None,
+    ):
         # Rectangular grid (h rows x w cols). `short` is the reference dimension
         # that keeps splat size + motion scale consistent across aspect ratios
         # (ported from the original Kaika solver, which was rectangular).
@@ -127,12 +137,15 @@ class FluidSim:
         # Per-frame divergence source (radial mode only); see add_radial/_project.
         self._src = None
         yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
-        self.X = xx.astype(np.float32)   # column index (0..w-1)
-        self.Y = yy.astype(np.float32)   # row index (0..h-1)
+        self.X = xx.astype(np.float32)  # column index (0..w-1)
+        self.Y = yy.astype(np.float32)  # row index (0..h-1)
         # Eigenvalues of the 5-point periodic Laplacian with per-axis periods
         # (h, w), so the spectral Poisson solve works on a rectangular grid.
-        a = (4.0 - 2 * np.cos(2 * np.pi * np.arange(h) / h)[:, None]
-             - 2 * np.cos(2 * np.pi * np.arange(w) / w)[None, :])
+        a = (
+            4.0
+            - 2 * np.cos(2 * np.pi * np.arange(h) / h)[:, None]
+            - 2 * np.cos(2 * np.pi * np.arange(w) / w)[None, :]
+        )
         a[0, 0] = 1.0
         # float32 so the spectral solve stays in complex64 end-to-end: fft2 of the
         # float32 divergence is complex64, and dividing by a float32 array keeps it
@@ -173,8 +186,7 @@ class FluidSim:
         self._src += strength * g
 
     def _project(self, source=None):
-        div = ((np.roll(self.u, -1, 1) - self.u) +
-               (np.roll(self.v, -1, 0) - self.v))
+        div = (np.roll(self.u, -1, 1) - self.u) + (np.roll(self.v, -1, 0) - self.v)
         if source is not None:
             # Target a nonzero divergence at the emitter (a genuine source) rather
             # than zero, so the fluid expands outward. Mean-subtract so the net
@@ -185,8 +197,8 @@ class FluidSim:
         phat = -sfft.fft2(div, workers=-1) / self._poisson
         phat[0, 0] = 0.0
         p = np.real(sfft.ifft2(phat, workers=-1)).astype(np.float32)
-        self.u -= (p - np.roll(p, 1, 1))
-        self.v -= (p - np.roll(p, 1, 0))
+        self.u -= p - np.roll(p, 1, 1)
+        self.v -= p - np.roll(p, 1, 0)
 
     def _advect(self, field, mode=None):
         bx = self.X - self.u
@@ -204,8 +216,10 @@ class FluidSim:
         if eps <= 0:
             return
         eps *= 0.05  # gentle gain — raw curl feedback is unstable otherwise
-        curl = ((np.roll(self.v, -1, 1) - np.roll(self.v, 1, 1)) -
-                (np.roll(self.u, -1, 0) - np.roll(self.u, 1, 0))) * 0.5
+        curl = (
+            (np.roll(self.v, -1, 1) - np.roll(self.v, 1, 1))
+            - (np.roll(self.u, -1, 0) - np.roll(self.u, 1, 0))
+        ) * 0.5
         absc = np.abs(curl)
         gx = (np.roll(absc, -1, 1) - np.roll(absc, 1, 1)) * 0.5
         gy = (np.roll(absc, -1, 0) - np.roll(absc, 1, 0)) * 0.5
@@ -231,12 +245,12 @@ class FluidSim:
                 nbr /= denom
                 setattr(self, fld, nbr)
         self._vorticity(self.vorticity)
-        self._project(self._src)   # establish the radial outflow (if any source)
-        self._src = None           # consume this frame's divergence source
+        self._project(self._src)  # establish the radial outflow (if any source)
+        self._src = None  # consume this frame's divergence source
         u0 = self._advect(self.u)
         v0 = self._advect(self.v)
         self.u, self.v = u0, v0
-        self._project()            # clean up advection divergence (no source)
+        self._project()  # clean up advection divergence (no source)
         # Advect each dye layer with ITS OWN edge mode (shared velocity field).
         for i, mode in enumerate(self.dye_modes):
             d = self._advect(self.dye[i], mode)
@@ -293,7 +307,7 @@ def _emitter(src: dict, nframes: int):
     emit_s = _series(src.get("emit", 0.3), nframes)
     radius_s = _series(src.get("radius", 0.08), nframes)
     force_s = _series(src.get("force", 20.0), nframes)
-    angle_s = _series(src.get("angle", 270.0), nframes)        # deg
+    angle_s = _series(src.get("angle", 270.0), nframes)  # deg
     inten_s = _series(src.get("intensity", 1.0), nframes)
     opac_s = _series(src.get("opacity", 1.0), nframes)
     radial = bool(src.get("radial", False))
@@ -303,7 +317,7 @@ def _emitter(src: dict, nframes: int):
     # = static). pts[k] in 0..1; param t in [0,1] over the whole duration.
     raw_pts = src.get("points") or [[0.5, 0.5]]
     pts = np.array([[float(a), float(b)] for a, b in raw_pts], np.float32)
-    path_speed = float(src.get("path_speed", 1.0))     # traversals over the clip
+    path_speed = float(src.get("path_speed", 1.0))  # traversals over the clip
     pingpong = bool(src.get("path_pingpong", False))
     closed = bool(src.get("path_closed", False)) and len(pts) > 2
 
@@ -313,7 +327,7 @@ def _emitter(src: dict, nframes: int):
             return pts[0]
         ph = t * path_speed
         tri = 1.0 - abs((ph % 2.0) - 1.0) if pingpong else (ph % 1.0)
-        if closed:                       # last point links back to the first
+        if closed:  # last point links back to the first
             s = tri * npts
             k = int(np.floor(s)) % npts
             fr = s - np.floor(s)
@@ -375,7 +389,7 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     # velocity uses one mode: the common one if uniform, else periodic (a torus the
     # whole flow lives on). A single source -> one layer == the old behaviour.
     src_wrap = [bool(s.get("wrap", True)) for s in sources]
-    distinct = sorted(set(src_wrap))                       # [True] / [False] / [False, True]
+    distinct = sorted(set(src_wrap))  # [True] / [False] / [False, True]
     dye_modes = ["wrap" if w else "constant" for w in distinct]
     vel_wrap = distinct[0] if len(distinct) == 1 else True
     src_layer = [distinct.index(w) for w in src_wrap]
@@ -391,7 +405,8 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     visc_l = _series(fl.get("viscosity", 0.0), nframes).tolist()
     vort_l = _series(fl.get("vorticity", 5.0), nframes).tolist()
     sim = FluidSim(
-        gh, gw,
+        gh,
+        gw,
         dissipation=diss_l[0],
         vel_dissipation=vdis_l[0],
         viscosity=visc_l[0],
@@ -418,8 +433,9 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     return frames, fps, (gh, gw)
 
 
-def render_mp4(frames: np.ndarray, fps: int, path: Path,
-               out_w: int | None = None, out_h: int | None = None) -> None:
+def render_mp4(
+    frames: np.ndarray, fps: int, path: Path, out_w: int | None = None, out_h: int | None = None
+) -> None:
     """Encode RGB frames to a web-playable h264 mp4 via system ffmpeg.
 
     frames are [T, H, W, 3]. `out_w`/`out_h` set the encoded pixel size; they are
@@ -430,15 +446,33 @@ def render_mp4(frames: np.ndarray, fps: int, path: Path,
     h, w = int(frames.shape[1]), int(frames.shape[2])
     out_w = int(out_w) if out_w else 512
     out_h = int(out_h) if out_h else 512
-    out_w -= out_w % 2                     # h264 yuv420p needs even dimensions
+    out_w -= out_w % 2  # h264 yuv420p needs even dimensions
     out_h -= out_h % 2
     path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "ffmpeg", "-y", "-v", "error",
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps),
-        "-i", "-",
-        "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        "-vf", f"scale={out_w}:{out_h}:flags=neighbor",   # upscale crisply
+        "ffmpeg",
+        "-y",
+        "-v",
+        "error",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{w}x{h}",
+        "-r",
+        str(fps),
+        "-i",
+        "-",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-vf",
+        f"scale={out_w}:{out_h}:flags=neighbor",  # upscale crisply
         str(path),
     ]
     proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True)
@@ -452,15 +486,33 @@ def params_hash(params: dict) -> str:
 
 if __name__ == "__main__":
     import time
-    p = {"duration": 10, "fps": 24, "grid": 96,
-         "source": {"emit": 0.3, "radius": 0.08, "force": 20, "angle": 270,
-                    "radial": False, "color": "#46b0ff", "enabled": True},
-         "fluid": {"dissipation": 0.95, "velocity_dissipation": 0.97,
-                   "viscosity": 0.0, "vorticity": 6.0}}
+
+    p = {
+        "duration": 10,
+        "fps": 24,
+        "grid": 96,
+        "source": {
+            "emit": 0.3,
+            "radius": 0.08,
+            "force": 20,
+            "angle": 270,
+            "radial": False,
+            "color": "#46b0ff",
+            "enabled": True,
+        },
+        "fluid": {
+            "dissipation": 0.95,
+            "velocity_dissipation": 0.97,
+            "viscosity": 0.0,
+            "vorticity": 6.0,
+        },
+    }
     t0 = time.time()
     frames, fps, n = simulate(p)
     t1 = time.time()
     render_mp4(frames, fps, Path("/tmp/fluid_test.mp4"))
     t2 = time.time()
-    print(f"sim {t1 - t0:.2f}s ({len(frames)} frames @ {n}px), "
-          f"encode {t2 - t1:.2f}s -> /tmp/fluid_test.mp4")
+    print(
+        f"sim {t1 - t0:.2f}s ({len(frames)} frames @ {n}px), "
+        f"encode {t2 - t1:.2f}s -> /tmp/fluid_test.mp4"
+    )

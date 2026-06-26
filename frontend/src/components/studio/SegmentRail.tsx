@@ -18,7 +18,12 @@ interface SegmentRailProps {
 
 // Studio left column: the list of validated segments. Click one to load it into
 // the stem editor on the right.
-export default function SegmentRail({ segments, activeSegId, onSelect, onCollapse }: SegmentRailProps) {
+export default function SegmentRail({
+  segments,
+  activeSegId,
+  onSelect,
+  onCollapse,
+}: SegmentRailProps) {
   return (
     <div className="seg-rail">
       <div className="seg-rail-head">

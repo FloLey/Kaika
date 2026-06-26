@@ -3,7 +3,15 @@
 // + shaping -> a drawable curve that drives the simulation).
 
 export const LABELS = [
-  "intro", "verse", "pre-chorus", "chorus", "bridge", "build", "drop", "break", "outro",
+  "intro",
+  "verse",
+  "pre-chorus",
+  "chorus",
+  "bridge",
+  "build",
+  "drop",
+  "break",
+  "outro",
 ];
 
 export const LABEL_COLOR = {
@@ -66,14 +74,12 @@ const SIGNAL_DEFAULTS = {
   threshold: 0,
 };
 
-const SIGNAL_FIELDS = [
-  "id", "name", "stemKey", "minHz", "maxHz",
-  ...Object.keys(SIGNAL_DEFAULTS),
-];
+const SIGNAL_FIELDS = ["id", "name", "stemKey", "minHz", "maxHz", ...Object.keys(SIGNAL_DEFAULTS)];
 
 // A fresh signal on a given stem (full band by default).
 export function seedSignal(stems, name, stem) {
-  const stemKey = stem || (stems?.original ? "original" : Object.keys(stems || {})[0] || "original");
+  const stemKey =
+    stem || (stems?.original ? "original" : Object.keys(stems || {})[0] || "original");
   const sr = stems?.[stemKey]?.sr || 44100;
   return {
     id: mkSigId(),
@@ -111,9 +117,7 @@ function hydrateSignals(stored) {
 }
 
 function serializeSignals(signals) {
-  return (signals || []).map((s) =>
-    Object.fromEntries(SIGNAL_FIELDS.map((k) => [k, s[k]]))
-  );
+  return (signals || []).map((s) => Object.fromEntries(SIGNAL_FIELDS.map((k) => [k, s[k]])));
 }
 
 // Default signals seeded on a fresh segment. Every track gets full-band
@@ -151,11 +155,7 @@ const STEM_DEFAULTS = {
     ...both("snare", 150, 800, 120),
     ...both("hats", 6000, 16000, 90),
   ],
-  bass: [
-    ...FULL_BAND,
-    ...both("sub", 30, 80),
-    ...both("low", 80, 250),
-  ],
+  bass: [...FULL_BAND, ...both("sub", 30, 80), ...both("low", 80, 250)],
   other: FULL_BAND,
 };
 
@@ -187,8 +187,7 @@ export function defaultSignals(stems) {
 
 // Identity of a default signal: stem + feature + band. Including the band lets a
 // stem carry several defaults on the same feature (e.g. drums kick/snare/hats).
-const defaultKey = (s) =>
-  `${s.stemKey}|${s.feature}|${Math.round(s.minHz)}|${Math.round(s.maxHz)}`;
+const defaultKey = (s) => `${s.stemKey}|${s.feature}|${Math.round(s.minHz)}|${Math.round(s.maxHz)}`;
 
 // Add any default signals that aren't already present, keeping the user's
 // existing/custom signals — so existing projects gain the new defaults.
@@ -207,9 +206,10 @@ export function hydrateSegments(raw, stems) {
     start: s.start,
     end: s.end,
     label: s.label,
-    signals: (s.signals && s.signals.length)
-      ? withDefaults(hydrateSignals(s.signals), stems)
-      : defaultSignals(stems),
+    signals:
+      s.signals && s.signals.length
+        ? withDefaults(hydrateSignals(s.signals), stems)
+        : defaultSignals(stems),
     // Keep the stored graph as-is. Its node ids stay stable too (each segment
     // owns its own graph, so they never collide across segments). null = no
     // animation built yet.
@@ -276,7 +276,10 @@ export function splitAt(segments, t) {
       out.push({ ...s, end: t, graph: cloneGraph(s.graph) });
       const { signals, idMap } = cloneSignals(s.signals);
       out.push({
-        ...s, id: mkSegId(), start: t, signals,
+        ...s,
+        id: mkSegId(),
+        start: t,
+        signals,
         graph: remapGraphSignals(s.graph, idMap),
       });
     } else {

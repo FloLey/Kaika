@@ -5,6 +5,7 @@ Regression guard for the bug where the medium params (dissipation / velocity_
 dissipation / viscosity / vorticity) were passed straight into ``float()`` in the
 FluidSim constructor, so a signal-driven array blew up the render with a 500.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -47,12 +48,9 @@ def test_param_accepts_per_frame_array(key: str) -> None:
     p_const[group][key] = float(np.mean(arr))
     frames_const, _, _ = fluid.simulate(p_const)
 
-    per_frame_delta = np.abs(
-        frames_arr.astype(int) - frames_const.astype(int)
-    ).mean()
+    per_frame_delta = np.abs(frames_arr.astype(int) - frames_const.astype(int)).mean()
     assert per_frame_delta > 0.1, (
-        f"param {key!r} ({group}) is not applied per-frame "
-        f"(delta={per_frame_delta:.3f})"
+        f"param {key!r} ({group}) is not applied per-frame " f"(delta={per_frame_delta:.3f})"
     )
 
 
@@ -77,17 +75,19 @@ def test_wrap_defaults_to_torus() -> None:
 def test_open_edges_let_dye_escape() -> None:
     """Open edges (wrap=False) let a jet drive dye off the frame, so less dye
     remains than the torus where it re-enters the opposite edge."""
+
     def last_frame_brightness(wrap: bool) -> float:
         p = _base()
-        p["source"].update(emit=0.5, force=55.0, angle=90.0, radius=0.07,
-                            color=[1.0, 1.0, 1.0], wrap=wrap)
+        p["source"].update(
+            emit=0.5, force=55.0, angle=90.0, radius=0.07, color=[1.0, 1.0, 1.0], wrap=wrap
+        )
         p["fluid"].update(dissipation=0.99, velocity_dissipation=0.99)
         frames, _, _ = fluid.simulate(p)
         return float(frames[-1].mean())
 
     torus = last_frame_brightness(True)
     open_edges = last_frame_brightness(False)
-    assert open_edges < torus * 0.8     # markedly less dye left on screen
+    assert open_edges < torus * 0.8  # markedly less dye left on screen
 
 
 def test_radial_source_blooms_omnidirectionally() -> None:
@@ -95,23 +95,25 @@ def test_radial_source_blooms_omnidirectionally() -> None:
     single-direction drift — the original irrotational kick was projected away and
     left a biased one-way flow."""
     p = _base()
-    p["source"].update(emit=0.5, force=30.0, radial=True, radius=0.07,
-                        color=[1.0, 1.0, 1.0])
+    p["source"].update(emit=0.5, force=30.0, radial=True, radius=0.07, color=[1.0, 1.0, 1.0])
     p["fluid"].update(dissipation=0.97, velocity_dissipation=0.97, vorticity=2.0)
     frames, _, (h, w) = fluid.simulate(p)
-    last = frames[-1].mean(axis=2).astype(np.float32)   # grayscale dye, last frame
+    last = frames[-1].mean(axis=2).astype(np.float32)  # grayscale dye, last frame
     yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
     cx, cy = w / 2.0, h / 2.0
     total = float(last.sum()) + 1e-6
 
     # Dye centroid stays near the centre source (a one-way drift would move it far).
-    drift = float(np.hypot((xx * last).sum() / total - cx,
-                           (yy * last).sum() / total - cy))
-    assert drift < min(h, w) * 0.06     # << any real directional bias
+    drift = float(np.hypot((xx * last).sum() / total - cx, (yy * last).sum() / total - cy))
+    assert drift < min(h, w) * 0.06  # << any real directional bias
 
     # Dye is spread across all four quadrants around the source, roughly balanced.
-    quads = [float(last[:h // 2, :w // 2].sum()), float(last[:h // 2, w // 2:].sum()),
-             float(last[h // 2:, :w // 2].sum()), float(last[h // 2:, w // 2:].sum())]
+    quads = [
+        float(last[: h // 2, : w // 2].sum()),
+        float(last[: h // 2, w // 2 :].sum()),
+        float(last[h // 2 :, : w // 2].sum()),
+        float(last[h // 2 :, w // 2 :].sum()),
+    ]
     assert min(quads) > 0 and max(quads) / min(quads) < 1.6
 
 
@@ -126,4 +128,4 @@ def test_project_without_source_unchanged() -> None:
     # Divergence-free after projection (the source-free behaviour we always had).
     div = (np.roll(sim.u, -1, 1) - sim.u) + (np.roll(sim.v, -1, 0) - sim.v)
     assert np.abs(div).max() < 1e-3
-    assert not np.allclose(sim.u, u0)   # it actually did something
+    assert not np.allclose(sim.u, u0)  # it actually did something

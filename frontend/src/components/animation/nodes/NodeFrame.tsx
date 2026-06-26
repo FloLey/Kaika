@@ -21,7 +21,15 @@ interface PortProps {
   title?: string;
 }
 
-export function Port({ nodeId, portId, kind, flow = "value", portRef, startConnect, title }: PortProps) {
+export function Port({
+  nodeId,
+  portId,
+  kind,
+  flow = "value",
+  portRef,
+  startConnect,
+  title,
+}: PortProps) {
   return (
     <span
       className={`gc-port gc-port-${kind} gc-port-${flow}`}
@@ -30,15 +38,17 @@ export function Port({ nodeId, portId, kind, flow = "value", portRef, startConne
       title={title}
       ref={portRef(nodeId, portId, kind, flow)}
       onPointerDown={
-        kind === "out" && startConnect
-          ? (e) => startConnect(nodeId, portId, flow, e)
-          : undefined
+        kind === "out" && startConnect ? (e) => startConnect(nodeId, portId, flow, e) : undefined
       }
     />
   );
 }
 
-interface PortDesc { portId: string; kind: string; flow: string; }
+interface PortDesc {
+  portId: string;
+  kind: string;
+  flow: string;
+}
 interface MultiAnchorProps {
   nodeId: string;
   ports: PortDesc[];
@@ -52,10 +62,19 @@ interface MultiAnchorProps {
 // so all their edges converge on it (the generalisation of FluidNode's GroupAnchor,
 // used by MinimizedCard to collapse a card's wires onto one header anchor). If it
 // carries exactly one `out` port it can also start a new wire.
-export function MultiAnchor({ nodeId, ports, portRef, startConnect, className = "", title }: MultiAnchorProps) {
+export function MultiAnchor({
+  nodeId,
+  ports,
+  portRef,
+  startConnect,
+  className = "",
+  title,
+}: MultiAnchorProps) {
   const key = ports.map((p) => `${p.portId}:${p.kind}:${p.flow}`).join(",");
   const ref = useCallback(
-    (el: Element | null) => { for (const p of ports) portRef(nodeId, p.portId, p.kind, p.flow)(el); },
+    (el: Element | null) => {
+      for (const p of ports) portRef(nodeId, p.portId, p.kind, p.flow)(el);
+    },
     // Deliberate: key on the serialized `key`, not the `ports` array identity, so
     // the ref callback stays stable while the port set is unchanged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,7 +89,9 @@ export function MultiAnchor({ nodeId, ports, portRef, startConnect, className = 
       data-port={out ? out.portId : ports[0]?.portId}
       title={title}
       ref={ref}
-      onPointerDown={out && startConnect ? (e) => startConnect(nodeId, out.portId, out.flow, e) : undefined}
+      onPointerDown={
+        out && startConnect ? (e) => startConnect(nodeId, out.portId, out.flow, e) : undefined
+      }
     />
   );
 }
@@ -91,8 +112,18 @@ interface NodeFrameProps {
 }
 
 export default function NodeFrame({
-  node, title, accent, selected, onTitlePointerDown, onDelete, headLead, headExtra,
-  sideIn, sideOut, minimized = false, children,
+  node,
+  title,
+  accent,
+  selected,
+  onTitlePointerDown,
+  onDelete,
+  headLead,
+  headExtra,
+  sideIn,
+  sideOut,
+  minimized = false,
+  children,
 }: NodeFrameProps) {
   const { minimized: minSet, toggle } = useContext(MinimizeContext) as {
     minimized?: Set<string>;
@@ -101,7 +132,9 @@ export default function NodeFrame({
   const isMin = minimized || (minSet && minSet.has && minSet.has(node.id));
   return (
     <div
-      className={`anim-node anim-node-${node.type}` + (selected ? " sel" : "") + (isMin ? " min" : "")}
+      className={
+        `anim-node anim-node-${node.type}` + (selected ? " sel" : "") + (isMin ? " min" : "")
+      }
       style={{ "--accent": accent } as CSSProperties}
     >
       {/* Connector dots that straddle the card's left/right edge (centered on the
@@ -121,7 +154,10 @@ export default function NodeFrame({
               title={isMin ? "expand card" : "minimize to header"}
               aria-label={isMin ? "expand card" : "minimize card"}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); toggle(node.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle(node.id);
+              }}
             >
               {isMin ? "▢" : "–"}
             </button>
@@ -132,7 +168,10 @@ export default function NodeFrame({
               title="delete card"
               aria-label="delete card"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
             >
               ✕
             </button>

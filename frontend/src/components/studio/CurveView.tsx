@@ -17,8 +17,14 @@ interface CurveViewProps {
 // requestAnimationFrame loop reading `audioRef`'s clock (same source the pulse
 // pad uses) so it moves during both solo and "play segment" — no re-renders.
 export default function CurveView({
-  curve, color = "#60A5FA", loading,
-  audioRef, segStart = 0, winLen = 1, playing, onSeek,
+  curve,
+  color = "#60A5FA",
+  loading,
+  audioRef,
+  segStart = 0,
+  winLen = 1,
+  playing,
+  onSeek,
 }: CurveViewProps) {
   const headRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -31,7 +37,10 @@ export default function CurveView({
   const n = curve ? curve.length : 0;
   const pts =
     n > 1 && curve
-      ? curve.map((v, i) => `${((i / (n - 1)) * 1000).toFixed(1)},${((1 - Math.max(0, Math.min(1, v))) * 100).toFixed(1)}`)
+      ? curve.map(
+          (v, i) =>
+            `${((i / (n - 1)) * 1000).toFixed(1)},${((1 - Math.max(0, Math.min(1, v))) * 100).toFixed(1)}`
+        )
       : [];
   const line = pts.join(" ");
   const area = n > 1 ? `0,100 ${line} 1000,100` : "";

@@ -14,6 +14,7 @@ The proposal is driven by three signals, in order of trust:
 
 Everything except :func:`transcribe_words` is pure and model-free.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -32,7 +33,7 @@ from .config import N_FFT, HOP, normalise as _normalise
 
 _log = logging.getLogger("kaika.segment")
 
-GAP_S = 4.0           # an instrumental gap this long (s) is a section break
+GAP_S = 4.0  # an instrumental gap this long (s) is a section break
 
 
 def load_audio(path: str | Path, sr: Optional[int] = None):
@@ -40,6 +41,7 @@ def load_audio(path: str | Path, sr: Optional[int] = None):
     go through the system ffmpeg to a temp wav — librosa's audioread fallback
     has no backend in this venv, so plain ``librosa.load`` fails on video."""
     import soundfile as sf
+
     try:
         y, native = sf.read(str(path), dtype="float32", always_2d=True)
         y = y.mean(axis=1)
@@ -51,6 +53,7 @@ def load_audio(path: str | Path, sr: Optional[int] = None):
         pass
     import subprocess
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
         cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(path), "-ac", "1"]
         if sr:
@@ -65,8 +68,8 @@ def load_audio(path: str | Path, sr: Optional[int] = None):
 # --------------------------------------------------------------------------- #
 _LRC_TAG = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
 _LRC_META = re.compile(r"^\[(ar|ti|al|by|offset|re|ve|la|length):", re.I)
-_SECTION_MARK = re.compile(r"^[\[\(][^\]\)]{1,40}[\]\)]$")   # "[Chorus]", "(x2)"
-_INLINE_PARENS = re.compile(r"\([^()]*\)")                   # "(ad-lib)" asides
+_SECTION_MARK = re.compile(r"^[\[\(][^\]\)]{1,40}[\]\)]$")  # "[Chorus]", "(x2)"
+_INLINE_PARENS = re.compile(r"\([^()]*\)")  # "(ad-lib)" asides
 _GENIUS_JUNK = re.compile(r"^you might also like$", re.I)
 
 
@@ -75,7 +78,7 @@ class LyricLine:
     t0: float
     t1: float
     text: str
-    aligned: bool = True            # False = interpolated, not actually heard
+    aligned: bool = True  # False = interpolated, not actually heard
 
 
 def parse_plain(text: str) -> List[str]:
@@ -137,11 +140,16 @@ def _whisper_backend() -> str:
     CUDA when a GPU is present, else CPU."""
     import importlib.util
     import platform
-    if (platform.system() == "Darwin" and platform.machine() == "arm64"
-            and importlib.util.find_spec("mlx_whisper") is not None):
+
+    if (
+        platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+        and importlib.util.find_spec("mlx_whisper") is not None
+    ):
         return "mlx"
     try:
         import ctranslate2
+
         if ctranslate2.get_cuda_device_count() > 0:
             return "cuda"
     except Exception:  # noqa: BLE001  (intentional fallback)
@@ -149,32 +157,34 @@ def _whisper_backend() -> str:
     return "cpu"
 
 
-def transcribe_words(audio_path: str | Path,
-                     model_name: str = "small") -> List[tuple]:
+def transcribe_words(audio_path: str | Path, model_name: str = "small") -> List[tuple]:
     """``[(word, t0, t1)]`` for the track with word timestamps. Backend is
     chosen automatically (mlx / faster-whisper)."""
     backend = _whisper_backend()
 
     def run_mlx() -> List[tuple]:
         import mlx_whisper
+
         # Decode to 16 kHz mono and pass the waveform directly — mlx-whisper
         # otherwise shells out to ffmpeg with its own assumptions.
         audio, _ = load_audio(audio_path, sr=16000)
-        repo = (model_name if "/" in model_name
-                else f"mlx-community/whisper-{model_name}-mlx")
-        res = mlx_whisper.transcribe(np.asarray(audio, dtype=np.float32),
-                                     path_or_hf_repo=repo, word_timestamps=True)
-        return [(w["word"], float(w["start"]), float(w["end"]))
-                for seg in res.get("segments", [])
-                for w in (seg.get("words") or [])]
+        repo = model_name if "/" in model_name else f"mlx-community/whisper-{model_name}-mlx"
+        res = mlx_whisper.transcribe(
+            np.asarray(audio, dtype=np.float32), path_or_hf_repo=repo, word_timestamps=True
+        )
+        return [
+            (w["word"], float(w["start"]), float(w["end"]))
+            for seg in res.get("segments", [])
+            for w in (seg.get("words") or [])
+        ]
 
     def run_fw(device: str, compute: str) -> List[tuple]:
         from faster_whisper import WhisperModel
+
         model = WhisperModel(model_name, device=device, compute_type=compute)
         # No VAD: Silero is speech-tuned and silently drops sung vocals.
         segs, _info = model.transcribe(str(audio_path), word_timestamps=True)
-        return [(w.word, float(w.start), float(w.end))
-                for s in segs for w in (s.words or [])]
+        return [(w.word, float(w.start), float(w.end)) for s in segs for w in (s.words or [])]
 
     if backend == "mlx":
         try:
@@ -189,8 +199,9 @@ def transcribe_words(audio_path: str | Path,
 # --------------------------------------------------------------------------- #
 # Alignment
 # --------------------------------------------------------------------------- #
-def _resolve_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
-                   ) -> List[Optional[LyricLine]]:
+def _resolve_lines(
+    lines: List[str], words: Sequence[Tuple[str, float, float]]
+) -> List[Optional[LyricLine]]:
     """Per-ORIGINAL-line alignment: returns a slot per input line (a LyricLine,
     incl. interpolated ones, or None). difflib's matching blocks are monotonic,
     so a repeated chorus lands on its own occurrence."""
@@ -234,8 +245,9 @@ def _resolve_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
     for li in range(n):
         ts = per_line.get(li, [])
         if counts.get(li) and len(ts) / counts[li] >= 0.4:
-            res[li] = LyricLine(min(t[0] for t in ts), max(t[1] for t in ts),
-                                lines[li], aligned=True)
+            res[li] = LyricLine(
+                min(t[0] for t in ts), max(t[1] for t in ts), lines[li], aligned=True
+            )
 
     aligned_idx = [i for i, l in enumerate(res) if l is not None]
     if not aligned_idx:
@@ -248,13 +260,11 @@ def _resolve_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
         step = (hi - lo) / (len(gap) + 1)
         for j, li in enumerate(gap):
             t0 = lo + step * (j + 1)
-            res[li] = LyricLine(t0, min(t0 + max(step, 1.0), hi),
-                                lines[li], aligned=False)
+            res[li] = LyricLine(t0, min(t0 + max(step, 1.0), hi), lines[li], aligned=False)
     return res
 
 
-def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]
-                ) -> List[LyricLine]:
+def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]) -> List[LyricLine]:
     """Aligned lyric lines (Nones dropped) with readable display timings — used
     for the review overlay / `lyric_lines`."""
     res = _resolve_lines(lines, words)
@@ -304,8 +314,9 @@ def _gap_boundaries(lines: List[dict], duration: float) -> List[float]:
     return cuts
 
 
-def _merge_boundaries(cluster_t: List[float], primary_t: List[float],
-                      duration: float, min_gap: float = 6.0) -> List[float]:
+def _merge_boundaries(
+    cluster_t: List[float], primary_t: List[float], duration: float, min_gap: float = 6.0
+) -> List[float]:
     """Union of clustering + primary boundaries, deduped so none sit closer
     than ``min_gap`` (primary cuts win — they reflect real structure)."""
     kept = [0.0, duration]
@@ -315,17 +326,23 @@ def _merge_boundaries(cluster_t: List[float], primary_t: List[float],
     return sorted(kept)
 
 
-def _label_sections(bound_t: List[float], duration: float,
-                    energies: List[float],
-                    lyric_lines: Optional[List[dict]] = None) -> List[dict]:
+def _label_sections(
+    bound_t: List[float],
+    duration: float,
+    energies: List[float],
+    lyric_lines: Optional[List[dict]] = None,
+) -> List[dict]:
     """Edges are intro/outro; the middle is labelled by lyric content when
     available (repeated block = chorus, unique = verse, instrumental =
     drop/build by energy), else by energy alone."""
     sections: List[dict] = []
     n = len(bound_t) - 1
     e_norm = _normalise(np.array(energies)) if energies else np.array([])
-    sigs = ([_lyric_signature(lyric_lines, bound_t[i], bound_t[i + 1])
-             for i in range(n)] if lyric_lines else [""] * n)
+    sigs = (
+        [_lyric_signature(lyric_lines, bound_t[i], bound_t[i + 1]) for i in range(n)]
+        if lyric_lines
+        else [""] * n
+    )
     sig_counts: dict = {}
     for s in sigs:
         if s:
@@ -348,15 +365,16 @@ def _label_sections(bound_t: List[float], duration: float,
             label = "build"
         else:
             label = "verse"
-        sections.append({"start": round(start, 3), "end": round(end, 3),
-                         "label": label, "energy": round(e, 3)})
+        sections.append(
+            {"start": round(start, 3), "end": round(end, 3), "label": label, "energy": round(e, 3)}
+        )
     return sections
 
 
 def _cluster_boundaries(y, sr, S, rms, duration) -> List[float]:
     """Base cut points: agglomerative clustering on chroma + MFCC."""
     k = max(2, min(8, int(round(duration / 25.0)) + 1))
-    chroma = librosa.feature.chroma_stft(S=S ** 2, sr=sr)
+    chroma = librosa.feature.chroma_stft(S=S**2, sr=sr)
     mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=HOP, n_mfcc=13)
     m = min(chroma.shape[1], mfcc.shape[1], len(rms))
     feat = np.vstack([chroma[:, :m], mfcc[:, :m]])
@@ -371,9 +389,13 @@ def _cluster_boundaries(y, sr, S, rms, duration) -> List[float]:
 # --------------------------------------------------------------------------- #
 # Vocal activity (the "extracted voice" signal)
 # --------------------------------------------------------------------------- #
-def vocal_activity(vocals_path: str | Path, fps: int = 20,
-                   thresh: float = 0.12, min_run_s: float = 0.5,
-                   merge_gap_s: float = 1.0):
+def vocal_activity(
+    vocals_path: str | Path,
+    fps: int = 20,
+    thresh: float = 0.12,
+    min_run_s: float = 0.5,
+    merge_gap_s: float = 1.0,
+):
     """RMS envelope of the isolated vocals stem.
 
     Returns ``(envelope, times, voiced)``: a 0..1 loudness value per frame, its
@@ -424,6 +446,7 @@ def _beat_grid(y, sr):
     def strength(t):
         f = int(round(t * sr / 512))
         return float(onset_env[min(len(onset_env) - 1, max(0, f))])
+
     best_k = max(range(4), key=lambda k: sum(strength(t) for t in beats[k::4]))
     return beats, beats[best_k::4], float(np.atleast_1d(tempo)[0])
 
@@ -452,7 +475,7 @@ def _snap_bounds(bound_t, downbeats, beats, duration):
 def _bar_mean(env, sr, hop, t0, t1):
     f0 = int(t0 * sr / hop)
     f1 = max(f0 + 1, int(t1 * sr / hop))
-    seg = env[f0:min(f1, len(env))]
+    seg = env[f0 : min(f1, len(env))]
     return float(np.mean(seg)) if len(seg) else 0.0
 
 
@@ -471,10 +494,17 @@ def build_bars(downbeats, duration, stem_paths, mix_y, sr):
     bars = []
     for i in range(len(downbeats)):
         t0, t1 = edges[i], edges[i + 1]
-        row = {"bar": i, "time": round(float(t0), 1),
-               "rms": round(_bar_mean(mix_env, sr, hop, t0, t1), 2)}
-        for key, lab in (("vocals", "vox"), ("drums", "drums"),
-                         ("bass", "bass"), ("other", "other")):
+        row = {
+            "bar": i,
+            "time": round(float(t0), 1),
+            "rms": round(_bar_mean(mix_env, sr, hop, t0, t1), 2),
+        }
+        for key, lab in (
+            ("vocals", "vox"),
+            ("drums", "drums"),
+            ("bass", "bass"),
+            ("other", "other"),
+        ):
             if key in stem_envs:
                 e, srs = stem_envs[key]
                 row[lab] = round(_bar_mean(e, srs, hop, t0, t1), 2)
@@ -503,12 +533,12 @@ def _sections_from_bars(secs, downbeats, duration):
     out = []
     for j, s in enumerate(secs):
         start = 0.0 if j == 0 else float(downbeats[s["start_bar"]])
-        end = (float(downbeats[secs[j + 1]["start_bar"]])
-               if j + 1 < len(secs) else duration)
+        end = float(downbeats[secs[j + 1]["start_bar"]]) if j + 1 < len(secs) else duration
         if end - start < 0.5:
             continue
-        out.append({"start": round(start, 3), "end": round(min(end, duration), 3),
-                    "label": s["label"]})
+        out.append(
+            {"start": round(start, 3), "end": round(min(end, duration), 3), "label": s["label"]}
+        )
     if out:
         out[0]["start"] = 0.0
         out[-1]["end"] = round(duration, 3)
@@ -518,10 +548,13 @@ def _sections_from_bars(secs, downbeats, duration):
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
-def propose_segments(audio_path: str | Path,
-                     stems: Optional[dict] = None,
-                     lyrics_text: Optional[str] = None,
-                     model_name: str = "small", fps: int = 20) -> dict:
+def propose_segments(
+    audio_path: str | Path,
+    stems: Optional[dict] = None,
+    lyrics_text: Optional[str] = None,
+    model_name: str = "small",
+    fps: int = 20,
+) -> dict:
     """Propose musical segments for a track.
 
     ``audio_path`` is the full mix; ``stems`` is ``{vocals,drums,bass,other:
@@ -550,8 +583,9 @@ def propose_segments(audio_path: str | Path,
             lines = parse_plain(lyrics_text)
             res_lines = _resolve_lines(lines, words)
             disp = align_lines(lines, words)
-            lyric_lines = [{"t0": l.t0, "t1": l.t1, "text": l.text,
-                            "aligned": l.aligned} for l in disp]
+            lyric_lines = [
+                {"t0": l.t0, "t1": l.t1, "text": l.text, "aligned": l.aligned} for l in disp
+            ]
         except Exception:  # noqa: BLE001  (intentional fallback)
             res_lines, lyric_lines = [], []
 
@@ -572,9 +606,11 @@ def propose_segments(audio_path: str | Path,
     # --- fallback: heuristic boundaries, beat-snapped ---
     if not segments:
         cluster_t = _cluster_boundaries(y, sr, S, rms, duration)
-        primary = (_gap_boundaries(lyric_lines, duration) if lyric_lines
-                   else _gap_boundaries([{"t0": a, "t1": b} for a, b in voiced],
-                                        duration))
+        primary = (
+            _gap_boundaries(lyric_lines, duration)
+            if lyric_lines
+            else _gap_boundaries([{"t0": a, "t1": b} for a, b in voiced], duration)
+        )
         bound_t = _merge_boundaries(cluster_t, primary, duration, min_gap=3.0)
         try:
             beats, downbeats, _t = _beat_grid(y, sr)
@@ -586,10 +622,9 @@ def propose_segments(audio_path: str | Path,
         for a, b in zip(bound_t, bound_t[1:]):
             f0 = int(a * sr / HOP)
             f1 = max(f0 + 1, int(b * sr / HOP))
-            seg = rms[f0:min(f1, len(rms))]
+            seg = rms[f0 : min(f1, len(rms))]
             energies.append(float(np.mean(seg)) if len(seg) else 0.0)
-        segments = _label_sections(bound_t, duration, energies,
-                                   lyric_lines or None)
+        segments = _label_sections(bound_t, duration, energies, lyric_lines or None)
 
     return {
         "segments": segments,
@@ -603,6 +638,7 @@ def propose_segments(audio_path: str | Path,
 if __name__ == "__main__":
     import json
     import sys
+
     if len(sys.argv) < 2:
         print("usage: python -m backend.segment <audio> [vocals] [lyrics.txt]")
         raise SystemExit(1)
@@ -610,12 +646,14 @@ if __name__ == "__main__":
     vocals = sys.argv[2] if len(sys.argv) > 2 else None
     lyrics = Path(sys.argv[3]).read_text() if len(sys.argv) > 3 else None
     stems = {}
-    if vocals:                       # infer sibling stems next to vocals.wav
+    if vocals:  # infer sibling stems next to vocals.wav
         d = Path(vocals).parent
-        stems = {k: str(d / f"{k}.wav") for k in ("vocals", "drums", "bass", "other")
-                 if (d / f"{k}.wav").exists()}
+        stems = {
+            k: str(d / f"{k}.wav")
+            for k in ("vocals", "drums", "bass", "other")
+            if (d / f"{k}.wav").exists()
+        }
     out = propose_segments(audio, stems, lyrics)
-    out_print = {k: v for k, v in out.items()
-                 if k not in ("vocal_envelope", "envelope_times")}
+    out_print = {k: v for k, v in out.items() if k not in ("vocal_envelope", "envelope_times")}
     out_print["envelope_len"] = len(out["vocal_envelope"])
     print(json.dumps(out_print, indent=2))

@@ -4,6 +4,7 @@
 synthetic stem (an amplitude-pulsed tone + noise) and asserts the extractor returns
 a normalized, frame-aligned curve.
 """
+
 import numpy as np
 import pytest
 
@@ -17,7 +18,7 @@ def stem(tmp_path_factory):
     sr = 22050
     dur = 2.0
     t = np.linspace(0, dur, int(sr * dur), endpoint=False)
-    am = 0.5 + 0.5 * np.sin(2 * np.pi * 2 * t)        # 2 Hz amplitude pulse
+    am = 0.5 + 0.5 * np.sin(2 * np.pi * 2 * t)  # 2 Hz amplitude pulse
     rng = np.random.default_rng(0)
     y = (am * np.sin(2 * np.pi * 220 * t) + 0.05 * rng.standard_normal(t.size)).astype(np.float32)
     p = tmp_path_factory.mktemp("audio") / "stem.wav"

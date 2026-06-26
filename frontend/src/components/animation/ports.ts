@@ -24,7 +24,11 @@ export function edgePath(x1: number, y1: number, x2: number, y2: number): string
   return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 }
 
-export interface PortSide { kind: string; nodeId: string; flow: string; }
+export interface PortSide {
+  kind: string;
+  nodeId: string;
+  flow: string;
+}
 
 // Whether a connect attempt (drag from an out port to an in port) is legal:
 // out -> in, never onto the same node, and the value/video/points flows must match.

@@ -1,4 +1,5 @@
 """Tests for the in-process job manager (B8.3)."""
+
 import threading
 import time
 
@@ -55,4 +56,4 @@ def test_get_returns_a_copy():
     _wait("t-copy")
     snapshot = jobs.get("t-copy")
     snapshot["state"] = "mutated"
-    assert jobs.get("t-copy")["state"] == "done"   # internal state untouched
+    assert jobs.get("t-copy")["state"] == "done"  # internal state untouched

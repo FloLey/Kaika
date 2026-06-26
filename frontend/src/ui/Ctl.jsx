@@ -6,13 +6,25 @@ import Info from "./Info.jsx";
 // convention at the call site). `section` defaults to the Studio shaping anchor
 // since that's the most common caller; FluidLab overrides it.
 export default function Ctl({
-  label, value, min, max, step, onChange, fmt, help, section = "studio-shaping",
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  fmt,
+  help,
+  section = "studio-shaping",
 }) {
   return (
     <label className="ctl">
       <span className="ctl-label">{label}</span>
       <input
-        type="range" min={min} max={max} step={step} value={value}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
       />
       <span className="ctl-val">{fmt ? fmt(value) : value}</span>

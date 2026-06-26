@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import type { ChangeEvent } from "react";
 import {
-  ORIENTATION_PRESETS, QUALITY_PRESETS, FPS_OPTIONS, presetFor, aspectOf,
+  ORIENTATION_PRESETS,
+  QUALITY_PRESETS,
+  FPS_OPTIONS,
+  presetFor,
+  aspectOf,
 } from "../../lib/output";
 import type { OutputSettings as Output, Quality } from "../../lib/types";
 
@@ -20,7 +24,9 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
 
   // ESC closes; lock the page scroll while open.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -37,14 +43,18 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
       >
         <div className="anim-modal-head">
           <span className="anim-modal-title">OUTPUT SETTINGS</span>
-          <button className="iconbtn" title="Close" onClick={onClose}>✕</button>
+          <button className="iconbtn" title="Close" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         <div className="anim-modal-body">
           {/* live aspect preview */}
           <div className="out-preview-wrap">
             <div className="out-preview" style={{ aspectRatio: aspectOf(output) }}>
-              <span className="out-preview-dim">{output.width}×{output.height}</span>
+              <span className="out-preview-dim">
+                {output.width}×{output.height}
+              </span>
             </div>
           </div>
 
@@ -69,15 +79,27 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
             <span className="out-label">size{preset === "custom" ? " · custom" : ""}</span>
             <div className="out-size">
               <input
-                type="number" className="hz-input" min={16} max={4096} step={2}
+                type="number"
+                className="hz-input"
+                min={16}
+                max={4096}
+                step={2}
                 value={output.width}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ width: clampDim(parseFloat(e.target.value)) })}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  set({ width: clampDim(parseFloat(e.target.value)) })
+                }
               />
               <span className="out-x">×</span>
               <input
-                type="number" className="hz-input" min={16} max={4096} step={2}
+                type="number"
+                className="hz-input"
+                min={16}
+                max={4096}
+                step={2}
                 value={output.height}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ height: clampDim(parseFloat(e.target.value)) })}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  set({ height: clampDim(parseFloat(e.target.value)) })
+                }
               />
               <span className="out-unit">px</span>
             </div>

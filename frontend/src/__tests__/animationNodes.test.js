@@ -11,7 +11,11 @@ import MinimizedCard from "../components/animation/nodes/MinimizedCard";
 import { Port } from "../components/animation/nodes/NodeFrame";
 import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
-import { setConstValue, setNodeRange, patchStatic } from "../components/animation/nodes/fluidBindings";
+import {
+  setConstValue,
+  setNodeRange,
+  patchStatic,
+} from "../components/animation/nodes/fluidBindings";
 
 const h = (node) => ({
   node,
@@ -28,7 +32,10 @@ describe("Port", () => {
   it("renders data-node/data-port attributes and a kind+flow class", () => {
     const html = renderToStaticMarkup(
       React.createElement(Port, {
-        nodeId: "n-1", portId: "force", kind: "in", flow: "value",
+        nodeId: "n-1",
+        portId: "force",
+        kind: "in",
+        flow: "value",
         portRef: () => () => {},
       })
     );
@@ -41,29 +48,43 @@ describe("Port", () => {
 
 describe("SignalNode", () => {
   const signal = {
-    id: "sig-1", name: "kick", stemKey: "drums",
-    minHz: 40, maxHz: 120, feature: "energy",
-    attack: 5, release: 250, invert: false, gamma: 1, gain: 1, offset: 0, threshold: 0,
+    id: "sig-1",
+    name: "kick",
+    stemKey: "drums",
+    minHz: 40,
+    maxHz: 120,
+    feature: "energy",
+    attack: 5,
+    release: 250,
+    invert: false,
+    gamma: 1,
+    gain: 1,
+    offset: 0,
+    threshold: 0,
   };
 
   it("mirrors the resolved signal (stem / feature / band) with one out port", () => {
     const node = signalNode(signal, 0, 0);
-    const html = renderToStaticMarkup(React.createElement(SignalNode, {
-      ...h(node),
-      ctx: { signals: [signal], segment: { start: 0, end: 8 }, job: { job_id: "job" } },
-    }));
-    expect(html).toContain("signal");        // title
-    expect(html).toContain("DRUMS");          // stem chip
-    expect(html).toContain("energy");         // feature
+    const html = renderToStaticMarkup(
+      React.createElement(SignalNode, {
+        ...h(node),
+        ctx: { signals: [signal], segment: { start: 0, end: 8 }, job: { job_id: "job" } },
+      })
+    );
+    expect(html).toContain("signal"); // title
+    expect(html).toContain("DRUMS"); // stem chip
+    expect(html).toContain("energy"); // feature
     expect(html).toContain('data-port="out"');
   });
 
   it("shows a missing-signal state when the id no longer resolves", () => {
     const node = signalNode(signal, 0, 0);
-    const html = renderToStaticMarkup(React.createElement(SignalNode, {
-      ...h(node),
-      ctx: { signals: [], segment: { start: 0, end: 8 }, job: { job_id: "job" } },
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(SignalNode, {
+        ...h(node),
+        ctx: { signals: [], segment: { start: 0, end: 8 }, job: { job_id: "job" } },
+      })
+    );
     expect(html).toContain("missing signal");
     expect(html).toContain('data-port="out"'); // still wirable / deletable
   });
@@ -76,7 +97,9 @@ describe("OutputNode", () => {
     const graph = {
       version: 1,
       nodes: [fluid, out],
-      edges: [{ id: "e", source: fluid.id, sourcePort: "out", target: out.id, targetPort: "video" }],
+      edges: [
+        { id: "e", source: fluid.id, sourcePort: "out", target: out.id, targetPort: "video" },
+      ],
     };
     return { graph, segment: { start: 0, end: 8, signals: [] }, job: "job", signals: [] };
   };
@@ -104,12 +127,14 @@ describe("OutputNode", () => {
 describe("FluidNode", () => {
   it("renders a video out port, static controls, and an in port per source param", () => {
     const node = fluidNode(0, 0);
-    const html = renderToStaticMarkup(React.createElement(FluidNode, {
-      ...h(node),
-      ctx: { graph: { nodes: [node], edges: [] } },
-      onGraphChange: () => {},
-      onDetach: () => {},
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(FluidNode, {
+        ...h(node),
+        ctx: { graph: { nodes: [node], edges: [] } },
+        onGraphChange: () => {},
+        onDetach: () => {},
+      })
+    );
     // one out video port
     expect(html).toContain('data-port="out"');
     expect(html).toContain("gc-port-video");
@@ -141,7 +166,12 @@ describe("FluidNode", () => {
     node.data.ports.force.binding = { kind: "node", nodeId: "n-src", lo: 0, hi: 60 };
     const updater = setNodeRange(node.id, "force", 0, 45);
     const g2 = updater({ nodes: [node], edges: [] });
-    expect(g2.nodes[0].data.ports.force.binding).toMatchObject({ kind: "node", nodeId: "n-src", lo: 0, hi: 45 });
+    expect(g2.nodes[0].data.ports.force.binding).toMatchObject({
+      kind: "node",
+      nodeId: "n-src",
+      lo: 0,
+      hi: 45,
+    });
   });
 
   it("static patches edit data.static", () => {
@@ -158,14 +188,14 @@ describe("CombineNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(CombineNode, { ...h(node), onGraphChange: () => {} })
     );
-    expect(html).toContain('data-port="out"');                 // video out
+    expect(html).toContain('data-port="out"'); // video out
     for (const slot of node.data.inputs) {
-      expect(html).toContain(`data-port="${slot.id}"`);         // each input slot port
+      expect(html).toContain(`data-port="${slot.id}"`); // each input slot port
     }
-    expect(html).toContain("MEDIUM");                           // merge medium block
+    expect(html).toContain("MEDIUM"); // merge medium block
     expect(html).toContain("merge");
     expect(html).toContain("layered");
-    expect(html).not.toContain("anim-combine-opacity");         // no opacity in merge
+    expect(html).not.toContain("anim-combine-opacity"); // no opacity in merge
   });
 
   it("layered mode: per-input opacity sliders, no shared-medium block", () => {
@@ -174,7 +204,7 @@ describe("CombineNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(CombineNode, { ...h(node), onGraphChange: () => {} })
     );
-    expect(html).toContain("anim-combine-opacity");             // opacity sliders
+    expect(html).toContain("anim-combine-opacity"); // opacity sliders
     expect(html).not.toContain("MEDIUM (shared)");
   });
 });
@@ -182,7 +212,10 @@ describe("CombineNode", () => {
 describe("PointsNode (spec 11)", () => {
   it("renders a marker per point and a points-flow out port", () => {
     const node = pointsNode(0, 0);
-    node.data.points = [[0.2, 0.3], [0.7, 0.8]];
+    node.data.points = [
+      [0.2, 0.3],
+      [0.7, 0.8],
+    ];
     const html = renderToStaticMarkup(
       React.createElement(PointsNode, { ...h(node), ctx: {}, onGraphChange: () => {} })
     );
@@ -194,16 +227,26 @@ describe("PointsNode (spec 11)", () => {
   it("FluidNode shows a positions port and the wired point count", () => {
     const f = fluidNode(0, 0);
     const p = pointsNode(0, 0);
-    p.data.points = [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]];
-    const graph = { nodes: [f, p], edges: [
-      { id: "e", source: p.id, sourcePort: "out", target: f.id, targetPort: "positions" },
-    ] };
+    p.data.points = [
+      [0.1, 0.1],
+      [0.2, 0.2],
+      [0.3, 0.3],
+    ];
+    const graph = {
+      nodes: [f, p],
+      edges: [{ id: "e", source: p.id, sourcePort: "out", target: f.id, targetPort: "positions" }],
+    };
     const html = renderToStaticMarkup(
-      React.createElement(FluidNode, { ...h(f), ctx: { graph }, onGraphChange: () => {}, onDetach: () => {} })
+      React.createElement(FluidNode, {
+        ...h(f),
+        ctx: { graph },
+        onGraphChange: () => {},
+        onDetach: () => {},
+      })
     );
     expect(html).toContain('data-port="positions"');
-    expect(html).toContain("positions");        // the labelled row
-    expect(html).toContain("3 points");          // wired point count
+    expect(html).toContain("positions"); // the labelled row
+    expect(html).toContain("3 points"); // wired point count
   });
 });
 
@@ -221,29 +264,42 @@ describe("MinimizedCard", () => {
     ],
   };
   const helpers = {
-    portRef: () => () => {}, startConnect: () => {}, onTitlePointerDown: () => {},
-    onLayoutChange: () => {}, selected: false,
+    portRef: () => () => {},
+    startConnect: () => {},
+    onTitlePointerDown: () => {},
+    onLayoutChange: () => {},
+    selected: false,
   };
 
   it("collapses a fluid card to its header with consolidated in/out anchors", () => {
-    const html = renderToStaticMarkup(React.createElement(MinimizedCard, {
-      node: fluid, helpers, ctx: { graph, signals: [] }, onDelete: () => {},
-    }));
-    expect(html).toContain("anim-node-fluid min");   // collapsed card class
-    expect(html).toContain("fluid");                  // header title kept
-    expect(html).toContain("▢");                      // restore button
-    expect(html).toContain('data-port="out"');        // single output anchor
+    const html = renderToStaticMarkup(
+      React.createElement(MinimizedCard, {
+        node: fluid,
+        helpers,
+        ctx: { graph, signals: [] },
+        onDelete: () => {},
+      })
+    );
+    expect(html).toContain("anim-node-fluid min"); // collapsed card class
+    expect(html).toContain("fluid"); // header title kept
+    expect(html).toContain("▢"); // restore button
+    expect(html).toContain('data-port="out"'); // single output anchor
     // inbound wires (force + r) consolidate onto ONE input anchor
     expect(html).toMatch(/data-port="(force|r)"/);
-    expect(html).not.toContain('type="range"');       // body controls hidden
+    expect(html).not.toContain('type="range"'); // body controls hidden
   });
 
   it("a node with no inbound wires shows only the output anchor", () => {
-    const html = renderToStaticMarkup(React.createElement(MinimizedCard, {
-      node: sig, helpers, ctx: { graph, signals: [] }, onDelete: () => {},
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MinimizedCard, {
+        node: sig,
+        helpers,
+        ctx: { graph, signals: [] },
+        onDelete: () => {},
+      })
+    );
     expect(html).toContain("anim-node-signal min");
     expect(html).toContain('data-port="out"');
-    expect(html).not.toContain('gc-port-in');          // no input anchor rendered
+    expect(html).not.toContain("gc-port-in"); // no input anchor rendered
   });
 });
