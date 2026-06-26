@@ -5,32 +5,32 @@ const MIN_LOG_HZ = 1000;
 const MIN_LOG_MEL = MIN_LOG_HZ / F_SP;
 const LOGSTEP = Math.log(6.4) / 27;
 
-export function hzToMel(f) {
+export function hzToMel(f: number): number {
   if (f >= MIN_LOG_HZ) return MIN_LOG_MEL + Math.log(f / MIN_LOG_HZ) / LOGSTEP;
   return f / F_SP;
 }
 
-export function melToHz(m) {
+export function melToHz(m: number): number {
   if (m >= MIN_LOG_MEL) return MIN_LOG_HZ * Math.exp(LOGSTEP * (m - MIN_LOG_MEL));
   return F_SP * m;
 }
 
 // fraction 0..1 measured from the BOTTOM of the spectrogram (lo) to the TOP (hi)
-export function freqToFrac(f, lo, hi) {
+export function freqToFrac(f: number, lo: number, hi: number): number {
   return (hzToMel(f) - hzToMel(lo)) / (hzToMel(hi) - hzToMel(lo));
 }
 
 // inverse: a fraction-from-bottom back to Hz
-export function fracToFreq(frac, lo, hi) {
+export function fracToFreq(frac: number, lo: number, hi: number): number {
   const mel = hzToMel(lo) + frac * (hzToMel(hi) - hzToMel(lo));
   return melToHz(mel);
 }
 
-export function clamp(v, lo, hi) {
+export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(v, hi));
 }
 
-export function fmtTime(t) {
+export function fmtTime(t: number): string {
   if (!isFinite(t)) return "0:00";
   const m = Math.floor(t / 60);
   const s = Math.floor(t % 60)
@@ -39,7 +39,7 @@ export function fmtTime(t) {
   return `${m}:${s}`;
 }
 
-export function fmtHz(hz) {
+export function fmtHz(hz: number): string {
   if (hz >= 1000) return (hz / 1000).toFixed(hz >= 10000 ? 1 : 2) + " kHz";
   return Math.round(hz) + " Hz";
 }

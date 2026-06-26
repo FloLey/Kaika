@@ -27,7 +27,7 @@ import {
   removePoint,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
-import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments.js";
+import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
 
 const STEMS = { original: { sr: 44100 }, drums: { sr: 44100 } };
 

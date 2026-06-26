@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import * as logbus from "../lib/logbus.js";
+import * as logbus from "../lib/logbus";
 
 // The log bus is a module singleton; reset it between tests.
 beforeEach(() => logbus.clear());

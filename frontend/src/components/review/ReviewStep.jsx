@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { fmtTime } from "../../lib/mel.js";
-import { LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary } from "../../lib/segments.js";
+import { fmtTime } from "../../lib/mel";
+import { LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary } from "../../lib/segments";
 
 // Step 2 — review and edit the proposed split before opening the studio.
 // The full-mix spectrogram + vocal-activity envelope are the backdrop; play the

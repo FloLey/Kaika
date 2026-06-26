@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SyntheticEvent } from "react";
-import { engine } from "../../lib/audio.js";
+import { engine } from "../../lib/audio";
 
 interface SegLike {
   start: number;

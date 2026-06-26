@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import * as logbus from "../lib/logbus.js";
+import * as logbus from "../lib/logbus";
 
 // A right-side overlay drawer showing the unified frontend+backend log stream.
 // Subscribes to the log bus; rows are sorted by timestamp (id as a stable

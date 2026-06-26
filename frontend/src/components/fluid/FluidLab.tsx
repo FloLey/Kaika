@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import SharedCtlRaw, { Toggle as SharedToggleRaw } from "../../ui/Ctl.jsx";
 import PathEditor from "./PathEditor";
 import type { Point } from "./PathEditor";
-import { runFluid } from "../../lib/api.js";
+import { runFluid } from "../../lib/api";
 
 // Ctl.jsx is still untyped; bridge it as a loose component so this module's prop
 // adapters type-check. (Drop the casts once ui/Ctl converts.)

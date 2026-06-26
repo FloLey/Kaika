@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { fmtTime } from "../../lib/mel.js";
-import { labelColor } from "../../lib/segments.js";
+import { fmtTime } from "../../lib/mel";
+import { labelColor } from "../../lib/segments";
 
 interface Segment {
   id: string;

@@ -7,9 +7,9 @@ import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
 import VolumeControl from "./VolumeControl";
 import { useStudioPlayback } from "./useStudioPlayback";
-import { engine } from "../../lib/audio.js";
-import { STEM_META, seedSignal } from "../../lib/segments.js";
-import { fmtTime } from "../../lib/mel.js";
+import { engine } from "../../lib/audio";
+import { STEM_META, seedSignal } from "../../lib/segments";
+import { fmtTime } from "../../lib/mel";
 import type { Graph, OutputSettings as OutputSettingsT } from "../../lib/types";
 import type { NodeCtx } from "../animation/nodes/nodeProps";
 
@@ -135,7 +135,7 @@ export default function Studio({
         const meta = STEM_META.find((m: { key: string }) => m.key === stemKey);
         const n = sigs.filter((s) => s.stemKey === stemKey).length + 1;
         const name = `${(meta?.name || stemKey).toLowerCase()} ${n}`;
-        return [...sigs, seedSignal(stems, name, stemKey)];
+        return [...sigs, seedSignal(stems, name, stemKey) as Signal];
       });
     },
     [editActiveSignals, stems]

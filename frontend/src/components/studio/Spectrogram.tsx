@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent as RPointerEvent } from "react";
-import { freqToFrac, fracToFreq, fmtHz, clamp } from "../../lib/mel.js";
+import { freqToFrac, fracToFreq, fmtHz, clamp } from "../../lib/mel";
 
 interface TrackSpec {
   specUrl: string;

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import { signalNode, fluidNode, outputNode, mkEdgeId } from "../../lib/graphModel";
 import { paletteSpecs } from "./nodes/registry";
-import { stemColor } from "../../lib/segments.js";
+import { stemColor } from "../../lib/segments";
 import type { Graph, GraphNode } from "../../lib/types";
 import type { SignalDef } from "./nodes/nodeProps";
 

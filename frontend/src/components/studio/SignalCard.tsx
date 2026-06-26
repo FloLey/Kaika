@@ -5,10 +5,10 @@ import CurveView from "./CurveView";
 import PulsePad from "./PulsePad";
 import InfoJsx from "../../ui/Info.jsx";
 import CtlJsx from "../../ui/Ctl.jsx";
-import { engine } from "../../lib/audio.js";
-import { fmtTime, fmtHz, clamp } from "../../lib/mel.js";
-import { stemColor } from "../../lib/segments.js";
-import { extractSignal } from "../../lib/api.js";
+import { engine } from "../../lib/audio";
+import { fmtTime, fmtHz, clamp } from "../../lib/mel";
+import { stemColor } from "../../lib/segments";
+import { extractSignal } from "../../lib/api";
 
 // Bridge: ui/Info + ui/Ctl are still .jsx — cast until they convert.
 /* eslint-disable @typescript-eslint/no-explicit-any */

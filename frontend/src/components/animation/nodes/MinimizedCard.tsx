@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import NodeFrame, { MultiAnchor } from "./NodeFrame";
 import { chromeFor } from "./registry";
-import { stemColor } from "../../../lib/segments.js";
+import { stemColor } from "../../../lib/segments";
 import type { NodeProps } from "./nodeProps";
 
 // renderAnimNode passes only these (no selection/onGraphChange for a collapsed card).

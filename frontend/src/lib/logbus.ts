@@ -7,25 +7,59 @@
 // entry: { id, ts (ms epoch), level: "info"|"warn"|"error",
 //          source: "frontend"|"backend", logger, msg, trace? }
 
+export type LogLevel = "info" | "warn" | "error";
+export type LogSource = "frontend" | "backend";
+
+export interface LogEntry {
+  id: string;
+  ts: number; // ms epoch
+  level: LogLevel;
+  source: LogSource;
+  logger: string;
+  msg: string;
+  trace?: string;
+}
+
+export interface LogOpts {
+  logger?: string;
+  trace?: string;
+}
+
+interface BackendRow {
+  seq: number;
+  ts: number; // epoch seconds
+  level: LogLevel;
+  logger: string;
+  msg: string;
+  trace?: string;
+}
+
+export interface BackendPayload {
+  seq?: number;
+  entries?: BackendRow[];
+}
+
+type Subscriber = (entries: LogEntry[]) => void;
+
 const CAP = 500; // max entries kept in memory (oldest drop off)
 
 let _id = 0; // local monotonic id for frontend entries
-let _entries = []; // newest-last
+let _entries: LogEntry[] = []; // newest-last
 let _backendSeq = 0; // cursor for GET /logs?since=
 let _maxBackendSeq = 0; // highest backend seq actually appended (hard dedupe)
-const _subs = new Set();
+const _subs = new Set<Subscriber>();
 
 function _emit() {
   for (const fn of _subs) fn(_entries);
 }
 
-function _push(entry) {
+function _push(entry: LogEntry) {
   _entries.push(entry);
   if (_entries.length > CAP) _entries = _entries.slice(-CAP);
   _emit();
 }
 
-export function log(level, msg, opts = {}) {
+export function log(level: LogLevel, msg: unknown, opts: LogOpts = {}) {
   _push({
     id: `f${++_id}`,
     ts: Date.now(),
@@ -37,13 +71,13 @@ export function log(level, msg, opts = {}) {
   });
 }
 
-export const info = (m, o) => log("info", m, o);
-export const warn = (m, o) => log("warn", m, o);
-export const error = (m, o) => log("error", m, o);
+export const info = (m: unknown, o?: LogOpts) => log("info", m, o);
+export const warn = (m: unknown, o?: LogOpts) => log("warn", m, o);
+export const error = (m: unknown, o?: LogOpts) => log("error", m, o);
 
 // Subscribe to changes; called immediately with the current list. Returns an
 // unsubscribe function.
-export function subscribe(fn) {
+export function subscribe(fn: Subscriber) {
   _subs.add(fn);
   fn(_entries);
   return () => _subs.delete(fn);
@@ -75,7 +109,7 @@ export function backendCursor() {
 
 // Ingest a `{ entries, seq }` payload from GET /logs. Advances the cursor and
 // appends new backend rows (keyed by their server seq so a retry can't dup).
-export function ingestBackend(payload) {
+export function ingestBackend(payload: BackendPayload | null | undefined) {
   if (!payload) return;
   if (typeof payload.seq === "number") _backendSeq = payload.seq;
   for (const e of payload.entries || []) {

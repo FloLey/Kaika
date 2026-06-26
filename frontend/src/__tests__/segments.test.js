@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LABELS, LABEL_COLOR, hydrateSegments, serializeSegments } from "../lib/segments.js";
+import { LABELS, LABEL_COLOR, hydrateSegments, serializeSegments } from "../lib/segments";
 
 // A minimal stems map (only `sr` is read by the hydration path).
 const STEMS = {

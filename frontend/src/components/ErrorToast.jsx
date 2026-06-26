@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import * as logbus from "../lib/logbus.js";
+import * as logbus from "../lib/logbus";
 
 // Pops a dismissible toast whenever a new error-level entry arrives (from either
 // the frontend or the polled backend stream). Clicking a toast opens the Logs

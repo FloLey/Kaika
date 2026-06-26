@@ -3,9 +3,9 @@ import type { CSSProperties } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import CurveView from "../../studio/CurveView";
 import PulsePad from "../../studio/PulsePad";
-import { stemColor, STEM_META } from "../../../lib/segments.js";
-import { fmtHz } from "../../../lib/mel.js";
-import { extractSignal } from "../../../lib/api.js";
+import { stemColor, STEM_META } from "../../../lib/segments";
+import { fmtHz } from "../../../lib/mel";
+import { extractSignal } from "../../../lib/api";
 import type { NodeProps } from "./nodeProps";
 import type { SignalData } from "../../../lib/types";
 
@@ -127,7 +127,9 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
             <span className="anim-signal-feature">{signal.feature}</span>
           </div>
           <div className="anim-signal-band">
-            {bandIgnored ? "band n/a" : `${fmtHz(signal.minHz)}–${fmtHz(signal.maxHz)}`}
+            {bandIgnored
+              ? "band n/a"
+              : `${fmtHz(signal.minHz as number)}–${fmtHz(signal.maxHz as number)}`}
           </div>
           <div className="anim-signal-viz">
             <div className="anim-signal-spark">

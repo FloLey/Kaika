@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { outputHash, outputRenderable } from "../../../lib/graphModel";
 import { aspectOf } from "../../../lib/output";
-import * as api from "../../../lib/api.js";
+import * as api from "../../../lib/api";
 import type { NodeProps } from "./nodeProps";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered
@@ -72,7 +72,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     const t = setTimeout(async () => {
       try {
         const { url } = await api.renderGraph({
-          job_id: job,
+          job_id: job as string,
           segment: { start: segment?.start, end: segment?.end, signals: segment?.signals },
           graph,
           output,

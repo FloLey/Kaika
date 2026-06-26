@@ -7,11 +7,11 @@ import Studio from "./components/studio/Studio";
 import Processing from "./components/Processing.jsx";
 import LogsPanel from "./components/LogsPanel.jsx";
 import ErrorToast from "./components/ErrorToast.jsx";
-import { hydrateSegments, serializeSegments } from "./lib/segments.js";
+import { hydrateSegments, serializeSegments } from "./lib/segments";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
-import { useLogPoll } from "./lib/useLogPoll.js";
-import * as logbus from "./lib/logbus.js";
-import * as api from "./lib/api.js";
+import { useLogPoll } from "./lib/useLogPoll";
+import * as logbus from "./lib/logbus";
+import * as api from "./lib/api";
 
 export default function App() {
   // projects | upload | processing | review | studio | error

@@ -2,22 +2,34 @@
 // (two cascaded highpass + two cascaded lowpass biquads). The <audio> elements
 // are owned by React; we attach a MediaElementSource to each exactly once.
 
-class AudioEngine {
-  constructor() {
-    this.ctx = null;
-    this.tracks = new Map(); // uid -> { el, src, hp1, hp2, lp1, lp2, gain, min, max }
-  }
+interface Track {
+  el: HTMLAudioElement;
+  src: MediaElementAudioSourceNode;
+  hp1: BiquadFilterNode;
+  hp2: BiquadFilterNode;
+  lp1: BiquadFilterNode;
+  lp2: BiquadFilterNode;
+  gain: GainNode;
+}
 
-  ensureCtx() {
+class AudioEngine {
+  ctx: AudioContext | null = null;
+  tracks = new Map<string, Track>();
+
+  ensureCtx(): AudioContext {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // webkitAudioContext is the legacy Safari prefix, absent from lib.dom.
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new Ctx();
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
     return this.ctx;
   }
 
   // Build the filter chain for a track's <audio> element (idempotent).
-  connect(uid, el, min, max, muted = false) {
+  connect(uid: string, el: HTMLAudioElement, min: number, max: number, muted = false): Track {
     const ctx = this.ensureCtx();
     let t = this.tracks.get(uid);
     if (!t) {
@@ -45,7 +57,7 @@ class AudioEngine {
     return t;
   }
 
-  setBand(uid, min, max) {
+  setBand(uid: string, min: number, max: number) {
     const t = this.tracks.get(uid);
     if (!t) return;
     t.hp1.frequency.value = min;
@@ -54,19 +66,19 @@ class AudioEngine {
     t.lp2.frequency.value = max;
   }
 
-  setMuted(uid, muted) {
+  setMuted(uid: string, muted: boolean) {
     const t = this.tracks.get(uid);
     if (!t) return;
     t.gain.gain.value = muted ? 0 : 1;
   }
 
-  remove(uid) {
+  remove(uid: string) {
     const t = this.tracks.get(uid);
     if (!t) return;
     [t.src, t.hp1, t.hp2, t.lp1, t.lp2, t.gain].forEach((n) => {
       try {
         n.disconnect();
-      } catch (e) {
+      } catch {
         /* noop */
       }
     });

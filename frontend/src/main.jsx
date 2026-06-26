@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import Docs from "./components/Docs.jsx";
-import { installGlobalCapture } from "./lib/logCapture.js";
+import { installGlobalCapture } from "./lib/logCapture";
 import "./styles/index.css";
 
 // Capture uncaught errors / rejections into the log bus before anything renders.

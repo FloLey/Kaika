@@ -3,16 +3,16 @@
 // from main.jsx before render. We deliberately do NOT patch console.* — explicit
 // capture only, to avoid noise and feedback loops.
 
-import { error as logError } from "./logbus.js";
+import { error as logError } from "./logbus";
 
 export function installGlobalCapture() {
-  window.addEventListener("error", (ev) => {
+  window.addEventListener("error", (ev: ErrorEvent) => {
     logError(ev.message || "script error", {
       logger: "window.onerror",
       trace: ev.error && ev.error.stack,
     });
   });
-  window.addEventListener("unhandledrejection", (ev) => {
+  window.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) => {
     const r = ev.reason;
     logError((r && r.message) || String(r), {
       logger: "unhandledrejection",
