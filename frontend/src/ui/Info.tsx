@@ -1,7 +1,12 @@
 // A small "?" badge. Hover or keyboard-focus reveals an explanation; when a
 // `section` is given it's also a link that opens the in-app guide (new tab)
 // scrolled to that section. `section` matches an id in Docs.jsx.
-export default function Info({ text, section }) {
+interface InfoProps {
+  text: string;
+  section?: string;
+}
+
+export default function Info({ text, section }: InfoProps) {
   const tip = <span className="info-tip">{text}</span>;
   if (section) {
     return (

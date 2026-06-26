@@ -1,5 +1,5 @@
-import type { ChangeEvent, ComponentType } from "react";
-import CtlJsx from "../../../ui/Ctl.jsx";
+import type { ChangeEvent } from "react";
+import Ctl from "../../../ui/Ctl";
 import NodeFrame, { Port } from "./NodeFrame";
 import { fluidParam } from "../../../lib/fluidParams.js";
 import {
@@ -11,9 +11,6 @@ import {
 } from "../../../lib/graphModel";
 import type { NodeProps } from "./nodeProps";
 import type { CombineData, CombineMedium } from "../../../lib/types";
-
-// Bridge: ui/Ctl is still .jsx — cast until it converts.
-const Ctl = CtlJsx as ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // The combine card (spec 10): composes N video inputs into one video output.
 //  • merge  — the inputs' emitters share ONE simulation (they interact), using

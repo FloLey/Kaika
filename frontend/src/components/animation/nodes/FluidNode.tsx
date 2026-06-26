@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ComponentType } from "react";
-import { Toggle as ToggleJsx } from "../../../ui/Ctl.jsx";
+import { Toggle } from "../../../ui/Ctl";
 import NodeFrame, { Port } from "./NodeFrame";
 import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
@@ -10,8 +9,6 @@ import type { NodeProps } from "./nodeProps";
 import type { FluidData, FluidParam } from "../../../lib/types";
 
 const FLUID_PARAMS = RAW_FLUID_PARAMS as FluidParam[];
-// Bridge: ui/Ctl is still .jsx — cast until it converts (optional sweep).
-const Toggle = ToggleJsx as ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // The artifact card (06 §FluidNode). Static controls on top; one input-port ROW
 // per FLUID_PARAMS entry, grouped source/color/medium (rows + the collapsed-group

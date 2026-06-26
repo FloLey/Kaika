@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType } from "react";
-import SharedCtlRaw, { Toggle as SharedToggleRaw } from "../../ui/Ctl.jsx";
+import SharedCtl, { Toggle as SharedToggle } from "../../ui/Ctl";
 import PathEditor from "./PathEditor";
 import type { Point } from "./PathEditor";
 import { runFluid } from "../../lib/api";
-
-// Ctl.jsx is still untyped; bridge it as a loose component so this module's prop
-// adapters type-check. (Drop the casts once ui/Ctl converts.)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SharedCtl = SharedCtlRaw as ComponentType<any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SharedToggle = SharedToggleRaw as ComponentType<any>;
 
 const HELP: Record<string, string> = {
   duration: "Length of the simulation (seconds) that gets computed and looped.",

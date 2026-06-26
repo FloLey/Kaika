@@ -1,13 +1,10 @@
 import { useCallback } from "react";
-import type { ChangeEvent, ComponentType } from "react";
-import CtlJsx from "../../../ui/Ctl.jsx";
+import type { ChangeEvent } from "react";
+import Ctl from "../../../ui/Ctl";
 import { Port } from "./NodeFrame";
 import { setConstValue, setNodeRange } from "./fluidBindings";
 import type { NodeHelpers, PortRef } from "./nodeProps";
 import type { Binding, FluidData, FluidParam, Graph, GraphNode } from "../../../lib/types";
-
-// Bridge: ui/Ctl is still .jsx — cast until it converts (optional sweep).
-const Ctl = CtlJsx as ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // One fluid param's input-port ROW and the collapsed-group anchor, extracted from
 // FluidNode. A const-bound row shows a single-thumb Ctl (the value IS the field); a

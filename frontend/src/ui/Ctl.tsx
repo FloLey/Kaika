@@ -1,4 +1,17 @@
-import Info from "./Info.jsx";
+import type { ChangeEvent } from "react";
+import Info from "./Info";
+
+interface CtlProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  fmt?: (v: number) => string;
+  help?: string;
+  section?: string;
+}
 
 // Shared slider + checkbox control rows used by SignalCard and FluidLab. The
 // optional `help`/`section` render a clickable "?" that deep-links into the
@@ -15,7 +28,7 @@ export default function Ctl({
   fmt,
   help,
   section = "studio-shaping",
-}) {
+}: CtlProps) {
   return (
     <label className="ctl">
       <span className="ctl-label">{label}</span>
@@ -25,7 +38,7 @@ export default function Ctl({
         max={max}
         step={step}
         value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(parseFloat(e.target.value))}
       />
       <span className="ctl-val">{fmt ? fmt(value) : value}</span>
       {help && <Info text={help} section={section} />}
@@ -33,11 +46,23 @@ export default function Ctl({
   );
 }
 
-export function Toggle({ label, value, onChange, help, section }) {
+interface ToggleProps {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  help?: string;
+  section?: string;
+}
+
+export function Toggle({ label, value, onChange, help, section }: ToggleProps) {
   return (
     <label className="ctl ctl-check">
       <span className="ctl-label">{label}</span>
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
+      />
       {help && <Info text={help} section={section} />}
     </label>
   );
