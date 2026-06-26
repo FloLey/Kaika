@@ -1,12 +1,32 @@
 import { useEffect, useRef, useState } from "react";
+import type {
+  CSSProperties,
+  Dispatch,
+  PointerEvent as RPointerEvent,
+  SetStateAction,
+  SyntheticEvent,
+} from "react";
 import { fmtTime } from "../../lib/mel";
 import { LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary } from "../../lib/segments";
+import type { Segment } from "../studio/Studio";
 
 // Step 2 — review and edit the proposed split before opening the studio.
 // The full-mix spectrogram + vocal-activity envelope are the backdrop; play the
 // track to listen, click to seek, drag the vertical handles to move boundaries,
 // and split at the playhead (or double-click) to add a cut. Each segment can be
 // relabelled or merged into its neighbor.
+interface ReviewStepProps {
+  specUrl: string;
+  audioUrl: string;
+  duration: number;
+  segments: Segment[];
+  setSegments: Dispatch<SetStateAction<Segment[]>>;
+  vocalEnvelope: number[];
+  envelopeTimes: number[];
+  onValidate: () => void;
+  onBack: () => void;
+}
+
 export default function ReviewStep({
   specUrl,
   audioUrl,
@@ -17,27 +37,28 @@ export default function ReviewStep({
   envelopeTimes,
   onValidate,
   onBack,
-}) {
-  const railRef = useRef(null);
-  const audioRef = useRef(null);
+}: ReviewStepProps) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [cur, setCur] = useState(0);
 
-  const timeAtX = (clientX) => {
-    const r = railRef.current.getBoundingClientRect();
+  const timeAtX = (clientX: number) => {
+    const r = railRef.current!.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * duration;
   };
 
   function togglePlay() {
     const el = audioRef.current;
+    if (!el) return;
     if (el.paused) el.play().catch(() => {});
     else el.pause();
   }
 
   // Space toggles play/pause from anywhere on this screen.
   useEffect(() => {
-    const onKey = (e) => {
-      if ((e.key === " " || e.code === "Space") && e.target.tagName !== "SELECT") {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === " " || e.code === "Space") && (e.target as HTMLElement).tagName !== "SELECT") {
         e.preventDefault();
         togglePlay();
       }
@@ -46,15 +67,16 @@ export default function ReviewStep({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function seekTo(t) {
+  function seekTo(t: number) {
     const el = audioRef.current;
     if (el && isFinite(el.duration)) el.currentTime = Math.max(0, Math.min(t, duration));
   }
 
-  function startDragBoundary(i, e) {
+  function startDragBoundary(i: number, e: RPointerEvent) {
     e.stopPropagation();
     e.preventDefault();
-    const move = (ev) => setSegments((segs) => moveBoundary(segs, i, timeAtX(ev.clientX)));
+    const move = (ev: PointerEvent) =>
+      setSegments((segs) => moveBoundary(segs, i, timeAtX(ev.clientX)) as Segment[]);
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -63,7 +85,7 @@ export default function ReviewStep({
     window.addEventListener("pointerup", up);
   }
 
-  const splitHere = () => setSegments((segs) => splitAt(segs, cur));
+  const splitHere = () => setSegments((segs) => splitAt(segs, cur) as Segment[]);
 
   // Vocal-activity envelope as a stretched polyline.
   const envPath = (() => {
@@ -125,7 +147,7 @@ export default function ReviewStep({
         className="rail"
         ref={railRef}
         onClick={(e) => seekTo(timeAtX(e.clientX))}
-        onDoubleClick={(e) => setSegments((segs) => splitAt(segs, timeAtX(e.clientX)))}
+        onDoubleClick={(e) => setSegments((segs) => splitAt(segs, timeAtX(e.clientX)) as Segment[])}
       >
         <img className="rail-img" src={specUrl} alt="full mix" draggable={false} />
         <svg className="rail-env" viewBox="0 0 1000 100" preserveAspectRatio="none">
@@ -140,7 +162,13 @@ export default function ReviewStep({
             <div
               key={s.id}
               className="rail-seg"
-              style={{ left: left + "%", width: width + "%", "--c": labelColor(s.label) }}
+              style={
+                {
+                  left: left + "%",
+                  width: width + "%",
+                  "--c": labelColor(s.label),
+                } as CSSProperties
+              }
             >
               <span className="rail-seg-label">{s.label}</span>
             </div>
@@ -167,7 +195,11 @@ export default function ReviewStep({
 
       <div className="seg-list">
         {segments.map((s, i) => (
-          <div className="seg-row" key={s.id} style={{ "--c": labelColor(s.label) }}>
+          <div
+            className="seg-row"
+            key={s.id}
+            style={{ "--c": labelColor(s.label) } as CSSProperties}
+          >
             <button
               className="seg-play"
               title="Play from here"
@@ -201,7 +233,7 @@ export default function ReviewStep({
               className="iconbtn"
               disabled={i === 0}
               title="Merge into the previous segment"
-              onClick={() => setSegments((segs) => mergeWithPrev(segs, s.id))}
+              onClick={() => setSegments((segs) => mergeWithPrev(segs, s.id) as Segment[])}
             >
               ⌫
             </button>
@@ -213,7 +245,7 @@ export default function ReviewStep({
         ref={audioRef}
         src={audioUrl}
         preload="metadata"
-        onTimeUpdate={(e) => setCur(e.target.currentTime)}
+        onTimeUpdate={(e: SyntheticEvent<HTMLAudioElement>) => setCur(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}

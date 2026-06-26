@@ -80,7 +80,9 @@ export const error = (m: unknown, o?: LogOpts) => log("error", m, o);
 export function subscribe(fn: Subscriber) {
   _subs.add(fn);
   fn(_entries);
-  return () => _subs.delete(fn);
+  return () => {
+    _subs.delete(fn);
+  };
 }
 
 export function getEntries() {

@@ -7,9 +7,9 @@ import * as logbus from "../lib/logbus";
 const MAX = 3;
 const TTL = 6000;
 
-export default function ErrorToast({ onOpenLogs }) {
-  const [toasts, setToasts] = useState([]); // { id, msg }
-  const seen = useRef(null); // id of the last error we've already toasted
+export default function ErrorToast({ onOpenLogs }: { onOpenLogs?: () => void }) {
+  const [toasts, setToasts] = useState<{ id: string; msg: string }[]>([]); // { id, msg }
+  const seen = useRef<string | null>(null); // id of the last error we've already toasted
 
   useEffect(() => {
     return logbus.subscribe((entries) => {
@@ -36,7 +36,7 @@ export default function ErrorToast({ onOpenLogs }) {
 
   if (toasts.length === 0) return null;
 
-  const dismiss = (id) => setToasts((ts) => ts.filter((t) => t.id !== id));
+  const dismiss = (id: string) => setToasts((ts) => ts.filter((t) => t.id !== id));
 
   return (
     <div className="toast-stack">

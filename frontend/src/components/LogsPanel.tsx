@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import type { UIEvent } from "react";
 import * as logbus from "../lib/logbus";
+import type { LogLevel } from "../lib/logbus";
 
 // A right-side overlay drawer showing the unified frontend+backend log stream.
 // Subscribes to the log bus; rows are sorted by timestamp (id as a stable
 // tiebreaker) and filtered by level. Lives in-session (not a separate root like
 // Docs) so it can show live logs while you work.
-const LEVELS = ["info", "warn", "error"];
+const LEVELS: LogLevel[] = ["info", "warn", "error"];
 
-export default function LogsPanel({ open, onClose }) {
+export default function LogsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [entries, setEntries] = useState(logbus.getEntries());
-  const [filter, setFilter] = useState({ info: true, warn: true, error: true });
-  const bodyRef = useRef(null);
+  const [filter, setFilter] = useState<Record<LogLevel, boolean>>({
+    info: true,
+    warn: true,
+    error: true,
+  });
+  const bodyRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
 
   useEffect(() => logbus.subscribe(setEntries), []);
@@ -27,8 +33,8 @@ export default function LogsPanel({ open, onClose }) {
     .filter((e) => filter[e.level])
     .sort((a, b) => a.ts - b.ts || (a.id < b.id ? -1 : 1));
 
-  const fmtTime = (ts) => new Date(ts).toLocaleTimeString();
-  const onScroll = (e) => {
+  const fmtTime = (ts: number) => new Date(ts).toLocaleTimeString();
+  const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   };

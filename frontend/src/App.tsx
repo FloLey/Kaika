@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import ProjectList from "./components/ProjectList.jsx";
+import type { Segment } from "./components/studio/Studio";
+import ProjectList from "./components/ProjectList";
 import FluidLab from "./components/fluid/FluidLab";
-import UploadStep from "./components/upload/UploadStep.jsx";
-import ReviewStep from "./components/review/ReviewStep.jsx";
+import UploadStep from "./components/upload/UploadStep";
+import ReviewStep from "./components/review/ReviewStep";
 import Studio from "./components/studio/Studio";
-import Processing from "./components/Processing.jsx";
-import LogsPanel from "./components/LogsPanel.jsx";
-import ErrorToast from "./components/ErrorToast.jsx";
+import Processing from "./components/Processing";
+import LogsPanel from "./components/LogsPanel";
+import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
 import { useLogPoll } from "./lib/useLogPoll";
@@ -20,16 +21,18 @@ export default function App() {
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState(false);
 
-  const [job, setJob] = useState(null);
+  const [job, setJob] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState(0);
   const [originalSpec, setOriginalSpec] = useState("");
-  const [stems, setStems] = useState({});
+  const [stems, setStems] = useState<
+    Record<string, { sr?: number; spectrogram?: string; audio?: string }>
+  >({});
 
-  const [segments, setSegments] = useState([]);
-  const [vocalEnvelope, setVocalEnvelope] = useState([]);
-  const [envelopeTimes, setEnvelopeTimes] = useState([]);
-  const [activeSegId, setActiveSegId] = useState(null);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [vocalEnvelope, setVocalEnvelope] = useState<number[]>([]);
+  const [envelopeTimes, setEnvelopeTimes] = useState<number[]>([]);
+  const [activeSegId, setActiveSegId] = useState<string | null>(null);
   // Project-wide animation output settings (size/quality/fps/background).
   const [output, setOutput] = useState(OUTPUT_DEFAULTS);
   const lastSaved = useRef("");
@@ -66,7 +69,17 @@ export default function App() {
   }, [segments, step, job, output]);
 
   // ---- new track: upload + propose -----------------------------------------
-  async function handleUpload({ file, youtubeUrl, lyrics, lyricsFile }) {
+  async function handleUpload({
+    file,
+    youtubeUrl,
+    lyrics,
+    lyricsFile,
+  }: {
+    file: File | null;
+    youtubeUrl: string;
+    lyrics: string;
+    lyricsFile: File | null;
+  }) {
     setStep("processing");
     setError("");
     try {
@@ -94,16 +107,16 @@ export default function App() {
       setEnvelopeTimes(segData.envelope_times || []);
       if (segData.duration) setDuration(segData.duration);
       lastSaved.current = "";
-      setSegments(hydrateSegments(segData.segments, data.stems));
+      setSegments(hydrateSegments(segData.segments, data.stems) as Segment[]);
       setStep("review");
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
       setStep("error");
     }
   }
 
   // ---- resume an existing project ------------------------------------------
-  async function openProject(id) {
+  async function openProject(id: string) {
     setStep("processing");
     setStatus("loading project…");
     setError("");
@@ -116,14 +129,17 @@ export default function App() {
       setOriginalSpec(p.stems?.original?.spectrogram || "");
       setVocalEnvelope(p.vocal_envelope || []);
       setEnvelopeTimes(p.envelope_times || []);
-      const segs = hydrateSegments(p.segments, p.stems || {});
+      const segs = hydrateSegments(p.segments, p.stems || {}) as Segment[];
       setSegments(segs);
       setActiveSegId(segs[0]?.id || null);
       const loadedOutput = withOutputDefaults(p.output);
       setOutput(loadedOutput);
       // If hydration added missing default signals, leave lastSaved empty so the
       // autosave persists them; otherwise mark as already-saved (no redundant PUT).
-      const loadedCount = (p.segments || []).reduce((a, s) => a + (s.signals || []).length, 0);
+      const loadedCount = (p.segments || []).reduce(
+        (a: number, s: { signals?: unknown[] }) => a + (s.signals || []).length,
+        0
+      );
       const mergedCount = segs.reduce((a, s) => a + s.signals.length, 0);
       lastSaved.current =
         mergedCount === loadedCount
@@ -135,7 +151,7 @@ export default function App() {
           : "";
       setStep(p.step || "studio");
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
       setStep("error");
     }
   }
@@ -238,11 +254,11 @@ export default function App() {
         <Studio
           segments={segments}
           setSegments={setSegments}
-          activeSegId={activeSegId}
+          activeSegId={activeSegId ?? undefined}
           setActiveSegId={setActiveSegId}
           stems={stems}
           duration={duration}
-          job={job}
+          job={job ?? undefined}
           output={output}
           setOutput={setOutput}
           onEditSplit={() => setStep("review")}

@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
-import Docs from "./components/Docs.jsx";
+import App from "./App";
+import Docs from "./components/Docs";
 import { installGlobalCapture } from "./lib/logCapture";
 import "./styles/index.css";
 
@@ -13,4 +13,6 @@ const doc = new URLSearchParams(window.location.search).get("doc");
 
 // No StrictMode: it double-invokes effects in dev, which conflicts with
 // Web Audio's "one MediaElementSource per <audio> element" rule.
-createRoot(document.getElementById("root")).render(doc !== null ? <Docs section={doc} /> : <App />);
+createRoot(document.getElementById("root")!).render(
+  doc !== null ? <Docs section={doc} /> : <App />
+);

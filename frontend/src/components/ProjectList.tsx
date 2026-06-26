@@ -1,17 +1,33 @@
 import { useEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import { listProjects, deleteProject } from "../lib/api";
 import { fmtTime } from "../lib/mel";
 
 // Start screen: resume a saved project or begin a new one.
-export default function ProjectList({ onNew, onOpen, onFluidLab }) {
-  const [projects, setProjects] = useState(null); // null = loading
+interface Project {
+  job_id: string;
+  title?: string;
+  step: string;
+  duration?: number;
+  has_lyrics?: boolean;
+  updated_at?: string;
+}
+
+interface ProjectListProps {
+  onNew: () => void;
+  onOpen: (id: string) => void;
+  onFluidLab: () => void;
+}
+
+export default function ProjectList({ onNew, onOpen, onFluidLab }: ProjectListProps) {
+  const [projects, setProjects] = useState<Project[] | null>(null); // null = loading
   const [error, setError] = useState("");
 
   async function refresh() {
     try {
       setProjects(await listProjects());
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
       setProjects([]);
     }
   }
@@ -20,7 +36,7 @@ export default function ProjectList({ onNew, onOpen, onFluidLab }) {
     refresh();
   }, []);
 
-  async function remove(e, id) {
+  async function remove(e: MouseEvent, id: string) {
     e.stopPropagation();
     if (!confirm("Delete this project and its audio/stems?")) return;
     await deleteProject(id).catch(() => {});

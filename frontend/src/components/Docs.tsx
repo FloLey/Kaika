@@ -4,7 +4,7 @@ import { useEffect } from "react";
 // ?doc=<section>, so every "?" in the app can open it in a new tab scrolled to
 // the relevant section. Section ids are referenced by Info badges and the header
 // help link — keep them in sync.
-export default function Docs({ section }) {
+export default function Docs({ section }: { section?: string }) {
   useEffect(() => {
     const id = section || (window.location.hash || "").replace(/^#/, "");
     if (!id) return;

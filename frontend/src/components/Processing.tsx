@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const MESSAGES = ["Running Demucs…", "Separating stems…", "Generating spectrograms…"];
 
-export default function Processing({ status }) {
+export default function Processing({ status }: { status?: string }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setI((p) => (p + 1) % MESSAGES.length), 3500);

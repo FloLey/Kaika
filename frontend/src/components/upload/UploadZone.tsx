@@ -1,13 +1,13 @@
 import { useRef, useState } from "react";
 
-export default function UploadZone({ onFile }) {
-  const input = useRef(null);
+export default function UploadZone({ onFile }: { onFile: (f: File) => void }) {
+  const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
 
   return (
     <div
       className={"drop" + (drag ? " drag" : "")}
-      onClick={() => input.current.click()}
+      onClick={() => input.current?.click()}
       onDragEnter={(e) => {
         e.preventDefault();
         setDrag(true);
@@ -37,7 +37,7 @@ export default function UploadZone({ onFile }) {
         accept="audio/*,video/mp4,.mp4,.m4a"
         hidden
         onChange={(e) => {
-          if (e.target.files[0]) onFile(e.target.files[0]);
+          if (e.target.files?.[0]) onFile(e.target.files[0]);
         }}
       />
     </div>
