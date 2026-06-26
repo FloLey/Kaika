@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SegmentRail from "./SegmentRail.jsx";
 import SignalCard from "./SignalCard.jsx";
-import AnimationCanvas from "../animation/AnimationCanvas.jsx";
-import OutputSettings from "../animation/OutputSettings.jsx";
+import AnimationCanvas from "../animation/AnimationCanvas";
+import OutputSettings from "../animation/OutputSettings";
 import VolumeControl from "./VolumeControl.jsx";
 import { engine } from "../../lib/audio.js";
 import { STEM_META, seedSignal } from "../../lib/segments.js";

@@ -6,7 +6,7 @@
 
 import { useCallback, useContext } from "react";
 import type { CSSProperties, PointerEvent, ReactNode } from "react";
-import { MinimizeContext } from "./minimizeContext.js";
+import { MinimizeContext } from "./minimizeContext";
 import type { PortRef } from "./nodeProps";
 
 type StartConnect = (nodeId: string, portId: string, flow: string, e: PointerEvent) => void;

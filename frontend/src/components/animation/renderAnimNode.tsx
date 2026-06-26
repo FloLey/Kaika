@@ -1,23 +1,22 @@
+import type { ReactElement } from "react";
 import MinimizedCard from "./nodes/MinimizedCard";
 import { NODE_TYPES } from "./nodes/registry";
+import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
+import type { GraphNode } from "../../lib/types";
 
-// Resolves a graph node to its React card via the node-type registry. 07's container
+// Resolves a graph node to its React card via the node-type registry. The container
 // passes this to <GraphCanvas renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}>.
-//
-//   renderAnimNode(node, helpers, ctx)
-//     node    — the graph node ({ id, type, x, y, data })
-//     helpers — from GraphCanvas: { onMove, portRef, startConnect, onTitlePointerDown, selected }
-//     ctx     — { segment, stems, job, signals, graph, onGraphChange, onDetach, minimized, ... }
-//
 // Returns the matching node component, or null for an unknown type.
-export default function renderAnimNode(node, helpers, ctx = {}) {
+export default function renderAnimNode(
+  node: GraphNode, helpers: NodeHelpers, ctx: NodeCtx = {},
+): ReactElement | null {
   const common = {
     node,
-    selected: helpers.selected,
+    selected: !!helpers.selected,
     helpers,
     ctx,
-    onGraphChange: ctx.onGraphChange,
-    onDelete: () => ctx.onDeleteNode && ctx.onDeleteNode(node.id),
+    onGraphChange: ctx.onGraphChange ?? (() => {}),
+    onDelete: () => ctx.onDeleteNode?.(node.id),
   };
   // Collapsed to header only: a generic card with consolidated wire anchors.
   if (ctx.minimized && ctx.minimized.has(node.id)) {

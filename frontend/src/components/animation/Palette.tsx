@@ -1,29 +1,35 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { signalNode, fluidNode, outputNode, mkEdgeId } from "../../lib/graphModel";
 import { paletteSpecs } from "./nodes/registry";
 import { stemColor } from "../../lib/segments.js";
+import type { Graph, GraphNode } from "../../lib/types";
+import type { SignalDef } from "./nodes/nodeProps";
 
-// The add-node toolbar: a bar across the top of the animation panel (not floating
-// on the canvas). Buttons add each node type at the canvas center; + Signal opens
-// a picker of the segment's signals; ⚙ output opens the project render settings.
-// Multiple fluid/output nodes are allowed — a graph can hold N independent
-// fluid -> output pipelines. + Pipeline adds a fluid + output already wired.
-//
-// Props:
-//   signals       — the segment's signal list (for the + Signal picker)
-//   centerGraph   — () => {x,y} graph-space point to drop new nodes at
-//   onOpenOutput  — open the output-settings modal (optional)
-//   onGraphChange(updater)
+// The add-node toolbar: a bar across the top of the animation panel. Buttons add each
+// node type at the canvas center; + Signal opens a picker of the segment's signals;
+// ⚙ output opens the project render settings. + Pipeline adds a fluid + output wired.
+interface PaletteProps {
+  signals?: SignalDef[];
+  centerGraph?: () => { x: number; y: number };
+  onOpenOutput?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  onGraphChange: (updater: (g: Graph) => Graph) => void;
+  allMinimized?: boolean;
+  onToggleMinimizeAll?: (() => void) | null;
+}
+
 export default function Palette({
   signals = [], centerGraph, onOpenOutput,
   isFullscreen, onToggleFullscreen, onGraphChange,
   allMinimized, onToggleMinimizeAll,
-}) {
+}: PaletteProps) {
   const [picking, setPicking] = useState(false);
 
   const where = () => (centerGraph ? centerGraph() : { x: 80, y: 80 });
 
-  const add = (factory) =>
+  const add = (factory: (x: number, y: number) => GraphNode) =>
     onGraphChange((g) => {
       const { x, y } = where();
       return { ...g, nodes: [...g.nodes, factory(x, y)] };
@@ -40,7 +46,7 @@ export default function Palette({
       return { ...g, nodes: [...g.nodes, fluid, output], edges: [...g.edges, edge] };
     });
 
-  const addSignal = (signal) => {
+  const addSignal = (signal: SignalDef) => {
     onGraphChange((g) => {
       const { x, y } = where();
       return { ...g, nodes: [...g.nodes, signalNode(signal, x, y)] };
@@ -59,7 +65,7 @@ export default function Palette({
               <button
                 key={s.id}
                 className="anim-picker-item"
-                style={{ "--accent": stemColor(s.stemKey) }}
+                style={{ "--accent": stemColor(s.stemKey) } as CSSProperties}
                 onClick={() => addSignal(s)}
               >
                 <span className="anim-picker-dot" />
@@ -73,10 +79,10 @@ export default function Palette({
         <button
           key={spec.type}
           className="btn sm"
-          title={spec.palette.title}
-          onClick={() => add(spec.factory)}
+          title={spec.palette!.title}
+          onClick={() => add(spec.factory!)}
         >
-          {spec.palette.label}
+          {spec.palette!.label}
         </button>
       ))}
       <button className="btn sm" title="Add a fluid + output, pre-wired"

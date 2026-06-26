@@ -3,7 +3,8 @@ import {
   emptyGraph, normalizeGraph, connect, disconnect, removeNode, mkEdgeId,
 } from "../../lib/graphModel";
 import { fluidParam } from "../../lib/fluidParams.js";
-import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
+import type { Graph, GraphEdge, GraphNode, OutputSettings } from "../../lib/types";
+import type { NodeCtx, SignalDef } from "./nodes/nodeProps";
 
 // The animation editor "brain": graph state (normalized from segment.graph), the
 // selection, the mutation handlers (connect / delete / minimize), and the assembled
@@ -12,12 +13,12 @@ import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
 // templates, …) add here without threading props through the component tree.
 
 interface GraphEditorOpts {
-  segment: { id?: string; start?: number; graph?: Graph; signals?: unknown[] } & Record<string, unknown>;
-  stems?: unknown;
-  job?: unknown;
-  output?: unknown;
-  groupClock?: unknown;
-  groupPlaying?: unknown;
+  segment: NodeCtx["segment"] & { graph?: Graph };
+  stems?: NodeCtx["stems"];
+  job?: NodeCtx["job"];
+  output?: OutputSettings | null;
+  groupClock?: NodeCtx["groupClock"];
+  groupPlaying?: boolean;
   commitGraph: (g: Graph) => void;   // lifts the whole graph to segment.graph
 }
 
@@ -91,9 +92,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 
   // The context handed to every node card (renderAnimNode).
-  const ctx = {
+  const ctx: NodeCtx = {
     segment, stems, job, output,
-    signals: segment.signals, graph,
+    signals: segment.signals as SignalDef[] | undefined, graph,
     groupClock, groupPlaying, segStart: segment.start,
     minimized,            // collapsed cards -> renderAnimNode swaps in MinimizedCard
     onGraphChange: applyUpdater,

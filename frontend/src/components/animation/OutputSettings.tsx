@@ -1,23 +1,31 @@
 import { useEffect } from "react";
+import type { ChangeEvent } from "react";
 import {
   ORIENTATION_PRESETS, QUALITY_PRESETS, FPS_OPTIONS, presetFor, aspectOf,
 } from "../../lib/output";
+import type { OutputSettings as Output, Quality } from "../../lib/types";
+
+interface OutputSettingsProps {
+  output: Output;
+  onChange: (o: Output) => void;
+  onClose: () => void;
+}
 
 // Project-level output settings modal (opened from the CREATE ANIMATION header
 // gear). Edits the one shared `output` object — size/orientation, render quality,
 // fps, and background color — that every render and the live preview read.
-export default function OutputSettings({ output, onChange, onClose }) {
-  const set = (patch) => onChange({ ...output, ...patch });
+export default function OutputSettings({ output, onChange, onClose }: OutputSettingsProps) {
+  const set = (patch: Partial<Output>) => onChange({ ...output, ...patch });
   const preset = presetFor(output);
 
   // ESC closes; lock the page scroll while open.
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const clampDim = (v) => Math.max(16, Math.min(4096, Math.round(v || 0)));
+  const clampDim = (v: number) => Math.max(16, Math.min(4096, Math.round(v || 0)));
 
   return (
     <div className="anim-modal-scrim" onPointerDown={onClose}>
@@ -63,13 +71,13 @@ export default function OutputSettings({ output, onChange, onClose }) {
               <input
                 type="number" className="hz-input" min={16} max={4096} step={2}
                 value={output.width}
-                onChange={(e) => set({ width: clampDim(parseFloat(e.target.value)) })}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ width: clampDim(parseFloat(e.target.value)) })}
               />
               <span className="out-x">×</span>
               <input
                 type="number" className="hz-input" min={16} max={4096} step={2}
                 value={output.height}
-                onChange={(e) => set({ height: clampDim(parseFloat(e.target.value)) })}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ height: clampDim(parseFloat(e.target.value)) })}
               />
               <span className="out-unit">px</span>
             </div>
@@ -83,7 +91,7 @@ export default function OutputSettings({ output, onChange, onClose }) {
                 <button
                   key={q.key}
                   className={"btn sm" + (output.quality === q.key ? " on" : "")}
-                  onClick={() => set({ quality: q.key })}
+                  onClick={() => set({ quality: q.key as Quality })}
                   title={q.hint}
                 >
                   {q.label}
@@ -116,7 +124,7 @@ export default function OutputSettings({ output, onChange, onClose }) {
                 type="color"
                 className="out-color"
                 value={output.background}
-                onChange={(e) => set({ background: e.target.value })}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ background: e.target.value })}
               />
               <span className="out-bg-hex">{output.background}</span>
             </div>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import renderAnimNode from "../components/animation/renderAnimNode.jsx";
+import renderAnimNode from "../components/animation/renderAnimNode";
 import { NODE_TYPES, paletteSpecs, chromeFor } from "../components/animation/nodes/registry";
 import { signalNode } from "../lib/graphModel";
 

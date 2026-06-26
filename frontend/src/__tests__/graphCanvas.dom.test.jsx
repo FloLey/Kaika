@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import GraphCanvas from "../components/animation/GraphCanvas.jsx";
+import GraphCanvas from "../components/animation/GraphCanvas";
 
 afterEach(cleanup);
 

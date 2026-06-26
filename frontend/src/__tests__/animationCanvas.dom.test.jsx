@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import AnimationCanvas from "../components/animation/AnimationCanvas.jsx";
+import AnimationCanvas from "../components/animation/AnimationCanvas";
 
 afterEach(cleanup);
 

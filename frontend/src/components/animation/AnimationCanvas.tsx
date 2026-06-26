@@ -1,9 +1,25 @@
 import { useCallback, useRef } from "react";
-import GraphCanvas from "./GraphCanvas.jsx";
-import Palette from "./Palette.jsx";
-import renderAnimNode from "./renderAnimNode.jsx";
-import { MinimizeContext } from "./nodes/minimizeContext.js";
+import GraphCanvas from "./GraphCanvas";
+import Palette from "./Palette";
+import renderAnimNode from "./renderAnimNode";
+import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
+import type { View } from "./usePanZoom";
+import type { Graph, OutputSettings } from "../../lib/types";
+import type { NodeCtx } from "./nodes/nodeProps";
+
+interface AnimationCanvasProps {
+  segment: NodeCtx["segment"] & { graph?: Graph };
+  stems?: NodeCtx["stems"];
+  job?: NodeCtx["job"];
+  output?: OutputSettings | null;
+  groupClock?: NodeCtx["groupClock"];
+  groupPlaying?: boolean;
+  onOpenOutput?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  onGraphChange: (g: Graph) => void;
+}
 
 // 07 — the per-segment animation container (the VIEW). The graph state + mutation
 // handlers + node `ctx` live in useGraphEditor; this component owns layout: refs,
@@ -16,15 +32,15 @@ import { useGraphEditor } from "./useGraphEditor";
 export default function AnimationCanvas({
   segment, stems, job, output, groupClock, groupPlaying, onOpenOutput,
   isFullscreen, onToggleFullscreen, onGraphChange: commitGraph,
-}) {
+}: AnimationCanvasProps) {
   const {
     graph, selId, setSelId, applyUpdater, ctx,
     minimizeCtx, minimizedKey, allMinimized, toggleMinimizeAll,
     onConnect, onEdgeDelete, onNodeDelete,
   } = useGraphEditor({ segment, stems, job, output, groupClock, groupPlaying, commitGraph });
 
-  const wrapRef = useRef(null);
-  const viewRef = useRef(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<View>(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
 
   // Fullscreen is owned by Studio (it fullscreens the whole panel so the timeline +
   // output modal stay visible); we just relay its state/toggle to the toolbar.
