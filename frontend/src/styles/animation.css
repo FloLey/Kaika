@@ -19,17 +19,32 @@
 /* the canvas area below the toolbar; anchors the absolute .gc-root */
 .anim-stage { position: relative; flex: 1 1 auto; min-height: 0; }
 
-/* fullscreen: fill the screen, drop the rounding, keep the paper background
-   (otherwise the browser paints the fullscreen element black). */
-.anim-wrap:fullscreen {
-  width: 100vw;
+/* fullscreen: Studio fullscreens the WHOLE panel (.studio-main) — not just the
+   canvas — so the segment transport (timeline) stays on top and the output-settings
+   modal, which lives in this subtree, still renders. The canvas grows to fill the
+   space left under the transport; keep the paper background (else the browser paints
+   the fullscreen element black). */
+.studio-main:fullscreen {
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  margin: 0;
-  border: none;
-  border-radius: 0;
+  padding: 12px 16px;
   background: var(--bg);
+  overflow: auto;
 }
-.anim-wrap:fullscreen .anim-toolbar { border-radius: 0; }
+.studio-main:fullscreen .anim-wrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  margin-top: 12px;
+  border-radius: 0;
+}
+.studio-main:fullscreen .anim-toolbar { border-radius: 0; }
+/* no tab bar in fullscreen — the toolbar's ✕/exit handles leaving */
+.studio-main:fullscreen .mode-bar { display: none; }
+/* trim the header to just the transport: drop the segment label + edit-split */
+.studio-main:fullscreen .results-head .section-title,
+.studio-main:fullscreen .results-head .edit-split { display: none; }
 
 .mode-bar {
   position: sticky;

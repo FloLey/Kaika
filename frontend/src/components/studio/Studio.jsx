@@ -204,7 +204,7 @@ export default function Studio({
             {tab === "signals" ? "EXTRACT SIGNALS BY TRACK" : "CREATE ANIMATION"}
           </span>
           <div className="controls">
-            <button className="btn sm" onClick={onEditSplit}>↩ edit split</button>
+            <button className="btn sm edit-split" onClick={onEditSplit}>↩ edit split</button>
             <button
               className="btn on seg-play"
               onClick={playAll}

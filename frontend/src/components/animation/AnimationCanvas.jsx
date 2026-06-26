@@ -15,7 +15,7 @@ import { useGraphEditor } from "./useGraphEditor";
 //   onGraphChange  — (graph) => void; commits the whole graph to segment.graph
 export default function AnimationCanvas({
   segment, stems, job, output, groupClock, groupPlaying, onOpenOutput,
-  onGraphChange: commitGraph,
+  isFullscreen, onToggleFullscreen, onGraphChange: commitGraph,
 }) {
   const {
     graph, selId, setSelId, applyUpdater, ctx,
@@ -24,23 +24,10 @@ export default function AnimationCanvas({
   } = useGraphEditor({ segment, stems, job, output, groupClock, groupPlaying, commitGraph });
 
   const wrapRef = useRef(null);
-  const panelRef = useRef(null);                  // the whole panel (fullscreen target)
   const viewRef = useRef(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
-  const [isFull, setIsFull] = useState(false);
 
-  // Fullscreen the playground via the browser Fullscreen API. Track the real state
-  // (so Esc / external exits update the button) by listening for fullscreenchange.
-  useEffect(() => {
-    const onFs = () => setIsFull(document.fullscreenElement === panelRef.current);
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
-  const toggleFullscreen = useCallback(() => {
-    const el = panelRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    else el.requestFullscreen?.().catch(() => {});
-  }, []);
+  // Fullscreen is owned by Studio (it fullscreens the whole panel so the timeline +
+  // output modal stay visible); we just relay its state/toggle to the toolbar.
 
   // Where to drop a new node: center of the viewport in graph space, staggered so
   // repeated adds don't land exactly on top of each other.
@@ -57,13 +44,13 @@ export default function AnimationCanvas({
   }, [graph]);
 
   return (
-    <div className={"anim-wrap" + (isFull ? " full" : "")} ref={panelRef}>
+    <div className="anim-wrap">
       <Palette
         signals={segment.signals}
         centerGraph={centerGraph}
         onOpenOutput={onOpenOutput}
-        isFullscreen={isFull}
-        onToggleFullscreen={toggleFullscreen}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={onToggleFullscreen}
         onGraphChange={applyUpdater}
         allMinimized={allMinimized}
         onToggleMinimizeAll={graph.nodes.length ? toggleMinimizeAll : null}

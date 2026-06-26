@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // a clamped scale range, and a background-drag pan. Persists the transform back
 // up (debounced) so 07 can autosave it onto `graph.view`.
 
-const MIN_SCALE = 0.4;
+const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.0;
 const clampScale = (s) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
 

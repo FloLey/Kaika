@@ -3,11 +3,17 @@ and the validation guardrail (spec 10). Const-only fluids need no audio, so thes
 run without mocking signal extraction. Small grids/durations keep them fast."""
 from __future__ import annotations
 
+import shutil
+
 import numpy as np
 import pytest
 
 from backend import fluid
 from backend import graph as G
+
+# render() encodes an mp4 via ffmpeg; skip those two cases where it's not installed
+# (e.g. minimal CI). The frame-level tests use _Dag.video and need no ffmpeg.
+_needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 24, "background": "#101418"}
 SEG = {"start": 0.0, "end": 1.0, "signals": []}
@@ -80,11 +86,13 @@ def test_stack_opacity_dims_the_layer():
     assert full > dim
 
 
+@_needs_ffmpeg
 def test_render_writes_mp4():
     url = G.render("job", SEG, _graph("merge"), NOAUDIO, OUT, "out1")
     assert url.endswith(".mp4")
 
 
+@_needs_ffmpeg
 def test_output_passthrough_renders():
     fa = _fluid("fA", (1, 1, 1), [0.4, 0.5], 0)
     fb = _fluid("fB", (0.3, 0.6, 1), [0.6, 0.5], 180)
