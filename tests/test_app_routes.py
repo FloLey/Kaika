@@ -61,6 +61,17 @@ def test_segment_missing_job_id_is_400(client):
     assert client.post("/segment", json={}).status_code == 400
 
 
+def test_segment_rejects_non_object_body(client):
+    # @json_body now guards /segment like the other POST routes.
+    assert client.post("/segment", json=[1, 2]).status_code == 400
+
+
+def test_segment_malformed_job_id_is_400(client):
+    # validate_job_id fails fast on a non 8-hex id (uniform {"error": ...} shape).
+    r = client.post("/segment", json={"job_id": "NOTHEX!!"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid job_id"
+
+
 def test_logs_feed_is_json(client):
     # uploads blueprint: the log feed never needs a DB.
     r = client.get("/logs?since=0")

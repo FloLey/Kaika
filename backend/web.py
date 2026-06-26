@@ -5,9 +5,25 @@ blueprint split — can import them without a cycle back through the app object.
 
 from __future__ import annotations
 
+import re
 from functools import wraps
 
 from flask import jsonify, request
+
+# Job ids are uuid4().hex[:8] (8 lowercase hex chars). Validating the shape lets
+# routes reject nonsense early with a clear 400 instead of a downstream None/404.
+# (Not a security boundary — Flask's <string> converter already excludes '/'.)
+_JOB_ID_RE = re.compile(r"^[a-f0-9]{8}$")
+
+
+def validate_job_id(job_id) -> bool:
+    """True if ``job_id`` is the canonical 8-char hex shape."""
+    return bool(job_id and isinstance(job_id, str) and _JOB_ID_RE.match(job_id))
+
+
+def error_response(message: str, code: int = 400):
+    """The one route-level error shape: ``{"error": message}`` with a status."""
+    return jsonify({"error": message}), code
 
 
 def json_body(fn):

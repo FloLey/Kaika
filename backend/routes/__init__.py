@@ -8,6 +8,6 @@ frontend contract is unchanged.
 from .uploads import bp as uploads_bp
 from .projects import bp as projects_bp
 from .animation import bp as animation_bp
-from .media import bp as media_bp
+from .serving import bp as serving_bp
 
-all_blueprints = (uploads_bp, projects_bp, animation_bp, media_bp)
+all_blueprints = (uploads_bp, projects_bp, animation_bp, serving_bp)

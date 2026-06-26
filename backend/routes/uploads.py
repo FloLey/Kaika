@@ -17,6 +17,7 @@ from .. import segment as seg
 from .. import jobs
 from .. import db
 from .. import logbus
+from ..web import json_body, validate_job_id, error_response
 from ..config import FMIN
 from ..media import (
     stem_audio_path,
@@ -47,7 +48,7 @@ def upload():
     audio_upload = request.files.get("file")
     youtube_url = (request.form.get("youtube_url") or "").strip()
     if (not audio_upload or not audio_upload.filename) and not youtube_url:
-        return jsonify({"error": "provide an audio file or a YouTube URL"}), 400
+        return error_response("provide an audio file or a YouTube URL", 400)
 
     job_id = uuid4().hex[:8]
     job_upload_dir = UPLOAD_DIR / job_id
@@ -154,16 +155,16 @@ def _process_upload(job_id, input_path, youtube_url, job_upload_dir, has_lyrics,
 
 
 @bp.route("/segment", methods=["POST"])
-def segment_route():
+@json_body
+def segment_route(body):
     """Stage 2: propose musical segments for an already-uploaded job. The slow
     Whisper alignment + LLM labelling run in the background; the finished job's
     ``result`` is the segment proposal (segments + vocal envelope + lyrics)."""
-    data = request.get_json(silent=True) or {}
-    job_id = data.get("job_id")
-    if not job_id:
-        return jsonify({"error": "missing job_id"}), 400
+    job_id = body.get("job_id")
+    if not validate_job_id(job_id):
+        return error_response("invalid job_id", 400)
     if stem_audio_path(job_id, "original") is None:
-        return jsonify({"error": "unknown job_id"}), 404
+        return error_response("unknown job_id", 404)
 
     jobs.submit(job_id, "analysing", lambda: _process_segment(job_id))
     return jsonify({"job_id": job_id})

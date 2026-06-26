@@ -34,6 +34,7 @@ _CONNECT_BACKOFF = 0.4  # seconds, multiplied by the attempt number
 # output}). Bump + add a step to `migrate_project_data` when the shape changes, so
 # old saves upgrade on load instead of silently mis-parsing.
 SCHEMA_VERSION = 1
+DEFAULT_STEP = "review"  # a fresh project opens on the review screen
 
 
 def migrate_project_data(data: dict | None) -> dict:
@@ -47,7 +48,7 @@ def migrate_project_data(data: dict | None) -> dict:
     return data
 
 
-_SCHEMA = """
+_SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS projects (
   job_id     TEXT PRIMARY KEY,
   title      TEXT,
@@ -55,8 +56,8 @@ CREATE TABLE IF NOT EXISTS projects (
   duration   DOUBLE PRECISION,
   fmin       INTEGER,
   has_lyrics BOOLEAN,
-  step       TEXT DEFAULT 'review',
-  data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  step       TEXT DEFAULT '{DEFAULT_STEP}',
+  data       JSONB NOT NULL DEFAULT '{{}}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -100,14 +101,14 @@ def create_project(
             """
             INSERT INTO projects
               (job_id, title, source, duration, fmin, has_lyrics, step, data)
-            VALUES (%s, %s, %s, %s, %s, %s, 'review', %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (job_id) DO UPDATE SET
               title=EXCLUDED.title, source=EXCLUDED.source,
               duration=EXCLUDED.duration, fmin=EXCLUDED.fmin,
               has_lyrics=EXCLUDED.has_lyrics, data=EXCLUDED.data,
               updated_at=now()
             """,
-            (job_id, title, source, duration, fmin, has_lyrics, Jsonb(data)),
+            (job_id, title, source, duration, fmin, has_lyrics, DEFAULT_STEP, Jsonb(data)),
         )
 
 

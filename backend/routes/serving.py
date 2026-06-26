@@ -1,9 +1,13 @@
 """Media-serving routes: the API index, fluid clips, stem audio, and spectrogram
-images. All static-ish reads off disk (range-served where <audio>/<video> seek)."""
+images. All static-ish reads off disk (range-served where <audio>/<video> seek).
+
+Named `serving` (not `media`) so it doesn't clash with `backend/media.py`, the
+audio/spectrogram helper module it imports from."""
 
 from flask import Blueprint, abort, jsonify, send_file
 
 from ..media import serve_range, stem_audio_path
+from ..web import validate_job_id
 from ..paths import FLUID_DIR, SPECTRO_DIR, STEMS
 
 bp = Blueprint("media", __name__)
@@ -27,6 +31,8 @@ def fluid_file(name: str):
 
 @bp.route("/audio/<job_id>/<stem>")
 def audio(job_id: str, stem: str):
+    if not validate_job_id(job_id):
+        abort(404)
     path = stem_audio_path(job_id, stem)
     if path is None:
         abort(404)
@@ -44,7 +50,7 @@ def audio(job_id: str, stem: str):
 
 @bp.route("/spectrogram/<job_id>/<stem>")
 def spectrogram(job_id: str, stem: str):
-    if stem not in STEMS:
+    if not validate_job_id(job_id) or stem not in STEMS:
         abort(404)
     png = SPECTRO_DIR / job_id / f"{stem}.png"
     if not png.exists():

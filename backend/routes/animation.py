@@ -10,7 +10,7 @@ from .. import signals as sig
 from .. import fluid
 from .. import graph as graphmod
 from .. import render_cache
-from ..web import json_body, validate_audio_params
+from ..web import json_body, validate_audio_params, error_response
 from ..media import stem_audio_path
 from ..paths import FLUID_DIR
 
@@ -29,7 +29,7 @@ def extract_route(b):
     stem = b.get("stem", "original")
     src = stem_audio_path(job_id, stem) if job_id else None
     if src is None:
-        return jsonify({"error": "unknown job/stem"}), 404
+        return error_response("unknown job/stem", 404)
     try:
         start, end, min_hz, max_hz, fps = validate_audio_params(b)
         out = sig.extract(
@@ -50,10 +50,10 @@ def extract_route(b):
         )
     except (ValueError, TypeError) as e:
         log.warning("extract bad params (%s/%s): %s", job_id, stem, e)
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
     except Exception as e:  # noqa: BLE001
         log.error("extract failed (%s/%s)", job_id, stem, exc_info=e)
-        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+        return error_response(f"{type(e).__name__}: {e}", 500)
     return jsonify(out)
 
 
@@ -73,10 +73,10 @@ def fluid_route(params):
             fluid.render_mp4(frames, fps, out)
         except (ValueError, KeyError, TypeError) as e:
             log.warning("fluid render bad params: %s", e)
-            return jsonify({"error": str(e)}), 400
+            return error_response(str(e), 400)
         except Exception as e:  # noqa: BLE001
             log.error("fluid render failed", exc_info=e)
-            return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+            return error_response(f"{type(e).__name__}: {e}", 500)
         render_cache.evict(FLUID_DIR)  # bound the cache after adding a clip
     return jsonify({"url": f"/fluid/{h}.mp4"})
 
@@ -96,13 +96,13 @@ def animate(body):
     output = body.get("output")  # project render settings (size/quality/fps/bg)
     output_id = body.get("output_id")  # which output's pipeline to render (N per graph)
     if not job_id or graph is None or segment is None:
-        return jsonify({"error": "missing job_id, segment, or graph"}), 400
+        return error_response("missing job_id, segment, or graph", 400)
     try:
         url = graphmod.render(job_id, segment, graph, stem_audio_path, output, output_id)
     except ValueError as e:
         log.warning("animate rejected graph (%s): %s", job_id, e)
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
     except Exception as e:  # noqa: BLE001
         log.error("animate failed (%s)", job_id, exc_info=e)
-        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+        return error_response(f"{type(e).__name__}: {e}", 500)
     return jsonify({"url": url})
