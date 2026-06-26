@@ -37,7 +37,10 @@ def validate_audio_params(b: dict) -> tuple[float, float, float, float, int]:
     fps = int(b.get("fps", 30))
     if not (0.0 <= start < end):
         raise ValueError(f"invalid window: start={start}, end={end}")
-    if not (0.0 < min_hz <= max_hz <= 20000.0):
+    # maxHz goes up to the stem's Nyquist (sr/2) — 22050 at 44.1k, 24000 at 48k, and
+    # higher for hi-res audio — so only require a positive, ordered band with a
+    # generous sanity ceiling (192kHz audio -> 96k Nyquist), not a 20kHz cap.
+    if not (0.0 < min_hz <= max_hz <= 96000.0):
         raise ValueError(f"invalid band: minHz={min_hz}, maxHz={max_hz}")
     if not (1 <= fps <= 240):
         raise ValueError(f"invalid fps: {fps}")
