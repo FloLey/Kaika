@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import GraphCanvas from "../components/animation/GraphCanvas";
+import type { Graph, GraphNode } from "../lib/types";
 
 afterEach(cleanup);
 
@@ -14,8 +15,10 @@ function setup(props = {}) {
     edges: [{ id: "e1", source: "n1", sourcePort: "out", target: "n1", targetPort: "in" }],
     view: { tx: 0, ty: 0, scale: 1 },
   };
-  const renderNode = (node) => <div data-testid={`node-${node.id}`}>{node.id}</div>;
-  return render(<GraphCanvas graph={graph} renderNode={renderNode} {...props} />);
+  const renderNode = (node: GraphNode) => <div data-testid={`node-${node.id}`}>{node.id}</div>;
+  return render(
+    <GraphCanvas graph={graph as unknown as Graph} renderNode={renderNode} {...props} />
+  );
 }
 
 describe("GraphCanvas interactions (jsdom)", () => {

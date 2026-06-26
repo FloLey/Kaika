@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import Studio from "../components/studio/Studio.tsx";
+import Studio from "../components/studio/Studio";
 
 // jsdom doesn't implement media playback; stub the transport calls Studio makes on
 // segment select / play so the shell logic runs without "Not implemented" noise.
@@ -30,7 +30,13 @@ function renderStudio(overrides = {}) {
     stems: {},
     duration: 60,
     job: "job123",
-    output: { width: 1080, height: 1080, fps: 30, quality: "normal" },
+    output: {
+      width: 1080,
+      height: 1080,
+      fps: 30,
+      quality: "normal" as const,
+      background: "#0b0b0f",
+    },
     setOutput: vi.fn(),
     onEditSplit: vi.fn(),
     ...overrides,
@@ -49,7 +55,7 @@ describe("Studio shell", () => {
     const { container } = renderStudio();
     const audio = container.querySelector("audio");
     expect(audio).toBeTruthy();
-    expect(audio.getAttribute("src")).toBe("/audio/job123/original");
+    expect(audio!.getAttribute("src")).toBe("/audio/job123/original");
   });
 
   it("renders both mode tabs", () => {

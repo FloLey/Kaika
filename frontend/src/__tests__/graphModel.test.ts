@@ -28,12 +28,22 @@ import {
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
+import type {
+  CombineData,
+  FluidData,
+  FluidNode,
+  Graph,
+  GraphNode,
+  Point,
+  PointsData,
+  SignalData,
+} from "../lib/types";
 
 const STEMS = { original: { sr: 44100 }, drums: { sr: 44100 } };
 
 // A renderable graph: one fluid wired into one output, plus a signal value source.
 function wiredGraph() {
-  let g = emptyGraph();
+  const g = emptyGraph();
   const fluid = fluidNode(0, 0);
   const out = outputNode(0, 0);
   const src = signalNode({ id: "sig-src", name: "src" }, 0, 0);
@@ -87,19 +97,21 @@ describe("normalizeGraph migrates older saves", () => {
   it("adds missing param ports (e.g. colour) so they become wireable", () => {
     const { g, fluidId, srcId } = wiredGraph();
     // Simulate a graph saved before the r/g/b colour ports existed.
-    const fluid = g.nodes.find((n) => n.id === fluidId);
+    const fluid = g.nodes.find((n) => n.id === fluidId) as FluidNode;
     delete fluid.data.ports.r;
     delete fluid.data.ports.g;
     delete fluid.data.ports.b;
 
     const out = normalizeGraph(g);
-    const f = out.nodes.find((n) => n.id === fluidId);
-    expect(f.data.ports.r.binding).toEqual({ kind: "const", value: fluidParam("r").def });
+    const f = out.nodes.find((n) => n.id === fluidId) as FluidNode;
+    expect(f.data.ports.r.binding).toEqual({ kind: "const", value: fluidParam("r")!.def });
     expect(Object.keys(f.data.ports).length).toBe(FLUID_PARAMS.length);
 
     // The previously-broken path (would throw on undefined port) now works.
     const wired = connect(out, srcId, fluidId, "r");
-    expect(wired.nodes.find((n) => n.id === fluidId).data.ports.r.binding).toMatchObject({
+    expect(
+      (wired.nodes.find((n) => n.id === fluidId) as FluidNode).data.ports.r.binding
+    ).toMatchObject({
       kind: "node",
       nodeId: srcId,
     });
@@ -107,7 +119,7 @@ describe("normalizeGraph migrates older saves", () => {
 
   it("drops stale ports + dangling edges for removed params", () => {
     const { g, fluidId, srcId } = wiredGraph();
-    const fluid = g.nodes.find((n) => n.id === fluidId);
+    const fluid = g.nodes.find((n) => n.id === fluidId) as FluidNode;
     fluid.data.ports.rot_speed = { binding: { kind: "node", nodeId: srcId, lo: 0, hi: 1 } };
     g.edges.push({
       id: "e-rot",
@@ -118,7 +130,7 @@ describe("normalizeGraph migrates older saves", () => {
     });
 
     const out = normalizeGraph(g);
-    const f = out.nodes.find((n) => n.id === fluidId);
+    const f = out.nodes.find((n) => n.id === fluidId) as FluidNode;
     expect(f.data.ports.rot_speed).toBeUndefined();
     expect(out.edges.find((e) => e.targetPort === "rot_speed")).toBeUndefined();
   });
@@ -132,10 +144,10 @@ describe("normalizeGraph migrates older saves", () => {
 describe("connect / disconnect keep the binding<->edge invariant", () => {
   it("connect writes the node binding AND an edge; disconnect round-trips to a const with no leftover edge", () => {
     const { g, fluidId, srcId } = wiredGraph();
-    const p = fluidParam("force");
+    const p = fluidParam("force")!;
 
     const g2 = connect(g, srcId, fluidId, "force");
-    const fluid2 = g2.nodes.find((n) => n.id === fluidId);
+    const fluid2 = g2.nodes.find((n) => n.id === fluidId) as FluidNode;
     expect(fluid2.data.ports.force.binding).toEqual({
       kind: "node",
       nodeId: srcId,
@@ -147,7 +159,7 @@ describe("connect / disconnect keep the binding<->edge invariant", () => {
     );
 
     const g3 = disconnect(g2, fluidId, "force");
-    const fluid3 = g3.nodes.find((n) => n.id === fluidId);
+    const fluid3 = g3.nodes.find((n) => n.id === fluidId) as FluidNode;
     expect(fluid3.data.ports.force.binding).toEqual({ kind: "const", value: p.def });
     expect(g3.edges.filter((e) => e.target === fluidId && e.targetPort === "force")).toHaveLength(
       0
@@ -172,10 +184,10 @@ describe("removeNode", () => {
     const g3 = removeNode(g2, srcId);
     expect(g3.nodes.find((n) => n.id === srcId)).toBeUndefined();
     expect(g3.edges.some((e) => e.source === srcId || e.target === srcId)).toBe(false);
-    const fluid = g3.nodes.find((n) => n.id === fluidId);
+    const fluid = g3.nodes.find((n) => n.id === fluidId) as FluidNode;
     expect(fluid.data.ports.force.binding).toEqual({
       kind: "const",
-      value: fluidParam("force").def,
+      value: fluidParam("force")!.def,
     });
   });
 });
@@ -197,7 +209,7 @@ describe("validate (01 §3.7)", () => {
     const g2 = connect(g, "n-ghost", fluidId, "force");
     const res = validate(g2);
     expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/missing node/);
+    expect((res as { ok: false; error: string }).error).toMatch(/missing node/);
   });
 
   it("rejects a non-numeric const binding (malformed graph)", () => {
@@ -206,13 +218,16 @@ describe("validate (01 §3.7)", () => {
       ...g,
       nodes: g.nodes.map((n) =>
         n.id === fluidId
-          ? {
+          ? ({
               ...n,
               data: {
                 ...n.data,
-                ports: { ...n.data.ports, force: { binding: { kind: "const", value: "loud" } } },
+                ports: {
+                  ...(n.data as FluidData).ports,
+                  force: { binding: { kind: "const", value: "loud" } },
+                },
               },
-            }
+            } as unknown as GraphNode)
           : n
       ),
     };
@@ -222,7 +237,7 @@ describe("validate (01 §3.7)", () => {
 
 // Two independent fluid -> output pipelines in one graph.
 function twoPipelines() {
-  let g = emptyGraph();
+  const g = emptyGraph();
   const fA = fluidNode(0, 0);
   const oA = outputNode(0, 0);
   const fB = fluidNode(0, 0);
@@ -236,17 +251,17 @@ function twoPipelines() {
 }
 
 // Set a fluid node's const param value (returns a new graph).
-const setForce = (g, fluidId, value) => ({
+const setForce = (g: Graph, fluidId: string, value: number) => ({
   ...g,
   nodes: g.nodes.map((n) =>
     n.id === fluidId
-      ? {
+      ? ({
           ...n,
           data: {
             ...n.data,
-            ports: { ...n.data.ports, force: { binding: { kind: "const", value } } },
+            ports: { ...(n.data as FluidData).ports, force: { binding: { kind: "const", value } } },
           },
-        }
+        } as GraphNode)
       : n
   ),
 });
@@ -258,8 +273,8 @@ describe("multiple fluid -> output pipelines", () => {
 
   it("videoInput resolves each output's own fluid", () => {
     const { g, fA, oA, fB, oB } = twoPipelines();
-    expect(videoInput(g, oA).id).toBe(fA);
-    expect(videoInput(g, oB).id).toBe(fB);
+    expect(videoInput(g, oA)!.id).toBe(fA);
+    expect(videoInput(g, oB)!.id).toBe(fB);
   });
 
   it("outputHash differs per output and isolates edits to one pipeline", () => {
@@ -350,8 +365,10 @@ describe("segments graph persistence + split (01 §3.8)", () => {
     expect(round.graph).toEqual(seg0.graph);
     // the stored signal id survived hydrate, so the graph ref still resolves.
     expect(round.signals.some((s) => s.id === sigId)).toBe(true);
-    expect(round.graph.nodes[0].data.signalId).toBe(sigId);
-    expect(round.signals.some((s) => s.id === round.graph.nodes[0].data.signalId)).toBe(true);
+    expect((round.graph!.nodes[0].data as SignalData).signalId).toBe(sigId);
+    expect(
+      round.signals.some((s) => s.id === (round.graph!.nodes[0].data as SignalData).signalId)
+    ).toBe(true);
   });
 
   it("splitAt gives the cloned half fresh ids + remaps its graph, with distinct graph objects", () => {
@@ -372,10 +389,12 @@ describe("segments graph persistence + split (01 §3.8)", () => {
     // two halves do not share a graph object
     expect(a.graph).not.toBe(b.graph);
     // first half keeps its original signal id + a valid ref
-    expect(a.graph.nodes[0].data.signalId).toBe(seg.signals[0].id);
-    expect(a.signals.some((s) => s.id === a.graph.nodes[0].data.signalId)).toBe(true);
+    expect((a.graph!.nodes[0].data as SignalData).signalId).toBe(seg.signals[0].id);
+    expect(a.signals.some((s) => s.id === (a.graph!.nodes[0].data as SignalData).signalId)).toBe(
+      true
+    );
     // second half got fresh signal ids AND a remapped graph (no dangling ref)
-    const bRef = b.graph.nodes[0].data.signalId;
+    const bRef = (b.graph!.nodes[0].data as SignalData).signalId;
     expect(bRef).not.toBe(seg.signals[0].id);
     expect(b.signals.some((s) => s.id === bRef)).toBe(true);
   });
@@ -478,20 +497,23 @@ describe("combine nodes (spec 10)", () => {
     const cb = combineNode(0, 0);
     g = { ...g, nodes: [cb] };
     g = addCombineInput(g, cb.id);
-    expect(g.nodes[0].data.inputs).toHaveLength(3);
-    const slotId = g.nodes[0].data.inputs[2].id;
+    expect((g.nodes[0].data as CombineData).inputs).toHaveLength(3);
+    const slotId = (g.nodes[0].data as CombineData).inputs[2].id;
     g = removeCombineInput(g, cb.id, slotId);
-    expect(g.nodes[0].data.inputs).toHaveLength(2);
+    expect((g.nodes[0].data as CombineData).inputs).toHaveLength(2);
     g = setCombineMedium(g, cb.id, "vorticity", 9);
-    expect(g.nodes[0].data.medium.vorticity).toBe(9);
+    expect((g.nodes[0].data as CombineData).medium.vorticity).toBe(9);
   });
 
   it("normalizeGraph fills a partial combine's fields", () => {
-    const g = { ...emptyGraph(), nodes: [{ id: "n-x", type: "combine", x: 0, y: 0, data: {} }] };
+    const g = {
+      ...emptyGraph(),
+      nodes: [{ id: "n-x", type: "combine", x: 0, y: 0, data: {} } as unknown as GraphNode],
+    };
     const n = normalizeGraph(g).nodes[0];
-    expect(n.data.mode).toBe("merge");
-    expect(n.data.inputs.length).toBeGreaterThanOrEqual(2);
-    expect(n.data.medium.dissipation).toBeDefined();
+    expect((n.data as CombineData).mode).toBe("merge");
+    expect((n.data as CombineData).inputs.length).toBeGreaterThanOrEqual(2);
+    expect((n.data as CombineData).medium.dissipation).toBeDefined();
   });
 });
 
@@ -499,21 +521,21 @@ describe("points node (spec 11)", () => {
   it("pointsNode factory: a points array seeded with one centre point", () => {
     const p = pointsNode(0, 0);
     expect(p.type).toBe("points");
-    expect(p.data.points).toEqual([[0.5, 0.5]]);
+    expect((p.data as PointsData).points).toEqual([[0.5, 0.5]]);
   });
 
   it("add / move / remove point helpers", () => {
-    let g = { ...emptyGraph(), nodes: [pointsNode(0, 0)] };
+    let g: Graph = { ...emptyGraph(), nodes: [pointsNode(0, 0)] };
     const id = g.nodes[0].id;
-    g = addPoint(g, id, [0.2, 0.3]);
-    expect(g.nodes[0].data.points).toEqual([
+    g = addPoint(g, id, [0.2, 0.3] as Point);
+    expect((g.nodes[0].data as PointsData).points).toEqual([
       [0.5, 0.5],
       [0.2, 0.3],
     ]);
-    g = movePoint(g, id, 0, [0.9, 0.9]);
-    expect(g.nodes[0].data.points[0]).toEqual([0.9, 0.9]);
+    g = movePoint(g, id, 0, [0.9, 0.9] as Point);
+    expect((g.nodes[0].data as PointsData).points[0]).toEqual([0.9, 0.9]);
     g = removePoint(g, id, 0);
-    expect(g.nodes[0].data.points).toEqual([[0.2, 0.3]]);
+    expect((g.nodes[0].data as PointsData).points).toEqual([[0.2, 0.3]]);
   });
 
   it("points -> fluid.positions validates, and moving a point busts the output hash", () => {
@@ -529,7 +551,7 @@ describe("points node (spec 11)", () => {
     expect(videoSource(g, f.id, "positions")).toBe(p.id);
 
     const h1 = outputHash(g, out.id, "job", 0, 10, []);
-    const g2 = movePoint(g, p.id, 0, [0.1, 0.1]);
+    const g2 = movePoint(g, p.id, 0, [0.1, 0.1] as Point);
     expect(outputHash(g2, out.id, "job", 0, 10, [])).not.toBe(h1); // point feeds the render
   });
 

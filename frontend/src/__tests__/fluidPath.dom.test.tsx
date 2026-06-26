@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import PathEditor from "../components/fluid/PathEditor.tsx";
+import PathEditor from "../components/fluid/PathEditor";
 
 afterEach(cleanup);
 
@@ -13,7 +13,7 @@ describe("PathEditor", () => {
       [0.5, 0.5],
       [0.2, 0.8],
       [0.8, 0.3],
-    ],
+    ] as [number, number][],
     pathClosed: false,
     onAddPoint: () => {},
     onMovePoint: () => {},
@@ -42,7 +42,7 @@ describe("PathEditor", () => {
     const onAddPoint = vi.fn();
     const { container } = render(<PathEditor {...base} onAddPoint={onAddPoint} />);
     const overlay = container.querySelector(".fluid-overlay");
-    fireEvent.pointerDown(overlay); // target === currentTarget → an add
+    fireEvent.pointerDown(overlay!); // target === currentTarget → an add
     expect(onAddPoint).toHaveBeenCalledTimes(1);
     expect(onAddPoint.mock.calls[0][0]).toHaveLength(2); // a [x, y] coord
   });
@@ -50,7 +50,7 @@ describe("PathEditor", () => {
   it("ignores a pointer-down that lands on a marker (no stray add)", () => {
     const onAddPoint = vi.fn();
     const { container } = render(<PathEditor {...base} onAddPoint={onAddPoint} />);
-    fireEvent.pointerDown(container.querySelector(".fluid-marker"));
+    fireEvent.pointerDown(container.querySelector(".fluid-marker")!);
     expect(onAddPoint).not.toHaveBeenCalled();
   });
 

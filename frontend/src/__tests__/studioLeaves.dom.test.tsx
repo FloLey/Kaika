@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import CurveView from "../components/studio/CurveView.tsx";
-import PulsePad from "../components/studio/PulsePad.tsx";
-import VolumeControl from "../components/studio/VolumeControl.tsx";
-import SegmentRail from "../components/studio/SegmentRail.tsx";
-import Spectrogram from "../components/studio/Spectrogram.tsx";
+import CurveView from "../components/studio/CurveView";
+import PulsePad from "../components/studio/PulsePad";
+import VolumeControl from "../components/studio/VolumeControl";
+import SegmentRail from "../components/studio/SegmentRail";
+import Spectrogram from "../components/studio/Spectrogram";
 
 afterEach(cleanup);
 
@@ -37,15 +37,15 @@ describe("VolumeControl", () => {
     fireEvent.click(getByLabelText("Volume"));
     const slider = container.querySelector("input[type=range]");
     expect(slider).toBeTruthy();
-    fireEvent.change(slider, { target: { value: "0.8" } });
+    fireEvent.change(slider!, { target: { value: "0.8" } });
     expect(onChange).toHaveBeenCalledWith(0.8);
   });
 });
 
 describe("SegmentRail", () => {
   const segments = [
-    { id: "s0", label: "intro", start: 0, end: 4 },
-    { id: "s1", label: "verse", start: 4, end: 12 },
+    { id: "s0", label: "intro", start: 0, end: 4, signals: [] },
+    { id: "s1", label: "verse", start: 4, end: 12, signals: [] },
   ];
   it("renders a chip per segment and selects on click", () => {
     const onSelect = vi.fn();

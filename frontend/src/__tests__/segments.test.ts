@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { LABELS, LABEL_COLOR, hydrateSegments, serializeSegments } from "../lib/segments";
+import type { RawSegment } from "../lib/segments";
 
 // A minimal stems map (only `sr` is read by the hydration path).
 const STEMS = {
@@ -11,11 +12,11 @@ const STEMS = {
 };
 
 // Drop the always-fresh ids so two hydrations are comparable.
-const stripIds = (segs) =>
+const stripIds = (segs: RawSegment[]) =>
   segs.map((s) => ({
     ...s,
     id: undefined,
-    signals: s.signals.map((g) => ({ ...g, id: undefined })),
+    signals: (s.signals ?? []).map((g) => ({ ...g, id: undefined })),
   }));
 
 describe("segments persistence contract", () => {
@@ -47,7 +48,7 @@ describe("segments persistence contract", () => {
     expect(out[0].start).toBe(0);
     expect(out[0].end).toBe(10);
     expect(out[0].label).toBe("verse");
-    const sig = out[0].signals.find((s) => s.minHz === 100 && s.maxHz === 500);
+    const sig = out[0].signals!.find((s) => s.minHz === 100 && s.maxHz === 500);
     expect(sig).toMatchObject({
       stemKey: "vocals",
       feature: "energy",

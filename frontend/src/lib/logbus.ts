@@ -31,7 +31,7 @@ interface BackendRow {
   level: LogLevel;
   logger: string;
   msg: string;
-  trace?: string;
+  trace?: string | null;
 }
 
 export interface BackendPayload {
@@ -124,7 +124,7 @@ export function ingestBackend(payload: BackendPayload | null | undefined) {
       source: "backend",
       logger: e.logger,
       msg: e.msg,
-      trace: e.trace,
+      trace: e.trace ?? undefined,
     });
   }
 }

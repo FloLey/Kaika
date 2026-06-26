@@ -2,10 +2,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import AnimationCanvas from "../components/animation/AnimationCanvas";
+import type { Segment } from "../lib/types";
 
 afterEach(cleanup);
 
-const baseSegment = { id: "s1", start: 0, end: 8, signals: [] };
+const baseSegment: Segment = { id: "s1", label: "seg", start: 0, end: 8, signals: [] };
 
 // Guards the useGraphEditor extraction end-to-end: the container mounts, the
 // registry-driven palette renders, and adding a node commits the updated graph.

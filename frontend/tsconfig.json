@@ -9,9 +9,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
 
-    // Incremental migration: .ts/.tsx are type-checked under `strict`; the existing
-    // .js/.jsx coexist (allowJs) but aren't checked (checkJs:false), so we convert
-    // file-by-file with a green `tsc --noEmit` the whole way.
+    // The migration is complete: all source + tests are .ts/.tsx and type-checked
+    // under `strict`. `allowJs` stays only for the one generated file
+    // (src/lib/fluidParams.js, produced by `make gen-params`); `checkJs:false`
+    // leaves that generated JS unchecked.
     "allowJs": true,
     "checkJs": false,
     "strict": true,

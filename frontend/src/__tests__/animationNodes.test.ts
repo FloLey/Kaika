@@ -16,16 +16,30 @@ import {
   setNodeRange,
   patchStatic,
 } from "../components/animation/nodes/fluidBindings";
+import type { FluidData, Graph, GraphNode, Segment, Signal } from "../lib/types";
+import type { NodeHelpers, NodeProps } from "../components/animation/nodes/nodeProps";
 
-const h = (node) => ({
+const baseHelpers: NodeHelpers = {
+  portRef: () => () => {},
+  startConnect: () => {},
+  onTitlePointerDown: () => {},
+  selected: false,
+};
+// A full, valid NodeProps; callers spread it and override ctx / handlers.
+const h = (node: GraphNode): NodeProps => ({
   node,
   selected: false,
-  helpers: {
-    portRef: () => () => {},
-    startConnect: () => {},
-    onTitlePointerDown: () => {},
-    selected: false,
-  },
+  helpers: baseHelpers,
+  ctx: {},
+  onGraphChange: () => {},
+});
+// A minimal valid Segment fixture.
+const seg = (start: number, end: number, signals: Signal[] = []): Segment => ({
+  id: "seg",
+  label: "seg",
+  start,
+  end,
+  signals,
 });
 
 describe("Port", () => {
@@ -68,7 +82,7 @@ describe("SignalNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(SignalNode, {
         ...h(node),
-        ctx: { signals: [signal], segment: { start: 0, end: 8 }, job: { job_id: "job" } },
+        ctx: { signals: [signal], segment: seg(0, 8), job: { job_id: "job" } },
       })
     );
     expect(html).toContain("signal"); // title
@@ -82,7 +96,7 @@ describe("SignalNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(SignalNode, {
         ...h(node),
-        ctx: { signals: [], segment: { start: 0, end: 8 }, job: { job_id: "job" } },
+        ctx: { signals: [], segment: seg(0, 8), job: { job_id: "job" } },
       })
     );
     expect(html).toContain("missing signal");
@@ -92,7 +106,7 @@ describe("SignalNode", () => {
 
 describe("OutputNode", () => {
   // A graph where `out` is wired to a fluid (so the output is renderable).
-  const renderableCtx = (out) => {
+  const renderableCtx = (out: GraphNode) => {
     const fluid = fluidNode(0, 0);
     const graph = {
       version: 1,
@@ -101,7 +115,7 @@ describe("OutputNode", () => {
         { id: "e", source: fluid.id, sourcePort: "out", target: out.id, targetPort: "video" },
       ],
     };
-    return { graph, segment: { start: 0, end: 8, signals: [] }, job: "job", signals: [] };
+    return { graph, segment: seg(0, 8), job: "job", signals: [] };
   };
 
   it("has one video in port and prompts to wire a fluid when unwired", () => {
@@ -130,7 +144,7 @@ describe("FluidNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(FluidNode, {
         ...h(node),
-        ctx: { graph: { nodes: [node], edges: [] } },
+        ctx: { graph: { version: 1, nodes: [node], edges: [] } },
         onGraphChange: () => {},
         onDetach: () => {},
       })
@@ -156,17 +170,20 @@ describe("FluidNode", () => {
     // builder the component uses — and hands the resulting updater to onGraphChange.
     const node = fluidNode(0, 0);
     const param = FLUID_PARAMS.find((p) => p.key === "force");
-    const updater = setConstValue(node.id, "force", param.max);
-    const g2 = updater({ nodes: [node], edges: [] });
-    expect(g2.nodes[0].data.ports.force.binding).toEqual({ kind: "const", value: param.max });
+    const updater = setConstValue(node.id, "force", param!.max);
+    const g2 = updater({ version: 1, nodes: [node], edges: [] });
+    expect((g2.nodes[0].data as FluidData).ports.force.binding).toEqual({
+      kind: "const",
+      value: param!.max,
+    });
   });
 
   it("a wired param row's range edit patches lo/hi on the node binding", () => {
     const node = fluidNode(0, 0);
     node.data.ports.force.binding = { kind: "node", nodeId: "n-src", lo: 0, hi: 60 };
     const updater = setNodeRange(node.id, "force", 0, 45);
-    const g2 = updater({ nodes: [node], edges: [] });
-    expect(g2.nodes[0].data.ports.force.binding).toMatchObject({
+    const g2 = updater({ version: 1, nodes: [node], edges: [] });
+    expect((g2.nodes[0].data as FluidData).ports.force.binding).toMatchObject({
       kind: "node",
       nodeId: "n-src",
       lo: 0,
@@ -177,8 +194,10 @@ describe("FluidNode", () => {
   it("static patches edit data.static", () => {
     const node = fluidNode(0, 0);
     const updater = patchStatic(node.id, { duration: 12 });
-    const g2 = updater({ nodes: [node], edges: [] });
-    expect(g2.nodes[0].data.static.duration).toBe(12);
+    const g2 = updater({ version: 1, nodes: [node], edges: [] });
+    expect(
+      ((g2.nodes[0].data as FluidData).static as unknown as Record<string, unknown>).duration
+    ).toBe(12);
   });
 });
 
@@ -200,7 +219,7 @@ describe("CombineNode", () => {
 
   it("layered mode: per-input opacity sliders, no shared-medium block", () => {
     const base = combineNode(0, 0);
-    const node = { ...base, data: { ...base.data, mode: "stack" } };
+    const node = { ...base, data: { ...base.data, mode: "stack" as const } };
     const html = renderToStaticMarkup(
       React.createElement(CombineNode, { ...h(node), onGraphChange: () => {} })
     );
@@ -232,7 +251,8 @@ describe("PointsNode (spec 11)", () => {
       [0.2, 0.2],
       [0.3, 0.3],
     ];
-    const graph = {
+    const graph: Graph = {
+      version: 1,
       nodes: [f, p],
       edges: [{ id: "e", source: p.id, sourcePort: "out", target: f.id, targetPort: "positions" }],
     };

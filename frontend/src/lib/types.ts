@@ -5,6 +5,9 @@
 
 export type Quality = "draft" | "normal" | "high";
 
+// A normalized [x, y] coordinate (0..1) on a pad — source-path points, etc.
+export type Point = [number, number];
+
 export interface OutputSettings {
   width: number;
   height: number;

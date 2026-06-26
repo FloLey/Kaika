@@ -52,7 +52,7 @@ export default [
     },
   },
   {
-    files: ["src/**/*.test.{js,jsx}", "vite.config.js"],
+    files: ["src/**/*.test.{js,jsx,ts,tsx}", "vite.config.js"],
     languageOptions: { globals: { ...globals.node } },
   },
 ];
