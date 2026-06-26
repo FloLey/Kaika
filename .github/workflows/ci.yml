@@ -16,9 +16,11 @@ jobs:
           cache: pip
       # ruff is static — no runtime deps needed, so lint fast first.
       - name: Install lint/test tooling
-        run: pip install ruff==0.15.19 pytest==9.1.1 pytest-cov
+        run: pip install ruff==0.15.19 black==26.5.1 pytest==9.1.1 pytest-cov
       - name: Ruff
         run: ruff check backend tests
+      - name: Black (format check)
+        run: black --check backend tests
       # The pure-logic test suite needs these runtime deps (audio/sim libs); the
       # heavy ML stack (torch/demucs/whisper) is only used by routes, not tests.
       - name: Install test runtime deps
@@ -45,9 +47,8 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      # NOTE: `npm run format:check` is intentionally NOT gated yet — the one-time
-      # Prettier+Black reformat (make format) lands as its own commit after the TS
-      # migration; add the step here once the tree is formatted.
+      - name: Format check
+        run: npm run format:check
       - name: Test
         run: npm test
       - name: Build

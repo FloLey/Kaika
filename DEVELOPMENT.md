@@ -140,15 +140,26 @@ here too (those files are rewritten anyway). Lower priority — the high-value t
 ## Formatting
 
 Black (Python) + Prettier (frontend) are configured (`pyproject.toml`,
-`.prettierrc.json`) but the one-time repo-wide reformat has **not** been applied yet
-— it's best run after the TypeScript migration so it isn't thrown away. When ready:
+`.prettierrc.json`) and the one-time repo-wide reformat **has been applied** (its SHA
+is in `.git-blame-ignore-revs`). CI now gates formatting: `black --check backend tests`
+and `npm run format:check` must pass. Keep the tree formatted as you go:
 
 ```bash
-make format          # Black + Prettier across the tree (land as its OWN commit)
+make format          # Black + Prettier across the tree
 ```
 
-Then add that commit's SHA to `.git-blame-ignore-revs` and enable the `format:check`
-steps in CI / the pre-commit hook (`pre-commit install`).
+Enable `git blame` to skip the reformat commit (once per clone):
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+To catch formatting before it reaches CI, install the pre-commit hooks (ruff + black
++ prettier, pinned in `.pre-commit-config.yaml`):
+
+```bash
+pip install pre-commit && pre-commit install
+```
 
 ## Lint config
 

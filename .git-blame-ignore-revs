@@ -3,3 +3,6 @@
 #
 # Add the SHA of the one-time `make format` reformat commit here once it lands, so
 # blame keeps pointing at the real authorship, not the whitespace pass.
+
+# Reformat: Black + Prettier (no logic change) — spec 04
+2dcc2c5c07679500b677f63632000ce435c437c6

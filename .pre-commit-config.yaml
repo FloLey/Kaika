@@ -8,7 +8,7 @@ repos:
       - id: ruff
         args: [--fix]
   - repo: https://github.com/psf/black
-    rev: 24.10.0
+    rev: 26.5.1
     hooks:
       - id: black
         files: ^backend/|^tests/
@@ -18,5 +18,5 @@ repos:
         name: prettier (frontend)
         entry: bash -c 'cd frontend && npx prettier --write "$@"' --
         language: system
-        files: ^frontend/src/.*\.(js|jsx|css)$
+        files: ^frontend/src/.*\.(js|jsx|ts|tsx|css)$
         exclude: ^frontend/src/lib/fluidParams\.js$
