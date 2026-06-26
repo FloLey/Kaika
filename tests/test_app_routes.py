@@ -45,3 +45,44 @@ def test_fluid_rejects_non_object_body(client):
 
 def test_jobs_unknown_is_404(client):
     assert client.get("/jobs/does-not-exist").status_code == 404
+
+
+# --- one smoke per blueprint after the spec-03 split (no DB / no audio needed) ---
+
+def test_upload_without_file_or_url_is_400(client):
+    # uploads blueprint: the request-context validation runs before any work.
+    assert client.post("/upload", data={}).status_code == 400
+
+
+def test_segment_missing_job_id_is_400(client):
+    # uploads blueprint: missing job_id is rejected before touching disk.
+    assert client.post("/segment", json={}).status_code == 400
+
+
+def test_logs_feed_is_json(client):
+    # uploads blueprint: the log feed never needs a DB.
+    r = client.get("/logs?since=0")
+    assert r.status_code == 200 and "entries" in r.get_json()
+
+
+def test_fluid_file_non_mp4_is_404(client):
+    # media blueprint: only .mp4 names are served.
+    assert client.get("/fluid/not-a-video").status_code == 404
+
+
+def test_spectrogram_unknown_stem_is_404(client):
+    # media blueprint: a stem outside STEMS is rejected before any file read.
+    assert client.get("/spectrogram/whatever/not-a-stem").status_code == 404
+
+
+def test_audio_unknown_job_is_404(client):
+    # media blueprint: no audio on disk -> 404.
+    assert client.get("/audio/nope/drums").status_code == 404
+
+
+def test_projects_list_shape(client):
+    # projects blueprint: returns a list when a DB is up; skip otherwise.
+    r = client.get("/projects")
+    if r.status_code != 200:
+        pytest.skip("no database available")
+    assert isinstance(r.get_json(), list)
