@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import NodeFrame, { Port } from "./NodeFrame.jsx";
+import type { CSSProperties } from "react";
+import NodeFrame, { Port } from "./NodeFrame";
 import { outputHash, outputRenderable } from "../../../lib/graphModel";
 import { aspectOf } from "../../../lib/output";
 import * as api from "../../../lib/api.js";
+import type { NodeProps } from "./nodeProps";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered
 // clip. Each output node renders ITS OWN pipeline (the fluid wired into it, N per
@@ -11,12 +13,12 @@ import * as api from "../../../lib/api.js";
 // The video's frame is slaved to the SHARED segment clock (ctx.groupClock =
 // Studio's refAudio) so it plays and scrubs in lock-step with the segment audio and
 // the signal pulse pads. Shows not-rendered / rendering / error states.
-export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
+export default function OutputNode({ node, selected, helpers, ctx, onDelete }: NodeProps) {
   const {
     graph, segment, job, output, signals,
     groupClock, groupPlaying, segStart = 0,
   } = ctx || {};
-  const videoRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const [videoUrl, setVideoUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,7 +39,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
   );
   const renderKey = useMemo(
     () => (graph
-      ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals)
+      ? outputHash(graph, node.id, job as string | undefined, segment?.start, segment?.end, signals)
         + JSON.stringify(output || {})
       : ""),
     [graph, node.id, job, segment?.start, segment?.end, signals, output]
@@ -55,7 +57,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
       try {
         const { url } = await api.renderGraph({
           job_id: job,
-          segment: { start: segment.start, end: segment.end, signals: segment.signals },
+          segment: { start: segment?.start, end: segment?.end, signals: segment?.signals },
           graph,
           output,
           output_id: node.id,
@@ -63,7 +65,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
         if (id !== reqId.current) return;        // a newer edit superseded us
         setVideoUrl(url);
       } catch (e) {
-        if (id === reqId.current) setError(e.message || String(e));
+        if (id === reqId.current) setError((e as Error)?.message || String(e));
       } finally {
         if (id === reqId.current) setBusy(false);
       }
@@ -112,7 +114,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
       };
     }
     v.pause();
-    let raf;
+    let raf: number;
     const sync = () => {
       const a = groupClock && groupClock.current;
       if (a && v.duration) {
@@ -155,7 +157,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }) {
         />
       }
     >
-      <div className="anim-output-well" style={{ "--out-aspect": aspect }}>
+      <div className="anim-output-well" style={{ "--out-aspect": aspect } as CSSProperties}>
         {videoUrl ? (
           <video
             ref={videoRef}

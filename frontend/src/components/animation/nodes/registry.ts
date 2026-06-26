@@ -8,11 +8,11 @@
 // components and graphModel must NOT import it.
 
 import type { ComponentType } from "react";
-import SignalNode from "./SignalNode.jsx";
+import SignalNode from "./SignalNode";
 import FluidNode from "./FluidNode";
-import OutputNode from "./OutputNode.jsx";
-import CombineNode from "./CombineNode.jsx";
-import PointsNode from "./PointsNode.jsx";
+import OutputNode from "./OutputNode";
+import CombineNode from "./CombineNode";
+import PointsNode from "./PointsNode";
 import { fluidNode, outputNode, combineNode, pointsNode } from "../../../lib/graphModel";
 import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
 import type { NodeProps } from "./nodeProps";
@@ -27,9 +27,9 @@ export interface NodeChrome {
 
 export interface NodeSpec {
   type: NodeType;
-  // The card component. Untyped while the node components are still .jsx; Phase 8
-  // converts them to .tsx with a shared NodeProps and tightens this.
-  Component: ComponentType<any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+  // The card component — now that every card is .tsx and implements NodeProps, a card
+  // whose props don't match is a compile error.
+  Component: ComponentType<NodeProps>;
   chrome: NodeChrome;
   // Generic palette factory (x, y) -> node. Omitted for `signal` (added via the
   // signal picker, not a plain button).

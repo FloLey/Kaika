@@ -1,4 +1,4 @@
-import MinimizedCard from "./nodes/MinimizedCard.jsx";
+import MinimizedCard from "./nodes/MinimizedCard";
 import { NODE_TYPES } from "./nodes/registry";
 
 // Resolves a graph node to its React card via the node-type registry. 07's container

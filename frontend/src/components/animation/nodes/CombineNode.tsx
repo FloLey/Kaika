@@ -1,10 +1,16 @@
-import Ctl from "../../../ui/Ctl.jsx";
-import NodeFrame, { Port } from "./NodeFrame.jsx";
+import type { ChangeEvent, ComponentType } from "react";
+import CtlJsx from "../../../ui/Ctl.jsx";
+import NodeFrame, { Port } from "./NodeFrame";
 import { fluidParam } from "../../../lib/fluidParams.js";
 import {
   setCombineMode, setCombineOpacity, setCombineMedium,
   addCombineInput, removeCombineInput,
 } from "../../../lib/graphModel";
+import type { NodeProps } from "./nodeProps";
+import type { CombineData, CombineMedium } from "../../../lib/types";
+
+// Bridge: ui/Ctl is still .jsx — cast until it converts.
+const Ctl = CtlJsx as ComponentType<any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // The combine card (spec 10): composes N video inputs into one video output.
 //  • merge  — the inputs' emitters share ONE simulation (they interact), using
@@ -14,10 +20,10 @@ import {
 // Dynamic N inputs: each slot is a video `in` port (+ a ✕ to remove); `+ input`
 // adds another. One video `out` port. v1 combine settings are static (signals
 // still drive the upstream fluids).
-const MEDIUM_KEYS = ["dissipation", "velocity_dissipation", "viscosity", "vorticity"];
+const MEDIUM_KEYS: (keyof CombineMedium)[] = ["dissipation", "velocity_dissipation", "viscosity", "vorticity"];
 
-export default function CombineNode({ node, selected, helpers, onGraphChange, onDelete }) {
-  const d = node.data;
+export default function CombineNode({ node, selected, helpers, onGraphChange, onDelete }: NodeProps) {
+  const d = node.data as CombineData;
   const mode = d.mode || "merge";
   const inputs = d.inputs || [];
 
@@ -81,7 +87,7 @@ export default function CombineNode({ node, selected, helpers, onGraphChange, on
                 max={1}
                 step={0.01}
                 value={slot.opacity ?? 1}
-                onChange={(e) =>
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
                   onGraphChange((g) => setCombineOpacity(g, node.id, slot.id, parseFloat(e.target.value)))}
                 title="layer opacity"
               />
@@ -120,7 +126,7 @@ export default function CombineNode({ node, selected, helpers, onGraphChange, on
                 max={p ? p.max : 1}
                 step={p ? p.step : 0.01}
                 fmt={p ? p.fmt : undefined}
-                onChange={(v) => onGraphChange((g) => setCombineMedium(g, node.id, key, v))}
+                onChange={(v: number) => onGraphChange((g) => setCombineMedium(g, node.id, key, v))}
               />
             );
           })}

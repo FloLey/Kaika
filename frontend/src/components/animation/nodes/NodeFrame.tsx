@@ -5,9 +5,23 @@
 // canvas via `portRef(nodeId, portId, kind, flow)`.
 
 import { useCallback, useContext } from "react";
+import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { MinimizeContext } from "./minimizeContext.js";
+import type { PortRef } from "./nodeProps";
 
-export function Port({ nodeId, portId, kind, flow = "value", portRef, startConnect, title }) {
+type StartConnect = (nodeId: string, portId: string, flow: string, e: PointerEvent) => void;
+
+interface PortProps {
+  nodeId: string;
+  portId: string;
+  kind: string;
+  flow?: string;
+  portRef: PortRef;
+  startConnect?: StartConnect;
+  title?: string;
+}
+
+export function Port({ nodeId, portId, kind, flow = "value", portRef, startConnect, title }: PortProps) {
   return (
     <span
       className={`gc-port gc-port-${kind} gc-port-${flow}`}
@@ -24,14 +38,24 @@ export function Port({ nodeId, portId, kind, flow = "value", portRef, startConne
   );
 }
 
+interface PortDesc { portId: string; kind: string; flow: string; }
+interface MultiAnchorProps {
+  nodeId: string;
+  ports: PortDesc[];
+  portRef: PortRef;
+  startConnect?: StartConnect;
+  className?: string;
+  title?: string;
+}
+
 // A single wiring dot that re-registers SEVERAL logical ports to one DOM element,
 // so all their edges converge on it (the generalisation of FluidNode's GroupAnchor,
 // used by MinimizedCard to collapse a card's wires onto one header anchor). If it
 // carries exactly one `out` port it can also start a new wire.
-export function MultiAnchor({ nodeId, ports, portRef, startConnect, className = "", title }) {
+export function MultiAnchor({ nodeId, ports, portRef, startConnect, className = "", title }: MultiAnchorProps) {
   const key = ports.map((p) => `${p.portId}:${p.kind}:${p.flow}`).join(",");
   const ref = useCallback(
-    (el) => { for (const p of ports) portRef(nodeId, p.portId, p.kind, p.flow)(el); },
+    (el: Element | null) => { for (const p of ports) portRef(nodeId, p.portId, p.kind, p.flow)(el); },
     // Deliberate: key on the serialized `key`, not the `ports` array identity, so
     // the ref callback stays stable while the port set is unchanged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,16 +75,34 @@ export function MultiAnchor({ nodeId, ports, portRef, startConnect, className = 
   );
 }
 
+interface NodeFrameProps {
+  node: { id: string; type: string };
+  title: ReactNode;
+  accent: string;
+  selected?: boolean;
+  onTitlePointerDown?: (e: PointerEvent) => void;
+  onDelete?: () => void;
+  headLead?: ReactNode;
+  headExtra?: ReactNode;
+  sideIn?: ReactNode;
+  sideOut?: ReactNode;
+  minimized?: boolean;
+  children?: ReactNode;
+}
+
 export default function NodeFrame({
   node, title, accent, selected, onTitlePointerDown, onDelete, headLead, headExtra,
   sideIn, sideOut, minimized = false, children,
-}) {
-  const { minimized: minSet, toggle } = useContext(MinimizeContext);
+}: NodeFrameProps) {
+  const { minimized: minSet, toggle } = useContext(MinimizeContext) as {
+    minimized?: Set<string>;
+    toggle?: (id: string) => void;
+  };
   const isMin = minimized || (minSet && minSet.has && minSet.has(node.id));
   return (
     <div
       className={`anim-node anim-node-${node.type}` + (selected ? " sel" : "") + (isMin ? " min" : "")}
-      style={{ "--accent": accent }}
+      style={{ "--accent": accent } as CSSProperties}
     >
       {/* Connector dots that straddle the card's left/right edge (centered on the
           title bar) so a wire visibly enters/leaves the side, not the title. */}

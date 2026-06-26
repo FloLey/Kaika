@@ -1,7 +1,11 @@
 import { useEffect } from "react";
-import NodeFrame, { MultiAnchor } from "./NodeFrame.jsx";
+import NodeFrame, { MultiAnchor } from "./NodeFrame";
 import { chromeFor } from "./registry";
 import { stemColor } from "../../../lib/segments.js";
+import type { NodeProps } from "./nodeProps";
+
+// renderAnimNode passes only these (no selection/onGraphChange for a collapsed card).
+type MinimizedCardProps = Pick<NodeProps, "node" | "helpers" | "ctx" | "onDelete">;
 
 // A card collapsed to just its header. All of the node's inbound wires re-route to
 // ONE left anchor and its single `out` to ONE right anchor (both registered via
@@ -10,7 +14,7 @@ import { stemColor } from "../../../lib/segments.js";
 // full node when ctx.minimized has the node id. Header chrome (title/accent/outFlow)
 // comes from the node-type registry; signal's accent follows its stem colour below.
 
-export default function MinimizedCard({ node, helpers, ctx, onDelete }) {
+export default function MinimizedCard({ node, helpers, ctx, onDelete }: MinimizedCardProps) {
   const base = chromeFor(node.type);
   let accent = base.accent;
   if (node.type === "signal") {

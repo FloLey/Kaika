@@ -1,32 +1,42 @@
 import { useEffect, useState } from "react";
-import NodeFrame, { Port } from "./NodeFrame.jsx";
-import CurveView from "../../studio/CurveView.jsx";
-import PulsePad from "../../studio/PulsePad.jsx";
+import type { ComponentType, CSSProperties } from "react";
+import NodeFrame, { Port } from "./NodeFrame";
+import CurveViewJsx from "../../studio/CurveView.jsx";
+import PulsePadJsx from "../../studio/PulsePad.jsx";
 import { stemColor, STEM_META } from "../../../lib/segments.js";
 import { fmtHz } from "../../../lib/mel.js";
 import { extractSignal } from "../../../lib/api.js";
+import type { NodeProps } from "./nodeProps";
+import type { SignalData } from "../../../lib/types";
+
+// Bridge: studio components are still .jsx — cast until they convert.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const CurveView = CurveViewJsx as ComponentType<any>;
+const PulsePad = PulsePadJsx as ComponentType<any>;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const FPS = 30;
-const stemName = (key) => (STEM_META.find((m) => m.key === key) || {}).name || key;
+const stemName = (key?: string) => (STEM_META.find((m: { key: string }) => m.key === key) || {}).name || key;
 
 // A read-only mirror of a signal defined in the other tab (01 §3.1 signal). It
 // resolves the live signal from the segment's `signals` by `data.signalId`, shows
 // its stem chip / feature / band, and a recognizable sparkline (a one-shot,
 // debounced extractSignal — the SignalCard pattern, no playback). One `out` port.
 // If the signal was deleted, it shows a graceful "missing signal" state.
-export default function SignalNode({ node, selected, helpers, ctx, onDelete }) {
+export default function SignalNode({ node, selected, helpers, ctx, onDelete }: NodeProps) {
   const { signals = [], segment, job, groupClock, groupPlaying } = ctx || {};
-  const signal = signals.find((s) => s.id === node.data.signalId) || null;
+  const data = node.data as SignalData;
+  const signal = signals.find((s) => s.id === data.signalId) || null;
 
   const segStart = segment?.start ?? 0;
   const segEnd = segment?.end ?? 0;
   const winLen = Math.max(0.001, segEnd - segStart);
-  // `ctx.job` is the job_id string (AnimationCanvas passes the project's `job`,
-  // a string — same value SignalCard sends as `job_id`). Tolerate an object form
-  // too, in case a caller ever passes the richer job record.
-  const jobId = typeof job === "string" ? job : (job?.job_id || job?.jobId || ctx?.jobId);
+  // `ctx.job` is the job_id string (AnimationCanvas passes the project's `job`, a
+  // string). Tolerate an object form too, in case a caller passes the richer record.
+  const jobRec = job as string | { job_id?: string; jobId?: string } | undefined;
+  const jobId = typeof jobRec === "string" ? jobRec : (jobRec?.job_id || jobRec?.jobId);
 
-  const [curve, setCurve] = useState([]);
+  const [curve, setCurve] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Re-extract only when a field that changes the curve changes (not every render,
@@ -58,7 +68,7 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }) {
         gamma: signal.gamma, gain: signal.gain, offset: signal.offset,
         threshold: signal.threshold,
       })
-        .then((d) => { setCurve(d.curve || []); setLoading(false); })
+        .then((d: { curve?: number[] }) => { setCurve(d.curve || []); setLoading(false); })
         .catch(() => { setCurve([]); setLoading(false); });
     }, 220);
     return () => clearTimeout(t);
@@ -93,7 +103,7 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }) {
       {signal ? (
         <div className="anim-signal">
           <div className="anim-signal-meta">
-            <span className="stem-chip" style={{ "--accent": color }}>
+            <span className="stem-chip" style={{ "--accent": color } as CSSProperties}>
               {stemName(signal.stemKey)}
             </span>
             <span className="anim-signal-name">{signal.name}</span>
@@ -130,7 +140,7 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }) {
         <div className="anim-signal anim-signal-missing">
           <div className="anim-missing-msg">
             missing signal
-            <span className="anim-missing-id">{node.data.label || node.data.signalId}</span>
+            <span className="anim-missing-id">{data.label || data.signalId}</span>
           </div>
           <div className="anim-missing-hint">re-pick it in the Signals tab, or delete this node.</div>
         </div>

@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { Toggle as ToggleJsx } from "../../../ui/Ctl.jsx";
-import NodeFrameJsx, { Port as PortJsx } from "./NodeFrame.jsx";
-import { FLUID_PARAMS } from "../../../lib/fluidParams.js";
+import NodeFrame, { Port } from "./NodeFrame";
+import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
 import { patchStatic } from "./fluidBindings";
-import { ParamRow as ParamRowJsx, GroupAnchor as GroupAnchorJsx } from "./FluidParamRow.jsx";
+import { ParamRow, GroupAnchor } from "./FluidParamRow";
 import type { NodeProps } from "./nodeProps";
-import type { FluidData } from "../../../lib/types";
+import type { FluidData, FluidParam } from "../../../lib/types";
 
-// Bridge: these children are still .jsx (TS infers all their props as required), so
-// cast to a permissive component type until they convert to .tsx — then drop the cast.
+const FLUID_PARAMS = RAW_FLUID_PARAMS as FluidParam[];
+// Bridge: ui/Ctl is still .jsx — cast until it converts (optional sweep).
 const Toggle = ToggleJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
-const NodeFrame = NodeFrameJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
-const Port = PortJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
-const ParamRow = ParamRowJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
-const GroupAnchor = GroupAnchorJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // The artifact card (06 §FluidNode). Static controls on top; one input-port ROW
 // per FLUID_PARAMS entry, grouped source/color/medium (rows + the collapsed-group

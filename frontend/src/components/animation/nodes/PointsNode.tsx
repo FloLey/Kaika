@@ -1,31 +1,36 @@
 import { useRef, useState } from "react";
-import NodeFrame, { Port } from "./NodeFrame.jsx";
+import type { CSSProperties, PointerEvent } from "react";
+import NodeFrame, { Port } from "./NodeFrame";
 import { addPoint, movePoint, removePoint } from "../../../lib/graphModel";
 import { useDragPad } from "../../../lib/useDragPad";
 import { aspectOf } from "../../../lib/output";
+import type { NodeProps } from "./nodeProps";
+import type { PointsData } from "../../../lib/types";
+
+type Point = [number, number];
 
 // The points source card (spec 11): a draw surface where you place points.
 // Wired into a fluid's `positions` input, the fluid emits one source per point.
 // Click empty space to add a point, drag a marker to move it, double-click a marker
 // to remove it. The pad adopts the project output aspect so points land where drawn.
 // One `out` port (flow "points"). v1 = static points; edits go through graphModel.
-export default function PointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }) {
-  const padRef = useRef(null);
+export default function PointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+  const padRef = useRef<HTMLDivElement>(null);
   const { norm, startDrag } = useDragPad(padRef);
-  const points = node.data.points || [];
+  const points = (node.data as PointsData).points || [];
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
 
   // The marker being dragged tracks against local state and commits to the graph
   // once on pointer-up — dragging no longer replaces the whole segment graph (and
   // re-runs autosave + canvas edge geometry) on every pointermove.
-  const [drag, setDrag] = useState(null);   // { i, coord } while dragging, else null
+  const [drag, setDrag] = useState<{ i: number; coord: Point } | null>(null);
 
-  const onPadDown = (e) => {
+  const onPadDown = (e: PointerEvent) => {
     if (e.target !== e.currentTarget) return;     // ignore clicks landing on a marker
     onGraphChange((g) => addPoint(g, node.id, norm(e)));
   };
 
-  const onMarkerDown = (i, e) => {
+  const onMarkerDown = (i: number, e: PointerEvent) => {
     startDrag(e, {
       onMove: (coord) => setDrag({ i, coord }),
       onEnd: ({ moved, coord }) => {
@@ -58,7 +63,7 @@ export default function PointsNode({ node, selected, helpers, ctx, onGraphChange
       <div
         className="anim-points-pad no-drag"
         ref={padRef}
-        style={{ "--out-aspect": aspect }}
+        style={{ "--out-aspect": aspect } as CSSProperties}
         onPointerDown={onPadDown}
       >
         {points.map(([x, y], i) => {
