@@ -8,8 +8,8 @@ import {
   mkEdgeId,
 } from "../../lib/graphModel";
 import { fluidParam } from "../../lib/fluidParams.js";
-import type { Graph, GraphEdge, GraphNode, OutputSettings } from "../../lib/types";
-import type { NodeCtx, SignalDef } from "./nodes/nodeProps";
+import type { Graph, GraphEdge, GraphNode, OutputSettings, Segment } from "../../lib/types";
+import type { NodeCtx } from "./nodes/nodeProps";
 
 // The animation editor "brain": graph state (normalized from segment.graph), the
 // selection, the mutation handlers (connect / delete / minimize), and the assembled
@@ -18,7 +18,7 @@ import type { NodeCtx, SignalDef } from "./nodes/nodeProps";
 // templates, …) add here without threading props through the component tree.
 
 interface GraphEditorOpts {
-  segment: NodeCtx["segment"] & { graph?: Graph };
+  segment: Segment;
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -33,10 +33,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   // A stable graph object: segment.graph when present, else a fresh empty graph.
   // normalizeGraph migrates older saves so every fluid node carries the current
   // param ports — otherwise wiring those ports silently fails.
-  const graph = useMemo(
-    () => normalizeGraph((segment.graph as Graph) || emptyGraph()),
-    [segment.graph]
-  );
+  const graph = useMemo(() => normalizeGraph(segment.graph || emptyGraph()), [segment.graph]);
   const [selId, setSelId] = useState<string | null>(null);
 
   // Stable updater: read the latest graph via a ref so the callback identity doesn't
@@ -127,7 +124,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     stems,
     job,
     output,
-    signals: segment.signals as SignalDef[] | undefined,
+    signals: segment.signals,
     graph,
     groupClock,
     groupPlaying,

@@ -13,6 +13,44 @@ export interface OutputSettings {
   background: string;
 }
 
+// ---- studio domain: stems, signals, segments ---------------------------------
+// One separated stem's served URLs + sample rate (top of its spectrogram = sr/2).
+export interface StemInfo {
+  sr?: number;
+  spectrogram?: string;
+  audio?: string;
+}
+
+// A signal: a stem + frequency band + shaping -> a drawable 0..1 curve. The
+// canonical shape shared by the studio (SignalCard) and the animation layer (the
+// loose `SignalDef` is now an alias of this).
+export interface Signal {
+  id: string;
+  stemKey: string;
+  minHz: number;
+  maxHz: number;
+  feature: string;
+  name?: string;
+  attack: number;
+  release: number;
+  invert: boolean;
+  gamma: number;
+  gain: number;
+  offset: number;
+  threshold: number;
+}
+
+// A contiguous time range [start, end] owning a list of signals and (optionally)
+// an animation graph. `graph` is null when no animation has been built yet.
+export interface Segment {
+  id: string;
+  label: string;
+  start: number;
+  end: number;
+  signals: Signal[];
+  graph?: Graph | null;
+}
+
 // ---- value-source binding ----------------------------------------------------
 // A fluid param port is a constant value, or a value-source node whose 0..1 curve
 // maps into [lo, hi] (native units).

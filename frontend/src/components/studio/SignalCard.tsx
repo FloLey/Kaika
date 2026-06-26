@@ -9,29 +9,9 @@ import { engine } from "../../lib/audio";
 import { fmtTime, fmtHz, clamp } from "../../lib/mel";
 import { stemColor } from "../../lib/segments";
 import { extractSignal } from "../../lib/api";
+import type { Signal, StemInfo } from "../../lib/types";
 
 const FPS = 30;
-
-export interface Signal {
-  id: string;
-  stemKey: string;
-  minHz: number;
-  maxHz: number;
-  feature: string;
-  name?: string;
-  attack: number;
-  release: number;
-  invert: boolean;
-  gamma: number;
-  gain: number;
-  offset: number;
-  threshold: number;
-}
-interface StemInfo {
-  sr?: number;
-  spectrogram?: string;
-  audio?: string;
-}
 
 interface SignalCardProps {
   signal: Signal;

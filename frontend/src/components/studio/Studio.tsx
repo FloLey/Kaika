@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent } from "react";
 import SegmentRail from "./SegmentRail";
 import SignalCard from "./SignalCard";
-import type { Signal } from "./SignalCard";
 import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
 import VolumeControl from "./VolumeControl";
@@ -10,24 +9,13 @@ import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
 import { STEM_META, seedSignal } from "../../lib/segments";
 import { fmtTime } from "../../lib/mel";
-import type { Graph, OutputSettings as OutputSettingsT } from "../../lib/types";
-import type { NodeCtx } from "../animation/nodes/nodeProps";
-
-// AnimationCanvas reads the segment through the loose NodeCtx carrier (signals as
-// the index-signature `SignalDef`); our concrete `Signal` is a valid instance of
-// that, so bridge it at the boundary rather than weakening `Signal` itself.
-type AnimSegment = NonNullable<NodeCtx["segment"]> & { graph?: Graph };
-
-type StemInfo = { sr?: number; spectrogram?: string; audio?: string };
-
-export interface Segment {
-  id: string;
-  label: string;
-  start: number;
-  end: number;
-  signals: Signal[];
-  graph?: Graph;
-}
+import type {
+  Graph,
+  OutputSettings as OutputSettingsT,
+  Segment,
+  Signal,
+  StemInfo,
+} from "../../lib/types";
 
 interface StudioProps {
   segments: Segment[];
@@ -135,7 +123,7 @@ export default function Studio({
         const meta = STEM_META.find((m: { key: string }) => m.key === stemKey);
         const n = sigs.filter((s) => s.stemKey === stemKey).length + 1;
         const name = `${(meta?.name || stemKey).toLowerCase()} ${n}`;
-        return [...sigs, seedSignal(stems, name, stemKey) as Signal];
+        return [...sigs, seedSignal(stems, name, stemKey)];
       });
     },
     [editActiveSignals, stems]
@@ -274,7 +262,7 @@ export default function Studio({
           : activeSeg && (
               <AnimationCanvas
                 key={activeSeg.id}
-                segment={activeSeg as unknown as AnimSegment}
+                segment={activeSeg}
                 stems={stems}
                 job={job}
                 output={output}

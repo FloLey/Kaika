@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Segment } from "./components/studio/Studio";
+import type { Segment } from "./lib/types";
+import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
 import FluidLab from "./components/fluid/FluidLab";
 import UploadStep from "./components/upload/UploadStep";
@@ -93,7 +94,7 @@ export default function App() {
       // Both stages run in the background now; kick them off and poll for the
       // result, feeding each phase's label into the Processing screen.
       const { job_id } = await api.uploadSong(fd);
-      const data = await api.pollJob(job_id, setStatus);
+      const data = await api.pollJob<UploadResult>(job_id, setStatus);
 
       setJob(data.job_id);
       setTitle(data.title || "");
@@ -102,12 +103,12 @@ export default function App() {
       setOriginalSpec(data.stems.original?.spectrogram || "");
 
       await api.segmentJob(job_id);
-      const segData = await api.pollJob(job_id, setStatus);
+      const segData = await api.pollJob<SegmentProposal>(job_id, setStatus);
       setVocalEnvelope(segData.vocal_envelope || []);
       setEnvelopeTimes(segData.envelope_times || []);
       if (segData.duration) setDuration(segData.duration);
       lastSaved.current = "";
-      setSegments(hydrateSegments(segData.segments, data.stems) as Segment[]);
+      setSegments(hydrateSegments(segData.segments, data.stems));
       setStep("review");
     } catch (e) {
       setError((e as Error).message);
@@ -129,7 +130,7 @@ export default function App() {
       setOriginalSpec(p.stems?.original?.spectrogram || "");
       setVocalEnvelope(p.vocal_envelope || []);
       setEnvelopeTimes(p.envelope_times || []);
-      const segs = hydrateSegments(p.segments, p.stems || {}) as Segment[];
+      const segs = hydrateSegments(p.segments, p.stems || {});
       setSegments(segs);
       setActiveSegId(segs[0]?.id || null);
       const loadedOutput = withOutputDefaults(p.output);

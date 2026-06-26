@@ -8,7 +8,7 @@ import type {
 } from "react";
 import { fmtTime } from "../../lib/mel";
 import { LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary } from "../../lib/segments";
-import type { Segment } from "../studio/Studio";
+import type { Segment } from "../../lib/types";
 
 // Step 2 — review and edit the proposed split before opening the studio.
 // The full-mix spectrogram + vocal-activity envelope are the backdrop; play the
@@ -76,7 +76,7 @@ export default function ReviewStep({
     e.stopPropagation();
     e.preventDefault();
     const move = (ev: PointerEvent) =>
-      setSegments((segs) => moveBoundary(segs, i, timeAtX(ev.clientX)) as Segment[]);
+      setSegments((segs) => moveBoundary(segs, i, timeAtX(ev.clientX)));
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -85,7 +85,7 @@ export default function ReviewStep({
     window.addEventListener("pointerup", up);
   }
 
-  const splitHere = () => setSegments((segs) => splitAt(segs, cur) as Segment[]);
+  const splitHere = () => setSegments((segs) => splitAt(segs, cur));
 
   // Vocal-activity envelope as a stretched polyline.
   const envPath = (() => {
@@ -147,7 +147,7 @@ export default function ReviewStep({
         className="rail"
         ref={railRef}
         onClick={(e) => seekTo(timeAtX(e.clientX))}
-        onDoubleClick={(e) => setSegments((segs) => splitAt(segs, timeAtX(e.clientX)) as Segment[])}
+        onDoubleClick={(e) => setSegments((segs) => splitAt(segs, timeAtX(e.clientX)))}
       >
         <img className="rail-img" src={specUrl} alt="full mix" draggable={false} />
         <svg className="rail-env" viewBox="0 0 1000 100" preserveAspectRatio="none">
@@ -233,7 +233,7 @@ export default function ReviewStep({
               className="iconbtn"
               disabled={i === 0}
               title="Merge into the previous segment"
-              onClick={() => setSegments((segs) => mergeWithPrev(segs, s.id) as Segment[])}
+              onClick={() => setSegments((segs) => mergeWithPrev(segs, s.id))}
             >
               ⌫
             </button>

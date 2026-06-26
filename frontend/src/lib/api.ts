@@ -1,11 +1,75 @@
-// Thin fetch wrappers around the Flask API. Responses are dynamic JSON, so the
-// payloads are typed as `any` at this boundary (callers shape them); the file-level
-// disable keeps that intentional rather than scattering per-line exceptions.
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// Thin fetch wrappers around the Flask API, with a typed response per endpoint.
+// The only `any` is inside jsonOrThrow — the genuine JSON parse boundary, where the
+// envelope's error fields are read before the payload is cast to its declared type.
 
 import * as logbus from "./logbus";
+import type { BackendPayload } from "./logbus";
+import type { Graph, OutputSettings, StemInfo } from "./types";
+import type { RawSegment } from "./segments";
 
-async function jsonOrThrow(res: Response): Promise<any> {
+// ---- response shapes ---------------------------------------------------------
+export interface JobAck {
+  job_id: string;
+}
+
+export interface UploadResult {
+  job_id: string;
+  fmin?: number;
+  duration?: number;
+  has_lyrics?: boolean;
+  title?: string;
+  stems: Record<string, StemInfo>;
+}
+
+export interface SegmentProposal {
+  segments: RawSegment[];
+  vocal_envelope?: number[];
+  envelope_times?: number[];
+  lyric_lines?: unknown[];
+  duration?: number;
+}
+
+export interface JobStatus {
+  state: "running" | "done" | "error";
+  step?: string;
+  error?: string;
+  result?: unknown;
+}
+
+export interface ProjectSummary {
+  job_id: string;
+  title?: string;
+  step: string;
+  duration?: number;
+  has_lyrics?: boolean;
+  updated_at?: string;
+}
+
+export interface Project {
+  job_id: string;
+  title?: string;
+  duration?: number;
+  fmin?: number;
+  has_lyrics?: boolean;
+  step?: string;
+  stems?: Record<string, StemInfo>;
+  segments?: RawSegment[];
+  output?: Partial<OutputSettings>;
+  vocal_envelope?: number[];
+  envelope_times?: number[];
+  lyric_lines?: unknown[];
+}
+
+export interface ExtractResult {
+  curve: number[];
+  times: number[];
+}
+
+export interface RenderResult {
+  url: string;
+}
+
+async function jsonOrThrow<T = unknown>(res: Response): Promise<T> {
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) {
     // e.g. an HTML SPA-fallback page — surface it instead of silently failing.
@@ -14,32 +78,33 @@ async function jsonOrThrow(res: Response): Promise<any> {
     logbus.error(msg, { logger: "api" });
     throw new Error(msg);
   }
-  const data = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON parse boundary
+  const data: any = await res.json();
   if (!res.ok) {
     const msg = data.detail || data.error || res.statusText;
     logbus.error(`${res.status} ${res.url}: ${msg}`, { logger: "api" });
     throw new Error(msg);
   }
-  return data;
+  return data as T;
 }
 
 // Backend log feed for the Logs panel. Deliberately bypasses jsonOrThrow so a
 // failed /logs request can't log an error (which the next poll would fetch — a
 // runaway loop). Callers (useLogPoll) swallow rejections.
-export async function getLogs(since = 0): Promise<any> {
+export async function getLogs(since = 0): Promise<BackendPayload> {
   const res = await fetch(`/logs?since=${since}`);
   if (!res.ok) throw new Error(`/logs ${res.status}`);
   return res.json(); // { entries, seq }
 }
 
-// /upload and /segment now return { job_id } immediately and do the slow work
-// in the background; poll the job to get the result. See pollJob below.
-export async function uploadSong(formData: FormData): Promise<any> {
-  return jsonOrThrow(await fetch("/upload", { method: "POST", body: formData }));
+// /upload and /segment return { job_id } immediately and do the slow work in the
+// background; poll the job to get the result (see pollJob).
+export async function uploadSong(formData: FormData): Promise<JobAck> {
+  return jsonOrThrow<JobAck>(await fetch("/upload", { method: "POST", body: formData }));
 }
 
-export async function segmentJob(jobId: string): Promise<any> {
-  return jsonOrThrow(
+export async function segmentJob(jobId: string): Promise<JobAck> {
+  return jsonOrThrow<JobAck>(
     await fetch("/segment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -48,11 +113,11 @@ export async function segmentJob(jobId: string): Promise<any> {
   );
 }
 
-export async function getJob(jobId: string): Promise<any> {
-  return jsonOrThrow(await fetch(`/jobs/${jobId}`));
+export async function getJob(jobId: string): Promise<JobStatus> {
+  return jsonOrThrow<JobStatus>(await fetch(`/jobs/${jobId}`));
 }
 
-// Human-readable label per backend step (jobs.py / app.py worker `set_step`).
+// Human-readable label per backend step (jobs.py / worker `set_step`).
 const STEP_LABELS: Record<string, string> = {
   downloading: "downloading audio from YouTube…",
   separating: "separating stems with demucs…",
@@ -62,23 +127,24 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 // Poll a background job until it finishes; resolve with its result, throw on
-// error. `onStep(label)` is called as the worker advances through its phases.
-export async function pollJob(
+// error. The result shape depends on the job (upload vs segment), so callers pick
+// the type: `pollJob<UploadResult>(...)`. `onStep(label)` fires as phases advance.
+export async function pollJob<T = unknown>(
   jobId: string,
   onStep?: (label: string) => void,
   intervalMs = 1000
-): Promise<any> {
+): Promise<T> {
   for (;;) {
     const j = await getJob(jobId);
     if (onStep && j.step) onStep(STEP_LABELS[j.step] || j.step);
-    if (j.state === "done") return j.result;
+    if (j.state === "done") return j.result as T;
     if (j.state === "error") throw new Error(j.error || "job failed");
     await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
 
-export async function extractSignal(params: Record<string, unknown>): Promise<any> {
-  return jsonOrThrow(
+export async function extractSignal(params: Record<string, unknown>): Promise<ExtractResult> {
+  return jsonOrThrow<ExtractResult>(
     await fetch("/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -87,8 +153,8 @@ export async function extractSignal(params: Record<string, unknown>): Promise<an
   );
 }
 
-export async function runFluid(params: Record<string, unknown>): Promise<any> {
-  return jsonOrThrow(
+export async function runFluid(params: Record<string, unknown>): Promise<RenderResult> {
+  return jsonOrThrow<RenderResult>(
     await fetch("/fluid", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -108,11 +174,11 @@ export async function renderGraph({
 }: {
   job_id: string;
   segment: unknown;
-  graph: unknown;
+  graph: Graph | unknown;
   output?: unknown;
   output_id?: unknown;
-}): Promise<any> {
-  return jsonOrThrow(
+}): Promise<RenderResult> {
+  return jsonOrThrow<RenderResult>(
     await fetch("/animate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -121,16 +187,16 @@ export async function renderGraph({
   );
 }
 
-export async function listProjects(): Promise<any> {
-  return jsonOrThrow(await fetch("/projects"));
+export async function listProjects(): Promise<ProjectSummary[]> {
+  return jsonOrThrow<ProjectSummary[]>(await fetch("/projects"));
 }
 
-export async function getProject(jobId: string): Promise<any> {
-  return jsonOrThrow(await fetch(`/projects/${jobId}`));
+export async function getProject(jobId: string): Promise<Project> {
+  return jsonOrThrow<Project>(await fetch(`/projects/${jobId}`));
 }
 
-export async function saveProject(jobId: string, payload: unknown): Promise<any> {
-  return jsonOrThrow(
+export async function saveProject(jobId: string, payload: unknown): Promise<{ ok: boolean }> {
+  return jsonOrThrow<{ ok: boolean }>(
     await fetch(`/projects/${jobId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -139,6 +205,6 @@ export async function saveProject(jobId: string, payload: unknown): Promise<any>
   );
 }
 
-export async function deleteProject(jobId: string): Promise<any> {
-  return jsonOrThrow(await fetch(`/projects/${jobId}`, { method: "DELETE" }));
+export async function deleteProject(jobId: string): Promise<{ ok: boolean }> {
+  return jsonOrThrow<{ ok: boolean }>(await fetch(`/projects/${jobId}`, { method: "DELETE" }));
 }

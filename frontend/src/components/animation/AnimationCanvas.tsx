@@ -5,11 +5,11 @@ import renderAnimNode from "./renderAnimNode";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
 import type { View } from "./usePanZoom";
-import type { Graph, OutputSettings } from "../../lib/types";
+import type { Graph, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
 
 interface AnimationCanvasProps {
-  segment: NodeCtx["segment"] & { graph?: Graph };
+  segment: Segment;
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;

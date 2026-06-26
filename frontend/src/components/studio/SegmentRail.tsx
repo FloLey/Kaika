@@ -1,13 +1,7 @@
 import type { CSSProperties } from "react";
 import { fmtTime } from "../../lib/mel";
 import { labelColor } from "../../lib/segments";
-
-interface Segment {
-  id: string;
-  label?: string;
-  start: number;
-  end: number;
-}
+import type { Segment } from "../../lib/types";
 
 interface SegmentRailProps {
   segments: Segment[];

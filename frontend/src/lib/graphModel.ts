@@ -20,6 +20,7 @@ import type {
   CombineNode,
   OutputNode,
   SignalNode,
+  Signal,
   ValidationResult,
 } from "./types";
 
@@ -558,7 +559,7 @@ export function outputHash(
   jobId: string | null | undefined,
   start: number | null | undefined,
   end: number | null | undefined,
-  signals: { id: string; [k: string]: unknown }[] | undefined
+  signals: Signal[] | undefined
 ): string {
   const contributing = outputContributing(graph, outputId);
   const sigById = new Map((signals || []).map((s) => [s.id, s]));
@@ -570,7 +571,7 @@ export function outputHash(
         const sig = sigById.get(n.data.signalId);
         if (sig) {
           referenced[n.data.signalId] = Object.fromEntries(
-            SIGNAL_HASH_FIELDS.map((k) => [k, sig[k]])
+            SIGNAL_HASH_FIELDS.map((k) => [k, (sig as unknown as Record<string, unknown>)[k]])
           );
         }
       }

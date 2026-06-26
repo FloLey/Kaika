@@ -6,8 +6,30 @@
 // shaping keys), so the working types are intentionally loose `any` records.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import type { Graph, Segment, Signal, StemInfo } from "./types";
+
 type AnyRec = Record<string, any>;
-type StemsMap = Record<string, AnyRec> | null | undefined;
+type StemsMap = Record<string, StemInfo> | null | undefined;
+
+// The persisted JSON shapes (what the backend sends / autosave writes) — looser
+// than the in-memory Signal/Segment; hydrate* turns them into the canonical types.
+export interface RawSignal {
+  id?: string;
+  name?: string;
+  stemKey?: string;
+  minHz?: number;
+  maxHz?: number;
+  feature?: string;
+  [k: string]: unknown;
+}
+export interface RawSegment {
+  id?: string;
+  label: string;
+  start: number;
+  end: number;
+  signals?: RawSignal[];
+  graph?: Graph | null;
+}
 
 export const LABELS = [
   "intro",
@@ -84,7 +106,7 @@ const SIGNAL_DEFAULTS: AnyRec = {
 const SIGNAL_FIELDS = ["id", "name", "stemKey", "minHz", "maxHz", ...Object.keys(SIGNAL_DEFAULTS)];
 
 // A fresh signal on a given stem (full band by default).
-export function seedSignal(stems: StemsMap, name?: string, stem?: string): AnyRec {
+export function seedSignal(stems: StemsMap, name?: string, stem?: string): Signal {
   const stemKey =
     stem || (stems?.original ? "original" : Object.keys(stems || {})[0] || "original");
   const sr = stems?.[stemKey]?.sr || 44100;
@@ -95,7 +117,7 @@ export function seedSignal(stems: StemsMap, name?: string, stem?: string): AnyRe
     minHz: 20,
     maxHz: Math.round(sr / 2),
     ...SIGNAL_DEFAULTS,
-  };
+  } as Signal;
 }
 
 // Rebuild signals from saved ones (fill defaults + a fresh id if missing).
@@ -103,7 +125,7 @@ export function seedSignal(stems: StemsMap, name?: string, stem?: string): AnyRe
 // surviving a reload. Only mint a new id when one is absent or (defensively)
 // duplicated. Safe because ids are UUIDs (a fresh signal can't collide with a
 // resumed one). Regenerating every id here used to orphan every graph reference.
-function hydrateSignals(stored: AnyRec[] | null | undefined): AnyRec[] {
+function hydrateSignals(stored: RawSignal[] | null | undefined): Signal[] {
   const seen = new Set();
   return (stored || []).map((s) => {
     let id = s.id;
@@ -120,11 +142,13 @@ function hydrateSignals(stored: AnyRec[] | null | undefined): AnyRec[] {
         Object.keys(SIGNAL_DEFAULTS).map((k) => [k, s[k] ?? SIGNAL_DEFAULTS[k]])
       ),
     };
-  });
+  }) as Signal[];
 }
 
-function serializeSignals(signals: AnyRec[] | null | undefined): AnyRec[] {
-  return (signals || []).map((s) => Object.fromEntries(SIGNAL_FIELDS.map((k) => [k, s[k]])));
+function serializeSignals(signals: Signal[] | null | undefined): RawSignal[] {
+  return (signals || []).map(
+    (s) => Object.fromEntries(SIGNAL_FIELDS.map((k) => [k, (s as AnyRec)[k]])) as RawSignal
+  );
 }
 
 // Default signals seeded on a fresh segment. Every track gets full-band
@@ -175,18 +199,18 @@ function defaultName(meta: AnyRec, def: AnyRec): string {
   return `${meta.name.toLowerCase()} ${def.label}`;
 }
 
-export function defaultSignals(stems: StemsMap): AnyRec[] {
-  const out = [];
+export function defaultSignals(stems: StemsMap): Signal[] {
+  const out: Signal[] = [];
   for (const m of STEM_META) {
     if (!stems || !stems[m.key]) continue;
     const nyq = Math.round((stems[m.key].sr || 44100) / 2);
     for (const def of STEM_DEFAULTS[m.key] || []) {
-      const sig = seedSignal(stems, defaultName(m, def), m.key);
+      const sig: AnyRec = seedSignal(stems, defaultName(m, def), m.key);
       sig.feature = def.feature;
       if (def.minHz != null) sig.minHz = Math.min(def.minHz, nyq);
       if (def.maxHz != null) sig.maxHz = Math.min(def.maxHz, nyq);
       for (const k of DEFAULT_SHAPE_KEYS) if (def[k] != null) sig[k] = def[k];
-      out.push(sig);
+      out.push(sig as Signal);
     }
   }
   return out;
@@ -199,7 +223,7 @@ const defaultKey = (s: AnyRec): string =>
 
 // Add any default signals that aren't already present, keeping the user's
 // existing/custom signals — so existing projects gain the new defaults.
-function withDefaults(existing: AnyRec[], stems: StemsMap): AnyRec[] {
+function withDefaults(existing: Signal[], stems: StemsMap): Signal[] {
   const have = new Set(existing.map(defaultKey));
   const missing = defaultSignals(stems).filter((d) => !have.has(defaultKey(d)));
   return [...existing, ...missing];
@@ -208,7 +232,7 @@ function withDefaults(existing: AnyRec[], stems: StemsMap): AnyRec[] {
 // Hydrate a server/proposal segment list (each gets a stable id + signals).
 // A fresh segment gets all the per-track defaults; an existing one keeps its
 // saved signals and gains any missing defaults.
-export function hydrateSegments(raw: AnyRec[] | null | undefined, stems: StemsMap): AnyRec[] {
+export function hydrateSegments(raw: RawSegment[] | null | undefined, stems: StemsMap): Segment[] {
   return (raw || []).map((s) => ({
     id: mkSegId(), // always fresh — never trust stored ids (avoids collisions)
     start: s.start,
@@ -226,7 +250,7 @@ export function hydrateSegments(raw: AnyRec[] | null | undefined, stems: StemsMa
 }
 
 // Strip to the persisted shape for autosave.
-export function serializeSegments(segments: AnyRec[]): AnyRec[] {
+export function serializeSegments(segments: Segment[]): RawSegment[] {
   return segments.map((s) => ({
     id: s.id,
     start: s.start,
@@ -240,17 +264,17 @@ export function serializeSegments(segments: AnyRec[]): AnyRec[] {
 
 // Deep-copy a pure-JSON graph (structuredClone with a JSON-roundtrip fallback
 // for envs that lack it — graphs are pure JSON).
-function cloneGraph(graph: any): any {
+function cloneGraph(graph: Graph | null | undefined): Graph | null {
   if (!graph) return null;
   return typeof structuredClone === "function"
     ? structuredClone(graph)
-    : JSON.parse(JSON.stringify(graph));
+    : (JSON.parse(JSON.stringify(graph)) as Graph);
 }
 
 // Copy a signal list with fresh ids (so a split's two halves are independent),
 // also reporting the old->new id mapping so a copied graph can be remapped.
-function cloneSignals(signals: AnyRec[] | null | undefined): {
-  signals: AnyRec[];
+function cloneSignals(signals: Signal[] | null | undefined): {
+  signals: Signal[];
   idMap: Record<string, string>;
 } {
   const idMap: Record<string, string> = {};
@@ -265,9 +289,12 @@ function cloneSignals(signals: AnyRec[] | null | undefined): {
 // Rewrite a graph's signal-node references through an id map; deep-copy so the
 // two halves of a split don't share one object. Unknown ids pass through (they
 // will read as "missing" later — the executor treats them as a flat 0).
-function remapGraphSignals(graph: any, idMap: Record<string, string>): any {
+function remapGraphSignals(
+  graph: Graph | null | undefined,
+  idMap: Record<string, string>
+): Graph | null {
   if (!graph) return null;
-  const g = cloneGraph(graph);
+  const g = cloneGraph(graph) as Graph;
   for (const n of g.nodes) {
     if (n.type === "signal" && idMap[n.data.signalId]) {
       n.data.signalId = idMap[n.data.signalId];
@@ -280,8 +307,8 @@ function remapGraphSignals(graph: any, idMap: Record<string, string>): any {
 // second half gets fresh signal ids (independent) and a graph remapped onto
 // them; the first half keeps its ids but gets a DISTINCT graph object so the two
 // halves never share-mutate (01 §3.8).
-export function splitAt(segments: AnyRec[], t: number): AnyRec[] {
-  const out = [];
+export function splitAt(segments: Segment[], t: number): Segment[] {
+  const out: Segment[] = [];
   for (const s of segments) {
     if (t > s.start + 0.5 && t < s.end - 0.5) {
       out.push({ ...s, end: t, graph: cloneGraph(s.graph) });
@@ -304,7 +331,7 @@ export function splitAt(segments: AnyRec[], t: number): AnyRec[] {
 // The earlier segment keeps its graph (its signals are unchanged, so its
 // references stay valid); the later segment's graph falls away with the
 // spliced-out segment. This is the defined behavior (01 §3.8) — no remap needed.
-export function mergeWithPrev(segments: AnyRec[], id: string): AnyRec[] {
+export function mergeWithPrev(segments: Segment[], id: string): Segment[] {
   const i = segments.findIndex((s) => s.id === id);
   if (i <= 0) return segments;
   const out = segments.slice();
@@ -314,7 +341,7 @@ export function mergeWithPrev(segments: AnyRec[], id: string): AnyRec[] {
 }
 
 // Move the boundary between segment i-1 and i to time `t`, keeping order.
-export function moveBoundary(segments: AnyRec[], i: number, t: number): AnyRec[] {
+export function moveBoundary(segments: Segment[], i: number, t: number): Segment[] {
   if (i <= 0 || i >= segments.length) return segments;
   const lo = segments[i - 1].start + 0.5;
   const hi = segments[i].end - 0.5;
