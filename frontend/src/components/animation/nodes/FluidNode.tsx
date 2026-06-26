@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Toggle } from "../../../ui/Ctl.jsx";
-import NodeFrame, { Port } from "./NodeFrame.jsx";
+import type { ComponentType } from "react";
+import { Toggle as ToggleJsx } from "../../../ui/Ctl.jsx";
+import NodeFrameJsx, { Port as PortJsx } from "./NodeFrame.jsx";
 import { FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
-import { patchStatic } from "./fluidBindings.js";
-import { ParamRow, GroupAnchor } from "./FluidParamRow.jsx";
+import { patchStatic } from "./fluidBindings";
+import { ParamRow as ParamRowJsx, GroupAnchor as GroupAnchorJsx } from "./FluidParamRow.jsx";
+import type { NodeProps } from "./nodeProps";
+import type { FluidData } from "../../../lib/types";
+
+// Bridge: these children are still .jsx (TS infers all their props as required), so
+// cast to a permissive component type until they convert to .tsx — then drop the cast.
+const Toggle = ToggleJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
+const NodeFrame = NodeFrameJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
+const Port = PortJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
+const ParamRow = ParamRowJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
+const GroupAnchor = GroupAnchorJsx as ComponentType<any>;  // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // The artifact card (06 §FluidNode). Static controls on top; one input-port ROW
 // per FLUID_PARAMS entry, grouped source/color/medium (rows + the collapsed-group
@@ -20,15 +31,18 @@ const GROUPS = [
   { key: "medium", label: "MEDIUM" },
 ];
 
-export default function FluidNode({ node, selected, helpers, ctx, onGraphChange, onDetach, onDelete }) {
-  const [open, setOpen] = useState({ source: true, color: true, medium: false });
-  const s = node.data.static;
+export default function FluidNode({ node, selected, helpers, ctx, onGraphChange, onDetach, onDelete }: NodeProps) {
+  const data = node.data as FluidData;   // this card only renders for a fluid node
+  const [open, setOpen] = useState<Record<string, boolean>>({ source: true, color: true, medium: false });
+  const s = data.static;
 
   // A wired points card overrides the single-centre source with N source positions.
   // Memoized so this graph walk doesn't re-run on every unrelated re-render.
   const posCount = useMemo(() => {
-    const srcId = ctx?.graph ? videoSource(ctx.graph, node.id, "positions") : null;
-    const pn = srcId ? ctx.graph.nodes.find((n) => n.id === srcId) : null;
+    const g = ctx?.graph;
+    if (!g) return 0;
+    const srcId = videoSource(g, node.id, "positions");
+    const pn = srcId ? g.nodes.find((n) => n.id === srcId) : null;
     return pn && pn.type === "points" ? (pn.data.points || []).length : 0;
   }, [ctx?.graph, node.id]);
 
@@ -38,9 +52,9 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
   const { onLayoutChange } = helpers;
   useEffect(() => { onLayoutChange?.(); }, [open, onLayoutChange]);
 
-  const setStatic = (patch) => onGraphChange(patchStatic(node.id, patch));
+  const setStatic = (patch: Record<string, unknown>) => onGraphChange(patchStatic(node.id, patch));
 
-  const detach = (key) => onDetach(node.id, key);
+  const detach = (key: string) => onDetach?.(node.id, key);
 
   return (
     <NodeFrame
@@ -82,13 +96,13 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
       {/* Static controls (non-port params). The clip always spans the full segment,
           so there is no duration control. */}
       <div className="anim-static">
-        <Toggle label="enabled" value={s.enabled} onChange={(v) => setStatic({ enabled: v })} />
-        <Toggle label="radial" value={s.radial} onChange={(v) => setStatic({ radial: v })} />
+        <Toggle label="enabled" value={s.enabled} onChange={(v: boolean) => setStatic({ enabled: v })} />
+        <Toggle label="radial" value={s.radial} onChange={(v: boolean) => setStatic({ radial: v })} />
         <Toggle
           label="wrap edges"
           value={s.wrap !== false}
           help="On: fluid that leaves one edge re-enters the opposite (a looping torus). Off: fluid that leaves the frame is gone for good."
-          onChange={(v) => setStatic({ wrap: v })}
+          onChange={(v: boolean) => setStatic({ wrap: v })}
         />
         {(s.radial || s.wrap === false) && (
           <div className="anim-path-note">
@@ -103,7 +117,7 @@ export default function FluidNode({ node, selected, helpers, ctx, onGraphChange,
         const params = FLUID_PARAMS.filter((p) => p.group === grp.key);
         const isOpen = open[grp.key];
         const wiredKeys = params
-          .filter((p) => node.data.ports[p.key]?.binding?.kind === "node")
+          .filter((p) => data.ports[p.key]?.binding?.kind === "node")
           .map((p) => p.key);
         return (
           <div key={grp.key} className="anim-group">

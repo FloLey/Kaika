@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
 
 import SignalNode from "../components/animation/nodes/SignalNode.jsx";
-import FluidNode from "../components/animation/nodes/FluidNode.jsx";
+import FluidNode from "../components/animation/nodes/FluidNode";
 import OutputNode from "../components/animation/nodes/OutputNode.jsx";
 import CombineNode from "../components/animation/nodes/CombineNode.jsx";
 import PointsNode from "../components/animation/nodes/PointsNode.jsx";
@@ -11,7 +11,7 @@ import MinimizedCard from "../components/animation/nodes/MinimizedCard.jsx";
 import { Port } from "../components/animation/nodes/NodeFrame.jsx";
 import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
-import { setConstValue, setNodeRange, patchStatic } from "../components/animation/nodes/fluidBindings.js";
+import { setConstValue, setNodeRange, patchStatic } from "../components/animation/nodes/fluidBindings";
 
 const h = (node) => ({
   node,

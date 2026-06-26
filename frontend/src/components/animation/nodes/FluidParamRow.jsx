@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import Ctl from "../../../ui/Ctl.jsx";
 import { Port } from "./NodeFrame.jsx";
-import { setConstValue, setNodeRange } from "./fluidBindings.js";
+import { setConstValue, setNodeRange } from "./fluidBindings";
 
 // One fluid param's input-port ROW and the collapsed-group anchor, extracted from
 // FluidNode. A const-bound row shows a single-thumb Ctl (the value IS the field); a
