@@ -1,6 +1,12 @@
 # Python tool config. Lint config lives in ruff.toml; this carries Black + coverage.
 # (Black and ruff agree on an 88–100 col range; line-length is advisory in ruff.)
 
+[tool.pytest.ini_options]
+# Put the repo root on sys.path so `from backend import ...` resolves whether pytest
+# is run as `pytest` (CI) or `python -m pytest` (the Makefile); without this CI fails
+# collection with ModuleNotFoundError: No module named 'backend'.
+pythonpath = ["."]
+
 [tool.black]
 line-length = 100
 target-version = ["py312"]
