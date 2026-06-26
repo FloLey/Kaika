@@ -1,9 +1,24 @@
+import type { CSSProperties } from "react";
 import { fmtTime } from "../../lib/mel.js";
 import { labelColor } from "../../lib/segments.js";
 
+interface Segment {
+  id: string;
+  label?: string;
+  start: number;
+  end: number;
+}
+
+interface SegmentRailProps {
+  segments: Segment[];
+  activeSegId?: string;
+  onSelect: (id: string) => void;
+  onCollapse?: () => void;
+}
+
 // Studio left column: the list of validated segments. Click one to load it into
 // the stem editor on the right.
-export default function SegmentRail({ segments, activeSegId, onSelect, onCollapse }) {
+export default function SegmentRail({ segments, activeSegId, onSelect, onCollapse }: SegmentRailProps) {
   return (
     <div className="seg-rail">
       <div className="seg-rail-head">
@@ -16,7 +31,7 @@ export default function SegmentRail({ segments, activeSegId, onSelect, onCollaps
         <button
           key={s.id}
           className={"seg-chip" + (s.id === activeSegId ? " active" : "")}
-          style={{ "--c": labelColor(s.label) }}
+          style={{ "--c": labelColor(s.label) } as CSSProperties}
           onClick={() => onSelect(s.id)}
         >
           <span className="seg-chip-top">

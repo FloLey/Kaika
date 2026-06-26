@@ -1,31 +1,48 @@
 import { useRef } from "react";
+import type { CSSProperties, MouseEvent, PointerEvent as RPointerEvent } from "react";
 import { freqToFrac, fracToFreq, fmtHz, clamp } from "../../lib/mel.js";
+
+interface TrackSpec {
+  specUrl: string;
+  minHz: number;
+  maxHz: number;
+  fmin: number;
+  fmax: number;
+  color: string;
+}
+
+interface SpectrogramProps {
+  track: TrackSpec;
+  frac: number;
+  onSeek: (f: number) => void;
+  onBandChange: (min: number, max: number) => void;
+  large?: boolean;
+  onExpand?: () => void;
+  winStart?: number;
+  winEnd?: number;
+  duration?: number;
+}
 
 // Reusable spectrogram with band overlay, draggable min/max handles, playhead,
 // and click-to-seek. Used both as a row thumbnail and (large) in the modal.
-//
-// `winStart`/`winEnd`/`duration` (optional) crop the full PNG horizontally to a
-// segment's time window: the image spans [0, duration]; we scale it up by
-// duration/window and shift it so [winStart, winEnd] fills the container. The
-// frequency (y) axis is untouched, so the band math below is unchanged.
 export default function Spectrogram({
   track, frac, onSeek, onBandChange, large, onExpand,
   winStart, winEnd, duration,
-}) {
-  const ref = useRef(null);
+}: SpectrogramProps) {
+  const ref = useRef<HTMLDivElement>(null);
   const { specUrl, minHz, maxHz, fmin, fmax, color } = track;
 
   const win = duration && winEnd != null && winStart != null
     ? winEnd - winStart : null;
-  const cropped = win && win > 0 && win < duration;
+  const cropped = win != null && win > 0 && win < duration!;
   // The image (full track) is scaled to duration/win of the container width;
   // translateX is a percentage of the IMAGE's own width, so the shift that puts
   // the window's start at the left edge is winStart/duration (not winStart/win).
-  const imgStyle = cropped
+  const imgStyle: CSSProperties | undefined = cropped
     ? {
-        width: (duration / win) * 100 + "%",
+        width: (duration! / win!) * 100 + "%",
         maxWidth: "none",
-        transform: `translateX(${-(winStart / duration) * 100}%)`,
+        transform: `translateX(${-(winStart! / duration!) * 100}%)`,
       }
     : undefined;
 
@@ -34,17 +51,17 @@ export default function Spectrogram({
   const topPct = (1 - maxFrac) * 100; // removed region above max
   const botPct = minFrac * 100; // removed region below min
 
-  function yToFreq(clientY) {
-    const r = ref.current.getBoundingClientRect();
+  function yToFreq(clientY: number): number {
+    const r = ref.current!.getBoundingClientRect();
     const fracFromBottom = clamp(1 - (clientY - r.top) / r.height, 0, 1);
     return fracToFreq(fracFromBottom, fmin, fmax);
   }
 
-  function startDrag(which, e) {
+  function startDrag(which: "min" | "max", e: RPointerEvent) {
     e.stopPropagation();
     e.preventDefault();
-    const move = (ev) => {
-      let hz = yToFreq(ev.clientY);
+    const move = (ev: PointerEvent) => {
+      const hz = yToFreq(ev.clientY);
       if (which === "min") onBandChange(Math.min(hz, maxHz), maxHz);
       else onBandChange(minHz, Math.max(hz, minHz));
     };
@@ -56,8 +73,8 @@ export default function Spectrogram({
     window.addEventListener("pointerup", up);
   }
 
-  function clickSeek(e) {
-    const r = ref.current.getBoundingClientRect();
+  function clickSeek(e: MouseEvent) {
+    const r = ref.current!.getBoundingClientRect();
     onSeek(clamp((e.clientX - r.left) / r.width, 0, 1));
   }
 
@@ -65,7 +82,7 @@ export default function Spectrogram({
     <div
       className={"spec" + (large ? " large" : "")}
       ref={ref}
-      style={{ "--accent": color }}
+      style={{ "--accent": color } as CSSProperties}
       onClick={clickSeek}
     >
       <img src={specUrl} alt="spectrogram" draggable={false} style={imgStyle} />

@@ -1,19 +1,13 @@
 import { useEffect, useState } from "react";
-import type { ComponentType, CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
-import CurveViewJsx from "../../studio/CurveView.jsx";
-import PulsePadJsx from "../../studio/PulsePad.jsx";
+import CurveView from "../../studio/CurveView";
+import PulsePad from "../../studio/PulsePad";
 import { stemColor, STEM_META } from "../../../lib/segments.js";
 import { fmtHz } from "../../../lib/mel.js";
 import { extractSignal } from "../../../lib/api.js";
 import type { NodeProps } from "./nodeProps";
 import type { SignalData } from "../../../lib/types";
-
-// Bridge: studio components are still .jsx — cast until they convert.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const CurveView = CurveViewJsx as ComponentType<any>;
-const PulsePad = PulsePadJsx as ComponentType<any>;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const FPS = 30;
 const stemName = (key?: string) => (STEM_META.find((m: { key: string }) => m.key === key) || {}).name || key;

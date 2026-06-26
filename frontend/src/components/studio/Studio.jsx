@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import SegmentRail from "./SegmentRail.jsx";
-import SignalCard from "./SignalCard.jsx";
+import SegmentRail from "./SegmentRail";
+import SignalCard from "./SignalCard";
 import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
-import VolumeControl from "./VolumeControl.jsx";
+import VolumeControl from "./VolumeControl";
 import { engine } from "../../lib/audio.js";
 import { STEM_META, seedSignal } from "../../lib/segments.js";
 import { fmtTime } from "../../lib/mel.js";

@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+
+interface VolumeControlProps {
+  value: number;
+  onChange: (v: number) => void;
+}
 
 // A speaker button that pops a vertical volume slider on click. Closes on an
 // outside click or Escape. `value` is 0..1; `onChange` gets the new value.
-export default function VolumeControl({ value, onChange }) {
+export default function VolumeControl({ value, onChange }: VolumeControlProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return undefined;
-    const onDown = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -43,7 +49,7 @@ export default function VolumeControl({ value, onChange }) {
               max={1}
               step={0.01}
               value={value}
-              onChange={(e) => onChange(parseFloat(e.target.value))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(parseFloat(e.target.value))}
               aria-label="Volume"
             />
           </div>

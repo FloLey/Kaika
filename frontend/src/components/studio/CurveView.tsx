@@ -1,4 +1,16 @@
 import { useEffect, useRef } from "react";
+import type { CSSProperties, MouseEvent, RefObject } from "react";
+
+interface CurveViewProps {
+  curve?: number[];
+  color?: string;
+  loading?: boolean;
+  audioRef?: RefObject<HTMLAudioElement | null>;
+  segStart?: number;
+  winLen?: number;
+  playing?: boolean;
+  onSeek?: (f: number) => void;
+}
 
 // Draws an extracted signal curve (0..1 over the segment's time window) as a
 // filled line, with a playhead during playback. The playhead is driven by a
@@ -7,25 +19,25 @@ import { useEffect, useRef } from "react";
 export default function CurveView({
   curve, color = "#60A5FA", loading,
   audioRef, segStart = 0, winLen = 1, playing, onSeek,
-}) {
-  const headRef = useRef(null);
-  const boxRef = useRef(null);
+}: CurveViewProps) {
+  const headRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
-  function clickSeek(e) {
-    if (!onSeek) return;
+  function clickSeek(e: MouseEvent) {
+    if (!onSeek || !boxRef.current) return;
     const r = boxRef.current.getBoundingClientRect();
     onSeek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
   }
   const n = curve ? curve.length : 0;
   const pts =
-    n > 1
+    n > 1 && curve
       ? curve.map((v, i) => `${((i / (n - 1)) * 1000).toFixed(1)},${((1 - Math.max(0, Math.min(1, v))) * 100).toFixed(1)}`)
       : [];
   const line = pts.join(" ");
   const area = n > 1 ? `0,100 ${line} 1000,100` : "";
 
   useEffect(() => {
-    const place = (t) => {
+    const place = (t: number) => {
       const head = headRef.current;
       if (!head) return;
       const f = winLen > 0 ? Math.max(0, Math.min(1, (t - segStart) / winLen)) : 0;
@@ -35,7 +47,7 @@ export default function CurveView({
       place(audioRef && audioRef.current ? audioRef.current.currentTime : segStart);
       return;
     }
-    let raf;
+    let raf: number;
     const tick = () => {
       const el = audioRef.current;
       place(el ? el.currentTime : segStart);
@@ -48,7 +60,7 @@ export default function CurveView({
   return (
     <div
       className={"curve" + (onSeek ? " seekable" : "")}
-      style={{ "--accent": color }}
+      style={{ "--accent": color } as CSSProperties}
       ref={boxRef}
       onClick={clickSeek}
     >
