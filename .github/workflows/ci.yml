@@ -22,7 +22,7 @@ jobs:
       # The pure-logic test suite needs these runtime deps (audio/sim libs); the
       # heavy ML stack (torch/demucs/whisper) is only used by routes, not tests.
       - name: Install test runtime deps
-        run: pip install numpy scipy librosa matplotlib soundfile flask
+        run: pip install numpy scipy librosa matplotlib soundfile flask "psycopg[binary]"
       - name: Pytest (+ coverage)
         run: pytest --cov=backend
       - name: Param spec is in sync (codegen no-diff)

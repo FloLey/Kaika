@@ -28,6 +28,23 @@ export default function Studio({
   const audioEls = useRef(new Map());
   const refAudio = useRef(null);   // clean full-mix reference for "play segment"
 
+  // Fullscreen the WHOLE studio panel (timeline + canvas + output modal + tabs), not
+  // just the canvas — so the segment transport stays visible and the settings modal,
+  // which lives in this subtree, still renders on top in fullscreen.
+  const studioMainRef = useRef(null);
+  const [isFull, setIsFull] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFull(document.fullscreenElement === studioMainRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  const toggleFullscreen = useCallback(() => {
+    const el = studioMainRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else el.requestFullscreen?.().catch(() => {});
+  }, []);
+
   const activeSeg = useMemo(
     () => segments.find((s) => s.id === activeSegId) || null,
     [segments, activeSegId]
@@ -157,7 +174,7 @@ export default function Studio({
           ☰
         </button>
       )}
-      <div className="studio-main">
+      <div className={"studio-main" + (isFull ? " full" : "")} ref={studioMainRef}>
         <audio
           ref={refAudio}
           src={job ? `/audio/${job}/original` : ""}
@@ -259,6 +276,8 @@ export default function Studio({
               output={output}
               groupClock={refAudio}
               groupPlaying={allPlaying}
+              isFullscreen={isFull}
+              onToggleFullscreen={toggleFullscreen}
               onOpenOutput={() => setShowOutput(true)}
               onGraphChange={setActiveGraph}
             />
