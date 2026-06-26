@@ -167,3 +167,9 @@ pip install pre-commit && pre-commit install
 import-sort would break the `matplotlib.use("Agg")` ordering). Blind excepts are
 flagged (`BLE`) and suppressed case-by-case with `# noqa: BLE001` where the fallback
 is deliberate.
+
+The frontend `eslint.config.js` lints **both** `.js/.jsx` and `.ts/.tsx` (via
+`typescript-eslint`): recommended rules + the react-hooks checks, with
+`@typescript-eslint/no-explicit-any` enforced as an error (justified boundaries —
+the dynamic-JSON layers in `lib/api.ts` / `lib/segments.ts` — carry a commented
+disable). `npm run lint` covers the whole TypeScript codebase.
