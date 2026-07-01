@@ -303,6 +303,42 @@
   gap: 8px;
   margin-bottom: 6px;
 }
+
+/* playground rail: collapsible card-category groups */
+.seg-rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.seg-rail-group + .seg-rail-group {
+  margin-top: 8px;
+}
+.seg-rail-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.seg-rail-group-label:hover {
+  color: var(--text);
+}
+.seg-rail-group-chev {
+  width: 10px;
+  font-size: 9px;
+}
+.seg-rail-group-count {
+  margin-left: auto;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
 .iconbtn.sm {
   width: 22px;
   height: 22px;

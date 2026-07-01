@@ -29,6 +29,18 @@ def fluid_file(name: str):
     return serve_range(p, mimetype="video/mp4")
 
 
+@bp.route("/fluid/stream/<render_id>/<name>")
+def fluid_stream_file(render_id: str, name: str):
+    """A streaming render's growing preview chunk (data/fluid/stream/<id>/<name>).
+    `render_id` is an output hash (hex); reject anything with path separators."""
+    if not name.endswith(".mp4") or not render_id.isalnum():
+        abort(404)
+    p = FLUID_DIR / "stream" / render_id / name
+    if not p.exists():
+        abort(404)
+    return serve_range(p, mimetype="video/mp4")
+
+
 @bp.route("/audio/<job_id>/<stem>")
 def audio(job_id: str, stem: str):
     if not validate_job_id(job_id):

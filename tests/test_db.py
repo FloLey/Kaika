@@ -64,3 +64,18 @@ def test_project_round_trip(live_db):
     finally:
         assert db.delete_project(job)
         assert db.get_project(job) is None
+
+
+def test_list_projects_excludes_the_playground(live_db):
+    # the app-managed Playground must never appear among the user's projects, but is
+    # still openable directly via get_project.
+    db.create_project(
+        "playground", title="Playground", source="synthetic", duration=1.0, fmin=20,
+        has_lyrics=False, stems={},
+    )
+    try:
+        listed = {p["job_id"] for p in db.list_projects()}
+        assert "playground" not in listed
+        assert db.get_project("playground") is not None  # still openable directly
+    finally:
+        db.delete_project("playground")

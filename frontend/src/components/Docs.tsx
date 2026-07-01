@@ -1,9 +1,35 @@
 import { useEffect } from "react";
 
+// Every section/anchor id in this guide — the set a "?" deep-link (`/?doc=<id>`) can
+// target. The per-argument help catalog (lib/paramHelp.ts) links into these, and a test
+// (paramHelp.test.ts) asserts both that this list matches the ids actually rendered here
+// AND that every section a "?" references is in it — so a link can never point nowhere.
+export const DOC_SECTION_IDS = [
+  "getting-started",
+  "projects",
+  "upload",
+  "review",
+  "studio",
+  "studio-features",
+  "studio-shaping",
+  "animation",
+  "animation-modulators",
+  "animation-points",
+  "animation-sources",
+  "animation-fx",
+  "animation-combine",
+  "animation-output",
+  "fluid-lab",
+  "fluid-source",
+  "fluid-path",
+  "fluid-medium",
+  "tips",
+] as const;
+
 // In-app user guide. Rendered as its own root (see main.jsx) when the URL has
 // ?doc=<section>, so every "?" in the app can open it in a new tab scrolled to
 // the relevant section. Section ids are referenced by Info badges and the header
-// help link — keep them in sync.
+// help link — keep them in sync (guarded by DOC_SECTION_IDS + paramHelp.test.ts).
 export default function Docs({ section }: { section?: string }) {
   useEffect(() => {
     const id = section || (window.location.hash || "").replace(/^#/, "");
@@ -54,7 +80,7 @@ export default function Docs({ section }: { section?: string }) {
             <a href="#animation">Create animation — the node graph</a>
           </li>
           <li>
-            <a href="#fluid-lab">Fluid Lab</a>
+            <a href="#fluid-lab">Playground &amp; the fluid card</a>
           </li>
           <li>
             <a href="#tips">Tips &amp; troubleshooting</a>
@@ -117,8 +143,8 @@ export default function Docs({ section }: { section?: string }) {
             spectrograms from disk. This can't be undone.
           </li>
           <li>
-            <strong>🌀 fluid lab</strong> — opens the standalone <a href="#fluid-lab">Fluid Lab</a>{" "}
-            playground.
+            <strong>🎮 playground</strong> — opens the always-present{" "}
+            <a href="#fluid-lab">Playground</a> sandbox (one segment per card).
           </li>
         </ul>
         <p>
@@ -456,9 +482,13 @@ export default function Docs({ section }: { section?: string }) {
 
         <h3>The cards</h3>
         <p>
-          Use the palette (top-left of the canvas) to drop cards, then wire them together. Every
-          card has a <strong>✕</strong> in its top-right corner to delete it (which also removes its
-          wires); ports sit on the card's sides — inputs on the left, outputs on the right.
+          The palette (top-left of the canvas) groups cards into category buttons —{" "}
+          <strong>Sources</strong>, <strong>Modulators</strong>, <strong>Generators</strong>,{" "}
+          <strong>Compositing</strong>, <strong>Output</strong> (in data-flow order). Open a category
+          and <strong>hover any item</strong> for a tip describing what it does and what it takes in
+          → puts out, then click to drop it. Every card has a <strong>✕</strong> in its top-right
+          corner to delete it (which also removes its wires); ports sit on the card's sides — inputs
+          on the left, outputs on the right.
         </p>
         <table>
           <tbody>
@@ -472,6 +502,15 @@ export default function Docs({ section }: { section?: string }) {
                 Exposes one of this segment's signals (from the other tab) as a 0–1 curve, with a
                 live pulse pad so you can see it move. Pick which signal from the{" "}
                 <strong>+ Signal</strong> menu. One output.
+              </td>
+            </tr>
+            <tr>
+              <td>math · lfo · noise · shaper</td>
+              <td>
+                The <strong>modulator</strong> cards — they make a 0–1 curve composable in the graph
+                itself (see <a href="#animation-modulators">below</a>). <em>Math</em> blends signals,{" "}
+                <em>LFO</em> and <em>noise</em> generate motion with no audio, and <em>shaper</em>{" "}
+                re-curves a signal. Each has one value output.
               </td>
             </tr>
             <tr>
@@ -489,6 +528,22 @@ export default function Docs({ section }: { section?: string }) {
                 A small canvas you draw points on (see below). Wire it into a fluid's{" "}
                 <em>positions</em> input and the fluid puts a <strong>source at each point</strong>{" "}
                 instead of one in the centre.
+              </td>
+            </tr>
+            <tr>
+              <td>lyrics</td>
+              <td>
+                A non-fluid <strong>video source</strong> (
+                <a href="#animation-sources">see below</a>): <em>lyrics</em> burns the segment's
+                aligned lyrics into the video. It gives a video out.
+              </td>
+            </tr>
+            <tr>
+              <td>color</td>
+              <td>
+                Sets a fluid's <a href="#animation-fx">dye colour</a> at the source — swatch, RGB
+                channels, or a gradient you scrub. Wire it into a fluid's <em>color</em> input; its
+                channels can be signal-driven too.
               </td>
             </tr>
             <tr>
@@ -533,6 +588,13 @@ export default function Docs({ section }: { section?: string }) {
             dragging the background and zoom with the scroll wheel. Delete a card with its ✕, or
             select a card/wire and press Delete.
           </li>
+          <li>
+            <strong>Select several at once</strong> — <kbd>Shift</kbd>- or <kbd>⌘</kbd>-click cards
+            to add them to the selection, or <kbd>Shift</kbd>-drag a box across the background to
+            grab everything inside it. Then drag any selected card to <strong>move the whole group
+            in one go</strong>, or press Delete to remove them all. Click an empty spot to clear the
+            selection.
+          </li>
         </ul>
         <p>
           The fluid parameters are the same ones documented under
@@ -540,6 +602,48 @@ export default function Docs({ section }: { section?: string }) {
           (including the colour channels) can be driven by a signal over the clip instead of being
           fixed.
         </p>
+
+        <h3 id="animation-modulators">Shaping &amp; generating signals — modulator cards</h3>
+        <p>
+          A <em>signal</em> card is the only source of a 0–1 curve, but the{" "}
+          <strong>modulator</strong> cards let you build new curves from it (or from nothing) right
+          in the graph — so you don't have to bake every choice into the studio. They all output a
+          value you wire into a fluid port (or into another modulator).
+        </p>
+        <ul>
+          <li>
+            <strong>Math</strong> — combines two or more signals: <em>multiply</em> to gate one by
+            another (e.g. vocals × the beat), <em>max</em> to floor a curve under an LFO,{" "}
+            <em>add/subtract</em>, or <em>mix</em> to crossfade. Use <strong>+ input</strong> for
+            more.
+          </li>
+          <li>
+            <strong>LFO</strong> — a sine / triangle / saw / square oscillator that needs no audio:
+            steady drift or pulsing. Set its rate in <em>cycles per clip</em> or <em>Hz</em>, plus a
+            phase offset.
+          </li>
+          <li>
+            <strong>Noise</strong> — smooth, organic random wander where an LFO would feel
+            mechanical. It's <strong>seeded</strong>, so a given seed always renders the same.
+          </li>
+          <li>
+            <strong>Shaper</strong> — re-curves one signal (attack/release, threshold, gamma,
+            gain/offset, invert, and an output [lo, hi] remap) <em>per use</em>, so you can reuse a
+            single studio signal sharply on one port and softly on another. The little graph on the
+            card previews the shape. <em>Delay</em> slides the signal later in time (in ms): the
+            exposed head is silent by default, or tick <em>wrap</em> to loop the tail back to the
+            start. To build a <strong>heartbeat</strong>, fan one beat signal out — feed it straight
+            into a <em>math</em> card set to <em>add</em>, and also through a shaper with a short{" "}
+            <em>delay</em> and a lower <em>gain</em> into the same math card — the delayed, weaker
+            copy lands just after each beat as the second thump.
+          </li>
+          <li>
+            <strong>Scope</strong> — a monitor: wire any value into it (an lfo, signal, noise,
+            math…) and it shows that value on a live sparkline + pulse pad, exactly like the signal
+            card. It <em>passes the value straight through</em>, so you can splice it inline
+            (<em>lfo → scope → fluid</em>) or just hang it off a value to confirm it's moving.
+          </li>
+        </ul>
 
         <h3 id="animation-points">Placing sources — the points card</h3>
         <p>
@@ -553,10 +657,58 @@ export default function Docs({ section }: { section?: string }) {
           etc. (and any signal modulation), just at different places. The card shows the project's
           aspect ratio so points land where you draw them.
         </p>
+        <p>
+          You don't have to place points by hand. Two more cards generate and transform a points set
+          (wire them into a fluid's <strong>positions</strong> just like the points card):
+        </p>
+        <ul>
+          <li>
+            <strong>Pattern</strong> — a parametric layout (<em>circle, ring, grid, line, spiral,
+            scatter</em>) with a count, radius and rotation. <em>offset x/y</em> shift the whole
+            layout off-centre, so a figure needn't sit in the middle. The card previews the dots it
+            makes.
+          </li>
+          <li>
+            <strong>Animate points</strong> — takes a points set and moves it over the clip:{" "}
+            <em>orbit</em> circles each source around the centre; <em>drift</em> slides them along a
+            heading and loops back; <em>chase</em> keeps them put and runs a lit snake around the set.
+          </li>
+          <li>
+            <strong>Merge points</strong> — concatenates two or more points sets into one. Wire a
+            Pattern/Points/Animate card into each input (<strong>+ input</strong> for more) and its
+            output into a fluid's <strong>positions</strong> — e.g. two offset Pattern rings combined
+            into a single emitter set.
+          </li>
+        </ul>
         <div className="note">
-          This is the simple first version — a fixed set of points for the whole clip. (Points that
-          move or appear/disappear over time will come later.)
+          Chain them — e.g. <em>pattern → animate → fluid positions</em>, or{" "}
+          <em>pattern + pattern → merge → fluid positions</em> — for richer source sets. A points
+          pipeline is capped at 64 sources.
         </div>
+
+        <h3 id="animation-sources">Other video sources — lyrics</h3>
+        <p>
+          Not every layer has to be a fluid. The lyrics card synthesises a video stream you can stack
+          with fluids (in a <em>layered</em> combine) or send straight to an output:
+        </p>
+        <ul>
+          <li>
+            <strong>Lyrics</strong> — burns this track's <strong>aligned lyrics</strong> into the
+            frame, timed to the vocal (the same alignment the review screen uses). Choose position /
+            alignment / case, and <em>line</em> vs <em>word</em> reveal (word fills the line in as
+            it's sung). Size, colour and opacity are modulatable. Needs lyrics on the track.
+          </li>
+        </ul>
+
+        <h3 id="animation-fx">Colour — the dye card</h3>
+        <p>
+          The <strong>Color</strong> card sets a fluid's <em>dye</em> colour at the source — wire it
+          into the fluid's <em>color</em> input. Its <em>mode</em> is <em>swatch</em> (one colour),{" "}
+          <em>rgb</em> (drive r/g/b with signals), or <em>gradient</em> (colour stops plus a
+          modulatable <em>position</em> that scrubs along them); <em>intensity</em> and{" "}
+          <em>opacity</em> are always modulatable. Because it colours the dye at emission (not a
+          finished picture), it works with both <em>layered</em> and <em>merge</em> combines.
+        </p>
 
         <h3 id="animation-combine">Combining fluids</h3>
         <p>
@@ -649,13 +801,21 @@ export default function Docs({ section }: { section?: string }) {
 
       <section id="fluid-lab">
         <h2>
-          <span className="num">7</span>Fluid Lab
+          <span className="num">7</span>Playground &amp; the fluid card
         </h2>
         <p>
-          The Fluid Lab is a standalone visual playground (reach it from the Projects screen). It
-          runs a small real-time fluid simulation: a central source injects coloured dye and pushes
-          the fluid around, and the result is rendered to a short looping video — a sandbox for
-          visuals the extracted signals can eventually drive.
+          The <strong>Playground</strong> is an always-present sandbox project (open it from the
+          Projects screen). It holds one segment per card, each a small working pipeline that shows
+          what that card does — the quickest way to see a card in isolation and copy its wiring. It
+          opens in the Studio like any project, with synthetic stems so the signal cards have
+          something to react to.
+        </p>
+        <p>
+          At the heart of most pipelines is the <strong>fluid</strong> card — a real-time fluid
+          simulation. A source injects coloured dye and pushes the fluid around; the result renders
+          to a short looping video. Every control below is a port you can drive with a signal, and
+          each carries a <strong>?</strong> in the card that links back here. The controls group into
+          the <em>source</em> (the emitter) and the <em>medium</em> (how the fluid flows).
         </p>
 
         <h3 id="fluid-source">The source — the dye emitter</h3>
@@ -666,16 +826,12 @@ export default function Docs({ section }: { section?: string }) {
               <th>Effect</th>
             </tr>
             <tr>
-              <td>colour (R/G/B)</td>
-              <td>The dye colour the source releases.</td>
-            </tr>
-            <tr>
-              <td>intensity</td>
-              <td>Brightness of the dye (an HDR multiplier — higher glows harder).</td>
-            </tr>
-            <tr>
-              <td>opacity</td>
-              <td>How strongly the dye shows over the background (lower = fainter).</td>
+              <td>colour</td>
+              <td>
+                The dye colour, intensity (HDR glow) and opacity now live on the separate{" "}
+                <strong>Color</strong> card — wire it into the fluid's <em>color</em> input. Unwired,
+                the fluid uses its default colour.
+              </td>
             </tr>
             <tr>
               <td>emit</td>
@@ -699,6 +855,17 @@ export default function Docs({ section }: { section?: string }) {
             <tr>
               <td>radial</td>
               <td>Push outward in all directions from the centre instead of one heading.</td>
+            </tr>
+            <tr>
+              <td>enabled</td>
+              <td>Turn the dye emission on or off (a disabled fluid still carries motion).</td>
+            </tr>
+            <tr>
+              <td>wrap edges</td>
+              <td>
+                On: dye leaving one edge re-enters the opposite (a looping torus). Off: dye that
+                leaves the frame is gone for good.
+              </td>
             </tr>
           </tbody>
         </table>

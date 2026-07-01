@@ -20,6 +20,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     job,
     output,
     signals,
+    lyricLines,
     groupClock,
     groupPlaying,
     segStart = 0,
@@ -29,7 +30,12 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
   const [videoUrl, setVideoUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const reqId = useRef(0);
+  const activeRender = useRef<string | null>(null); // render_id we're streaming, to cancel on edit
+  const lastTime = useRef(0); // playback position, preserved as the growing preview swaps src
+
+  const fps = (output as { fps?: number } | undefined)?.fps || 24;
 
   // The preview well adopts the project output aspect so portrait/landscape is
   // visible while editing (the rendered clip matches this exact shape).
@@ -53,44 +59,110 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
             segment?.start,
             segment?.end,
             signals
-          ) + JSON.stringify(output || {})
+          ) +
+          JSON.stringify(output || {}) +
+          // The backend folds a lyrics card's burned-in text into output_hash, so a
+          // change to the aligned lines (which arrive async) must re-trigger the render.
+          `|ly:${JSON.stringify(lyricLines || [])}`
         : "",
-    [graph, node.id, job, segment?.start, segment?.end, signals, output]
+    [graph, node.id, job, segment?.start, segment?.end, signals, output, lyricLines]
   );
 
-  // Auto-render this output (debounced) whenever its render key changes. Request-id
-  // guard drops stale responses. Not renderable (no fluid wired yet) → skip
-  // silently and leave the well empty; only real backend failures show an error.
+  // Auto-render this output (debounced) whenever its render key changes. The render
+  // STREAMS in ~5s blocks: we start a background job and poll it, updating the
+  // preview as each block lands (5s→10s→…) so a long segment shows something in a
+  // block's time instead of after the whole clip. A request-id guard drops stale
+  // responses; the previous render is cancelled so an abandoned edit stops early.
+  // Not renderable (no fluid wired yet) → skip silently; only backend failures show.
   useEffect(() => {
     if (!renderable) {
       setError("");
+      setBusy(false);
+      setProgress(null);
       return undefined;
     }
     const id = ++reqId.current;
     setBusy(true);
     setError("");
+    lastTime.current = 0; // a fresh edit restarts the preview from the top
+    let stopped = false;
+    let myRender: string | null = null;
     const t = setTimeout(async () => {
+      if (activeRender.current) api.cancelStreamRender(activeRender.current); // stop the prior render
       try {
-        const { url } = await api.renderGraph({
+        const { render_id } = await api.startStreamRender({
           job_id: job as string,
-          segment: { start: segment?.start, end: segment?.end, signals: segment?.signals },
+          segment: {
+            start: segment?.start,
+            end: segment?.end,
+            signals: segment?.signals,
+            lyric_lines: lyricLines,
+          },
           graph,
           output,
           output_id: node.id,
         });
-        if (id !== reqId.current) return; // a newer edit superseded us
-        setVideoUrl(url);
+        if (stopped || id !== reqId.current) {
+          api.cancelStreamRender(render_id); // superseded before we could poll it
+          return;
+        }
+        myRender = render_id;
+        activeRender.current = render_id;
+        for (;;) {
+          const st = await api.getStreamStatus(render_id);
+          if (stopped || id !== reqId.current) return; // a newer edit took over
+          if (st.total) setProgress({ done: st.frames_done, total: st.total });
+          if (st.state === "running") {
+            if (st.preview_url) setVideoUrl(st.preview_url); // grows block by block
+            await new Promise((r) => setTimeout(r, 250));
+            continue;
+          }
+          if (st.state === "done") {
+            if (st.url) setVideoUrl(st.url);
+          } else if (st.state === "error") {
+            throw new Error(st.error || "render failed");
+          }
+          break; // done | error | cancelled
+        }
       } catch (e) {
         if (id === reqId.current) setError((e as Error)?.message || String(e));
       } finally {
-        if (id === reqId.current) setBusy(false);
+        if (id === reqId.current) {
+          setBusy(false);
+          setProgress(null);
+          if (activeRender.current === myRender) activeRender.current = null;
+        }
       }
     }, 300);
-    return () => clearTimeout(t);
-    // Deliberate: the debounced /animate fires on the serialized `renderKey`
+    return () => {
+      stopped = true;
+      clearTimeout(t);
+      if (myRender) api.cancelStreamRender(myRender); // this render is superseded — stop it
+    };
+    // Deliberate: the debounced stream fires on the serialized `renderKey`
     // (this output's subgraph hash), not on the graph object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderKey, renderable]);
+
+  // Preserve the playback position as the growing preview (or the final clip) swaps
+  // the <video> src — otherwise every new block would restart from 0. We remember
+  // the last position and seek back once the new (longer) source is loaded.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !videoUrl) return undefined;
+    const save = () => {
+      if (v.currentTime) lastTime.current = v.currentTime;
+    };
+    const restore = () => {
+      if (lastTime.current > 0 && lastTime.current < v.duration) v.currentTime = lastTime.current;
+    };
+    v.addEventListener("timeupdate", save);
+    v.addEventListener("loadedmetadata", restore);
+    return () => {
+      v.removeEventListener("timeupdate", save);
+      v.removeEventListener("loadedmetadata", restore);
+    };
+  }, [videoUrl]);
 
   // Two playback modes:
   //  • idle (segment not playing) — the clip loops on its own, so the pulse-driven
@@ -145,6 +217,12 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     return () => cancelAnimationFrame(raf);
   }, [videoUrl, groupPlaying, groupClock, segStart]);
 
+  // "rendering 15s / 55s" while blocks stream in; a bare spinner label before the
+  // first frame count arrives.
+  const renderLabel = progress
+    ? `rendering ${Math.round(progress.done / fps)}s / ${Math.round(progress.total / fps)}s`
+    : "rendering…";
+
   return (
     <NodeFrame
       node={node}
@@ -195,16 +273,17 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
             </div>
           )
         )}
-        {busy && (
+        {busy && !videoUrl && (
           <div className="anim-output-busy">
             <div className="anim-loader" aria-hidden="true">
               <span className="anim-loader-orb" />
               <span className="anim-loader-orb" />
               <span className="anim-loader-orb" />
             </div>
-            <div className="anim-loader-label">rendering…</div>
+            <div className="anim-loader-label">{renderLabel}</div>
           </div>
         )}
+        {busy && videoUrl && <div className="anim-output-progress">{renderLabel}</div>}
         {error && <div className="anim-output-err">{error}</div>}
       </div>
     </NodeFrame>

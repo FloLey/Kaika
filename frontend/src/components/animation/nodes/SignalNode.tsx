@@ -150,6 +150,7 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
               winLen={winLen}
               color={color}
               playing={groupPlaying}
+              idleLoop
             />
           </div>
         </div>

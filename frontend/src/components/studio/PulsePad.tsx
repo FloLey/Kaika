@@ -54,14 +54,14 @@ export default function PulsePad({
       raf = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(raf);
     }
-    // Idle + idleLoop: cycle through the curve over winLen so the pad pulses on
-    // its own. Uses rAF timestamps for the phase (no wall clock).
+    // Idle + idleLoop: cycle through the curve over winLen so the pad pulses on its own.
+    // Phase comes off the SHARED rAF clock (the document timeline `ts`), NOT a per-pad
+    // start time — so every idle pad with the same window stays in lock-step (a signal
+    // and its Scope pulse together instead of drifting out of sync).
     if (idleLoop && curve && curve.length) {
       let raf: number;
-      let t0: number | null = null;
       const tick = (ts: number) => {
-        if (t0 == null) t0 = ts;
-        const phase = winLen > 0 ? ((ts - t0) / 1000 / winLen) % 1 : 0;
+        const phase = winLen > 0 ? (ts / 1000 / winLen) % 1 : 0;
         paint(curve[Math.min(curve.length - 1, Math.round(phase * (curve.length - 1)))] || 0);
         raf = requestAnimationFrame(tick);
       };

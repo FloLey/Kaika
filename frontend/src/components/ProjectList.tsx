@@ -16,10 +16,10 @@ interface Project {
 interface ProjectListProps {
   onNew: () => void;
   onOpen: (id: string) => void;
-  onFluidLab: () => void;
+  onPlayground: () => void;
 }
 
-export default function ProjectList({ onNew, onOpen, onFluidLab }: ProjectListProps) {
+export default function ProjectList({ onNew, onOpen, onPlayground }: ProjectListProps) {
   const [projects, setProjects] = useState<Project[] | null>(null); // null = loading
   const [error, setError] = useState("");
 
@@ -48,8 +48,8 @@ export default function ProjectList({ onNew, onOpen, onFluidLab }: ProjectListPr
       <div className="results-head">
         <span className="section-title">PROJECTS</span>
         <div className="controls">
-          <button className="btn sm" onClick={onFluidLab}>
-            🌀 fluid lab
+          <button className="btn sm" onClick={onPlayground}>
+            🎮 playground
           </button>
           <button className="btn on" onClick={onNew}>
             + new track

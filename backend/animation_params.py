@@ -70,64 +70,9 @@ FLUID_PARAM_SPEC: list[dict] = [
         "default": 270.0,
         "fmt": "deg",
     },
-    # Per-channel dye colour (0..1). Modulatable so a signal/pulse can drive hue,
-    # not just brightness. simulate() falls back to the static `color` vector for
-    # any channel left unset (keeps the FluidLab `/fluid` path scalar-only).
-    {
-        "key": "r",
-        "sim_group": "source",
-        "ui_group": "color",
-        "label": "red",
-        "min": 0.0,
-        "max": 1.0,
-        "step": 0.01,
-        "default": 0.27,
-        "fmt": "dp2",
-    },
-    {
-        "key": "g",
-        "sim_group": "source",
-        "ui_group": "color",
-        "label": "green",
-        "min": 0.0,
-        "max": 1.0,
-        "step": 0.01,
-        "default": 0.69,
-        "fmt": "dp2",
-    },
-    {
-        "key": "b",
-        "sim_group": "source",
-        "ui_group": "color",
-        "label": "blue",
-        "min": 0.0,
-        "max": 1.0,
-        "step": 0.01,
-        "default": 1.0,
-        "fmt": "dp2",
-    },
-    {
-        "key": "intensity",
-        "sim_group": "source",
-        "ui_group": "color",
-        "label": "intensity",
-        "min": 0.0,
-        "max": 3.0,
-        "step": 0.1,
-        "default": 1.0,
-        "fmt": "dp1",
-    },
-    {
-        "key": "opacity",
-        "sim_group": "source",
-        "ui_group": "color",
-        "label": "opacity",
-        "min": 0.0,
-        "max": 1.0,
-        "step": 0.05,
-        "default": 1.0,
-        "fmt": "dp2",
-    },
+    # NOTE: the per-channel dye colour (r/g/b/intensity/opacity) USED to live here as
+    # fluid ports. It was extracted into its own `color` card (COLOR_PARAM_SPEC below),
+    # wired into the fluid's `color` input — so the fluid spec is now source + medium only.
     {
         "key": "dissipation",
         "sim_group": "fluid",
@@ -179,6 +124,29 @@ FLUID_PARAM_SPEC: list[dict] = [
 # native-unit fallback used when a port has no binding.
 PARAMS: dict[str, tuple[str, float, float, float]] = {
     p["key"]: (p["sim_group"], p["min"], p["max"], p["default"]) for p in FLUID_PARAM_SPEC
+}
+
+# The dye-colour params, extracted from the fluid into a standalone `color` card
+# (wired into the fluid's `color` input). Same native-unit ranges/defaults the fluid
+# used to carry; all nest under simulate()'s `source.*`. r/g/b are a swatch in the UI;
+# intensity/opacity stay modulatable ports. When no color card is wired the fluid
+# falls back to its static `color` vector (+ simulate's intensity/opacity defaults).
+COLOR_PARAM_SPEC: list[dict] = [
+    {"key": "r", "label": "red", "min": 0.0, "max": 1.0, "step": 0.01, "default": 0.27, "fmt": "dp2"},
+    {"key": "g", "label": "green", "min": 0.0, "max": 1.0, "step": 0.01, "default": 0.69, "fmt": "dp2"},
+    {"key": "b", "label": "blue", "min": 0.0, "max": 1.0, "step": 0.01, "default": 1.0, "fmt": "dp2"},
+    {"key": "intensity", "label": "intensity", "min": 0.0, "max": 3.0, "step": 0.1, "default": 1.0, "fmt": "dp1"},
+    {"key": "opacity", "label": "opacity", "min": 0.0, "max": 1.0, "step": 0.05, "default": 1.0, "fmt": "dp2"},
+    # gradient mode: 0..1 sample point along the colour stops (modulatable — wire an
+    # LFO/signal to sweep the colour). Ignored in swatch / rgb mode.
+    {"key": "position", "label": "position", "min": 0.0, "max": 1.0, "step": 0.01, "default": 0.0, "fmt": "dp2"},
+]
+
+# key -> (min, max, default) for the color card's ports. Same shape as the source
+# port specs (sources.SOURCE_PARAMS) so the graph executor resolves a color port
+# exactly like any other modulatable port. All color keys nest under source.
+COLOR_PARAMS: dict[str, tuple[float, float, float]] = {
+    p["key"]: (p["min"], p["max"], p["default"]) for p in COLOR_PARAM_SPEC
 }
 
 # Static params (not ports in v1; set on the fluid card) and where they nest.

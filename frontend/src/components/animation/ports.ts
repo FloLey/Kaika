@@ -30,11 +30,25 @@ export interface PortSide {
   flow: string;
 }
 
-// Whether a connect attempt (drag from an out port to an in port) is legal:
-// out -> in, never onto the same node, and the value/video/points flows must match.
+// The reason a connect attempt (drag from an out port onto another port) is
+// rejected, as a short human message — or null when the connection is legal.
+// Returns null too when there's no target port yet (an in-progress drag over
+// empty space isn't a mistake to explain). Drives both the validity check below
+// and the toast the canvas pops on a rejected drop.
+export function connectIssue(source?: PortSide | null, target?: PortSide | null): string | null {
+  if (!source || !target) return null;
+  if (target.kind !== "in") return "Drop onto an input port, not an output.";
+  if (source.nodeId === target.nodeId) return "A node can't connect to itself.";
+  if (source.flow !== target.flow) {
+    return `Type mismatch: a ${source.flow} output can't feed a ${target.flow} input.`;
+  }
+  return null; // "value" | "video" | "points" | "color" all matched
+}
+
+// Whether a connect attempt is legal: out -> in, never onto the same node, and
+// the value/video/points flows must match. Kept in lockstep with the message
+// above so the highlight and the toast can never disagree.
 export function canConnect(source?: PortSide | null, target?: PortSide | null): boolean {
-  if (!source || !target) return false;
-  if (source.kind !== "out" || target.kind !== "in") return false;
-  if (source.nodeId === target.nodeId) return false;
-  return source.flow === target.flow; // "value" | "video" | "points"
+  if (!source || !target || source.kind !== "out") return false;
+  return connectIssue(source, target) === null;
 }

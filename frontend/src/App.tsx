@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Segment } from "./lib/types";
 import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
-import FluidLab from "./components/fluid/FluidLab";
 import UploadStep from "./components/upload/UploadStep";
 import ReviewStep from "./components/review/ReviewStep";
 import Studio from "./components/studio/Studio";
@@ -33,6 +32,7 @@ export default function App() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [vocalEnvelope, setVocalEnvelope] = useState<number[]>([]);
   const [envelopeTimes, setEnvelopeTimes] = useState<number[]>([]);
+  const [lyricLines, setLyricLines] = useState<unknown[]>([]);
   const [activeSegId, setActiveSegId] = useState<string | null>(null);
   // Project-wide animation output settings (size/quality/fps/background).
   const [output, setOutput] = useState(OUTPUT_DEFAULTS);
@@ -106,6 +106,7 @@ export default function App() {
       const segData = await api.pollJob<SegmentProposal>(job_id, setStatus);
       setVocalEnvelope(segData.vocal_envelope || []);
       setEnvelopeTimes(segData.envelope_times || []);
+      setLyricLines(segData.lyric_lines || []);
       if (segData.duration) setDuration(segData.duration);
       lastSaved.current = "";
       setSegments(hydrateSegments(segData.segments, data.stems));
@@ -129,6 +130,7 @@ export default function App() {
       setStems(p.stems || {});
       setOriginalSpec(p.stems?.original?.spectrogram || "");
       setVocalEnvelope(p.vocal_envelope || []);
+      setLyricLines(p.lyric_lines || []);
       setEnvelopeTimes(p.envelope_times || []);
       const segs = hydrateSegments(p.segments, p.stems || {});
       setSegments(segs);
@@ -151,6 +153,21 @@ export default function App() {
             })
           : "";
       setStep(p.step || "studio");
+    } catch (e) {
+      setError((e as Error).message);
+      setStep("error");
+    }
+  }
+
+  // The Playground: the always-present, app-managed project (one pipeline per card).
+  // Built lazily on first open, then loaded into the Studio like any project.
+  async function openPlayground() {
+    setStep("processing");
+    setStatus("preparing playground…");
+    setError("");
+    try {
+      const { job_id } = await api.ensurePlayground();
+      await openProject(job_id);
     } catch (e) {
       setError((e as Error).message);
       setStep("error");
@@ -220,10 +237,9 @@ export default function App() {
         <ProjectList
           onNew={() => setStep("upload")}
           onOpen={openProject}
-          onFluidLab={() => setStep("fluidlab")}
+          onPlayground={openPlayground}
         />
       )}
-      {step === "fluidlab" && <FluidLab onBack={() => setStep("projects")} />}
       {step === "upload" && <UploadStep onSubmit={handleUpload} />}
       {step === "processing" && <Processing status={status} />}
       {step === "error" && (
@@ -262,6 +278,7 @@ export default function App() {
           job={job ?? undefined}
           output={output}
           setOutput={setOutput}
+          lyricLines={lyricLines}
           onEditSplit={() => setStep("review")}
         />
       )}

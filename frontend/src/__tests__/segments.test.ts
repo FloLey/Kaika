@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { LABELS, LABEL_COLOR, hydrateSegments, serializeSegments } from "../lib/segments";
+import { LABELS, LABEL_COLOR, hydrateSegments, serializeSegments, copyLayout } from "../lib/segments";
 import type { RawSegment } from "../lib/segments";
+import type { Graph, Segment, Signal } from "../lib/types";
 
 // A minimal stems map (only `sr` is read by the hydration path).
 const STEMS = {
@@ -76,5 +77,63 @@ describe("label palette", () => {
     for (const label of LABELS) {
       expect(LABEL_COLOR[label], `missing colour for ${label}`).toBeTruthy();
     }
+  });
+});
+
+describe("copyLayout (copy cards to the next segment)", () => {
+  const sig = (id: string, over: Partial<Signal> = {}): Signal => ({
+    id,
+    stemKey: "drums",
+    minHz: 40,
+    maxHz: 200,
+    feature: "energy",
+    attack: 5,
+    release: 250,
+    invert: false,
+    gamma: 1,
+    gain: 1,
+    offset: 0,
+    threshold: 0,
+    ...over,
+  });
+  const seg = (id: string, signals: Signal[], graph: Graph | null): Segment => ({
+    id,
+    label: id,
+    start: 0,
+    end: 8,
+    signals,
+    graph,
+  });
+  const graphWith = (signalId: string): Graph =>
+    ({
+      version: 8,
+      nodes: [
+        { id: "n-sig", type: "signal", x: 0, y: 0, data: { signalId } },
+        { id: "n-fluid", type: "fluid", x: 0, y: 0, data: { static: {}, ports: {} } },
+      ],
+      edges: [],
+    }) as unknown as Graph;
+  const sigId = (g: Graph) =>
+    (g.nodes.find((n) => n.type === "signal")!.data as { signalId: string }).signalId;
+
+  it("rewires the copied signal card onto the target's matching band (no duplicate)", () => {
+    const out = copyLayout(seg("A", [sig("s-src")], graphWith("s-src")), seg("B", [sig("s-tgt")], null));
+    expect(out.signals).toHaveLength(1); // matched the existing band, added nothing
+    expect(sigId(out.graph!)).toBe("s-tgt"); // points at THIS segment's signal, not the source's
+    expect(out.graph!.nodes.some((n) => n.type === "fluid")).toBe(true); // layout carried over
+  });
+
+  it("clones a band the target is missing and points the card at the clone", () => {
+    const source = seg("A", [sig("s-src", { minHz: 1000, maxHz: 4000 })], graphWith("s-src"));
+    const out = copyLayout(source, seg("B", [sig("s-tgt")], null));
+    expect(out.signals).toHaveLength(2); // target band + the cloned source band
+    const cloned = out.signals.find((s) => s.minHz === 1000)!;
+    expect(cloned.id).not.toBe("s-src"); // fresh id on the target
+    expect(sigId(out.graph!)).toBe(cloned.id);
+  });
+
+  it("leaves the target untouched when the source has no graph", () => {
+    const target = seg("B", [sig("s-tgt")], null);
+    expect(copyLayout(seg("A", [], null), target)).toBe(target);
   });
 });

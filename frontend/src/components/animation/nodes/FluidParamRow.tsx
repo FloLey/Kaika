@@ -2,9 +2,10 @@ import { useCallback } from "react";
 import type { ChangeEvent } from "react";
 import Ctl from "../../../ui/Ctl";
 import { Port } from "./NodeFrame";
+import ArgInfo from "./ArgInfo";
 import { setConstValue, setNodeRange } from "./fluidBindings";
 import type { NodeHelpers, PortRef } from "./nodeProps";
-import type { Binding, FluidData, FluidParam, Graph, GraphNode } from "../../../lib/types";
+import type { Binding, FluidParam, FluidPort, Graph, GraphNode } from "../../../lib/types";
 
 // One fluid param's input-port ROW and the collapsed-group anchor, extracted from
 // FluidNode. A const-bound row shows a single-thumb Ctl (the value IS the field); a
@@ -106,8 +107,8 @@ interface ParamRowProps {
 }
 
 export function ParamRow({ node, param, helpers, onGraphChange, onDetach }: ParamRowProps) {
-  const data = node.data as FluidData;
-  const port = data.ports[param.key];
+  const ports = (node.data as { ports?: Record<string, FluidPort> }).ports || {};
+  const port = ports[param.key];
   const binding: Binding = port?.binding || { kind: "const", value: param.def };
 
   const setConst = (v: number) => onGraphChange(setConstValue(node.id, param.key, v));
@@ -125,6 +126,7 @@ export function ParamRow({ node, param, helpers, onGraphChange, onDetach }: Para
         title={`${param.label} in`}
       />
       <span className="anim-param-label">{param.label}</span>
+      <ArgInfo type={node.type} k={param.key} group={param.group} />
       {binding.kind === "node" ? (
         <RangeControl
           param={param}

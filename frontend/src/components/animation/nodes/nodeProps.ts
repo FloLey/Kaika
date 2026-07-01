@@ -35,6 +35,7 @@ export interface NodeCtx {
   job?: unknown;
   output?: OutputSettings | null;
   signals?: SignalDef[];
+  lyricLines?: unknown[]; // aligned lyric lines [{t0,t1,text}] for the lyrics card
   groupClock?: RefObject<HTMLAudioElement | null>;
   groupPlaying?: boolean;
   segStart?: number;

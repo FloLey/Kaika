@@ -165,6 +165,43 @@
   opacity: 1;
 }
 
+/* Toast explaining why a connect attempt was refused — bottom-centre of the
+   canvas, fades in, and clears itself after a beat. */
+.gc-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(440px, 88%);
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: #fbecee;
+  border: 1px solid #e3b6c0;
+  color: #a33a52;
+  font-size: 12px;
+  font-family: var(--mono);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: gc-hint-in 0.14s ease-out;
+}
+.gc-hint-icon {
+  flex: none;
+}
+@keyframes gc-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* ✕ handle to cut a wire — hidden until the edge is hovered or selected. */
 .gc-edge-del {
   opacity: 0;
@@ -249,6 +286,16 @@
 .anim-node.sel {
   outline: 2px solid var(--accent, var(--petale));
   outline-offset: 1px;
+}
+
+/* Shift-drag rubber band for box-selecting cards; screen-space overlay on .gc-root. */
+.gc-marquee {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  border: 1px solid var(--petale);
+  background: color-mix(in srgb, var(--petale) 14%, transparent);
+  border-radius: 2px;
 }
 .anim-node-fluid {
   width: 320px;
@@ -692,6 +739,23 @@
   text-transform: uppercase;
   color: #dde4f0;
 }
+/* Slim streaming-progress chip shown over an already-visible preview while later
+   blocks keep rendering (the growing preview stays watchable underneath). */
+.anim-output-progress {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #dde4f0;
+  background: rgba(12, 13, 18, 0.72);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+}
 @keyframes anim-orb {
   0%,
   100% {
@@ -736,7 +800,7 @@
 
 .anim-toolbar {
   position: relative;
-  z-index: 20; /* keep the toolbar (and its + Signal dropdown) above the canvas */
+  z-index: 20; /* keep the toolbar (and its Add-node dropdown) above the canvas */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -749,10 +813,120 @@
 .anim-toolbar-spacer {
   flex: 1 1 auto;
 }
-/* anchors the + Signal picker dropdown */
-.anim-add-signal {
+/* the row of per-category add buttons (wraps on a narrow panel) */
+.anim-add-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* anchors each category's dropdown and the signal picker */
+.anim-add-menu {
   position: relative;
   display: flex;
+}
+/* the open category button reads active */
+.anim-add-btn.on {
+  border-color: var(--petale-soft);
+  color: var(--petale);
+}
+
+/* the grouped Add-node dropdown */
+.anim-add-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  width: 200px;
+  /* overflow stays visible so the per-item hover help (anchored to the right) isn't
+     clipped; each category holds ≤5 items, so no scroll is needed. */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 30;
+}
+.anim-add-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.anim-add-group + .anim-add-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.anim-add-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 4px 8px 2px;
+}
+.anim-add-item {
+  position: relative;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.anim-add-item:hover {
+  background: var(--panel-2);
+}
+
+/* per-item hover help: what it does + the input → output flow. Anchored to the RIGHT
+   of the item (modelled on .info-tip) so a wide tip doesn't reflow the narrow menu. */
+.anim-add-tip {
+  position: absolute;
+  top: -2px;
+  left: calc(100% + 8px);
+  z-index: 70;
+  width: max-content;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-family: var(--mono);
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.12s,
+    transform 0.12s;
+  pointer-events: none;
+}
+.anim-add-item:hover .anim-add-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+.anim-add-tip-help {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.anim-add-tip-io {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--courant);
+  border-top: 1px dashed var(--line);
+  padding-top: 4px;
 }
 
 .anim-signal-picker {
@@ -1121,6 +1295,62 @@
   background: var(--courant);
 }
 
+/* color-flow ports read petal-pink (the dye colour the card carries). */
+.gc-port-color {
+  border-color: var(--petale);
+}
+.gc-port-color.gc-port-out {
+  background: var(--petale);
+}
+
+/* The colour card's swatch row: the native colour well + its label. */
+.anim-color-swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.anim-color-swatch input[type="color"],
+.anim-gradient-stop input[type="color"] {
+  width: 32px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line, #333);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  flex: none;
+}
+
+/* The colour card's gradient editor: a preview bar + one row per colour stop. */
+.anim-gradient {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.anim-gradient-bar {
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--line, #333);
+  background: var(--grad, #000);
+}
+.anim-gradient-stop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.anim-gradient-stop input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.anim-gradient-t {
+  width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 .anim-points-pad {
   position: relative;
   width: 100%;
@@ -1160,6 +1390,17 @@
   line-height: 1.3;
 }
 
+/* read-only preview pad (pattern card): not interactive, markers don't grab */
+.anim-points-pad-ro {
+  cursor: default;
+}
+.anim-points-marker-ro {
+  width: 9px;
+  height: 9px;
+  cursor: default;
+  pointer-events: none;
+}
+
 /* fluid's labelled `positions` input row (spec 11) */
 .anim-pos-row {
   position: relative;
@@ -1182,5 +1423,149 @@
 .anim-pos-count {
   margin-left: auto;
   font: 10px/1 var(--mono);
+  color: var(--muted);
+}
+
+/* scope card: a small chip naming the monitored source type */
+.anim-scope-chip {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--mod);
+  background: color-mix(in srgb, var(--mod) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--mod) 30%, var(--line));
+  border-radius: 5px;
+  padding: 3px 6px;
+  text-transform: lowercase;
+}
+
+/* ---- modulator (value) cards: math / lfo / noise / shaper ----------------- */
+
+.anim-mod {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* generator shape preview — a small well that mirrors the points/output wells */
+.anim-mini-spark {
+  display: block;
+  width: 100%;
+  height: 38px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* a labelled native <select> styled to sit with the Ctl rows */
+.anim-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.anim-select-label {
+  flex: none;
+  width: 48px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.anim-select {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.anim-select:hover {
+  border-color: color-mix(in srgb, var(--mod) 45%, var(--line));
+}
+
+/* segmented waveform picker (LFO) */
+.anim-shape-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.anim-shape-btn {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 2px;
+  cursor: pointer;
+  text-transform: lowercase;
+}
+.anim-shape-btn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--mod) 45%, var(--line));
+}
+.anim-shape-btn.on {
+  color: var(--mod);
+  border-color: color-mix(in srgb, var(--mod) 55%, var(--line));
+  background: color-mix(in srgb, var(--mod) 12%, var(--panel));
+}
+
+/* math inputs — mirrors the combine input rows */
+.anim-math-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.anim-math-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.anim-math-row > .gc-port {
+  flex: none;
+}
+.anim-math-slot {
+  font-size: 11px;
+  color: var(--text);
+}
+.anim-math-rm {
+  margin-left: auto;
+}
+.anim-math-add {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* ---- video FX cards: transform / color ------------------------------------ */
+.anim-fx-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+.anim-fx-static {
+  margin-top: 6px;
+  margin-bottom: 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: none;
+  padding-top: 6px;
+}
+
+/* shaper output-remap sub-block */
+.anim-mod-remap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--line);
+}
+.anim-mod-remap-label {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   color: var(--muted);
 }

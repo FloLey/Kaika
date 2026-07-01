@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Toggle } from "../../../ui/Ctl";
 import NodeFrame, { Port } from "./NodeFrame";
+import { argHelp } from "../../../lib/paramHelp";
 import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
 import { patchStatic } from "./fluidBindings";
@@ -18,9 +19,10 @@ const FLUID_PARAMS = RAW_FLUID_PARAMS as FluidParam[];
 // PATH: v1 uses a SIMPLIFIED static path — a single center point plus the radial
 // toggle (per 06's recommendation). The full FluidLab path editor is deferred.
 
+// COLOR is no longer a fluid group — the dye colour was extracted into a standalone
+// `color` card wired into the fluid's `color` input (see the color-input row below).
 const GROUPS = [
   { key: "source", label: "SOURCE" },
-  { key: "color", label: "COLOR" },
   { key: "medium", label: "MEDIUM" },
 ];
 
@@ -36,7 +38,6 @@ export default function FluidNode({
   const data = node.data as FluidData; // this card only renders for a fluid node
   const [open, setOpen] = useState<Record<string, boolean>>({
     source: true,
-    color: true,
     medium: false,
   });
   const s = data.static;
@@ -50,6 +51,13 @@ export default function FluidNode({
     const pn = srcId ? g.nodes.find((n) => n.id === srcId) : null;
     return pn && pn.type === "points" ? (pn.data.points || []).length : 0;
   }, [ctx?.graph, node.id]);
+
+  // Whether a `color` card is wired into the dye-colour input (else the fluid uses its
+  // static default colour).
+  const colorWired = useMemo(
+    () => !!(ctx?.graph && videoSource(ctx.graph, node.id, "color")),
+    [ctx?.graph, node.id]
+  );
 
   // Collapsing/expanding a group mounts/unmounts ports; ask the canvas to redraw
   // edges so wires re-anchor (to the group header when collapsed, to the row port
@@ -100,6 +108,21 @@ export default function FluidNode({
         </span>
       </div>
 
+      {/* Dye colour: wire a `color` card here to drive r/g/b + intensity/opacity;
+          otherwise the fluid uses its static default colour. */}
+      <div className="anim-pos-row">
+        <Port
+          kind="in"
+          flow="color"
+          nodeId={node.id}
+          portId="color"
+          portRef={helpers.portRef}
+          title="wire a color card here"
+        />
+        <span className="anim-pos-label">color</span>
+        <span className="anim-pos-count">{colorWired ? "wired" : "default"}</span>
+      </div>
+
       {/* Static controls (non-port params). The clip always spans the full segment,
           so there is no duration control. */}
       <div className="anim-static">
@@ -107,17 +130,19 @@ export default function FluidNode({
           label="enabled"
           value={s.enabled}
           onChange={(v: boolean) => setStatic({ enabled: v })}
+          {...argHelp("fluid", "enabled")}
         />
         <Toggle
           label="radial"
           value={s.radial}
           onChange={(v: boolean) => setStatic({ radial: v })}
+          {...argHelp("fluid", "radial")}
         />
         <Toggle
           label="wrap edges"
           value={s.wrap !== false}
-          help="On: fluid that leaves one edge re-enters the opposite (a looping torus). Off: fluid that leaves the frame is gone for good."
           onChange={(v: boolean) => setStatic({ wrap: v })}
+          {...argHelp("fluid", "wrap")}
         />
         {(s.radial || s.wrap === false) && (
           <div className="anim-path-note">

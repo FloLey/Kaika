@@ -13,6 +13,7 @@ interface AnimationCanvasProps {
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
+  lyricLines?: unknown[];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;
   onOpenOutput?: () => void;
@@ -34,6 +35,7 @@ export default function AnimationCanvas({
   stems,
   job,
   output,
+  lyricLines,
   groupClock,
   groupPlaying,
   onOpenOutput,
@@ -43,8 +45,8 @@ export default function AnimationCanvas({
 }: AnimationCanvasProps) {
   const {
     graph,
-    selId,
-    setSelId,
+    selected,
+    setSelected,
     applyUpdater,
     ctx,
     minimizeCtx,
@@ -53,8 +55,8 @@ export default function AnimationCanvas({
     toggleMinimizeAll,
     onConnect,
     onEdgeDelete,
-    onNodeDelete,
-  } = useGraphEditor({ segment, stems, job, output, groupClock, groupPlaying, commitGraph });
+    onDeleteSelection,
+  } = useGraphEditor({ segment, stems, job, output, lyricLines, groupClock, groupPlaying, commitGraph });
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<View>(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
@@ -95,10 +97,10 @@ export default function AnimationCanvas({
             layoutKey={minimizedKey}
             onGraphChange={applyUpdater}
             onConnect={onConnect}
-            onNodeDelete={onNodeDelete}
             onEdgeDelete={onEdgeDelete}
-            selected={selId}
-            onSelect={setSelId}
+            onDeleteSelection={onDeleteSelection}
+            selected={selected}
+            onSelectionChange={setSelected}
             onViewChange={(v) => {
               viewRef.current = v;
             }}

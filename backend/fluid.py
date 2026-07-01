@@ -321,6 +321,24 @@ def _emitter(src: dict, nframes: int):
     pingpong = bool(src.get("path_pingpong", False))
     closed = bool(src.get("path_closed", False)) and len(pts) > 2
 
+    # Emission gate (chase): the source stays put but emits as a SNAKE sweeps the ring.
+    # A head moves once per `gate_speed` over the clip; each point lights as the head
+    # passes and fades behind it. gate_phase = this source's slot (0..1), gate_duty =
+    # snake length (lit fraction), gate_fade = tail taper (0 = solid arc, 1 = fade to 0).
+    gate_speed = float(src.get("gate_speed", 0.0))
+    gate_phase = float(src.get("gate_phase", 0.0))
+    gate_duty = float(src.get("gate_duty", 1.0))
+    gate_fade = float(src.get("gate_fade", 0.0))
+    gated = gate_speed > 0.0 and gate_duty < 1.0
+
+    def gate_at(t):
+        if not gated:
+            return 1.0
+        d = (t * gate_speed - gate_phase) % 1.0  # 0 at the head, grows toward the tail
+        if d >= gate_duty:
+            return 0.0
+        return 1.0 - gate_fade * (d / gate_duty)  # head bright -> tail fades (snake)
+
     def pos_at(t):
         npts = len(pts)
         if npts == 1:
@@ -340,108 +358,149 @@ def _emitter(src: dict, nframes: int):
     def inject(sim, i, denom, layer=0):
         if not enabled:
             return
-        px, py = pos_at(i / denom)
+        t = i / denom
+        g = gate_at(t)
+        if g <= 0.0:
+            return
+        px, py = pos_at(t)
         ang = np.deg2rad(angle_s[i])
         color_i = np.array([r_s[i], g_s[i], b_s[i]], np.float32) * inten_s[i] * opac_s[i]
-        sim.add_dye(px, py, radius_s[i], color_i, emit_s[i], layer)
-        f = force_s[i] * 0.02  # slider units -> a few cells/frame at steady state
+        sim.add_dye(px, py, radius_s[i], color_i, emit_s[i] * g, layer)
+        f = force_s[i] * 0.02 * g  # slider units -> a few cells/frame at steady state
         if radial:
             # Radial uses a divergence source (own gain); it builds outflow over
             # frames, so it wants a smaller per-frame strength than a velocity kick.
-            sim.add_radial(px, py, radius_s[i], force_s[i] * 0.05)
+            sim.add_radial(px, py, radius_s[i], force_s[i] * 0.05 * g)
         elif f:
             sim.add_force(px, py, radius_s[i], np.cos(ang) * f, np.sin(ang) * f)
 
     return inject
 
 
-def simulate(params: dict, apply_bg: bool = True) -> tuple:
-    """Run the sim from a params dict -> (frames uint8 [T,h,w,3], fps, (h,w)).
+class FluidClip:
+    """A resumable render of one `simulate()` params dict.
+
+    Holds the live `FluidSim` plus the pre-sampled per-frame medium series and
+    emitters, so frames can be produced in contiguous **blocks** (front-to-back)
+    while the sim state (velocity/dye) carries across `advance()` calls. This is
+    what lets a long clip stream in 5s chunks instead of one monolithic render.
+
+    `advance(a, b) -> frames[a:b]` MUST be called with contiguous, increasing
+    ranges starting at the current cursor: `advance(0, k)`, then `advance(k, …)`,
+    etc. — because block K+1's starting field IS block K's final field, the sim
+    cannot skip ahead. `simulate()` is just `advance(0, nframes)` in one call, so
+    every existing caller/test stays byte-identical.
 
     Grid: an `output` dict (width/height/quality) selects a rectangular grid via
     `grid_from_output`; otherwise the legacy square `grid` (FluidLab `/fluid`).
-
     Emitters: `params["sources"]` is a LIST of source dicts injected together into
-    ONE field each frame (merge). A single `params["source"]` is the back-compat
-    case (wrapped as `[source]`). The medium (`params["fluid"]`) is one shared set.
+    ONE field each frame (merge); a single `params["source"]` is wrapped as
+    `[source]`. The medium (`params["fluid"]`) is one shared set.
 
     `apply_bg`: when True (default) the project background is composited in (the
-    standalone single-fluid / FluidLab path — unchanged). The combine executor passes
-    `apply_bg=False` so intermediate layers stay dye-on-transparent and the TERMINAL
-    output applies the background once (spec 10)."""
-    out = params.get("output") or {}
-    if out:
-        gh, gw = grid_from_output(out)
-        fps = int(out.get("fps", params.get("fps", 24)))
-        bg_rgb = _hex_rgb(out.get("background", "#000000"))
-    else:
-        gh = gw = int(params.get("grid", 96))
-        fps = int(params.get("fps", 24))
-        bg_rgb = None
-    duration = float(params.get("duration", 10))
-    nframes = max(1, int(round(duration * fps)))
-    fl = params.get("fluid", {})
-    sources = params.get("sources") or [params.get("source", {})]
+    standalone single-fluid / FluidLab path). The combine executor passes
+    `apply_bg=False` so intermediate layers stay dye-on-transparent and the
+    TERMINAL output applies the background once (spec 10)."""
 
-    # Per-source edge mode. Distinct modes become separate dye LAYERS that share the
-    # ONE velocity field, so a merge of fluids with different `wrap` keeps each
-    # component's dye behaviour (wraps vs escapes) while they still interact. The
-    # velocity uses one mode: the common one if uniform, else periodic (a torus the
-    # whole flow lives on). A single source -> one layer == the old behaviour.
-    src_wrap = [bool(s.get("wrap", True)) for s in sources]
-    distinct = sorted(set(src_wrap))  # [True] / [False] / [False, True]
-    dye_modes = ["wrap" if w else "constant" for w in distinct]
-    vel_wrap = distinct[0] if len(distinct) == 1 else True
-    src_layer = [distinct.index(w) for w in src_wrap]
+    def __init__(self, params: dict, apply_bg: bool = True):
+        out = params.get("output") or {}
+        if out:
+            self.gh, self.gw = grid_from_output(out)
+            self.fps = int(out.get("fps", params.get("fps", 24)))
+            bg_rgb = _hex_rgb(out.get("background", "#000000"))
+        else:
+            self.gh = self.gw = int(params.get("grid", 96))
+            self.fps = int(params.get("fps", 24))
+            bg_rgb = None
+        duration = float(params.get("duration", 10))
+        self.nframes = max(1, int(round(duration * self.fps)))
+        fl = params.get("fluid", {})
+        sources = params.get("sources") or [params.get("source", {})]
 
-    # Medium params -> per-frame series FIRST, so the sim can be seeded from frame 0
-    # and a wired pulse (an array) doesn't blow up float() in the constructor. The
-    # loop below overwrites these attributes each frame.
-    # `.tolist()` converts each float32 series to Python floats ONCE (one vectorized
-    # call) so the per-frame medium update below indexes a list instead of calling
-    # float() on a numpy scalar every frame.
-    diss_l = _series(fl.get("dissipation", 0.95), nframes).tolist()
-    vdis_l = _series(fl.get("velocity_dissipation", 0.97), nframes).tolist()
-    visc_l = _series(fl.get("viscosity", 0.0), nframes).tolist()
-    vort_l = _series(fl.get("vorticity", 5.0), nframes).tolist()
-    sim = FluidSim(
-        gh,
-        gw,
-        dissipation=diss_l[0],
-        vel_dissipation=vdis_l[0],
-        viscosity=visc_l[0],
-        vorticity=vort_l[0],
-        wrap=vel_wrap,
-        dye_modes=dye_modes,
-    )
-    emitters = list(zip([_emitter(s, nframes) for s in sources], src_layer))
+        # Per-source edge mode. Distinct modes become separate dye LAYERS that share
+        # the ONE velocity field, so a merge of fluids with different `wrap` keeps
+        # each component's dye behaviour (wraps vs escapes) while they still
+        # interact. The velocity uses one mode: the common one if uniform, else
+        # periodic (a torus the whole flow lives on). A single source -> one layer.
+        src_wrap = [bool(s.get("wrap", True)) for s in sources]
+        distinct = sorted(set(src_wrap))  # [True] / [False] / [False, True]
+        dye_modes = ["wrap" if w else "constant" for w in distinct]
+        vel_wrap = distinct[0] if len(distinct) == 1 else True
+        src_layer = [distinct.index(w) for w in src_wrap]
 
-    frames = np.empty((nframes, gh, gw, 3), np.uint8)
-    denom = max(1, nframes - 1)
-    bg = bg_rgb if apply_bg else None
-    for i in range(nframes):
-        # Medium params can change each frame -> set on the sim before stepping.
-        # FluidSim.step() reads these attributes each call, so this Just Works.
-        sim.dissipation = diss_l[i]
-        sim.vel_dissipation = vdis_l[i]
-        sim.viscosity = visc_l[i]
-        sim.vorticity = vort_l[i]
-        for inject, layer in emitters:
-            inject(sim, i, denom, layer)
-        sim.step()
-        frames[i] = _tonemap(sim.current_dye(), bg=bg)
-    return frames, fps, (gh, gw)
+        # Medium params -> per-frame series FIRST, so the sim can be seeded from
+        # frame 0 and a wired pulse (an array) doesn't blow up float() in the
+        # constructor. advance() overwrites these attributes each frame.
+        # `.tolist()` converts each float32 series to Python floats ONCE (one
+        # vectorized call) so the per-frame medium update indexes a list instead of
+        # calling float() on a numpy scalar every frame.
+        self._diss = _series(fl.get("dissipation", 0.95), self.nframes).tolist()
+        self._vdis = _series(fl.get("velocity_dissipation", 0.97), self.nframes).tolist()
+        self._visc = _series(fl.get("viscosity", 0.0), self.nframes).tolist()
+        self._vort = _series(fl.get("vorticity", 5.0), self.nframes).tolist()
+        self._sim = FluidSim(
+            self.gh,
+            self.gw,
+            dissipation=self._diss[0],
+            vel_dissipation=self._vdis[0],
+            viscosity=self._visc[0],
+            vorticity=self._vort[0],
+            wrap=vel_wrap,
+            dye_modes=dye_modes,
+        )
+        self._emitters = list(zip([_emitter(s, self.nframes) for s in sources], src_layer))
+        self._denom = max(1, self.nframes - 1)
+        self._bg = bg_rgb if apply_bg else None
+        self._cursor = 0
+
+    def advance(self, a: int, b: int) -> np.ndarray:
+        """Step the sim from frame `a` to `b` (exclusive) and return frames[a:b]."""
+        if a != self._cursor:
+            raise ValueError(
+                f"FluidClip.advance must be contiguous (cursor={self._cursor}, got a={a})"
+            )
+        b = min(int(b), self.nframes)
+        sim = self._sim
+        frames = np.empty((max(0, b - a), self.gh, self.gw, 3), np.uint8)
+        for i in range(a, b):
+            # Medium params can change each frame -> set on the sim before stepping.
+            # FluidSim.step() reads these attributes each call, so this Just Works.
+            sim.dissipation = self._diss[i]
+            sim.vel_dissipation = self._vdis[i]
+            sim.viscosity = self._visc[i]
+            sim.vorticity = self._vort[i]
+            for inject, layer in self._emitters:
+                inject(sim, i, self._denom, layer)
+            sim.step()
+            frames[i - a] = _tonemap(sim.current_dye(), bg=self._bg)
+        self._cursor = b
+        return frames
+
+
+def simulate(params: dict, apply_bg: bool = True) -> tuple:
+    """Run the sim from a params dict -> (frames uint8 [T,h,w,3], fps, (h,w)).
+
+    Thin wrapper over `FluidClip`: build the clip and advance it over the whole
+    range in one call. See `FluidClip` for the grid/emitter/background semantics."""
+    clip = FluidClip(params, apply_bg=apply_bg)
+    frames = clip.advance(0, clip.nframes)
+    return frames, clip.fps, (clip.gh, clip.gw)
 
 
 def render_mp4(
-    frames: np.ndarray, fps: int, path: Path, out_w: int | None = None, out_h: int | None = None
+    frames: np.ndarray,
+    fps: int,
+    path: Path,
+    out_w: int | None = None,
+    out_h: int | None = None,
 ) -> None:
-    """Encode RGB frames to a web-playable h264 mp4 via system ffmpeg.
+    """Encode RGB frames to a web-playable h264 mp4 via system ffmpeg (one-shot).
 
     frames are [T, H, W, 3]. `out_w`/`out_h` set the encoded pixel size; they are
     chosen with the SAME aspect as the grid (the sim grid is derived from the
     output size), so the upscale is uniform — no stretch, no bars. Defaults to a
-    512px square for the legacy `/fluid` (FluidLab) path.
+    512px square for the legacy `/fluid` (FluidLab) path. The progressive/streaming
+    renderer uses `open_stream_encoder` instead.
     """
     h, w = int(frames.shape[1]), int(frames.shape[2])
     out_w = int(out_w) if out_w else 512
@@ -478,6 +537,36 @@ def render_mp4(
     proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.decode()[-2000:])
+
+
+def open_stream_encoder(
+    path: Path, fps: int, gw: int, gh: int, out_w: int | None = None, out_h: int | None = None
+) -> "subprocess.Popen":
+    """Open a persistent ffmpeg that encodes a CONTINUOUS rawvideo stream into `path`.
+
+    The streaming renderer feeds one block's `frames.tobytes()` at a time to the
+    returned process's stdin; the sim grid `gw`x`gh` is constant across blocks so a
+    single input stream works. Unlike `render_mp4` (one-shot, `+faststart`), the
+    output is a FRAGMENTED mp4 (`frag_keyframe+empty_moov`), so the file is
+    progressively valid and plays in a `<video>` while it's still growing. The caller
+    writes each block, then closes stdin and waits to finalize (see graph.render_stream).
+    """
+    out_w = int(out_w) if out_w else 512
+    out_h = int(out_h) if out_h else 512
+    out_w -= out_w % 2  # h264 yuv420p needs even dimensions
+    out_h -= out_h % 2
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg", "-y", "-v", "error",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{gw}x{gh}", "-r", str(fps), "-i", "-",
+        "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        # ~1s GOPs with a keyframe at each fragment so partial reads decode cleanly.
+        "-g", str(max(1, int(fps))), "-keyint_min", str(max(1, int(fps))), "-sc_threshold", "0",
+        "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
+        "-vf", f"scale={out_w}:{out_h}:flags=neighbor",
+        str(path),
+    ]  # fmt: skip
+    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
 
 def params_hash(params: dict) -> str:

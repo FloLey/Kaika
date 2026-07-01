@@ -35,8 +35,10 @@ without a third-party library (decision locked).
 ```jsx
 <GraphCanvas
   graph={graph}
-  onGraphChange={(updater) => ...}     // (graph) => graph; for moves/connects/deletes
-  selected={selId} onSelect={setSelId}
+  onGraphChange={(updater) => ...}        // (graph) => graph; for moves/connects/deletes
+  selected={selected}                     // ReadonlySet<string>: node ids and/or one edge id
+  onSelectionChange={setSelected}         // (next: Set<string>) => void
+  onDeleteSelection={(ids) => ...}        // batch-remove every selected id in one updater
   renderNode={(node, helpers) => <SomeNode .../>}  // 06 supplies this
 />
 ```

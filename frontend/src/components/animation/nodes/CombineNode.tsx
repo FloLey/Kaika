@@ -1,7 +1,9 @@
 import type { ChangeEvent } from "react";
 import Ctl from "../../../ui/Ctl";
 import NodeFrame, { Port } from "./NodeFrame";
+import ArgInfo from "./ArgInfo";
 import { fluidParam } from "../../../lib/fluidParams.js";
+import { argHelp } from "../../../lib/paramHelp";
 import {
   setCombineMode,
   setCombineOpacity,
@@ -76,6 +78,7 @@ export default function CombineNode({
         {mode === "merge"
           ? "sources share one simulation — they interact"
           : "stacked with transparency (top → bottom)"}
+        <ArgInfo type="combine" k="mode" />
       </div>
 
       <div className="anim-combine-inputs">
@@ -141,6 +144,7 @@ export default function CombineNode({
                 step={p ? p.step : 0.01}
                 fmt={p ? p.fmt : undefined}
                 onChange={(v: number) => onGraphChange((g) => setCombineMedium(g, node.id, key, v))}
+                {...argHelp("combine", key)}
               />
             );
           })}

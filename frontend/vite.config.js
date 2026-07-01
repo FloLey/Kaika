@@ -12,6 +12,8 @@ export default defineConfig({
       "/segment": "http://127.0.0.1:5000",
       "/jobs": "http://127.0.0.1:5000",
       "/extract": "http://127.0.0.1:5000",
+      "/resolve": "http://127.0.0.1:5000",
+      "/playground": "http://127.0.0.1:5000",
       "/animate": "http://127.0.0.1:5000",
       "/fluid": "http://127.0.0.1:5000",
       "/logs": "http://127.0.0.1:5000",

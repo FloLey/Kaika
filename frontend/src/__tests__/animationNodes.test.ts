@@ -154,10 +154,11 @@ describe("FluidNode", () => {
     expect(html).toContain("gc-port-video");
     // static controls
     expect(html).toContain("enabled");
-    // group headers
+    // group headers (COLOR was extracted into the standalone color card)
     expect(html).toContain("SOURCE");
-    expect(html).toContain("COLOR");
     expect(html).toContain("MEDIUM");
+    // the dye-colour input (wire a color card here)
+    expect(html).toContain('data-port="color"');
     // the source group is open by default -> its param in-ports are present
     const sourceKeys = FLUID_PARAMS.filter((p) => p.group === "source").map((p) => p.key);
     for (const k of sourceKeys) {

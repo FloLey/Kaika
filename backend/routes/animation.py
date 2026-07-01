@@ -10,6 +10,7 @@ from .. import signals as sig
 from .. import fluid
 from .. import graph as graphmod
 from .. import render_cache
+from .. import render_jobs
 from ..web import json_body, validate_audio_params, error_response
 from ..media import stem_audio_path
 from ..paths import FLUID_DIR
@@ -53,6 +54,29 @@ def extract_route(b):
         return error_response(str(e), 400)
     except Exception as e:  # noqa: BLE001
         log.error("extract failed (%s/%s)", job_id, stem, exc_info=e)
+        return error_response(f"{type(e).__name__}: {e}", 500)
+    return jsonify(out)
+
+
+@bp.route("/resolve", methods=["POST"])
+@json_body
+def resolve_route(b):
+    """Resolve one value node's 0..1 curve for the segment+graph (the Scope card's live
+    view) -> {curve, times, fps}. No render, no DB — just runs the value resolver, so a
+    dangling `lfo -> scope` works with no output wired."""
+    job_id = b.get("job_id")
+    segment = b.get("segment")
+    graph = b.get("graph")
+    node_id = b.get("node_id")
+    if not job_id or segment is None or graph is None or not node_id:
+        return error_response("missing job_id, segment, graph, or node_id", 400)
+    try:
+        out = graphmod.resolve_node_curve(job_id, segment, graph, node_id, stem_audio_path)
+    except (ValueError, TypeError, KeyError) as e:
+        log.warning("resolve bad input (%s/%s): %s", job_id, node_id, e)
+        return error_response(str(e), 400)
+    except Exception as e:  # noqa: BLE001
+        log.error("resolve failed (%s/%s)", job_id, node_id, exc_info=e)
         return error_response(f"{type(e).__name__}: {e}", 500)
     return jsonify(out)
 
@@ -106,3 +130,52 @@ def animate(body):
         log.error("animate failed (%s)", job_id, exc_info=e)
         return error_response(f"{type(e).__name__}: {e}", 500)
     return jsonify({"url": url})
+
+
+@bp.post("/animate/stream")
+@json_body
+def animate_stream(body):
+    """Start a progressive block render -> {render_id}.
+
+    Renders the same clip as `/animate` but front-to-back in ~5s blocks on a
+    background worker: poll `GET /animate/stream/<render_id>` for the growing preview
+    and final URL, and `POST /animate/stream/<render_id>/cancel` to stop it (the UI
+    cancels the previous render on every edit). Bad graph -> HTTP 400 up front."""
+    job_id = body.get("job_id")
+    graph = body.get("graph")
+    segment = body.get("segment")
+    output = body.get("output")
+    output_id = body.get("output_id")
+    if not job_id or graph is None or segment is None:
+        return error_response("missing job_id, segment, or graph", 400)
+    try:  # fail fast on an invalid graph instead of surfacing it as an async error
+        graphmod.validate(graph)
+    except ValueError as e:
+        log.warning("animate/stream rejected graph (%s): %s", job_id, e)
+        return error_response(str(e), 400)
+    render_id = render_jobs.start(
+        lambda on_progress, should_cancel: graphmod.render_stream(
+            job_id, segment, graph, stem_audio_path, output, output_id,
+            on_progress=on_progress, should_cancel=should_cancel,
+        )
+    )
+    return jsonify({"render_id": render_id})
+
+
+@bp.get("/animate/stream/<render_id>")
+def animate_stream_status(render_id):
+    """Poll a streaming render: {state, frames_done, total, preview_url, url, error}.
+    `state` is running|done|cancelled|error; use `preview_url` while running and
+    `url` once done."""
+    st = render_jobs.get(render_id)
+    if st is None:
+        return error_response("unknown render", 404)
+    return jsonify(st)
+
+
+@bp.post("/animate/stream/<render_id>/cancel")
+def animate_stream_cancel(render_id):
+    """Stop a streaming render after its current block (idempotent; ok even if the
+    render already finished or is unknown)."""
+    render_jobs.cancel(render_id)
+    return jsonify({"ok": True})

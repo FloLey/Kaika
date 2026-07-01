@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import renderAnimNode from "../components/animation/renderAnimNode";
 import { NODE_TYPES, paletteSpecs, chromeFor } from "../components/animation/nodes/registry";
-import { signalNode } from "../lib/graphModel";
+import { signalNode, VIDEO_PRODUCERS, normalizeGraph, emptyGraph } from "../lib/graphModel";
 import type { GraphNode } from "../lib/types";
 import type { NodeCtx } from "../components/animation/nodes/nodeProps";
 
@@ -23,7 +23,7 @@ describe("node-type registry", () => {
       expect(spec.type).toBe(key);
       expect(spec.Component).toBeTruthy();
       expect(spec.chrome.title).toBeTruthy();
-      expect(spec.chrome.outFlow).toMatch(/^(value|video|points)$/);
+      expect(spec.chrome.outFlow).toMatch(/^(value|video|points|color)$/);
     }
   });
 
@@ -55,6 +55,34 @@ describe("node-type registry", () => {
       const html = renderToStaticMarkup(renderAnimNode(node, helpers, ctx));
       expect(html, `${type} should render`).toContain('data-port="out"');
     }
+  });
+
+  it("normalizeGraph keeps every registry node type (KNOWN_NODE_TYPES covers the registry)", () => {
+    // normalizeGraph drops nodes whose type isn't in the hand-maintained
+    // KNOWN_NODE_TYPES allowlist. If a card is added to the registry but not that list,
+    // adding it silently vanishes (the node is stripped on the next normalize) — so
+    // pin every factoried registry type to survive a normalize round-trip.
+    for (const spec of paletteSpecs()) {
+      const node = spec.factory!(0, 0);
+      const g = { ...emptyGraph(), nodes: [node] };
+      const out = normalizeGraph(g);
+      expect(
+        out.nodes.some((n) => n.type === spec.type),
+        `${spec.type} is in the registry but dropped by normalizeGraph — add it to KNOWN_NODE_TYPES`
+      ).toBe(true);
+    }
+  });
+
+  it("VIDEO_PRODUCERS matches exactly the registry's video-output cards", () => {
+    // Drift guard: an output (and the backend `_VIDEO_HANDLERS`) accepts only these
+    // types. If a new video card is added to the registry but not to VIDEO_PRODUCERS
+    // (or vice-versa), the app POSTs graphs the backend rejects — so pin them together.
+    const fromRegistry = new Set(
+      Object.values(NODE_TYPES)
+        .filter((s) => s.chrome.outFlow === "video")
+        .map((s) => s.type)
+    );
+    expect(new Set(VIDEO_PRODUCERS)).toEqual(fromRegistry);
   });
 
   it("chromeFor falls back gracefully for an unknown type", () => {

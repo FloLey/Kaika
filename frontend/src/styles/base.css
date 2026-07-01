@@ -14,6 +14,8 @@
   --petale: #b84a74;
   --petale-soft: #d98aa6;
   --courant: #34808a; /* teal current */
+  --mod: #6f6cae; /* indigo — the modulator (value) card family */
+  --fx: #c0902e; /* amber — the video-FX card family (matches combine's tone) */
   --petal-grad: linear-gradient(135deg, #c75a82, #b84a74);
   --mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --shadow: 0 1px 2px rgba(31, 36, 51, 0.04), 0 10px 30px rgba(31, 36, 51, 0.06);

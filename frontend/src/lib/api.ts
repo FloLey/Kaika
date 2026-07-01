@@ -69,6 +69,21 @@ export interface RenderResult {
   url: string;
 }
 
+export interface StreamStartResult {
+  render_id: string;
+}
+
+// Live status of a progressive block render (see backend/render_jobs.py). While
+// `running`, show `preview_url` (grows block by block); once `done`, use `url`.
+export interface StreamStatus {
+  state: "running" | "done" | "cancelled" | "error";
+  frames_done: number;
+  total: number;
+  preview_url: string | null;
+  url: string | null;
+  error: string | null;
+}
+
 async function jsonOrThrow<T = unknown>(res: Response): Promise<T> {
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) {
@@ -153,15 +168,22 @@ export async function extractSignal(params: Record<string, unknown>): Promise<Ex
   );
 }
 
-export async function runFluid(params: Record<string, unknown>): Promise<RenderResult> {
-  return jsonOrThrow<RenderResult>(
-    await fetch("/fluid", {
+// Resolve one value node's 0..1 curve for a segment+graph — the Scope card's live view.
+export async function resolveCurve(params: {
+  job_id: string;
+  segment: unknown;
+  graph: unknown;
+  node_id: string;
+}): Promise<ExtractResult> {
+  return jsonOrThrow<ExtractResult>(
+    await fetch("/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     })
   );
 }
+
 
 // Render an animation graph for one segment. The segment's signal defs ride in
 // the request (Issue 1A) so the backend can resolve `signal` node references.
@@ -187,12 +209,48 @@ export async function renderGraph({
   );
 }
 
+// Progressive render: start a background block render and poll it. Renders the same
+// clip as `renderGraph` but front-to-back in ~5s blocks, so the first seconds show
+// in ~1/10th the time and the preview grows. The frontend cancels the previous
+// render on every edit (see cancelStreamRender), so abandoned renders stop early.
+export async function startStreamRender(body: {
+  job_id: string;
+  segment: unknown;
+  graph: Graph | unknown;
+  output?: unknown;
+  output_id?: unknown;
+}): Promise<StreamStartResult> {
+  return jsonOrThrow<StreamStartResult>(
+    await fetch("/animate/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+  );
+}
+
+export async function getStreamStatus(renderId: string): Promise<StreamStatus> {
+  return jsonOrThrow<StreamStatus>(await fetch(`/animate/stream/${renderId}`));
+}
+
+// Fire-and-forget: signal a render to stop after its current block. Swallows errors
+// (the render may already be gone) so callers can call it freely on edit/unmount.
+export async function cancelStreamRender(renderId: string): Promise<void> {
+  await fetch(`/animate/stream/${renderId}/cancel`, { method: "POST" }).catch(() => {});
+}
+
 export async function listProjects(): Promise<ProjectSummary[]> {
   return jsonOrThrow<ProjectSummary[]>(await fetch("/projects"));
 }
 
 export async function getProject(jobId: string): Promise<Project> {
   return jsonOrThrow<Project>(await fetch(`/projects/${jobId}`));
+}
+
+// Ensure the always-present Playground project exists (built lazily on first call) and
+// return its job id. Idempotent.
+export async function ensurePlayground(): Promise<{ job_id: string }> {
+  return jsonOrThrow<{ job_id: string }>(await fetch("/playground", { method: "POST" }));
 }
 
 export async function saveProject(jobId: string, payload: unknown): Promise<{ ok: boolean }> {

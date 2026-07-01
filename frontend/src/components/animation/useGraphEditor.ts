@@ -7,8 +7,8 @@ import {
   removeNode,
   mkEdgeId,
 } from "../../lib/graphModel";
-import { fluidParam } from "../../lib/fluidParams.js";
-import type { Graph, GraphEdge, GraphNode, OutputSettings, Segment } from "../../lib/types";
+import { nodeParam } from "../../lib/nodeParams";
+import type { Graph, GraphEdge, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
 
 // The animation editor "brain": graph state (normalized from segment.graph), the
@@ -22,19 +22,35 @@ interface GraphEditorOpts {
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
+  lyricLines?: unknown[];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;
   commitGraph: (g: Graph) => void; // lifts the whole graph to segment.graph
 }
 
 export function useGraphEditor(opts: GraphEditorOpts) {
-  const { segment, stems, job, output, groupClock, groupPlaying, commitGraph } = opts;
+  const { segment, stems, job, output, lyricLines, groupClock, groupPlaying, commitGraph } = opts;
 
   // A stable graph object: segment.graph when present, else a fresh empty graph.
   // normalizeGraph migrates older saves so every fluid node carries the current
   // param ports — otherwise wiring those ports silently fails.
   const graph = useMemo(() => normalizeGraph(segment.graph || emptyGraph()), [segment.graph]);
-  const [selId, setSelId] = useState<string | null>(null);
+
+  // Selection is a SET of ids so several cards (and/or an edge) can be active at
+  // once — that's what makes "move a group in one go" possible. It holds node ids
+  // and/or a single edge id; delete/group-move read the whole set.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const clearSelected = useCallback(() => setSelected(new Set()), []);
+  const deselect = useCallback(
+    (id: string) =>
+      setSelected((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      }),
+    []
+  );
 
   // Stable updater: read the latest graph via a ref so the callback identity doesn't
   // change on every edit (keeps GraphCanvas/Palette from re-rendering each commit).
@@ -66,7 +82,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     (srcId: string, srcPort: string, tgtId: string, tgtPort: string) => {
       applyUpdater((g) => {
         const tgt = g.nodes.find((n) => n.id === tgtId);
-        if (tgt && tgt.type === "fluid" && fluidParam(tgtPort)) {
+        if (tgt && nodeParam(tgt.type, tgtPort)) {
           return connect(g, srcId, tgtId, tgtPort);
         }
         const edges = g.edges.filter((e) => !(e.target === tgtId && e.targetPort === tgtPort));
@@ -87,22 +103,43 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     (edge: GraphEdge) => {
       applyUpdater((g) => {
         const tgt = g.nodes.find((n) => n.id === edge.target);
-        if (tgt && tgt.type === "fluid" && fluidParam(edge.targetPort)) {
+        if (tgt && nodeParam(tgt.type, edge.targetPort)) {
           return disconnect(g, edge.target, edge.targetPort);
         }
         return { ...g, edges: g.edges.filter((e) => e.id !== edge.id) };
       });
-      setSelId(null);
+      deselect(edge.id);
     },
-    [applyUpdater]
+    [applyUpdater, deselect]
   );
 
-  const onNodeDelete = useCallback(
-    (node: GraphNode) => {
-      applyUpdater((g) => removeNode(g, node.id));
-      setSelId(null);
+  // Delete every selected id in ONE updater. Folding removeNode/disconnect over a
+  // single graph (rather than calling per-item handlers) avoids each call reading a
+  // stale graphRef within the same tick and clobbering the others' deletions.
+  const onDeleteSelection = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return;
+      applyUpdater((g) => {
+        let ng = g;
+        for (const id of ids) {
+          if (ng.nodes.some((n) => n.id === id)) {
+            ng = removeNode(ng, id);
+            continue;
+          }
+          const edge = ng.edges.find((e) => e.id === id);
+          if (!edge) continue;
+          const tgt = ng.nodes.find((n) => n.id === edge.target);
+          if (tgt && nodeParam(tgt.type, edge.targetPort)) {
+            ng = disconnect(ng, edge.target, edge.targetPort);
+          } else {
+            ng = { ...ng, edges: ng.edges.filter((e) => e.id !== id) };
+          }
+        }
+        return ng;
+      });
+      clearSelected();
     },
-    [applyUpdater]
+    [applyUpdater, clearSelected]
   );
 
   const allMinimized = graph.nodes.length > 0 && graph.nodes.every((n) => minimized.has(n.id));
@@ -125,6 +162,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     job,
     output,
     signals: segment.signals,
+    lyricLines,
     graph,
     groupClock,
     groupPlaying,
@@ -134,14 +172,15 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     onDetach: (fluidId: string, key: string) => applyUpdater((g) => disconnect(g, fluidId, key)),
     onDeleteNode: (id: string) => {
       applyUpdater((g) => removeNode(g, id));
-      setSelId(null);
+      deselect(id);
     },
   };
 
   return {
     graph,
-    selId,
-    setSelId,
+    selected,
+    setSelected,
+    clearSelected,
     applyUpdater,
     ctx,
     minimizeCtx,
@@ -150,6 +189,6 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     toggleMinimizeAll,
     onConnect,
     onEdgeDelete,
-    onNodeDelete,
+    onDeleteSelection,
   };
 }

@@ -157,7 +157,9 @@ def list_projects() -> list[dict[str, Any]]:
         rows = conn.execute("""
             SELECT job_id, title, source, duration, has_lyrics, step,
                    to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS updated_at
-            FROM projects ORDER BY updated_at DESC
+            FROM projects
+            WHERE job_id <> 'playground'  -- the app-managed Playground is not a user project
+            ORDER BY updated_at DESC
             """).fetchall()
     return rows
 

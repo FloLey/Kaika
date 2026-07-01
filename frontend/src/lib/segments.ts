@@ -327,6 +327,41 @@ export function splitAt(segments: Segment[], t: number): Segment[] {
   return out;
 }
 
+// Copy a source segment's whole card layout (its animation graph) onto `target`,
+// returning the updated target. The graph's `signal` cards are rewired to the TARGET's
+// signals: each referenced band is matched to an existing target signal (same stem +
+// frequency range + feature) or, if absent, cloned onto the target — so the copied
+// pipeline drives THIS segment instead of pointing back at the source's signals. The
+// fluid / fx / modulator cards and all their wiring carry over verbatim.
+export function copyLayout(source: Segment, target: Segment): Segment {
+  const srcGraph = source.graph;
+  if (!srcGraph || !srcGraph.nodes?.length) return target;
+  const key = (s: Signal) => `${s.stemKey}|${s.minHz}|${s.maxHz}|${s.feature}`;
+  const srcById = new Map(source.signals.map((s) => [s.id, s]));
+  const byKey = new Map(target.signals.map((s) => [key(s), s]));
+  const idMap: Record<string, string> = {};
+  const added: Signal[] = [];
+  for (const n of srcGraph.nodes) {
+    if (n.type !== "signal") continue;
+    const sig = srcById.get(n.data.signalId);
+    if (!sig) continue; // dangling reference — leave it (reads as silent)
+    const match = byKey.get(key(sig));
+    if (match) {
+      idMap[sig.id] = match.id;
+    } else {
+      const clone = { ...sig, id: mkSigId() };
+      added.push(clone);
+      byKey.set(key(sig), clone);
+      idMap[sig.id] = clone.id;
+    }
+  }
+  return {
+    ...target,
+    signals: added.length ? [...target.signals, ...added] : target.signals,
+    graph: remapGraphSignals(srcGraph, idMap),
+  };
+}
+
 // Merge segment `id` into its previous neighbor (delete the boundary before it).
 // The earlier segment keeps its graph (its signals are unchanged, so its
 // references stay valid); the later segment's graph falls away with the

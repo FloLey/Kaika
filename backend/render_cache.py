@@ -19,8 +19,10 @@ from pathlib import Path
 
 log = logging.getLogger("kaika.cache")
 
-CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(5 * 1024**3)))  # 5 GB
-CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_CACHE_MAX_AGE_DAYS", "30"))
+# Backstop only: the reachability sweep (cache_gc.py) is the primary cleaner now, so
+# these caps just bound a long UNSAVED editing session between sweeps — kept modest.
+CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(2 * 1024**3)))  # 2 GB
+CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_CACHE_MAX_AGE_DAYS", "14"))
 
 
 def touch(path: Path) -> None:

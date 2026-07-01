@@ -14,6 +14,7 @@ in their own modules so adding an endpoint never means scrolling this file.
 import logging
 import os
 import shutil
+import threading
 
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
@@ -54,6 +55,20 @@ def handle_unexpected(e):  # noqa: ANN001
 
 for bp in all_blueprints:
     app.register_blueprint(bp)
+
+
+# Reclaim render-cache clips left over from past editing sessions, off the boot path
+# (a daemon thread, fully guarded) so it never delays or crashes startup.
+def _startup_cache_gc():
+    try:
+        from . import cache_gc
+
+        cache_gc.sweep()
+    except Exception as e:  # noqa: BLE001
+        log.warning("startup cache gc failed: %s", e)
+
+
+threading.Thread(target=_startup_cache_gc, name="cache-gc", daemon=True).start()
 
 
 if __name__ == "__main__":

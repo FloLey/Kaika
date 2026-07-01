@@ -16,6 +16,15 @@ def projects_list():
     return jsonify(db.list_projects())
 
 
+@bp.route("/playground", methods=["POST"])
+def playground_ensure():
+    """Ensure the always-present Playground project exists (built lazily on first open)
+    and return its job id. Idempotent — a near no-op once present."""
+    from .. import seed_card_demo  # local import: pulls numpy/soundfile/matplotlib lazily
+
+    return jsonify({"job_id": seed_card_demo.ensure_playground()})
+
+
 @bp.route("/projects/<job_id>", methods=["GET"])
 def project_get(job_id: str):
     row = db.get_project(job_id)
@@ -58,6 +67,10 @@ def project_save(job_id: str):
     )
     if not ok:
         abort(404)
+    # Note: no cache GC here on purpose — sweeping mid-session could unlink a preview
+    # clip a still-open editor is playing, and it would add DB-walk latency to every
+    # save. The startup sweep (app.py) + `make gc-cache` + render_cache's size/age cap
+    # keep the cache bounded instead.
     return jsonify({"ok": True})
 
 

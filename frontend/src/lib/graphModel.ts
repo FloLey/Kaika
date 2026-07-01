@@ -3,11 +3,8 @@
 // and a stable hash for the render cache (§3.6). Node `data` is the discriminated
 // union from types.ts, so per-type access is checked after narrowing on `type`.
 
-import {
-  FLUID_PARAMS as RAW_FLUID_PARAMS,
-  FLUID_PARAM_KEYS,
-  fluidParam as rawFluidParam,
-} from "./fluidParams.js";
+import { FLUID_PARAMS as RAW_FLUID_PARAMS, FLUID_PARAM_KEYS } from "./fluidParams.js";
+import { nodeParam, nodeParams } from "./nodeParams";
 import type {
   Binding,
   Graph,
@@ -20,13 +17,53 @@ import type {
   CombineNode,
   OutputNode,
   SignalNode,
+  MathData,
+  LfoData,
+  NoiseData,
+  ShaperData,
+  MathNode,
+  LfoNode,
+  NoiseNode,
+  ShaperNode,
+  ScopeNode,
+  PatternData,
+  AnimatePointsData,
+  MergePointsData,
+  PatternNode,
+  AnimatePointsNode,
+  MergePointsNode,
+  ColorData,
+  LyricsData,
+  ColorNode,
+  LyricsNode,
+  FluidPort,
   Signal,
   ValidationResult,
 } from "./types";
 
+// A node's modulatable-port map, or null if the card type has none. Several card
+// types carry `data.ports` (fluid + the FX cards); this is the structural guard used
+// by the generic binding helpers below.
+const portsOf = (n: GraphNode): Record<string, FluidPort> | null =>
+  n.data && typeof n.data === "object" && "ports" in n.data
+    ? (n.data as { ports: Record<string, FluidPort> }).ports
+    : null;
+
+// Coerce a saved `ports` map to EXACTLY a node type's current param spec — a new
+// param gets a default const port; a removed one is dropped. Used by normalizeGraph.
+const coercePorts = (
+  type: string,
+  old: Record<string, FluidPort> | undefined
+): Record<string, FluidPort> => {
+  const ports: Record<string, FluidPort> = {};
+  for (const p of nodeParams(type)) {
+    ports[p.key] = old?.[p.key] || { binding: { kind: "const", value: p.def } };
+  }
+  return ports;
+};
+
 // fluidParams.js is untyped JS; pin the shapes graphModel relies on.
 const FLUID_PARAMS = RAW_FLUID_PARAMS as { key: string; def: number; min: number; max: number }[];
-const fluidParam = rawFluidParam as (k: string) => { def: number; min: number; max: number };
 
 // Same id convention as segments.js `rid`: "<prefix>-<8 chars>".
 const rid = (p: string): string => {
@@ -38,6 +75,7 @@ const rid = (p: string): string => {
 
 export const mkNodeId = (): string => rid("n");
 export const mkEdgeId = (): string => rid("e");
+const mkInputId = (): string => rid("in");
 
 // ---- node factories (01 §3.1) ------------------------------------------------
 
@@ -92,7 +130,19 @@ export function fluidNode(x: number, y: number): FluidNode {
 // changes; normalizeGraph() upgrades any older save to here and re-stamps it.
 //   v1: signal/fluid/output node-graph.
 //   v2: + combine + points nodes, the fluid `positions` input, minimize set.
-export const GRAPH_VERSION = 2;
+//   v3: + modulator (value) cards — math / lfo / noise / shaper.
+//   v4: + points cards — pattern / animate-points / mirror-points.
+//   v5: + video FX cards — transform / feedback / color / warp (ported, modulatable).
+//   v6: + source cards — gradient / particles / lyrics.
+//   v7: removed the gradient / particles / feedback / warp / mirror-points cards —
+//       normalizeGraph now drops nodes of any unknown type (+ their edges).
+//   v8: the fluid's COLOR group was extracted into a standalone `color` (dye) card
+//       wired into the fluid's `color` input; the old `color` (grade FX) card is now
+//       `grade`. normalizeGraph renames legacy `color`→`grade` for pre-v8 saves.
+//   v9: + shaper `delay`(ms)/`wrap` fields for time-shifting a value.
+//  v10: removed the transform / grade video-FX cards — normalizeGraph drops them (and
+//       any pre-v8 `color`→`grade` renames) as unknown types.
+export const GRAPH_VERSION = 10;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -130,6 +180,152 @@ export function pointsNode(x: number, y: number): PointsNode {
   return { id: mkNodeId(), type: "points", x, y, data: { points: [[0.5, 0.5]] } };
 }
 
+// ---- modulator (value) cards -------------------------------------------------
+// Value-domain generators/operators. Inputs (math/shaper) are plain value edges —
+// no lo/hi binding, the 0..1 curve passes through. Seeded so renders stay cache-stable.
+export function mathNode(x: number, y: number): MathNode {
+  return {
+    id: mkNodeId(),
+    type: "math",
+    x,
+    y,
+    data: { op: "multiply", inputs: [mkInputId(), mkInputId()], mix: 0.5 },
+  };
+}
+export function lfoNode(x: number, y: number): LfoNode {
+  return {
+    id: mkNodeId(),
+    type: "lfo",
+    x,
+    y,
+    data: { shape: "sine", rateMode: "cycles", rate: 4, phase: 0, duty: 0.5 },
+  };
+}
+export function noiseNode(x: number, y: number): NoiseNode {
+  return { id: mkNodeId(), type: "noise", x, y, data: { rate: 1, seed: 1, octaves: 2 } };
+}
+export function shaperNode(x: number, y: number): ShaperNode {
+  return {
+    id: mkNodeId(),
+    type: "shaper",
+    x,
+    y,
+    data: {
+      delay: 0,
+      wrap: false,
+      attack: 5,
+      release: 250,
+      invert: false,
+      threshold: 0,
+      gamma: 1,
+      gain: 1,
+      offset: 0,
+      lo: 0,
+      hi: 1,
+    },
+  };
+}
+export function scopeNode(x: number, y: number): ScopeNode {
+  return { id: mkNodeId(), type: "scope", x, y, data: {} };
+}
+
+// ---- points cards ------------------------------------------------------------
+// Generate / transform a `points` set. Pattern is a generator; animate takes a points
+// input (plain points edges) and passes a transformed set through.
+export function patternNode(x: number, y: number): PatternNode {
+  return {
+    id: mkNodeId(),
+    type: "pattern",
+    x,
+    y,
+    data: { layout: "circle", count: 6, radius: 0.3, rotation: 0, seed: 1, offsetX: 0, offsetY: 0 },
+  };
+}
+export function animatePointsNode(x: number, y: number): AnimatePointsNode {
+  return {
+    id: mkNodeId(),
+    type: "animate-points",
+    x,
+    y,
+    data: { mode: "orbit", amount: 0.15, rate: 1, angle: 0, count: 3, fade: 1 },
+  };
+}
+// Concatenates N points inputs into one set. Two input ports to start; reuses the
+// generic addInputPort/removeInputPort helpers (data.inputs: string[]).
+export function mergePointsNode(x: number, y: number): MergePointsNode {
+  return {
+    id: mkNodeId(),
+    type: "merge-points",
+    x,
+    y,
+    data: { inputs: [mkInputId(), mkInputId()] },
+  };
+}
+// ---- color source card -------------------------------------------------------
+// Sets the fluid's dye colour, wired into a fluid's `color` input. Modes: swatch (a
+// solid colour), rgb (per-channel modulatable ports), gradient (stops + a modulatable
+// `position` that samples along them). All values are ports (same binding model).
+export const COLOR_STOPS_DEFAULT: ColorData["stops"] = [
+  { t: 0, color: "#2a4eff" },
+  { t: 1, color: "#ff5ac8" },
+];
+export function colorNode(x: number, y: number): ColorNode {
+  return {
+    id: mkNodeId(),
+    type: "color",
+    x,
+    y,
+    data: { mode: "swatch", stops: COLOR_STOPS_DEFAULT.map((s) => ({ ...s })), ports: coercePorts("color", undefined) },
+  };
+}
+
+// ---- source cards (→ video) --------------------------------------------------
+export function lyricsNode(x: number, y: number): LyricsNode {
+  return {
+    id: mkNodeId(),
+    type: "lyrics",
+    x,
+    y,
+    data: { position: "bottom", align: "center", case: "none", reveal: "word", ports: coercePorts("lyrics", undefined) },
+  };
+}
+
+// Shallow-merge a patch into a node's `data` (op/knob/param edits on the simple
+// value cards). Generic across node types — the caller passes a typed patch.
+export function patchNodeData(graph: Graph, id: string, patch: Record<string, unknown>): Graph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) =>
+      n.id === id ? ({ ...n, data: { ...n.data, ...patch } } as GraphNode) : n
+    ),
+  };
+}
+
+// Add / remove an input port on a node carrying `data.inputs: string[]` (the Math
+// card). Removing also drops any edge wired into that port (keeps the graph clean).
+export function addInputPort(graph: Graph, id: string): Graph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) =>
+      n.id === id && "inputs" in n.data
+        ? ({ ...n, data: { ...n.data, inputs: [...n.data.inputs, mkInputId()] } } as GraphNode)
+        : n
+    ),
+  };
+}
+export function removeInputPort(graph: Graph, id: string, portId: string): Graph {
+  const nodes = graph.nodes.map((n) =>
+    n.id === id && "inputs" in n.data
+      ? ({
+          ...n,
+          data: { ...n.data, inputs: n.data.inputs.filter((p) => p !== portId) },
+        } as GraphNode)
+      : n
+  );
+  const edges = graph.edges.filter((e) => !(e.target === id && e.targetPort === portId));
+  return { ...graph, nodes, edges };
+}
+
 type Point = [number, number];
 const patchPoints = (graph: Graph, id: string, fn: (pts: Point[]) => Point[]): Graph => ({
   ...graph,
@@ -149,7 +345,22 @@ export function removePoint(graph: Graph, id: string, i: number): Graph {
   return patchPoints(graph, id, (pts) => pts.filter((_, k) => k !== i));
 }
 
-export const VIDEO_PRODUCERS = new Set<string>(["fluid", "combine", "output"]);
+// Video FX cards: video → video pass-throughs (one `video` input each). They produce a
+// video stream but are NOT emitter sources, so they can feed an output or a stack
+// combine but never a merge. None currently (transform / grade were removed) — kept as
+// the extension point for re-adding a video-FX card.
+export const VIDEO_FX = new Set<string>([]);
+
+// Non-fluid video sources (no video input; synthesise frames). Producers, not emitters.
+export const VIDEO_SOURCES = new Set<string>(["lyrics"]);
+
+export const VIDEO_PRODUCERS = new Set<string>([
+  "fluid",
+  "combine",
+  "output",
+  ...VIDEO_FX,
+  ...VIDEO_SOURCES,
+]);
 
 // The node wired into (targetId, targetPort) via a video edge, or null.
 export function videoSource(graph: Graph, targetId: string, targetPort: string): string | null {
@@ -247,17 +458,46 @@ function isEmitterSource(
   return false;
 }
 
+// Every node type the editor still knows how to create/render. normalizeGraph drops
+// any node whose type isn't here (a retired card — v7) so old saves stay valid. Kept
+// local (not derived from the registry) to honour the no-import-from-registry rule.
+const KNOWN_NODE_TYPES = new Set<string>([
+  "signal",
+  "fluid",
+  "points",
+  "combine",
+  "output",
+  "math",
+  "lfo",
+  "noise",
+  "shaper",
+  "scope",
+  "pattern",
+  "animate-points",
+  "merge-points",
+  "color",
+  "lyrics",
+]);
+
 // Upgrade a (possibly older) persisted graph to the current GRAPH_VERSION. Every
 // fluid node is coerced to EXACTLY the current FLUID_PARAMS ports (a param added
 // since the save gets a default port; a removed one + its dangling edges are
-// dropped), combine/points get any missing fields, and the result is re-stamped to
-// GRAPH_VERSION. Idempotent + returns the same object when nothing changed (safe to
-// run on every load). For a future breaking change, add a targeted step keyed on the
-// incoming version before the shape pass, then bump GRAPH_VERSION.
+// dropped), combine/points get any missing fields, nodes of a retired type are
+// dropped (+ their edges), and the result is re-stamped to GRAPH_VERSION. Idempotent
+// + returns the same object when nothing changed (safe to run on every load). For a
+// future breaking change, add a targeted step keyed on the incoming version before
+// the shape pass, then bump GRAPH_VERSION.
 export function normalizeGraph(graph: Graph): Graph {
   if (!graph || !Array.isArray(graph.nodes)) return graph;
   let changed = false;
-  const nodes = graph.nodes.map((n): GraphNode => {
+  // v8: a pre-v8 `color` node was the grade FX card (later renamed `color` -> `grade`,
+  // freeing `color` for the dye card). The grade card is gone as of v10, so rename these
+  // legacy nodes to `grade` — an unknown type now — and the filter below drops them,
+  // rather than mis-coercing old grade data into a dye card.
+  const legacy = (graph.version ?? 0) < 8;
+  const mapped = graph.nodes.map((node): GraphNode => {
+    const n = legacy && node.type === "color" ? ({ ...node, type: "grade" } as unknown as GraphNode) : node;
+    if (n !== node) changed = true;
     if (n.type === "points") {
       const pts = Array.isArray(n.data?.points) ? n.data.points : ([[0.5, 0.5]] as Point[]);
       if (pts !== n.data?.points) changed = true;
@@ -278,6 +518,127 @@ export function normalizeGraph(graph: Graph): Graph {
       if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
       return { ...n, data };
     }
+    if (n.type === "math") {
+      const d = (n.data || {}) as Partial<MathData>;
+      const data: MathData = {
+        op: d.op || "multiply",
+        inputs: Array.isArray(d.inputs) && d.inputs.length ? d.inputs : [mkInputId(), mkInputId()],
+        mix: typeof d.mix === "number" ? d.mix : 0.5,
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "lfo") {
+      const d = (n.data || {}) as Partial<LfoData>;
+      const data: LfoData = {
+        shape: d.shape || "sine",
+        rateMode: d.rateMode || "cycles",
+        rate: typeof d.rate === "number" ? d.rate : 4,
+        phase: typeof d.phase === "number" ? d.phase : 0,
+        duty: typeof d.duty === "number" ? d.duty : 0.5,
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "noise") {
+      const d = (n.data || {}) as Partial<NoiseData>;
+      const data: NoiseData = {
+        rate: typeof d.rate === "number" ? d.rate : 1,
+        seed: typeof d.seed === "number" ? d.seed : 1,
+        octaves: typeof d.octaves === "number" ? d.octaves : 2,
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "shaper") {
+      const d = (n.data || {}) as Partial<ShaperData>;
+      const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
+      const data: ShaperData = {
+        delay: num(d.delay, 0),
+        wrap: !!d.wrap,
+        attack: num(d.attack, 5),
+        release: num(d.release, 250),
+        invert: !!d.invert,
+        threshold: num(d.threshold, 0),
+        gamma: num(d.gamma, 1),
+        gain: num(d.gain, 1),
+        offset: num(d.offset, 0),
+        lo: num(d.lo, 0),
+        hi: num(d.hi, 1),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "scope") {
+      // a pure monitor — its data is just an optional label; nothing to coerce.
+      return n;
+    }
+    if (n.type === "pattern") {
+      const d = (n.data || {}) as Partial<PatternData>;
+      const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
+      const data: PatternData = {
+        layout: d.layout || "circle",
+        count: num(d.count, 6),
+        radius: num(d.radius, 0.3),
+        rotation: num(d.rotation, 0),
+        seed: num(d.seed, 1),
+        offsetX: num(d.offsetX, 0),
+        offsetY: num(d.offsetY, 0),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "animate-points") {
+      const d = (n.data || {}) as Partial<AnimatePointsData>;
+      const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
+      const data: AnimatePointsData = {
+        mode: d.mode || "orbit",
+        amount: num(d.amount, 0.15),
+        rate: num(d.rate, 1),
+        angle: num(d.angle, 0),
+        count: num(d.count, 3),
+        fade: num(d.fade, 1),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "merge-points") {
+      const d = (n.data || {}) as Partial<MergePointsData>;
+      const data: MergePointsData = {
+        inputs: Array.isArray(d.inputs) && d.inputs.length ? d.inputs : [mkInputId(), mkInputId()],
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "color") {
+      const d = (n.data || {}) as Partial<ColorData>;
+      const stops =
+        Array.isArray(d.stops) && d.stops.length
+          ? d.stops.map((s) => ({
+              t: typeof s?.t === "number" ? s.t : 0,
+              color: typeof s?.color === "string" ? s.color : "#ffffff",
+            }))
+          : COLOR_STOPS_DEFAULT.map((s) => ({ ...s }));
+      const data: ColorData = {
+        mode: d.mode === "rgb" || d.mode === "gradient" ? d.mode : "swatch",
+        stops,
+        ports: coercePorts("color", d.ports),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "lyrics") {
+      const d = (n.data || {}) as Partial<LyricsData>;
+      const data: LyricsData = {
+        position: d.position || "bottom",
+        align: d.align || "center",
+        case: d.case || "none",
+        reveal: d.reveal || "word",
+        ports: coercePorts("lyrics", d.ports),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
     if (n.type !== "fluid") return n;
     const old = n.data?.ports || {};
     const ports: Record<string, { binding: Binding }> = {};
@@ -289,13 +650,21 @@ export function normalizeGraph(graph: Graph): Graph {
     if (!sameKeys) changed = true;
     return { ...n, data: { ...n.data, ports } };
   });
-  // Drop edges that targeted a now-removed fluid PARAM port (keeps the §3.3
-  // invariant). `positions` (the points input, spec 11) is a non-param fluid input,
-  // so it's allowed — don't drop it.
-  const valid = new Set([...FLUID_PARAM_KEYS, "positions"]);
+  // Drop nodes of a retired/unknown type (v7) so a legacy save loads cleanly. Their
+  // incident edges are pruned below via `liveIds`.
+  const nodes = mapped.filter((n) => KNOWN_NODE_TYPES.has(n.type));
+  if (nodes.length !== mapped.length) changed = true;
+  const liveIds = new Set(nodes.map((n) => n.id));
+  // Drop edges incident to a removed node, and edges that targeted a now-removed
+  // fluid PARAM port (keeps the §3.3 invariant). `positions` (the points input, spec
+  // 11) is a non-param fluid input, so it's allowed — don't drop it.
+  const valid = new Set([...FLUID_PARAM_KEYS, "positions", "color"]);
   const fluidIds = new Set(nodes.filter((n) => n.type === "fluid").map((n) => n.id));
   const edges = (graph.edges || []).filter(
-    (e) => !(fluidIds.has(e.target) && !valid.has(e.targetPort))
+    (e) =>
+      liveIds.has(e.source) &&
+      liveIds.has(e.target) &&
+      !(fluidIds.has(e.target) && !valid.has(e.targetPort))
   );
   if (edges.length !== (graph.edges || []).length) changed = true;
   if (graph.version !== GRAPH_VERSION) changed = true; // re-stamp after migrating
@@ -304,58 +673,60 @@ export function normalizeGraph(graph: Graph): Graph {
 
 // ---- wiring (keeps the §3.3 binding<->edge invariant) ------------------------
 
-// Wire a value-source node into a fluid param: writes BOTH the binding and the
-// edge. lo/hi default to the param range (maps source 0..1 -> native units).
-export function connect(graph: Graph, sourceId: string, fluidId: string, paramKey: string): Graph {
-  const p = fluidParam(paramKey);
-  const fluid = graph.nodes.find((n) => n.id === fluidId);
-  if (!fluid || fluid.type !== "fluid") return graph;
-  fluid.data.ports[paramKey] = {
-    binding: { kind: "node", nodeId: sourceId, lo: p.min, hi: p.max },
-  };
-  const edges = graph.edges.filter((e) => !(e.target === fluidId && e.targetPort === paramKey));
+// Wire a value-source node into a modulatable param (fluid or an FX card): writes
+// BOTH the binding and the edge. lo/hi default to the param range (maps source
+// 0..1 -> native units).
+export function connect(graph: Graph, sourceId: string, targetId: string, paramKey: string): Graph {
+  const node = graph.nodes.find((n) => n.id === targetId);
+  const p = node ? nodeParam(node.type, paramKey) : undefined;
+  const ports = node ? portsOf(node) : null;
+  if (!p || !ports) return graph;
+  ports[paramKey] = { binding: { kind: "node", nodeId: sourceId, lo: p.min, hi: p.max } };
+  const edges = graph.edges.filter((e) => !(e.target === targetId && e.targetPort === paramKey));
   edges.push({
     id: mkEdgeId(),
     source: sourceId,
     sourcePort: "out",
-    target: fluidId,
+    target: targetId,
     targetPort: paramKey,
   });
   return { ...graph, edges };
 }
 
 // Clear a wired param back to its default constant, dropping the edge.
-export function disconnect(graph: Graph, fluidId: string, paramKey: string): Graph {
-  const p = fluidParam(paramKey);
-  const fluid = graph.nodes.find((n) => n.id === fluidId);
-  if (!fluid || fluid.type !== "fluid") return graph;
-  fluid.data.ports[paramKey] = { binding: { kind: "const", value: p.def } };
+export function disconnect(graph: Graph, targetId: string, paramKey: string): Graph {
+  const node = graph.nodes.find((n) => n.id === targetId);
+  const p = node ? nodeParam(node.type, paramKey) : undefined;
+  const ports = node ? portsOf(node) : null;
+  if (!p || !ports) return graph;
+  ports[paramKey] = { binding: { kind: "const", value: p.def } };
   return {
     ...graph,
-    edges: graph.edges.filter((e) => !(e.target === fluidId && e.targetPort === paramKey)),
+    edges: graph.edges.filter((e) => !(e.target === targetId && e.targetPort === paramKey)),
   };
 }
 
-// Drop a node, its incident edges, and reset any fluid port bound to it back to
-// the param default constant (so no binding dangles — §3.3 invariant).
+// Drop a node, its incident edges, and reset any port bound to it (on any ported
+// card) back to the param default constant (so no binding dangles — §3.3 invariant).
 export function removeNode(graph: Graph, nodeId: string): Graph {
   const nodes = graph.nodes
     .filter((n) => n.id !== nodeId)
     .map((n): GraphNode => {
-      if (n.type !== "fluid") return n;
+      const srcPorts = portsOf(n);
+      if (!srcPorts) return n;
       let touched = false;
       const ports: Record<string, { binding: Binding }> = {};
-      for (const [key, port] of Object.entries(n.data.ports)) {
+      for (const [key, port] of Object.entries(srcPorts)) {
         const b = port.binding;
         if (b && b.kind === "node" && b.nodeId === nodeId) {
-          ports[key] = { ...port, binding: { kind: "const", value: fluidParam(key).def } };
+          ports[key] = { ...port, binding: { kind: "const", value: nodeParam(n.type, key)?.def ?? 0 } };
           touched = true;
         } else {
           ports[key] = port;
         }
       }
       if (!touched) return n;
-      return { ...n, data: { ...n.data, ports } };
+      return { ...n, data: { ...n.data, ports } } as GraphNode;
     });
   const edges = graph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
   const out: Graph = { ...graph, nodes, edges };
@@ -410,12 +781,11 @@ export function outputRenderable(graph: Graph, outputId: string): boolean {
   for (const nid of outputContributing(graph, outputId)) {
     const n = byId.get(nid);
     if (!n) continue;
-    if (n.type === "fluid") {
-      for (const port of Object.values(n.data.ports || {})) {
-        const b = port.binding;
-        if (b && b.kind === "node" && !byId.has(b.nodeId)) return false;
-      }
-    } else if (n.type === "combine") {
+    for (const port of Object.values(portsOf(n) || {})) {
+      const b = port.binding;
+      if (b && b.kind === "node" && !byId.has(b.nodeId)) return false;
+    }
+    if (n.type === "combine") {
       const wired = (n.data.inputs || []).some((s) => videoSource(graph, nid, s.id) != null);
       if (!wired) return false;
       if (n.data.mode === "merge") {
@@ -425,6 +795,9 @@ export function outputRenderable(graph: Graph, outputId: string): boolean {
         }
       }
     } else if (n.type === "output" && nid !== outputId) {
+      if (videoSource(graph, nid, "video") == null) return false;
+    } else if (VIDEO_FX.has(n.type)) {
+      // an FX card needs its `video` input wired to render.
       if (videoSource(graph, nid, "video") == null) return false;
     }
   }
@@ -446,10 +819,11 @@ export function validate(graph: Graph): ValidationResult {
     }
   }
 
-  // 2. every fluid port binding is well-formed (const numeric / node resolves to an
-  //    existing node with numeric lo/hi). Mirrors backend graph._validate_binding.
-  for (const n of nodes.filter((x): x is FluidNode => x.type === "fluid")) {
-    for (const [key, port] of Object.entries(n.data.ports || {})) {
+  // 2. every modulatable port binding (fluid OR an FX card) is well-formed (const
+  //    numeric / node resolves to an existing node with numeric lo/hi). Mirrors
+  //    backend graph._validate_binding.
+  for (const n of nodes) {
+    for (const [key, port] of Object.entries(portsOf(n) || {})) {
       // Loosen the type: validate is the boundary that catches malformed runtime data.
       const b = port.binding as
         | { kind?: string; value?: unknown; nodeId?: string; lo?: unknown; hi?: unknown }

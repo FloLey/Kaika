@@ -1,6 +1,6 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
-.PHONY: dev db-up db-down install rerender-spectrograms \
-	test test-backend test-frontend lint build clean-cache gen-params \
+.PHONY: dev db-up db-down install rerender-spectrograms seed-playground export-playground \
+	test test-backend test-frontend lint build clean-cache gc-cache gen-params \
 	format coverage
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
@@ -26,6 +26,17 @@ install:
 # Re-render existing projects' spectrograms after a theme/colormap change.
 rerender-spectrograms:
 	.venv/bin/python -m backend.rerender_spectrograms
+
+# Force-rebuild the Playground project from the committed pipeline fixture + pre-render
+# each. The app also builds it lazily on first open, so this is only for dev/smoke.
+seed-playground: db-up
+	@until docker compose exec -T db pg_isready -U demucs -d demucs >/dev/null 2>&1; do sleep 1; done
+	.venv/bin/python -m backend.seed_card_demo
+
+# Capture the CURRENT live Playground (your reworked pipelines) into the committed
+# fixture, so it becomes the default. Run after reworking cards in the UI.
+export-playground:
+	.venv/bin/python -m backend.seed_card_demo export
 
 # ---- quality gates (mirror CI) ---------------------------------------------
 test: test-backend test-frontend
@@ -56,7 +67,13 @@ build:
 # Drop rendered animation clips (data/fluid/*.mp4). The cache rebuilds on demand.
 clean-cache:
 	rm -f data/fluid/*.mp4
-	@echo "render cache cleared"
+	rm -rf data/fluid/stream
+	rm -f data/fluid_cache/*.npy
+	@echo "render + fluid-frame cache cleared"
+
+# Reachability sweep: drop cached clips no saved project points to (keeps recent ones).
+gc-cache:
+	.venv/bin/python -m backend.cache_gc
 
 # Regenerate frontend/src/lib/fluidParams.js from animation_params.FLUID_PARAM_SPEC.
 # Run after editing the spec; a pytest fails CI if the committed file is stale.

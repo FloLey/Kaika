@@ -25,6 +25,8 @@ import {
   addPoint,
   movePoint,
   removePoint,
+  animatePointsNode,
+  shaperNode,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
@@ -94,23 +96,21 @@ describe("node factories", () => {
 });
 
 describe("normalizeGraph migrates older saves", () => {
-  it("adds missing param ports (e.g. colour) so they become wireable", () => {
+  it("adds missing param ports so they become wireable", () => {
     const { g, fluidId, srcId } = wiredGraph();
-    // Simulate a graph saved before the r/g/b colour ports existed.
+    // Simulate a graph saved before a since-added fluid param port existed.
     const fluid = g.nodes.find((n) => n.id === fluidId) as FluidNode;
-    delete fluid.data.ports.r;
-    delete fluid.data.ports.g;
-    delete fluid.data.ports.b;
+    delete fluid.data.ports.force;
 
     const out = normalizeGraph(g);
     const f = out.nodes.find((n) => n.id === fluidId) as FluidNode;
-    expect(f.data.ports.r.binding).toEqual({ kind: "const", value: fluidParam("r")!.def });
+    expect(f.data.ports.force.binding).toEqual({ kind: "const", value: fluidParam("force")!.def });
     expect(Object.keys(f.data.ports).length).toBe(FLUID_PARAMS.length);
 
     // The previously-broken path (would throw on undefined port) now works.
-    const wired = connect(out, srcId, fluidId, "r");
+    const wired = connect(out, srcId, fluidId, "force");
     expect(
-      (wired.nodes.find((n) => n.id === fluidId) as FluidNode).data.ports.r.binding
+      (wired.nodes.find((n) => n.id === fluidId) as FluidNode).data.ports.force.binding
     ).toMatchObject({
       kind: "node",
       nodeId: srcId,
@@ -568,6 +568,65 @@ describe("points node (spec 11)", () => {
     g = connectVideo(g, p.id, "out", f.id, "positions");
     expect(g.edges).toHaveLength(1);
     expect(normalizeGraph(g).edges).toHaveLength(1); // must NOT be dropped
+  });
+
+  it("animatePointsNode factory carries chase fields (count, fade)", () => {
+    const a = animatePointsNode(0, 0);
+    expect(a.type).toBe("animate-points");
+    expect(a.data).toEqual({ mode: "orbit", amount: 0.15, rate: 1, angle: 0, count: 3, fade: 1 });
+  });
+
+  it("shaperNode factory carries delay/wrap defaults (0, false)", () => {
+    const s = shaperNode(0, 0);
+    expect(s.type).toBe("shaper");
+    expect(s.data.delay).toBe(0);
+    expect(s.data.wrap).toBe(false);
+  });
+
+  it("normalizeGraph back-fills delay/wrap for a legacy shaper save", () => {
+    const g = {
+      version: 8,
+      nodes: [
+        {
+          id: "s1",
+          type: "shaper",
+          x: 0,
+          y: 0,
+          data: {
+            attack: 5,
+            release: 250,
+            invert: false,
+            threshold: 0,
+            gamma: 1,
+            gain: 1,
+            offset: 0,
+            lo: 0,
+            hi: 1,
+          },
+        } as unknown as GraphNode,
+      ],
+      edges: [],
+    };
+    const out = normalizeGraph(g);
+    expect(out.version).toBe(GRAPH_VERSION);
+    expect(out.nodes[0].data).toMatchObject({ delay: 0, wrap: false });
+  });
+
+  it("normalizeGraph fills count/fade for a legacy animate-points save", () => {
+    const g = {
+      ...emptyGraph(),
+      nodes: [
+        {
+          id: "a1",
+          type: "animate-points",
+          x: 0,
+          y: 0,
+          data: { mode: "chase", amount: 0.15, rate: 2, angle: 0 },
+        } as unknown as GraphNode,
+      ],
+    };
+    const n = normalizeGraph(g).nodes[0];
+    expect(n.data).toEqual({ mode: "chase", amount: 0.15, rate: 2, angle: 0, count: 3, fade: 1 });
   });
 });
 

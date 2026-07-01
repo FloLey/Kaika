@@ -27,28 +27,28 @@ describe("GraphCanvas interactions (jsdom)", () => {
     expect(getByTestId("node-n1").textContent).toBe("n1");
   });
 
-  it("Delete with a selected edge calls onEdgeDelete (the keydown stale-closure path)", () => {
-    const onEdgeDelete = vi.fn();
-    setup({ selected: "e1", onEdgeDelete });
+  it("Delete with a selection calls onDeleteSelection with the selected ids", () => {
+    const onDeleteSelection = vi.fn();
+    setup({ selected: new Set(["e1"]), onDeleteSelection });
     fireEvent.keyDown(window, { key: "Delete" });
-    expect(onEdgeDelete).toHaveBeenCalledTimes(1);
-    expect(onEdgeDelete.mock.calls[0][0].id).toBe("e1");
+    expect(onDeleteSelection).toHaveBeenCalledTimes(1);
+    expect(onDeleteSelection.mock.calls[0][0]).toEqual(["e1"]);
   });
 
-  it("Delete with a selected node calls onNodeDelete", () => {
-    const onNodeDelete = vi.fn();
-    setup({ selected: "n1", onNodeDelete });
+  it("Delete with several selected nodes passes them all in one go", () => {
+    const onDeleteSelection = vi.fn();
+    setup({ selected: new Set(["n1", "e1"]), onDeleteSelection });
     fireEvent.keyDown(window, { key: "Delete" });
-    expect(onNodeDelete).toHaveBeenCalledTimes(1);
-    expect(onNodeDelete.mock.calls[0][0].id).toBe("n1");
+    expect(onDeleteSelection).toHaveBeenCalledTimes(1);
+    expect(new Set(onDeleteSelection.mock.calls[0][0])).toEqual(new Set(["n1", "e1"]));
   });
 
   it("does NOT delete while typing in an input field", () => {
-    const onEdgeDelete = vi.fn();
-    const { container } = setup({ selected: "e1", onEdgeDelete });
+    const onDeleteSelection = vi.fn();
+    const { container } = setup({ selected: new Set(["e1"]), onDeleteSelection });
     const input = document.createElement("input");
     container.appendChild(input);
     fireEvent.keyDown(input, { key: "Delete" }); // bubbles to the window handler
-    expect(onEdgeDelete).not.toHaveBeenCalled();
+    expect(onDeleteSelection).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@ librosa==0.11.0
 matplotlib==3.11.0
 numpy==2.4.6
 scipy==1.18.0
+pillow==12.2.0
 soundfile==0.14.0
 mlx-whisper==0.4.3; platform_system == "Darwin" and platform_machine == "arm64"
 faster-whisper==1.2.1

@@ -22,6 +22,49 @@ def test_tonemap_clamps_to_uint8_and_blacks_out_empty_dye():
     assert (out[1, 1] > 0).all()  # bright dye -> lit, but bounded
 
 
+class _DyeRecorder:
+    """Minimal sim stub that records the dye amount each emitter inject() asks for."""
+
+    def __init__(self):
+        self.amounts = []
+
+    def add_dye(self, px, py, radius, color, amount, layer=0):
+        self.amounts.append(float(amount))
+
+    def add_force(self, *a, **k):
+        pass
+
+    def add_radial(self, *a, **k):
+        pass
+
+
+def test_emitter_snake_gate_bright_head_fading_tail_dark_outside():
+    # A chase snake: slot 0, body length 0.5 of the loop, fully tapered (head->tail).
+    src = {"emit": 1.0, "force": 0.0, "gate_speed": 1.0, "gate_phase": 0.0, "gate_duty": 0.5, "gate_fade": 1.0}
+    inject = fluid._emitter(src, nframes=11)
+    rec = _DyeRecorder()
+    inject(rec, 0, 10)  # t=0, d=0 -> the head, full brightness
+    assert rec.amounts == pytest.approx([1.0])
+    rec.amounts.clear()
+    inject(rec, 2, 10)  # t=0.2, d=0.2 in body, u=0.2/0.5=0.4 -> g=0.6
+    assert rec.amounts == pytest.approx([0.6])
+    rec.amounts.clear()
+    inject(rec, 7, 10)  # t=0.7, d=0.7 >= 0.5 -> behind the tail, dark
+    assert rec.amounts == []
+
+
+def test_emitter_snake_no_taper_is_a_solid_arc():
+    # taper 0 -> the whole body emits at full strength (a solid sliding arc).
+    src = {"emit": 1.0, "force": 0.0, "gate_speed": 1.0, "gate_phase": 0.0, "gate_duty": 0.5, "gate_fade": 0.0}
+    inject = fluid._emitter(src, nframes=11)
+    rec = _DyeRecorder()
+    inject(rec, 2, 10)  # in the body -> full (no taper)
+    assert rec.amounts == pytest.approx([1.0])
+    rec.amounts.clear()
+    inject(rec, 7, 10)  # outside the body -> dark
+    assert rec.amounts == []
+
+
 def test_dissipation_decays_static_dye_by_the_dissipation_factor():
     # Zero velocity -> advection is identity, so one step just multiplies the dye
     # by `dissipation`.

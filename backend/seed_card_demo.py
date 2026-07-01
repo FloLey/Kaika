@@ -1,0 +1,242 @@
+"""The Playground project: one valid pipeline per card, each a small graph that
+visibly exercises that card. It's an always-present, app-managed project (job id
+``playground``) — built lazily by ``ensure_playground()`` the first time the user opens
+the Playground, and hidden from the user's projects list.
+
+`ensure_playground()` is idempotent: it writes SYNTHETIC stems (no upload needed) +
+analysis + the segments from ``backend.card_demo.DEMOS``, and is a near no-op once
+present. The CLI ``python -m backend.seed_card_demo`` (or ``make seed-playground``)
+force-rebuilds and additionally pre-renders each segment as a smoke check.
+
+Only the ``signal`` card needs audio; a synthetic drum stem gives it a kick to react to.
+``lyrics`` reads lyric lines from the analysis cache. Everything else is synthetic.
+"""
+
+from __future__ import annotations
+
+import json
+
+import numpy as np
+import soundfile as sf
+
+from . import card_demo, graph
+from .media import make_spectrogram, stem_audio_path
+from .paths import ANALYSIS_DIR, SEPARATED_DIR, STEMS, UPLOAD_DIR
+
+JOB_ID = "playground"
+TITLE = "Playground"
+SR = 44100
+SEG_LEN = 3.0  # seconds per segment
+OUTPUT = {"width": 1080, "height": 1920, "quality": "draft", "fps": 24, "background": "#000000"}
+
+
+# --------------------------------------------------------------------------- #
+# Synthetic audio
+# --------------------------------------------------------------------------- #
+def _drums(t: np.ndarray) -> np.ndarray:
+    """A 120 BPM click track: 60 Hz kicks + noisy hats, so the energy/onset features
+    have real transients to react to."""
+    sig = np.zeros_like(t)
+    rng = np.random.default_rng(0)
+    n_kick = int(0.12 * SR)
+    kick_env = np.exp(-np.arange(n_kick) / (0.05 * SR))
+    kick = np.sin(2 * np.pi * 60 * np.arange(n_kick) / SR) * kick_env
+    for k in range(int(t[-1] / 0.5) + 1):  # kick every 0.5 s
+        i0 = int(k * 0.5 * SR)
+        sig[i0 : i0 + n_kick] += kick[: max(0, len(sig) - i0)]
+    n_hat = int(0.03 * SR)
+    hat_env = np.exp(-np.arange(n_hat) / (0.01 * SR))
+    for k in range(int(t[-1] / 0.25) + 1):  # hat every 0.25 s
+        i0 = int(k * 0.25 * SR)
+        sig[i0 : i0 + n_hat] += (rng.standard_normal(n_hat) * hat_env * 0.3)[: max(0, len(sig) - i0)]
+    return sig
+
+
+def _tone(t: np.ndarray, freq: float, wobble: float = 4.0) -> np.ndarray:
+    env = 0.6 + 0.4 * np.sin(2 * np.pi * wobble * t / max(1.0, t[-1]))
+    return np.sin(2 * np.pi * freq * t) * env
+
+
+def _norm(x: np.ndarray) -> np.ndarray:
+    m = float(np.max(np.abs(x))) or 1.0
+    return (x / m * 0.9).astype(np.float32)
+
+
+def write_synthetic_stems(job_id: str, duration: float) -> dict:
+    """Write the synthetic stem WAVs where `media.stem_audio_path` resolves them, plus
+    the `original` mix and per-stem spectrograms. Returns the stems metadata map."""
+    t = np.arange(int(SR * duration), dtype=np.float32) / SR
+    parts = {
+        "drums": _drums(t),
+        "bass": _tone(t, 80, 1.5),
+        "vocals": _tone(t, 220, 3.0),
+        "other": _tone(t, 440, 2.0) * 0.5,
+    }
+    parts = {k: _norm(v) for k, v in parts.items()}
+    original = _norm(parts["drums"] * 0.8 + parts["bass"] * 0.6 + parts["vocals"] * 0.4 + parts["other"] * 0.3)
+
+    # separated stems: <SEPARATED_DIR>/<job>/<model>/<song>/<stem>.wav (find_stem_dir
+    # picks the first model + song dir, so any names work).
+    song_dir = SEPARATED_DIR / job_id / "htdemucs" / "song"
+    song_dir.mkdir(parents=True, exist_ok=True)
+    for stem, audio in parts.items():
+        sf.write(str(song_dir / f"{stem}.wav"), audio, SR)
+    # original lives under uploads/<job>/original.wav (for UI playback + spectrogram).
+    up = UPLOAD_DIR / job_id
+    up.mkdir(parents=True, exist_ok=True)
+    sf.write(str(up / "original.wav"), original, SR)
+
+    # spectrograms + sr metadata so the Signals tab isn't blank.
+    from .paths import COLORMAPS, SPECTRO_DIR
+
+    stems_meta: dict = {}
+    for stem in STEMS:
+        src = stem_audio_path(job_id, stem)
+        sr, _ = make_spectrogram(src, SPECTRO_DIR / job_id / f"{stem}.png", COLORMAPS[stem])
+        stems_meta[stem] = {
+            "audio": f"/audio/{job_id}/{stem}",
+            "spectrogram": f"/spectrogram/{job_id}/{stem}",
+            "sr": sr,
+        }
+    return stems_meta
+
+
+# --------------------------------------------------------------------------- #
+# Segments + analysis cache
+# --------------------------------------------------------------------------- #
+def build_segments(demos: list[dict]) -> list[dict]:
+    segs = []
+    for i, d in enumerate(demos):
+        segs.append(
+            {
+                "id": f"seg-{i}",
+                "label": d["label"],
+                "start": round(i * SEG_LEN, 3),
+                "end": round((i + 1) * SEG_LEN, 3),
+                "signals": d["signals"],
+                "graph": d["graph"],
+            }
+        )
+    return segs
+
+
+def _lyric_lines(segments: list[dict]) -> list[dict]:
+    """Author lyric lines spanning the lyrics segment's window (absolute song time).
+    Found by the graph containing a `lyrics` node, so it's independent of the label."""
+    seg = next(
+        (s for s in segments if any(n.get("type") == "lyrics" for n in s["graph"]["nodes"])),
+        None,
+    )
+    if seg is None:
+        return []
+    s, e = seg["start"], seg["end"]
+    words = ["lyrics", "card", "on", "the", "beat"]
+    n = len(words)
+    step = (e - s) / n
+    return [{"t0": round(s + k * step, 3), "t1": round(s + (k + 1) * step, 3), "text": " ".join(words[: k + 1])} for k in range(n)]
+
+
+def write_analysis(job_id: str, segments: list[dict], duration: float) -> list[dict]:
+    times = np.arange(0.0, duration, 0.25)
+    env = (0.5 + 0.5 * np.sin(2 * np.pi * times / 2.0)).round(3).tolist()
+    lines = _lyric_lines(segments)
+    ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
+    (ANALYSIS_DIR / f"{job_id}.json").write_text(
+        json.dumps({"vocal_envelope": env, "envelope_times": times.round(3).tolist(), "lyric_lines": lines})
+    )
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# Build / ensure
+# --------------------------------------------------------------------------- #
+def _build(db, *, render: bool, log=lambda _m="": None) -> str:
+    """(Re)build the Playground project: synthetic stems + analysis + DB rows. With
+    `render`, also pre-render each segment as a smoke check (the CLI path); the app's
+    ensure path skips that (the Studio renders on open)."""
+    segments = build_segments(card_demo.DEMOS)
+    duration = len(segments) * SEG_LEN
+
+    log(f"writing synthetic stems ({duration:.0f}s) …")
+    stems_meta = write_synthetic_stems(JOB_ID, duration)
+    lines = write_analysis(JOB_ID, segments, duration)
+
+    log("(re)creating project …")
+    db.delete_project(JOB_ID)
+    db.create_project(
+        JOB_ID,
+        title=TITLE,
+        source="synthetic",
+        duration=duration,
+        fmin=20,
+        has_lyrics=bool(lines),
+        stems=stems_meta,
+    )
+    db.save_segments(JOB_ID, segments, step="studio", output=OUTPUT)
+
+    if render:
+        log("rendering each segment (smoke check) …")
+        for seg in segments:
+            # Mirror the app: the lyric lines ride in the render payload (OutputNode
+            # does this) so the lyrics segment renders its text here too.
+            payload = {**seg, "lyric_lines": lines}
+            out_id = next(n["id"] for n in seg["graph"]["nodes"] if n["type"] == "output")
+            url = graph.render(JOB_ID, payload, seg["graph"], stem_audio_path, OUTPUT, out_id)
+            log(f"  • {seg['label']:<22} {url}")
+    return JOB_ID
+
+
+def ensure_playground() -> str:
+    """Idempotent: build the always-present Playground project if it's missing (its DB
+    row AND its synthetic stems). A near no-op once present. No pre-render — the Studio
+    renders on open. Called by `POST /playground` when the user opens the Playground."""
+    from . import db
+
+    if db.get_project(JOB_ID) is not None and stem_audio_path(JOB_ID, "drums") is not None:
+        return JOB_ID
+    return _build(db, render=False)
+
+
+def export_playground() -> int:
+    """Capture the CURRENT live Playground (your reworked pipelines) into the committed
+    fixture `card_demo.PIPELINES_PATH`, which the seed then loads as the defaults. Each
+    segment's signals are trimmed to only those its graph references (drops the studio
+    hydration noise), and its graph is stored verbatim."""
+    from . import card_demo, db
+
+    row = db.get_project(JOB_ID)
+    if row is None:
+        raise SystemExit(f"no '{JOB_ID}' project in the DB — open the Playground once first")
+    label_to_key = {label: key for key, label in card_demo.CARD_LABELS.items()}
+    out = []
+    for s in row["data"]["segments"]:
+        key = label_to_key.get(s["label"])
+        if key is None:
+            print(f"  ! skipping segment with unknown card label: {s['label']!r}")
+            continue
+        graph = s["graph"]
+        referenced = {n.get("data", {}).get("signalId") for n in graph["nodes"] if n.get("type") == "signal"}
+        signals = [sig for sig in s.get("signals", []) if sig.get("id") in referenced]
+        out.append({"key": key, "label": s["label"], "signals": signals, "graph": graph})
+    card_demo.PIPELINES_PATH.write_text(json.dumps(out, indent=2))
+    missing = card_demo.ALL_CARDS - {e["key"] for e in out}
+    print(f"[playground] exported {len(out)} pipelines -> {card_demo.PIPELINES_PATH.name}")
+    if missing:
+        print(f"  ! WARNING: no pipeline exported for cards: {sorted(missing)}")
+    return len(out)
+
+
+def seed() -> str:
+    """CLI entry (`python -m backend.seed_card_demo` / `make seed-playground`): force a
+    rebuild from the fixture and pre-render every segment as a smoke check."""
+    from . import db  # local import so the module imports without a live DB
+
+    job = _build(db, render=True, log=lambda m="": print(f"[playground] {m}" if m else ""))
+    print(f"\n[playground] done — open '{TITLE}' (job {job}) in the Studio.")
+    return job
+
+
+if __name__ == "__main__":
+    import sys
+
+    export_playground() if sys.argv[1:2] == ["export"] else seed()

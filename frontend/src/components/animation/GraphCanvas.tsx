@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { PointerEvent as RPointerEvent, ReactNode } from "react";
 import usePanZoom from "./usePanZoom";
 import type { View } from "./usePanZoom";
-import { portKey, centerInContainer, edgePath, canConnect } from "./ports";
+import { portKey, centerInContainer, edgePath, canConnect, connectIssue } from "./ports";
 import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
 import type { NodeHelpers } from "./nodes/nodeProps";
 
@@ -21,15 +21,19 @@ interface PortMeta {
 }
 type Updater = (g: Graph) => Graph;
 
+const EMPTY_SEL: ReadonlySet<string> = new Set();
+
 interface GraphCanvasProps {
   graph: Graph;
   layoutKey?: string;
   onGraphChange?: (updater: Updater) => void;
   onConnect?: (srcId: string, srcPort: string, tgtId: string, tgtPort: string) => void;
-  onNodeDelete?: (node: GraphNode) => void;
   onEdgeDelete?: (edge: GraphEdge) => void;
-  selected?: string | null;
-  onSelect?: (id: string | null) => void;
+  onDeleteSelection?: (ids: string[]) => void;
+  // The active selection: node ids and/or a single edge id. Several nodes can be
+  // selected at once (shift/⌘-click or marquee) and then dragged/deleted as a group.
+  selected?: ReadonlySet<string>;
+  onSelectionChange?: (next: Set<string>) => void;
   onViewChange?: (v: View) => void;
   renderNode: (node: GraphNode, helpers: NodeHelpers) => ReactNode;
 }
@@ -39,17 +43,49 @@ export default function GraphCanvas({
   layoutKey,
   onGraphChange,
   onConnect,
-  onNodeDelete,
   onEdgeDelete,
-  selected,
-  onSelect,
+  onDeleteSelection,
+  selected = EMPTY_SEL,
+  onSelectionChange,
   onViewChange,
   renderNode,
 }: GraphCanvasProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const { view, onWheel, onBackgroundPointerDown, onBackgroundPointerMove, onBackgroundPointerUp } =
-    usePanZoom(graph, onViewChange, rootRef);
+  const {
+    view,
+    onWheel,
+    onBackgroundPointerDown,
+    onBackgroundPointerMove,
+    onBackgroundPointerUp,
+    screenToGraph,
+  } = usePanZoom(graph, onViewChange, rootRef);
+
+  // Latest selection / graph in refs so the pointer handlers (memoized, attached as
+  // window listeners) read current values without re-subscribing on every edit.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+
+  const replaceSel = useCallback(
+    (id: string | null) => onSelectionChange?.(id == null ? new Set() : new Set([id])),
+    [onSelectionChange]
+  );
+  const toggleSel = useCallback(
+    (id: string) => {
+      const next = new Set(selectedRef.current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      onSelectionChange?.(next);
+    },
+    [onSelectionChange]
+  );
+
+  // Live map of node id -> positioned wrapper element, for marquee hit-testing.
+  // offsetWidth/offsetHeight are layout px (unaffected by the stage's CSS scale),
+  // so they line up with node.x/node.y which live in the same graph-space units.
+  const nodeEls = useRef(new Map<string, HTMLElement>());
 
   // --- port registry: portKey -> DOM element ---------------------------------
   const portEls = useRef(new Map<string, Element>());
@@ -85,13 +121,19 @@ export default function GraphCanvas({
     return () => ro.disconnect();
   }, [tick]);
 
-  // --- node dragging ---------------------------------------------------------
-  interface Drag {
+  // --- node dragging (moves the whole selection in one go) -------------------
+  interface DragItem {
     id: string;
-    startX: number;
-    startY: number;
     origX: number;
     origY: number;
+  }
+  interface Drag {
+    startX: number;
+    startY: number;
+    items: DragItem[]; // every selected node, captured at grab time
+    clickedId: string;
+    wasGroup: boolean; // grabbed a node already part of a multi-selection
+    moved: boolean;
   }
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -104,10 +146,33 @@ export default function GraphCanvas({
       if (e.button !== 0) return;
       if ((e.target as HTMLElement).closest?.(".no-drag")) return;
       e.stopPropagation();
-      onSelect?.(node.id);
-      setDrag({ id: node.id, startX: e.clientX, startY: e.clientY, origX: node.x, origY: node.y });
+      // Shift / ⌘ / Ctrl-click toggles a card in the selection (no drag).
+      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+        toggleSel(node.id);
+        return;
+      }
+      const cur = selectedRef.current;
+      const wasGroup = cur.has(node.id) && cur.size > 1;
+      // Grab inside the current multi-selection -> keep it (drag the group). Grab a
+      // node that wasn't selected -> it becomes the lone selection.
+      const sel: ReadonlySet<string> = cur.has(node.id) ? cur : new Set([node.id]);
+      if (!cur.has(node.id)) onSelectionChange?.(new Set(sel));
+      const byId = new Map(graphRef.current.nodes.map((n) => [n.id, n]));
+      const items: DragItem[] = [];
+      for (const id of sel) {
+        const n = byId.get(id);
+        if (n) items.push({ id: n.id, origX: n.x, origY: n.y });
+      }
+      setDrag({
+        startX: e.clientX,
+        startY: e.clientY,
+        items,
+        clickedId: node.id,
+        wasGroup,
+        moved: false,
+      });
     },
-    [onSelect]
+    [onSelectionChange, toggleSel]
   );
 
   useEffect(() => {
@@ -117,19 +182,28 @@ export default function GraphCanvas({
       if (!d) return;
       const dx = (e.clientX - d.startX) / scaleRef.current;
       const dy = (e.clientY - d.startY) / scaleRef.current;
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) > 0.5) d.moved = true;
       onGraphChange?.((g) => ({
         ...g,
-        nodes: g.nodes.map((n) => (n.id === d.id ? { ...n, x: d.origX + dx, y: d.origY + dy } : n)),
+        nodes: g.nodes.map((n) => {
+          const it = d.items.find((i) => i.id === n.id);
+          return it ? { ...n, x: it.origX + dx, y: it.origY + dy } : n;
+        }),
       }));
     };
-    const up = () => setDrag(null);
+    const up = () => {
+      const d = dragRef.current;
+      // A plain click (no drag) on a node inside a group collapses to just that node.
+      if (d && !d.moved && d.wasGroup) onSelectionChange?.(new Set([d.clickedId]));
+      setDrag(null);
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, onGraphChange]);
+  }, [drag, onGraphChange, onSelectionChange]);
 
   // --- connecting (drag from an out port to an in port) ----------------------
   interface Wire {
@@ -143,6 +217,17 @@ export default function GraphCanvas({
   const [wire, setWire] = useState<Wire | null>(null);
   const wireRef = useRef<Wire | null>(null);
   wireRef.current = wire;
+
+  // A brief toast explaining why the last connect attempt was rejected. Auto-
+  // clears; a fresh attempt replaces it (and resets the timer).
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showHint = useCallback((msg: string) => {
+    setHint(msg);
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHint(null), 2800);
+  }, []);
+  useEffect(() => () => void (hintTimer.current && clearTimeout(hintTimer.current)), []);
 
   const startConnect = useCallback(
     (nodeId: string, portId: string, flow: string, e: RPointerEvent) => {
@@ -188,10 +273,25 @@ export default function GraphCanvas({
       }
       setWire((w) => (w ? { ...w, x2, y2, target } : w));
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       const w = wireRef.current;
       if (w && w.target) {
         onConnect?.(w.source.nodeId, w.source.portId, w.target.nodeId, w.target.portId);
+      } else if (w) {
+        // Dropped without a valid target. If it landed on an actual port, explain
+        // why it was refused; a drop onto empty space is just a cancel (no toast).
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const portDom = hit?.closest("[data-port]");
+        const meta = portDom
+          ? portMeta.current.get(
+              portKey(
+                portDom.getAttribute("data-node") || "",
+                portDom.getAttribute("data-port") || ""
+              )
+            )
+          : null;
+        const issue = connectIssue(w.source, meta);
+        if (issue) showHint(issue);
       }
       setWire(null);
     };
@@ -201,64 +301,118 @@ export default function GraphCanvas({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [wire, onConnect]);
+  }, [wire, onConnect, showHint]);
+
+  // --- marquee (shift-drag the background to box-select cards) ---------------
+  interface Marquee {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  }
+  const [marquee, setMarquee] = useState<Marquee | null>(null);
+  const marqueeRef = useRef<Marquee | null>(null);
+  marqueeRef.current = marquee;
+
+  const startMarquee = useCallback((e: RPointerEvent) => {
+    const root = rootRef.current;
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setMarquee({ x0: x, y0: y, x1: x, y1: y });
+  }, []);
+
+  useEffect(() => {
+    if (!marquee) return undefined;
+    const root = rootRef.current;
+    const move = (e: PointerEvent) => {
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      setMarquee((m) => (m ? { ...m, x1: e.clientX - rect.left, y1: e.clientY - rect.top } : m));
+    };
+    const up = () => {
+      const m = marqueeRef.current;
+      if (m) {
+        // Box corners -> graph space, then AABB-overlap each node's rendered rect.
+        const a = screenToGraph(Math.min(m.x0, m.x1), Math.min(m.y0, m.y1));
+        const b = screenToGraph(Math.max(m.x0, m.x1), Math.max(m.y0, m.y1));
+        const hits = new Set<string>();
+        for (const n of graphRef.current.nodes) {
+          const el = nodeEls.current.get(n.id);
+          const w = el ? el.offsetWidth : 0;
+          const h = el ? el.offsetHeight : 0;
+          if (n.x < b.x && n.x + w > a.x && n.y < b.y && n.y + h > a.y) hits.add(n.id);
+        }
+        onSelectionChange?.(hits);
+      }
+      setMarquee(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [marquee, screenToGraph, onSelectionChange]);
 
   // --- background interactions (pan + clear selection) -----------------------
   const bgPointerDown = useCallback(
     (e: RPointerEvent) => {
       if (e.target !== e.currentTarget) return; // only the bare background
+      // Shift-drag boxes a selection; a plain drag pans the canvas.
+      if (e.shiftKey) {
+        e.preventDefault();
+        startMarquee(e);
+        return;
+      }
       onBackgroundPointerDown(e);
     },
-    [onBackgroundPointerDown]
+    [onBackgroundPointerDown, startMarquee]
   );
 
   const bgPointerUp = useCallback(
     (e: RPointerEvent) => {
       const moved = onBackgroundPointerUp(e);
-      if (!moved && e.target === e.currentTarget) onSelect?.(null);
+      if (!moved && e.target === e.currentTarget && !e.shiftKey) replaceSel(null);
     },
-    [onBackgroundPointerUp, onSelect]
+    [onBackgroundPointerUp, replaceSel]
   );
 
-  // --- delete (node or edge) -------------------------------------------------
-  const onNodeDeleteRef = useRef(onNodeDelete);
+  // --- delete (whole selection, node(s) and/or edge) -------------------------
   const onEdgeDeleteRef = useRef(onEdgeDelete);
-  onNodeDeleteRef.current = onNodeDelete;
+  const onDeleteSelectionRef = useRef(onDeleteSelection);
   onEdgeDeleteRef.current = onEdgeDelete;
+  onDeleteSelectionRef.current = onDeleteSelection;
 
   const removeEdge = useCallback(
     (edge: GraphEdge) => {
       if (!edge) return;
       if (onEdgeDeleteRef.current) onEdgeDeleteRef.current(edge);
       else onGraphChange?.((g) => ({ ...g, edges: g.edges.filter((ed) => ed.id !== edge.id) }));
-      onSelect?.(null);
     },
-    [onGraphChange, onSelect]
+    [onGraphChange]
   );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
-      if (!selected) return;
+      if (selected.size === 0) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      const edge = (graph.edges || []).find((ed) => ed.id === selected);
-      if (edge) {
-        e.preventDefault();
-        removeEdge(edge);
-        return;
-      }
-      const node = graph.nodes.find((n) => n.id === selected);
-      if (node) {
-        e.preventDefault();
-        if (onNodeDeleteRef.current) onNodeDeleteRef.current(node);
-        else onGraphChange?.((g) => ({ ...g, nodes: g.nodes.filter((n2) => n2.id !== node.id) }));
-        onSelect?.(null);
-      }
+      e.preventDefault();
+      const ids = [...selected];
+      if (onDeleteSelectionRef.current) onDeleteSelectionRef.current(ids);
+      else
+        onGraphChange?.((g) => ({
+          ...g,
+          nodes: g.nodes.filter((n) => !selected.has(n.id)),
+          edges: g.edges.filter((ed) => !selected.has(ed.id)),
+        }));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, graph, onGraphChange, onSelect, removeEdge]);
+  }, [selected, onGraphChange]);
 
   // --- edge geometry (screen space, recomputed each tick) --------------------
   const edges = (graph.edges || [])
@@ -303,13 +457,14 @@ export default function GraphCanvas({
     >
       <svg className="gc-edges gc-edges-base" width="100%" height="100%">
         {edges.map((e) => (
-          <g key={e.id} className={"gc-edge" + (e.id === selected ? " sel" : "")}>
+          <g key={e.id} className={"gc-edge" + (selected.has(e.id) ? " sel" : "")}>
             <path
               className="gc-edge-hit"
               d={e.d}
               onPointerDown={(ev) => {
                 ev.stopPropagation();
-                onSelect?.(e.id);
+                if (ev.shiftKey || ev.metaKey || ev.ctrlKey) toggleSel(e.id);
+                else replaceSel(e.id);
               }}
             />
             <path className="gc-edge-line" d={e.d} />
@@ -342,16 +497,32 @@ export default function GraphCanvas({
           <div
             key={node.id}
             className="gc-node-pos"
+            ref={(el) => {
+              if (el) nodeEls.current.set(node.id, el);
+              else nodeEls.current.delete(node.id);
+            }}
             style={{ position: "absolute", left: node.x, top: node.y }}
           >
             {renderNode(node, {
               ...helpers,
               onTitlePointerDown: onTitlePointerDown(node),
-              selected: node.id === selected,
+              selected: selected.has(node.id),
             })}
           </div>
         ))}
       </div>
+
+      {marquee && (
+        <div
+          className="gc-marquee"
+          style={{
+            left: Math.min(marquee.x0, marquee.x1),
+            top: Math.min(marquee.y0, marquee.y1),
+            width: Math.abs(marquee.x1 - marquee.x0),
+            height: Math.abs(marquee.y1 - marquee.y0),
+          }}
+        />
+      )}
 
       {wire && (
         <svg className="gc-edges gc-edges-wire" width="100%" height="100%">
@@ -360,6 +531,13 @@ export default function GraphCanvas({
             d={edgePath(wire.x1, wire.y1, wire.x2, wire.y2)}
           />
         </svg>
+      )}
+
+      {hint && (
+        <div className="gc-hint" role="status">
+          <span className="gc-hint-icon">⚠</span>
+          <span>{hint}</span>
+        </div>
       )}
     </div>
   );
