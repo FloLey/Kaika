@@ -659,6 +659,48 @@
 
 /* ---- output node ---------------------------------------------------------- */
 
+/* "mark final" toggle — highlights the segment's export output with a star + accent. */
+.anim-final-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.anim-final-btn:hover {
+  color: var(--petale);
+  border-color: var(--petale-soft);
+}
+.anim-final-btn.on {
+  color: #fff;
+  background: var(--petale);
+  border-color: transparent;
+}
+
+/* compact "layer" numeric control on fluid / combine cards. */
+.ctl-num {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ctl-num input[type="number"] {
+  width: 56px;
+  padding: 3px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
 .anim-output-well {
   position: relative;
   width: 100%;
@@ -1165,6 +1207,13 @@
 }
 .out-size .hz-input {
   width: 84px;
+}
+.out-lock {
+  margin-left: auto;
+  font-size: 14px;
+}
+.out-lock.on {
+  color: var(--petale);
 }
 .out-x,
 .out-unit {

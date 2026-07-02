@@ -40,6 +40,8 @@ export interface NodeCtx {
   groupPlaying?: boolean;
   segStart?: number;
   minimized?: Set<string>;
+  finalOutputId?: string; // the segment's output marked "final" (for the export stage)
+  setFinalOutput?: (nodeId: string) => void; // mark/clear this segment's final output ("" clears)
   onGraphChange?: (updater: (g: Graph) => Graph) => void;
   onDetach?: (fluidId: string, key: string) => void;
   onDeleteNode?: (id: string) => void;

@@ -26,10 +26,11 @@ interface GraphEditorOpts {
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;
   commitGraph: (g: Graph) => void; // lifts the whole graph to segment.graph
+  setFinalOutput?: NodeCtx["setFinalOutput"]; // mark/clear this segment's final output
 }
 
 export function useGraphEditor(opts: GraphEditorOpts) {
-  const { segment, stems, job, output, lyricLines, groupClock, groupPlaying, commitGraph } = opts;
+  const { segment, stems, job, output, lyricLines, groupClock, groupPlaying, commitGraph, setFinalOutput } = opts;
 
   // A stable graph object: segment.graph when present, else a fresh empty graph.
   // normalizeGraph migrates older saves so every fluid node carries the current
@@ -168,6 +169,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     groupPlaying,
     segStart: segment.start,
     minimized, // collapsed cards -> renderAnimNode swaps in MinimizedCard
+    finalOutputId: segment.finalOutputId, // which output the OutputNode shows as "final"
+    setFinalOutput, // OutputNode marks itself final for this segment
     onGraphChange: applyUpdater,
     onDetach: (fluidId: string, key: string) => applyUpdater((g) => disconnect(g, fluidId, key)),
     onDeleteNode: (id: string) => {

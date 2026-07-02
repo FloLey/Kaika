@@ -142,18 +142,25 @@ def _is_emitter_source(graph: dict, node_id, nodes: dict, seen=None) -> bool:
 
 
 def composite(layers: list, opacities: list) -> np.ndarray:
-    """Alpha-over stack of dye-on-transparent uint8 frame stacks (spec 10).
+    """Alpha-over stack of dye frame stacks -> 3-channel dye-on-transparent (spec 10).
 
-    `layers[0]` is the TOP layer. A layer's coverage (alpha) is its per-pixel
-    brightness (max channel) times its `opacity`, so a bright upper layer hides
-    what's beneath while dim/empty areas let lower layers show through. The result
-    stays dye-on-transparent (the terminal output applies the background)."""
-    acc = np.zeros_like(layers[0], dtype=np.float32)
+    `layers[0]` is the TOP layer. A 3-channel (dye-on-black) layer's coverage is its
+    per-pixel brightness (max channel); a 4-channel (RGBA, e.g. lyrics) layer uses its
+    explicit alpha instead — so an opaque BLACK outline occludes what's beneath it
+    (brightness alone would treat black as transparent). Both times coverage is scaled
+    by the layer's `opacity`. The result stays dye-on-transparent, 3-channel (the
+    terminal output applies the background)."""
+    acc = np.zeros(layers[0].shape[:-1] + (3,), dtype=np.float32)
     for layer, op in reversed(list(zip(layers, opacities))):  # bottom -> top
         f = layer.astype(np.float32) / 255.0
         op = float(op)
-        a = np.clip(f.max(axis=-1, keepdims=True), 0.0, 1.0) * op
-        acc = f * op + acc * (1.0 - a)
+        if layer.shape[-1] == 4:  # RGBA: explicit alpha, straight (un-premultiplied) rgb
+            a = np.clip(f[..., 3:4], 0.0, 1.0) * op
+            contrib = f[..., :3] * a
+        else:  # dye-on-black: brightness is the coverage, colour is premultiplied
+            a = np.clip(f.max(axis=-1, keepdims=True), 0.0, 1.0) * op
+            contrib = f * op
+        acc = contrib + acc * (1.0 - a)
     return (np.clip(acc, 0.0, 1.0) * 255).astype(np.uint8)
 
 
@@ -333,6 +340,37 @@ def _contributing_ids(graph: dict, output_id: str) -> set:
         seen.add(nid)
         stack.extend(incoming.get(nid, ()))
     return seen
+
+
+def _field_nodes(graph: dict, output_id: str) -> list[str]:
+    """The raw-field producers (`fluid` / `combine(merge)`) feeding `output_id`, in
+    video-chain order (used by the continuous song export). A fluid feeding a merge is
+    absorbed by the merge, so we stop AT each field and don't recurse into a merge's
+    inputs; `output`/`transform`/`grade`/`combine(stack)` are pass-through and recursed;
+    `lyrics` is a generated layer, not a fluid field."""
+    nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
+    found: list[str] = []
+    seen: set = set()
+
+    def walk(nid):
+        if nid is None or nid in seen:
+            return
+        seen.add(nid)
+        node = nodes.get(nid)
+        if node is None:
+            return
+        t = node.get("type")
+        if t == "fluid" or (t == "combine" and node.get("data", {}).get("mode") == "merge"):
+            found.append(nid)  # a raw field — stop here
+        elif t == "combine":  # stack: recurse each layer input
+            for slot in node.get("data", {}).get("inputs", []):
+                walk(_video_source(graph, nid, slot.get("id")))
+        elif t in ("output", "transform", "grade"):  # pass-through video chain
+            walk(_video_source(graph, nid, "video"))
+        # lyrics / anything else: not a fluid field, ignore
+
+    walk(output_id)
+    return found
 
 
 def output_hash(
@@ -963,6 +1001,25 @@ class _Dag:
             params["grid"] = LEGACY_GRID
         return params
 
+    def field_layers(self, output_id: str) -> list[dict]:
+        """The raw-simulation fields feeding `output_id`, for the continuous song export:
+        `[{node_id, layer, params}]` in video-chain order. A field is a `fluid` node or a
+        `combine(merge)` node (a fluid feeding a merge is absorbed by the merge, so we
+        stop there); stack/fx/output are pass-through, lyrics is a generated layer (no
+        field). `layer` is the node's `data.layer` (the cross-segment continuity key) or
+        its 1-based discovery order; `params` are the `simulate()` params for that field
+        over this segment's window (grid/fps from the export output)."""
+        out = []
+        for k, nid in enumerate(_field_nodes(self.graph, output_id)):
+            node = self.nodes[nid]
+            if node.get("type") == "fluid":
+                params = self._fluid_video_params(node)
+            else:  # combine(merge)
+                params = self._merge_params(self.emitters(nid), node.get("data", {}).get("medium", {}))
+            layer = int(node.get("data", {}).get("layer", k + 1))
+            out.append({"node_id": nid, "layer": layer, "params": params})
+        return out
+
     def emitters(self, node_id) -> list:
         """The flat emitter list a MERGE feeds into one shared sim. Dispatches on
         node type via `_EMITTER_HANDLERS`; memoized per render."""
@@ -1166,6 +1223,23 @@ def _grid_dims(dag: "_Dag"):
     return LEGACY_GRID, LEGACY_GRID
 
 
+def _lyrics_static(d: dict) -> dict:
+    """The lyrics card's static (non-modulatable) fields -> sources.lyrics kwargs."""
+    return dict(
+        position=d.get("position", "bottom"),
+        align=d.get("align", "center"),
+        case=d.get("case", "none"),
+        reveal=d.get("reveal", "word"),
+        font=d.get("font", "inter"),
+        box_x=float(d.get("box_x", 0.05)),
+        box_y=float(d.get("box_y", 0.08)),
+        box_w=float(d.get("box_w", 0.9)),
+        box_h=float(d.get("box_h", 0.84)),
+        outline=bool(d.get("outline", True)),
+        outline_width=float(d.get("outlineWidth", 0.12)),
+    )
+
+
 def _lyrics_video(dag: "_Dag", node: dict) -> np.ndarray:
     d = node.get("data", {})
     nframes = max(1, round(dag.duration * dag.fps))
@@ -1178,10 +1252,7 @@ def _lyrics_video(dag: "_Dag", node: dict) -> np.ndarray:
         dag.fps,
         lines=lines,
         seg_start=float(dag.segment.get("start", 0.0)),
-        position=d.get("position", "bottom"),
-        align=d.get("align", "center"),
-        case=d.get("case", "none"),
-        reveal=d.get("reveal", "word"),
+        **_lyrics_static(d),
         **dag._fx_params(node),
     )
 
@@ -1251,10 +1322,7 @@ def _lyrics_block(dag: "_Dag", node: dict):
     kw = dict(
         lines=lines,
         seg_start=float(dag.segment.get("start", 0.0)),
-        position=d.get("position", "bottom"),
-        align=d.get("align", "center"),
-        case=d.get("case", "none"),
-        reveal=d.get("reveal", "word"),
+        **_lyrics_static(d),
     )
 
     def produce(a, b):

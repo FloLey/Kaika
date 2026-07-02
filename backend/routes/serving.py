@@ -6,6 +6,7 @@ audio/spectrogram helper module it imports from."""
 
 from flask import Blueprint, abort, jsonify, send_file
 
+from .. import fonts
 from ..media import serve_range, stem_audio_path
 from ..web import validate_job_id
 from ..paths import FLUID_DIR, SPECTRO_DIR, STEMS
@@ -17,6 +18,12 @@ bp = Blueprint("media", __name__)
 def index():
     # Pure API: the UI is the Vite dev server on :5173.
     return jsonify({"service": "kaika api", "ui": "http://localhost:5173 (npm run dev)"})
+
+
+@bp.route("/fonts")
+def fonts_list():
+    # The bundled lyric fonts [{key, label}] for the lyrics card's font picker.
+    return jsonify(fonts.list_fonts())
 
 
 @bp.route("/fluid/<name>")

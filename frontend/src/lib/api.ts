@@ -5,6 +5,7 @@
 import * as logbus from "./logbus";
 import type { BackendPayload } from "./logbus";
 import type { Graph, OutputSettings, StemInfo } from "./types";
+import type { ExportSettings } from "./export";
 import type { RawSegment } from "./segments";
 
 // ---- response shapes ---------------------------------------------------------
@@ -55,6 +56,7 @@ export interface Project {
   stems?: Record<string, StemInfo>;
   segments?: RawSegment[];
   output?: Partial<OutputSettings>;
+  export?: Partial<ExportSettings>;
   vocal_envelope?: number[];
   envelope_times?: number[];
   lyric_lines?: unknown[];
@@ -76,6 +78,17 @@ export interface StreamStartResult {
 // Live status of a progressive block render (see backend/render_jobs.py). While
 // `running`, show `preview_url` (grows block by block); once `done`, use `url`.
 export interface StreamStatus {
+  state: "running" | "done" | "cancelled" | "error";
+  frames_done: number;
+  total: number;
+  preview_url: string | null;
+  url: string | null;
+  error: string | null;
+}
+
+// Live status of the final full-track export (same progressive-block model as a
+// stream render — while `running`, show `preview_url`; once `done`, use `url`).
+export interface ExportStatus {
   state: "running" | "done" | "cancelled" | "error";
   frames_done: number;
   total: number;
@@ -239,8 +252,42 @@ export async function cancelStreamRender(renderId: string): Promise<void> {
   await fetch(`/animate/stream/${renderId}/cancel`, { method: "POST" }).catch(() => {});
 }
 
+// Final export: kick off the full-track HD render (every segment's marked output,
+// stitched) and poll it the same way as a stream render. 400s if any segment lacks
+// a final output (the message lists the missing segment ids).
+export async function startExport(jobId: string): Promise<StreamStartResult> {
+  return jsonOrThrow<StreamStartResult>(
+    await fetch("/export/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId }),
+    })
+  );
+}
+
+export async function getExportStatus(renderId: string): Promise<ExportStatus> {
+  return jsonOrThrow<ExportStatus>(await fetch(`/export/stream/${renderId}`));
+}
+
+// Fire-and-forget: signal the export to stop after its current block. Swallows
+// errors (the render may already be gone) so callers can call it freely on
+// cancel/unmount.
+export async function cancelExport(renderId: string): Promise<void> {
+  await fetch(`/export/stream/${renderId}/cancel`, { method: "POST" }).catch(() => {});
+}
+
 export async function listProjects(): Promise<ProjectSummary[]> {
   return jsonOrThrow<ProjectSummary[]>(await fetch("/projects"));
+}
+
+export interface FontOption {
+  key: string;
+  label: string;
+}
+
+// The bundled lyric fonts for the lyrics card's font picker.
+export async function listFonts(): Promise<FontOption[]> {
+  return jsonOrThrow<FontOption[]>(await fetch("/fonts"));
 }
 
 export async function getProject(jobId: string): Promise<Project> {

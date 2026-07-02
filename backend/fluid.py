@@ -91,9 +91,13 @@ def grid_for(width: int, height: int, short_cells: int) -> tuple[int, int]:
 
 
 def grid_from_output(out: dict) -> tuple[int, int]:
-    """(grid_h, grid_w) from an `output` settings dict (width/height/quality)."""
-    cells = _QUALITY_CELLS.get(str(out.get("quality", "normal")), _QUALITY_CELLS["normal"])
-    return grid_for(int(out.get("width", 1080)), int(out.get("height", 1920)), cells)
+    """(grid_h, grid_w) from an `output` settings dict. An explicit `gridCells`
+    (short-side cells) wins — the HD song export uses it to go finer than any quality
+    preset; otherwise the quality preset selects the cell count."""
+    cells = out.get("gridCells") or _QUALITY_CELLS.get(
+        str(out.get("quality", "normal")), _QUALITY_CELLS["normal"]
+    )
+    return grid_for(int(out.get("width", 1080)), int(out.get("height", 1920)), int(cells))
 
 
 class FluidSim:
@@ -280,15 +284,21 @@ def _tonemap(d: np.ndarray, exposure=1.9, gamma=1.15, bg=None) -> np.ndarray:
 
 
 def apply_background(frames: np.ndarray, color) -> np.ndarray:
-    """Composite uint8 dye-on-black `frames` over a solid `color` (hex or [r,g,b]).
+    """Composite uint8 dye `frames` over a solid `color` (hex or [r,g,b]) -> 3-channel.
 
-    Uses the same emissive "screen" blend as `_tonemap`'s `bg`: black bg leaves the
-    dye unchanged; a colour shows through where there's no dye and never darkens the
-    glow. Used at the TERMINAL output so intermediate layers stay background-free and
-    composite cleanly (spec 10)."""
+    A 3-channel (dye-on-black) stack uses the emissive "screen" blend as `_tonemap`'s
+    `bg`: black bg leaves the dye unchanged; a colour shows through where there's no dye
+    and never darkens the glow. A 4-channel (RGBA) stack — e.g. a lyrics layer sent
+    straight to an output — is normal-`over` the background using its alpha, so an
+    opaque black outline stays black. Used at the TERMINAL output so intermediate layers
+    stay background-free and composite cleanly (spec 10)."""
     bg = _hex_rgb(color) if isinstance(color, str) else np.asarray(color, np.float32)
     f = frames.astype(np.float32) / 255.0
-    out = 1.0 - (1.0 - bg[None, None, None, :]) * (1.0 - f)
+    if frames.shape[-1] == 4:  # RGBA: normal over-background using the explicit alpha
+        a = np.clip(f[..., 3:4], 0.0, 1.0)
+        out = f[..., :3] * a + bg[None, None, None, :] * (1.0 - a)
+    else:  # dye-on-black: emissive screen blend
+        out = 1.0 - (1.0 - bg[None, None, None, :]) * (1.0 - f)
     return (np.clip(out, 0, 1) * 255).astype(np.uint8)
 
 
@@ -377,6 +387,68 @@ def _emitter(src: dict, nframes: int):
     return inject
 
 
+def _dye_layout(sources: list) -> tuple[list, bool]:
+    """(dye_modes, vel_wrap) for a source list. Distinct per-source edge modes become
+    separate dye LAYERS over ONE shared velocity field, so a merge of fluids with
+    different `wrap` keeps each component's dye behaviour (wraps vs escapes) while they
+    still interact. The velocity uses one mode: the common one if uniform, else periodic
+    (a torus the whole flow lives on). A single source -> one layer."""
+    src_wrap = [bool(s.get("wrap", True)) for s in (sources or [{}])]
+    distinct = sorted(set(src_wrap)) or [True]  # [True] / [False] / [False, True]
+    dye_modes = ["wrap" if w else "constant" for w in distinct]
+    vel_wrap = distinct[0] if len(distinct) == 1 else True
+    return dye_modes, vel_wrap
+
+
+_MEDIUM_DEFAULTS = {
+    "dissipation": 0.95,
+    "velocity_dissipation": 0.97,
+    "viscosity": 0.0,
+    "vorticity": 5.0,
+}
+
+
+class LayerInjector:
+    """The per-frame "rules" of ONE fluid field over ONE clip/segment window: the medium
+    param tracks + emitter injectors, indexed by a clip-LOCAL frame `i` in
+    `[0, nframes)`. `apply(sim, i)` sets the medium on `sim` and injects that frame's
+    dye/force — it drives an EXTERNAL `FluidSim`, so a persistent field can be advanced
+    across many segments (the continuous song export) or a fresh one per clip
+    (`FluidClip`). `dye_modes` is the field's dye-layer mode list; each source's `wrap`
+    maps to a stable dye-layer index within it (union-of-modes for a shared field)."""
+
+    def __init__(self, params: dict, dye_modes: list):
+        fps = int((params.get("output") or {}).get("fps", params.get("fps", 24)))
+        duration = float(params.get("duration", 10))
+        self.nframes = max(1, int(round(duration * fps)))
+        fl = params.get("fluid", {})
+        # Medium -> per-frame Python-float lists ONCE (vectorized) so the per-frame
+        # update indexes a list instead of calling float() on a numpy scalar each frame.
+        self._medium = {
+            k: _series(fl.get(k, d), self.nframes).tolist() for k, d in _MEDIUM_DEFAULTS.items()
+        }
+        sources = params.get("sources") or [params.get("source", {})]
+        self._emitters = []
+        for s in sources:
+            mode = "wrap" if bool(s.get("wrap", True)) else "constant"
+            layer = dye_modes.index(mode) if mode in dye_modes else 0
+            self._emitters.append((_emitter(s, self.nframes), layer))
+        self._denom = max(1, self.nframes - 1)
+
+    def medium0(self, key: str) -> float:
+        """This field's frame-0 value for a medium param (to seed a fresh FluidSim)."""
+        return self._medium[key][0]
+
+    def apply(self, sim: "FluidSim", i: int) -> None:
+        """Set `sim`'s medium from frame `i` and inject this frame's emitters (no step)."""
+        sim.dissipation = self._medium["dissipation"][i]
+        sim.vel_dissipation = self._medium["velocity_dissipation"][i]
+        sim.viscosity = self._medium["viscosity"][i]
+        sim.vorticity = self._medium["vorticity"][i]
+        for inject, layer in self._emitters:
+            inject(sim, i, self._denom, layer)
+
+
 class FluidClip:
     """A resumable render of one `simulate()` params dict.
 
@@ -412,44 +484,22 @@ class FluidClip:
             self.gh = self.gw = int(params.get("grid", 96))
             self.fps = int(params.get("fps", 24))
             bg_rgb = None
-        duration = float(params.get("duration", 10))
-        self.nframes = max(1, int(round(duration * self.fps)))
-        fl = params.get("fluid", {})
         sources = params.get("sources") or [params.get("source", {})]
-
-        # Per-source edge mode. Distinct modes become separate dye LAYERS that share
-        # the ONE velocity field, so a merge of fluids with different `wrap` keeps
-        # each component's dye behaviour (wraps vs escapes) while they still
-        # interact. The velocity uses one mode: the common one if uniform, else
-        # periodic (a torus the whole flow lives on). A single source -> one layer.
-        src_wrap = [bool(s.get("wrap", True)) for s in sources]
-        distinct = sorted(set(src_wrap))  # [True] / [False] / [False, True]
-        dye_modes = ["wrap" if w else "constant" for w in distinct]
-        vel_wrap = distinct[0] if len(distinct) == 1 else True
-        src_layer = [distinct.index(w) for w in src_wrap]
-
-        # Medium params -> per-frame series FIRST, so the sim can be seeded from
-        # frame 0 and a wired pulse (an array) doesn't blow up float() in the
-        # constructor. advance() overwrites these attributes each frame.
-        # `.tolist()` converts each float32 series to Python floats ONCE (one
-        # vectorized call) so the per-frame medium update indexes a list instead of
-        # calling float() on a numpy scalar every frame.
-        self._diss = _series(fl.get("dissipation", 0.95), self.nframes).tolist()
-        self._vdis = _series(fl.get("velocity_dissipation", 0.97), self.nframes).tolist()
-        self._visc = _series(fl.get("viscosity", 0.0), self.nframes).tolist()
-        self._vort = _series(fl.get("vorticity", 5.0), self.nframes).tolist()
+        dye_modes, vel_wrap = _dye_layout(sources)
+        # The per-frame "rules" (medium tracks + emitter injectors). LayerInjector holds
+        # the same math the standalone clip used; here it drives our own sim.
+        self._layer = LayerInjector(params, dye_modes)
+        self.nframes = self._layer.nframes
         self._sim = FluidSim(
             self.gh,
             self.gw,
-            dissipation=self._diss[0],
-            vel_dissipation=self._vdis[0],
-            viscosity=self._visc[0],
-            vorticity=self._vort[0],
+            dissipation=self._layer.medium0("dissipation"),
+            vel_dissipation=self._layer.medium0("velocity_dissipation"),
+            viscosity=self._layer.medium0("viscosity"),
+            vorticity=self._layer.medium0("vorticity"),
             wrap=vel_wrap,
             dye_modes=dye_modes,
         )
-        self._emitters = list(zip([_emitter(s, self.nframes) for s in sources], src_layer))
-        self._denom = max(1, self.nframes - 1)
         self._bg = bg_rgb if apply_bg else None
         self._cursor = 0
 
@@ -463,14 +513,7 @@ class FluidClip:
         sim = self._sim
         frames = np.empty((max(0, b - a), self.gh, self.gw, 3), np.uint8)
         for i in range(a, b):
-            # Medium params can change each frame -> set on the sim before stepping.
-            # FluidSim.step() reads these attributes each call, so this Just Works.
-            sim.dissipation = self._diss[i]
-            sim.vel_dissipation = self._vdis[i]
-            sim.viscosity = self._visc[i]
-            sim.vorticity = self._vort[i]
-            for inject, layer in self._emitters:
-                inject(sim, i, self._denom, layer)
+            self._layer.apply(sim, i)  # set medium + inject this frame's emitters
             sim.step()
             frames[i - a] = _tonemap(sim.current_dye(), bg=self._bg)
         self._cursor = b

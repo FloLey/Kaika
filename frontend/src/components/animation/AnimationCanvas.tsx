@@ -20,6 +20,7 @@ interface AnimationCanvasProps {
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onGraphChange: (g: Graph) => void;
+  setFinalOutput?: NodeCtx["setFinalOutput"];
 }
 
 // 07 — the per-segment animation container (the VIEW). The graph state + mutation
@@ -42,6 +43,7 @@ export default function AnimationCanvas({
   isFullscreen,
   onToggleFullscreen,
   onGraphChange: commitGraph,
+  setFinalOutput,
 }: AnimationCanvasProps) {
   const {
     graph,
@@ -56,7 +58,17 @@ export default function AnimationCanvas({
     onConnect,
     onEdgeDelete,
     onDeleteSelection,
-  } = useGraphEditor({ segment, stems, job, output, lyricLines, groupClock, groupPlaying, commitGraph });
+  } = useGraphEditor({
+    segment,
+    stems,
+    job,
+    output,
+    lyricLines,
+    groupClock,
+    groupPlaying,
+    commitGraph,
+    setFinalOutput,
+  });
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<View>(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom

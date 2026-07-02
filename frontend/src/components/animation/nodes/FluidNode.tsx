@@ -4,7 +4,7 @@ import NodeFrame, { Port } from "./NodeFrame";
 import { argHelp } from "../../../lib/paramHelp";
 import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
-import { patchStatic } from "./fluidBindings";
+import { patchStatic, setFluidLayer } from "./fluidBindings";
 import { ParamRow, GroupAnchor } from "./FluidParamRow";
 import type { NodeProps } from "./nodeProps";
 import type { FluidData, FluidParam } from "../../../lib/types";
@@ -68,6 +68,10 @@ export default function FluidNode({
   }, [open, onLayoutChange]);
 
   const setStatic = (patch: Record<string, unknown>) => onGraphChange(patchStatic(node.id, patch));
+  // Cross-segment continuity layer (data.layer). Clamped to a positive integer; the
+  // final export carries a layer's simulation forward across segment cuts.
+  const setLayer = (v: number) =>
+    onGraphChange(setFluidLayer(node.id, Number.isFinite(v) && v >= 1 ? Math.round(v) : 1));
 
   const detach = (key: string) => onDetach?.(node.id, key);
 
@@ -151,6 +155,16 @@ export default function FluidNode({
             {s.wrap === false ? "open edges" : ""}
           </div>
         )}
+        <label className="ctl ctl-num anim-layer" title="cross-segment continuity — outputs sharing a layer number carry their simulation across segment cuts in the final export">
+          <span className="ctl-label">layer</span>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={data.layer ?? 1}
+            onChange={(e) => setLayer(parseInt(e.target.value, 10))}
+          />
+        </label>
       </div>
 
       {/* Param input ports, grouped + collapsible. */}

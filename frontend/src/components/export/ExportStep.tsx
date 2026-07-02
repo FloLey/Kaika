@@ -1,0 +1,384 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
+import * as api from "../../lib/api";
+import { fmtTime } from "../../lib/mel";
+import { aspectOf } from "../../lib/output";
+import type { ExportSettings } from "../../lib/export";
+import type { Segment } from "../../lib/types";
+
+interface ExportStepProps {
+  job?: string;
+  segments: Segment[];
+  exportSettings: ExportSettings;
+  setExportSettings: (o: ExportSettings) => void;
+  onBack: () => void;
+}
+
+// The final-export stage: render the WHOLE track in HD by stitching each segment's
+// marked "final" output. Owns the HD settings form, a per-segment readiness
+// checklist (every segment must have a final output), and the progressive render —
+// it starts the backend export and polls it the same way an OutputNode streams a
+// single clip: the preview grows block by block while running, then swaps to the
+// finished file. Cancel stops it after the current block.
+export default function ExportStep({
+  job,
+  segments,
+  exportSettings,
+  setExportSettings,
+  onBack,
+}: ExportStepProps) {
+  const set = (patch: Partial<ExportSettings>) => setExportSettings({ ...exportSettings, ...patch });
+  const clampDim = (v: number) => Math.max(16, Math.min(4096, Math.round(v || 0)));
+
+  // Aspect-ratio lock: when on, editing one dimension derives the other so the export
+  // keeps its shape. `ratio` (w/h) is (re)captured whenever the lock is engaged.
+  const [locked, setLocked] = useState(true);
+  const [ratio, setRatio] = useState(() => exportSettings.width / exportSettings.height);
+  const toggleLock = () =>
+    setLocked((was) => {
+      if (!was) setRatio(exportSettings.width / exportSettings.height);
+      return !was;
+    });
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoUrl, setVideoUrl] = useState(""); // growing preview while running, final file when done
+  const [finalUrl, setFinalUrl] = useState(""); // the finished clip (enables the download link)
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const activeRender = useRef<string | null>(null); // render_id we're polling
+  const lastTime = useRef(0); // playback position, preserved as the growing preview swaps src
+  const mounted = useRef(true); // false after unmount → the poll stops touching state (never cancels)
+
+  const fps = exportSettings.fps || 30;
+  // Persist the in-flight render id so leaving and returning to this stage re-attaches to
+  // the SAME backend render instead of losing it (leaving no longer cancels the render).
+  const storeKey = job ? `export-render:${job}` : null;
+
+  // Readiness: every segment needs a marked final output (⚠ otherwise). Generate is
+  // disabled until they all do — the backend would 400 anyway, but flag it up front.
+  const unmarked = segments.filter((s) => !s.finalOutputId);
+  const ready = segments.length > 0 && unmarked.length === 0;
+
+  // Poll a running export into the UI. Shared by generate() (fresh start) and the resume
+  // effect (returning to the stage). Stops updating state once unmounted, but NEVER
+  // cancels the backend render — only the explicit Cancel button does that.
+  const pollRender = useCallback(
+    async (renderId: string) => {
+      activeRender.current = renderId;
+      setBusy(true);
+      setError("");
+      let terminal = false;
+      try {
+        for (;;) {
+          const st = await api.getExportStatus(renderId);
+          if (!mounted.current || activeRender.current !== renderId) return; // left / superseded
+          if (st.total) setProgress({ done: st.frames_done, total: st.total });
+          if (st.state === "running") {
+            if (st.preview_url) setVideoUrl(st.preview_url); // grows block by block
+            await new Promise((r) => setTimeout(r, 500));
+            continue;
+          }
+          terminal = true;
+          if (st.state === "done") {
+            if (st.url) {
+              setVideoUrl(st.url);
+              setFinalUrl(st.url);
+            }
+          } else if (st.state === "error") {
+            throw new Error(st.error || "export failed");
+          }
+          break; // done | error | cancelled
+        }
+      } catch (e) {
+        terminal = true; // a failed poll (e.g. the render expired) ends this attempt
+        if (mounted.current) setError((e as Error)?.message || String(e));
+      } finally {
+        if (terminal) {
+          if (storeKey) sessionStorage.removeItem(storeKey);
+          activeRender.current = null;
+          if (mounted.current) {
+            setBusy(false);
+            setProgress(null);
+          }
+        }
+      }
+    },
+    [storeKey]
+  );
+
+  // Resume an in-flight render when returning to the stage (it kept running while away).
+  // If the stored render is already gone, the poll's first fetch clears it.
+  useEffect(() => {
+    mounted.current = true;
+    const pending = storeKey ? sessionStorage.getItem(storeKey) : null;
+    if (pending) pollRender(pending);
+    return () => {
+      mounted.current = false; // stop touching state; the backend render keeps running
+    };
+  }, [storeKey, pollRender]);
+
+  // Preserve the playback position as the growing preview (or the final clip) swaps
+  // the <video> src — otherwise every new block would restart from 0 (mirrors the
+  // OutputNode growing-preview approach).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !videoUrl) return undefined;
+    const save = () => {
+      if (v.currentTime) lastTime.current = v.currentTime;
+    };
+    const restore = () => {
+      if (lastTime.current > 0 && lastTime.current < v.duration) v.currentTime = lastTime.current;
+    };
+    v.addEventListener("timeupdate", save);
+    v.addEventListener("loadedmetadata", restore);
+    return () => {
+      v.removeEventListener("timeupdate", save);
+      v.removeEventListener("loadedmetadata", restore);
+    };
+  }, [videoUrl]);
+
+  // Kick off the full-track export, persist its id (so it survives leaving the stage),
+  // then poll it via pollRender. The preview updates as each block lands.
+  async function generate() {
+    if (!job || busy) return;
+    setBusy(true);
+    setError("");
+    setVideoUrl("");
+    setFinalUrl("");
+    setProgress(null);
+    lastTime.current = 0;
+    let started;
+    try {
+      started = await api.startExport(job);
+    } catch (e) {
+      setError((e as Error)?.message || String(e));
+      setBusy(false);
+      return;
+    }
+    if (storeKey) sessionStorage.setItem(storeKey, started.render_id);
+    pollRender(started.render_id); // manages busy/progress/preview from here
+  }
+
+  // Explicit cancel: stop the backend render and forget it. This is now the ONLY path
+  // that cancels — leaving the stage keeps the render running.
+  function cancel() {
+    if (activeRender.current) api.cancelExport(activeRender.current);
+    if (storeKey) sessionStorage.removeItem(storeKey);
+    activeRender.current = null;
+    setBusy(false);
+    setProgress(null);
+  }
+
+  const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const renderLabel = progress
+    ? `rendering ${Math.round(progress.done / fps)}s / ${Math.round(progress.total / fps)}s`
+    : "starting…";
+  const aspect = aspectOf(exportSettings);
+
+  return (
+    <div className="export">
+      <div className="export-head">
+        <span className="section-title">FINAL EXPORT · RENDER THE WHOLE TRACK IN HD</span>
+        <button className="btn sm" onClick={onBack}>
+          ↩ studio
+        </button>
+      </div>
+
+      <div className="export-body">
+        <div className="export-settings">
+          {/* HD render settings */}
+          <div className="out-field">
+            <span className="out-label">size</span>
+            <div className="out-size">
+              <input
+                type="number"
+                className="hz-input"
+                min={16}
+                max={4096}
+                step={2}
+                value={exportSettings.width}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  const w = clampDim(parseFloat(e.target.value));
+                  set(locked ? { width: w, height: clampDim(w / ratio) } : { width: w });
+                }}
+              />
+              <span className="out-x">×</span>
+              <input
+                type="number"
+                className="hz-input"
+                min={16}
+                max={4096}
+                step={2}
+                value={exportSettings.height}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  const h = clampDim(parseFloat(e.target.value));
+                  set(locked ? { height: h, width: clampDim(h * ratio) } : { height: h });
+                }}
+              />
+              <span className="out-unit">px</span>
+              <button
+                type="button"
+                className={"iconbtn out-lock" + (locked ? " on" : "")}
+                title={
+                  locked
+                    ? "Aspect ratio locked — editing one side scales the other. Click to unlock."
+                    : "Lock aspect ratio to the current shape"
+                }
+                aria-label="Lock aspect ratio"
+                aria-pressed={locked}
+                onClick={toggleLock}
+              >
+                {locked ? "🔒" : "🔓"}
+              </button>
+            </div>
+          </div>
+
+          <div className="out-field">
+            <span className="out-label">fps</span>
+            <input
+              type="number"
+              className="hz-input"
+              min={1}
+              max={120}
+              step={1}
+              value={exportSettings.fps}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                set({ fps: Math.max(1, Math.min(120, Math.round(parseFloat(e.target.value) || 0))) })
+              }
+            />
+          </div>
+
+          <div className="out-field">
+            <span className="out-label">detail / grid</span>
+            <input
+              type="number"
+              className="hz-input"
+              min={16}
+              max={1024}
+              step={8}
+              value={exportSettings.gridCells}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                set({
+                  gridCells: Math.max(16, Math.min(1024, Math.round(parseFloat(e.target.value) || 0))),
+                })
+              }
+            />
+            <span className="export-hint">higher = crisper simulation, but slower to render</span>
+          </div>
+
+          <div className="out-field">
+            <span className="out-label">background</span>
+            <div className="out-bg">
+              <input
+                type="color"
+                className="out-color"
+                value={exportSettings.background}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ background: e.target.value })}
+              />
+              <span className="out-bg-hex">{exportSettings.background}</span>
+            </div>
+          </div>
+
+          {/* per-segment readiness checklist */}
+          <div className="export-checklist">
+            <div className="export-checklist-head">SEGMENTS</div>
+            {segments.length === 0 && (
+              <div className="export-hint">no segments to export</div>
+            )}
+            {segments.map((s) => {
+              const marked = !!s.finalOutputId;
+              return (
+                <div
+                  key={s.id}
+                  className={"export-seg" + (marked ? " ok" : " warn")}
+                  title={
+                    marked
+                      ? "a final output is marked for this segment"
+                      : "no final output — mark one in the editor (★ on an output card)"
+                  }
+                >
+                  <span className="export-seg-icon">{marked ? "✓" : "⚠"}</span>
+                  <span className="export-seg-label">{s.label}</span>
+                  <span className="export-seg-time">
+                    {fmtTime(s.start)} – {fmtTime(s.end)}
+                  </span>
+                  {!marked && (
+                    <span className="export-seg-note">no final output — mark one in the editor</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="export-actions">
+            {busy ? (
+              <button className="btn on" onClick={cancel}>
+                ✕ cancel
+              </button>
+            ) : (
+              <button
+                className="btn on"
+                onClick={generate}
+                disabled={!ready || !job}
+                title={
+                  ready
+                    ? "Render the whole track in HD"
+                    : "Mark a final output on every segment first"
+                }
+              >
+                ▸ Generate
+              </button>
+            )}
+            {!ready && segments.length > 0 && (
+              <span className="export-hint">
+                {unmarked.length} segment{unmarked.length === 1 ? "" : "s"} still need a final output
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* preview + progress */}
+        <div className="export-preview">
+          <div
+            className="anim-output-well export-well"
+            style={{ "--out-aspect": aspect } as CSSProperties}
+          >
+            {videoUrl ? (
+              <video
+                ref={videoRef}
+                className="anim-output-video"
+                src={videoUrl}
+                muted
+                playsInline
+                preload="auto"
+                controls={!!finalUrl}
+                loop={!finalUrl}
+                autoPlay
+              />
+            ) : (
+              !busy &&
+              !error && <div className="anim-output-empty">no export yet — press Generate</div>
+            )}
+            {error && <div className="anim-output-err">{error}</div>}
+          </div>
+
+          {busy && (
+            <div className="export-progress">
+              <div className="export-bar">
+                <div className="export-bar-fill" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="export-progress-label">{renderLabel}</div>
+            </div>
+          )}
+
+          {finalUrl && (
+            <a className="btn export-download" href={finalUrl} download>
+              ⬇ download video
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

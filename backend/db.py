@@ -119,20 +119,26 @@ def save_segments(
     step: Optional[str] = None,
     title: Optional[str] = None,
     output: Optional[dict] = None,
+    export: Optional[dict] = None,
 ) -> bool:
-    """Update the editable tree (segments + per-segment tracks), and optionally
-    the step/title and the project-wide `output` render settings. Used by /segment
-    to seed the proposal and by the frontend autosave. `output=None` preserves the
-    stored value. Returns False if the project doesn't exist."""
+    """Update the editable tree (segments + per-segment tracks), and optionally the
+    step/title, the project-wide `output` render settings, and the `export` (HD final
+    render) settings. Used by /segment to seed the proposal and by the frontend
+    autosave. A None `output`/`export` preserves the stored value. Returns False if the
+    project doesn't exist."""
     with _connect() as conn:
         cur = conn.execute(
             """
             UPDATE projects SET
               data = jsonb_set(
                        jsonb_set(
-                         jsonb_set(data, '{segments}', %(segments)s, true),
-                         '{output}',
-                         COALESCE(%(output)s::jsonb, data->'output', '{}'::jsonb),
+                         jsonb_set(
+                           jsonb_set(data, '{segments}', %(segments)s, true),
+                           '{output}',
+                           COALESCE(%(output)s::jsonb, data->'output', '{}'::jsonb),
+                           true),
+                         '{export}',
+                         COALESCE(%(export)s::jsonb, data->'export', '{}'::jsonb),
                          true),
                        '{schema_version}', %(schema_version)s, true),
               step = COALESCE(%(step)s, step),
@@ -145,6 +151,7 @@ def save_segments(
                 "step": step,
                 "title": title,
                 "output": Jsonb(output) if output is not None else None,
+                "export": Jsonb(export) if export is not None else None,
                 "schema_version": Jsonb(SCHEMA_VERSION),
                 "job_id": job_id,
             },

@@ -8,6 +8,7 @@ import {
   setCombineMode,
   setCombineOpacity,
   setCombineMedium,
+  setCombineLayer,
   addCombineInput,
   removeCombineInput,
 } from "../../../lib/graphModel";
@@ -127,6 +128,22 @@ export default function CombineNode({
           + input
         </button>
       </div>
+
+      {/* Cross-segment continuity layer (data.layer): outputs sharing a layer number
+          carry their composed simulation across segment cuts in the final export. */}
+      <label className="ctl ctl-num anim-layer" title="cross-segment continuity — same layer number carries the composed simulation across segment cuts in the final export">
+        <span className="ctl-label">layer</span>
+        <input
+          type="number"
+          min={1}
+          step={1}
+          value={d.layer ?? 1}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            const v = parseInt(e.target.value, 10);
+            onGraphChange((g) => setCombineLayer(g, node.id, Number.isFinite(v) && v >= 1 ? v : 1));
+          }}
+        />
+      </label>
 
       {mode === "merge" && (
         <div className="anim-combine-medium">

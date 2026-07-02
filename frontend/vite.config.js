@@ -15,6 +15,8 @@ export default defineConfig({
       "/resolve": "http://127.0.0.1:5000",
       "/playground": "http://127.0.0.1:5000",
       "/animate": "http://127.0.0.1:5000",
+      "/export": "http://127.0.0.1:5000",
+      "/fonts": "http://127.0.0.1:5000",
       "/fluid": "http://127.0.0.1:5000",
       "/logs": "http://127.0.0.1:5000",
       "/projects": "http://127.0.0.1:5000",

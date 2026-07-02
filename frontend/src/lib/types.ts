@@ -45,6 +45,8 @@ export interface Signal {
 
 // A contiguous time range [start, end] owning a list of signals and (optionally)
 // an animation graph. `graph` is null when no animation has been built yet.
+// `finalOutputId` is the id of the output node marked "final" for this segment —
+// the one the Final export stage renders (undefined until the user marks one).
 export interface Segment {
   id: string;
   label: string;
@@ -52,6 +54,7 @@ export interface Segment {
   end: number;
   signals: Signal[];
   graph?: Graph | null;
+  finalOutputId?: string;
 }
 
 // ---- value-source binding ----------------------------------------------------
@@ -87,6 +90,7 @@ export interface FluidPort {
 export interface FluidData {
   static: FluidStatic;
   ports: Record<string, FluidPort>;
+  layer?: number; // cross-segment continuity key (final export carries a layer's sim forward)
 }
 
 export interface CombineSlot {
@@ -103,6 +107,7 @@ export interface CombineData {
   mode: "merge" | "stack";
   inputs: CombineSlot[];
   medium: CombineMedium;
+  layer?: number; // cross-segment continuity key (final export carries a layer's sim forward)
 }
 
 export interface PointsData {
@@ -208,10 +213,17 @@ export type LyricsAlign = "left" | "center" | "right";
 export type LyricsCase = "none" | "upper" | "lower";
 export type LyricsReveal = "line" | "word";
 export interface LyricsData {
+  font: string; // key of a bundled font (GET /fonts); see backend/fonts.py
   position: LyricsPosition;
   align: LyricsAlign;
   case: LyricsCase;
   reveal: LyricsReveal;
+  box_x: number; // text box, fractions 0..1 of the frame
+  box_y: number;
+  box_w: number;
+  box_h: number;
+  outline: boolean; // black outline under the fill (readable over anything)
+  outlineWidth: number; // outline thickness as a fraction of the font size
   ports: Record<string, FluidPort>;
 }
 

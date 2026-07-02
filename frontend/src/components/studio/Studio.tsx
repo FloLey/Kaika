@@ -29,6 +29,7 @@ interface StudioProps {
   setOutput: (o: OutputSettingsT) => void;
   lyricLines?: unknown[];
   onEditSplit?: () => void;
+  onExport?: () => void;
 }
 
 // Stage 3 — the studio. Owns all playback/ephemeral state (rail open, what's
@@ -48,6 +49,7 @@ export default function Studio({
   setOutput,
   lyricLines,
   onEditSplit,
+  onExport,
 }: StudioProps) {
   const [railOpen, setRailOpen] = useState(true);
   // The Playground is about the cards, so it lands on the animation tab; a normal
@@ -103,10 +105,13 @@ export default function Studio({
     handleSolo,
   } = useStudioPlayback({ activeSeg, winStart, winEnd, segLen });
 
-  function selectSegment(id: string) {
-    resetTransport();
-    setActiveSegId(id);
-  }
+  const selectSegment = useCallback(
+    (id: string) => {
+      resetTransport();
+      setActiveSegId(id);
+    },
+    [resetTransport, setActiveSegId]
+  );
 
   // ---- per-segment signal edits --------------------------------------------
   const editActiveSignals = useCallback(
@@ -155,6 +160,18 @@ export default function Studio({
     [activeSegId, setSegments]
   );
 
+  // Mark (or clear, with an empty id) the active segment's "final" output — the one
+  // the export stage renders. Same setSegments path as a graph edit, so App's
+  // autosave persists it. An OutputNode toggles this via ctx.setFinalOutput.
+  const setFinalOutput = useCallback(
+    (nodeId: string) => {
+      setSegments((prev) =>
+        prev.map((s) => (s.id === activeSegId ? { ...s, finalOutputId: nodeId || undefined } : s))
+      );
+    },
+    [activeSegId, setSegments]
+  );
+
   // Copy the current segment's card layout (its whole animation graph) onto the NEXT
   // segment, so you can build once and reuse the pipeline down the track. `copyLayout`
   // deep-copies the graph AND rewires its signal cards onto the next segment's own
@@ -173,7 +190,8 @@ export default function Studio({
     }
     const updated = copyLayout(activeSeg, nextSeg);
     setSegments((prev) => prev.map((s) => (s.id === nextSeg.id ? updated : s)));
-  }, [nextSeg, activeSeg, setSegments]);
+    selectSegment(nextSeg.id); // follow the copy onto the next segment
+  }, [nextSeg, activeSeg, setSegments, selectSegment]);
 
   return (
     <div className={"studio" + (railOpen ? "" : " rail-collapsed")}>
@@ -210,6 +228,15 @@ export default function Studio({
             <button className="btn sm edit-split" onClick={onEditSplit}>
               ↩ edit split
             </button>
+            {onExport && (
+              <button
+                className="btn sm final-export"
+                onClick={onExport}
+                title="Render the whole track in HD (mark a final output per segment first)"
+              >
+                Final export ▸
+              </button>
+            )}
             {tab === "animation" && (
               <button
                 className="btn sm"
@@ -320,6 +347,7 @@ export default function Studio({
                 onToggleFullscreen={toggleFullscreen}
                 onOpenOutput={() => setShowOutput(true)}
                 onGraphChange={setActiveGraph}
+                setFinalOutput={setFinalOutput}
               />
             )}
 

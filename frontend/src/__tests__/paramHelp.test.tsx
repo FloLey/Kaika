@@ -27,7 +27,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   pattern: 6, // layout/count/radius/rotation/offsetX/offsetY (seed hidden unless scatter)
   "animate-points": 3, // mode/amount/rate (angle/length/taper are mode-specific)
   "merge-points": 0,
-  lyrics: 9, // 4 selects + 5 ports
+  lyrics: 16, // font + 4 selects + box(x/y/w/h) + outline + outlineWidth + 5 ports
 };
 
 const HELPERS = {
@@ -43,7 +43,10 @@ const HELPERS = {
 const INLINE_ARGS: Record<string, string[]> = {
   fluid: ["enabled", "radial", "wrap"],
   color: ["mode"],
-  lyrics: ["position", "align", "case", "reveal"],
+  lyrics: [
+    "font", "position", "align", "case", "reveal",
+    "box_x", "box_y", "box_w", "box_h", "outline", "outlineWidth",
+  ],
   pattern: ["layout", "count", "radius", "rotation", "offsetX", "offsetY", "seed"],
   lfo: ["shape", "rateMode", "rate", "phase", "duty"],
   noise: ["rate", "octaves", "seed"],

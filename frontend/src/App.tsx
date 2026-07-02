@@ -5,11 +5,13 @@ import ProjectList from "./components/ProjectList";
 import UploadStep from "./components/upload/UploadStep";
 import ReviewStep from "./components/review/ReviewStep";
 import Studio from "./components/studio/Studio";
+import ExportStep from "./components/export/ExportStep";
 import Processing from "./components/Processing";
 import LogsPanel from "./components/LogsPanel";
 import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
+import { EXPORT_DEFAULTS, withExportDefaults } from "./lib/export";
 import { useLogPoll } from "./lib/useLogPoll";
 import * as logbus from "./lib/logbus";
 import * as api from "./lib/api";
@@ -36,6 +38,8 @@ export default function App() {
   const [activeSegId, setActiveSegId] = useState<string | null>(null);
   // Project-wide animation output settings (size/quality/fps/background).
   const [output, setOutput] = useState(OUTPUT_DEFAULTS);
+  // Final-export settings (HD size/fps/detail/background) — used by the export stage.
+  const [exportSettings, setExportSettings] = useState(EXPORT_DEFAULTS);
   const lastSaved = useRef("");
 
   // ---- logs: panel toggle, error badge, backend polling --------------------
@@ -48,8 +52,8 @@ export default function App() {
 
   // ---- autosave (debounced) -------------------------------------------------
   useEffect(() => {
-    if (!job || (step !== "review" && step !== "studio")) return;
-    const payload = { step, segments: serializeSegments(segments), output };
+    if (!job || (step !== "review" && step !== "studio" && step !== "export")) return;
+    const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
     const jsonStr = JSON.stringify(payload);
     if (jsonStr === lastSaved.current) return;
     const t = setTimeout(() => {
@@ -67,7 +71,7 @@ export default function App() {
         });
     }, 800);
     return () => clearTimeout(t);
-  }, [segments, step, job, output]);
+  }, [segments, step, job, output, exportSettings]);
 
   // ---- new track: upload + propose -----------------------------------------
   async function handleUpload({
@@ -137,6 +141,8 @@ export default function App() {
       setActiveSegId(segs[0]?.id || null);
       const loadedOutput = withOutputDefaults(p.output);
       setOutput(loadedOutput);
+      const loadedExport = withExportDefaults(p.export);
+      setExportSettings(loadedExport);
       // If hydration added missing default signals, leave lastSaved empty so the
       // autosave persists them; otherwise mark as already-saved (no redundant PUT).
       const loadedCount = (p.segments || []).reduce(
@@ -150,6 +156,7 @@ export default function App() {
               step: p.step || "studio",
               segments: serializeSegments(segs),
               output: loadedOutput,
+              export: loadedExport,
             })
           : "";
       setStep(p.step || "studio");
@@ -189,7 +196,7 @@ export default function App() {
   }
 
   return (
-    <div className={"wrap" + (step === "studio" ? " wide" : "")}>
+    <div className={"wrap" + (step === "studio" || step === "export" ? " wide" : "")}>
       <header>
         <div className="brand">
           <h1>
@@ -206,7 +213,7 @@ export default function App() {
               ⚠ save failed
             </span>
           )}
-          {(step === "review" || step === "studio" || step === "upload") && (
+          {(step === "review" || step === "studio" || step === "upload" || step === "export") && (
             <button className="btn" onClick={toProjects}>
               ↩ projects
             </button>
@@ -280,6 +287,17 @@ export default function App() {
           setOutput={setOutput}
           lyricLines={lyricLines}
           onEditSplit={() => setStep("review")}
+          onExport={() => setStep("export")}
+        />
+      )}
+
+      {step === "export" && (
+        <ExportStep
+          job={job ?? undefined}
+          segments={segments}
+          exportSettings={exportSettings}
+          setExportSettings={setExportSettings}
+          onBack={() => setStep("studio")}
         />
       )}
 

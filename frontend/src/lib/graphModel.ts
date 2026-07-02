@@ -142,7 +142,8 @@ export function fluidNode(x: number, y: number): FluidNode {
 //   v9: + shaper `delay`(ms)/`wrap` fields for time-shifting a value.
 //  v10: removed the transform / grade video-FX cards — normalizeGraph drops them (and
 //       any pre-v8 `color`→`grade` renames) as unknown types.
-export const GRAPH_VERSION = 10;
+//  v11: lyrics card gained font, a text box (box_x/y/w/h), and outline/outlineWidth.
+export const GRAPH_VERSION = 11;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -286,7 +287,20 @@ export function lyricsNode(x: number, y: number): LyricsNode {
     type: "lyrics",
     x,
     y,
-    data: { position: "bottom", align: "center", case: "none", reveal: "word", ports: coercePorts("lyrics", undefined) },
+    data: {
+      font: "inter",
+      position: "bottom",
+      align: "center",
+      case: "none",
+      reveal: "word",
+      box_x: 0.05,
+      box_y: 0.08,
+      box_w: 0.9,
+      box_h: 0.84,
+      outline: true,
+      outlineWidth: 0.12,
+      ports: coercePorts("lyrics", undefined),
+    },
   };
 }
 
@@ -429,6 +443,10 @@ export function setCombineMedium(
   value: number
 ): Graph {
   return patchCombine(graph, combineId, (d) => ({ ...d, medium: { ...d.medium, [key]: value } }));
+}
+// Cross-segment continuity layer (data.layer) — carries the composed sim across cuts.
+export function setCombineLayer(graph: Graph, combineId: string, layer: number): Graph {
+  return patchCombine(graph, combineId, (d) => ({ ...d, layer }));
 }
 
 // Whether `nodeId` resolves to fluid emitter(s) for a merge (no stack upstream).
@@ -629,11 +647,19 @@ export function normalizeGraph(graph: Graph): Graph {
     }
     if (n.type === "lyrics") {
       const d = (n.data || {}) as Partial<LyricsData>;
+      const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
       const data: LyricsData = {
+        font: typeof d.font === "string" ? d.font : "inter",
         position: d.position || "bottom",
         align: d.align || "center",
         case: d.case || "none",
         reveal: d.reveal || "word",
+        box_x: num(d.box_x, 0.05),
+        box_y: num(d.box_y, 0.08),
+        box_w: num(d.box_w, 0.9),
+        box_h: num(d.box_h, 0.84),
+        outline: d.outline !== false,
+        outlineWidth: num(d.outlineWidth, 0.12),
         ports: coercePorts("lyrics", d.ports),
       };
       if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;

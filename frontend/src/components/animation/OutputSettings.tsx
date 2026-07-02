@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
   ORIENTATION_PRESETS,
@@ -21,6 +21,21 @@ interface OutputSettingsProps {
 export default function OutputSettings({ output, onChange, onClose }: OutputSettingsProps) {
   const set = (patch: Partial<Output>) => onChange({ ...output, ...patch });
   const preset = presetFor(output);
+
+  // Aspect-ratio lock: when on, editing one dimension derives the other so the shape
+  // is preserved. `ratio` (w/h) is (re)captured when the lock engages or an
+  // orientation preset is picked — so custom edits then follow that shape.
+  const [locked, setLocked] = useState(true);
+  const [ratio, setRatio] = useState(() => output.width / output.height);
+  const toggleLock = () =>
+    setLocked((was) => {
+      if (!was) setRatio(output.width / output.height); // capture current shape on lock
+      return !was;
+    });
+  const pickOrientation = (w: number, h: number) => {
+    setRatio(w / h); // the lock follows the chosen orientation
+    set({ width: w, height: h });
+  };
 
   // ESC closes; lock the page scroll while open.
   useEffect(() => {
@@ -66,7 +81,7 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
                 <button
                   key={p.key}
                   className={"btn sm" + (preset === p.key ? " on" : "")}
-                  onClick={() => set({ width: p.width, height: p.height })}
+                  onClick={() => pickOrientation(p.width, p.height)}
                 >
                   {p.label} <span className="out-ratio">{p.ratio}</span>
                 </button>
@@ -85,9 +100,10 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
                 max={4096}
                 step={2}
                 value={output.width}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  set({ width: clampDim(parseFloat(e.target.value)) })
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  const w = clampDim(parseFloat(e.target.value));
+                  set(locked ? { width: w, height: clampDim(w / ratio) } : { width: w });
+                }}
               />
               <span className="out-x">×</span>
               <input
@@ -97,11 +113,26 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
                 max={4096}
                 step={2}
                 value={output.height}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  set({ height: clampDim(parseFloat(e.target.value)) })
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  const h = clampDim(parseFloat(e.target.value));
+                  set(locked ? { height: h, width: clampDim(h * ratio) } : { height: h });
+                }}
               />
               <span className="out-unit">px</span>
+              <button
+                type="button"
+                className={"iconbtn out-lock" + (locked ? " on" : "")}
+                title={
+                  locked
+                    ? "Aspect ratio locked — editing one side scales the other. Click to unlock."
+                    : "Lock aspect ratio to the current shape"
+                }
+                aria-label="Lock aspect ratio"
+                aria-pressed={locked}
+                onClick={toggleLock}
+              >
+                {locked ? "🔒" : "🔓"}
+              </button>
             </div>
           </div>
 

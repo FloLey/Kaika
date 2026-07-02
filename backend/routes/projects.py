@@ -48,6 +48,7 @@ def project_get(job_id: str):
             "stems": data.get("stems", {}),
             "segments": data.get("segments", []),
             "output": data.get("output") or {},
+            "export": data.get("export") or {},
             "vocal_envelope": analysis.get("vocal_envelope", []),
             "envelope_times": analysis.get("envelope_times", []),
             "lyric_lines": analysis.get("lyric_lines", []),
@@ -64,6 +65,7 @@ def project_save(job_id: str):
         step=body.get("step"),
         title=body.get("title"),
         output=body.get("output"),
+        export=body.get("export"),
     )
     if not ok:
         abort(404)

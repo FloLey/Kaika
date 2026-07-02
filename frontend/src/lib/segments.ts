@@ -29,6 +29,7 @@ export interface RawSegment {
   end: number;
   signals?: RawSignal[];
   graph?: Graph | null;
+  finalOutputId?: string;
 }
 
 export const LABELS = [
@@ -246,6 +247,9 @@ export function hydrateSegments(raw: RawSegment[] | null | undefined, stems: Ste
     // owns its own graph, so they never collide across segments). null = no
     // animation built yet.
     graph: s.graph || null,
+    // The "final" output node id survives the reload alongside the graph (node
+    // ids are stable), so the export stage's per-segment mark persists.
+    finalOutputId: s.finalOutputId,
   }));
 }
 
@@ -259,6 +263,8 @@ export function serializeSegments(segments: Segment[]): RawSegment[] {
     signals: serializeSignals(s.signals),
     // The graph is a plain JSON object — carry it untouched (null if absent).
     graph: s.graph || null,
+    // Persist the marked "final" output (undefined until one is marked).
+    finalOutputId: s.finalOutputId,
   }));
 }
 
@@ -332,7 +338,9 @@ export function splitAt(segments: Segment[], t: number): Segment[] {
 // signals: each referenced band is matched to an existing target signal (same stem +
 // frequency range + feature) or, if absent, cloned onto the target — so the copied
 // pipeline drives THIS segment instead of pointing back at the source's signals. The
-// fluid / fx / modulator cards and all their wiring carry over verbatim.
+// fluid / fx / modulator cards and all their wiring carry over verbatim. The "final"
+// output marker carries over too: node ids are preserved by the deep copy, so the
+// source's finalOutputId points at the matching output node in the copied graph.
 export function copyLayout(source: Segment, target: Segment): Segment {
   const srcGraph = source.graph;
   if (!srcGraph || !srcGraph.nodes?.length) return target;
@@ -359,6 +367,7 @@ export function copyLayout(source: Segment, target: Segment): Segment {
     ...target,
     signals: added.length ? [...target.signals, ...added] : target.signals,
     graph: remapGraphSignals(srcGraph, idMap),
+    finalOutputId: source.finalOutputId,
   };
 }
 

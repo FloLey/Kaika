@@ -1,0 +1,134 @@
+/* ---- final export stage --------------------------------------------------- */
+/* The HD full-track export page: a settings + per-segment checklist column on the
+   left and a growing preview + progress on the right. Reuses the output-well /
+   out-field primitives from animation.css so it reads like the rest of the studio. */
+
+.export {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.export-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.export-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.export-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.export-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* per-segment readiness checklist */
+.export-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+}
+.export-checklist-head {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 4px;
+}
+.export-seg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.export-seg-icon {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+.export-seg.ok .export-seg-icon {
+  color: var(--courant);
+}
+.export-seg.warn .export-seg-icon {
+  color: var(--petale);
+}
+.export-seg-label {
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.export-seg-time {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.export-seg-note {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--petale);
+  font-style: italic;
+}
+
+.export-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* preview + progress column */
+.export-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.export-well {
+  max-width: 420px;
+  margin: 0 auto;
+}
+.export-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+}
+.export-bar {
+  height: 8px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.export-bar-fill {
+  height: 100%;
+  background: var(--petale);
+  transition: width 0.3s ease;
+}
+.export-progress-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+.export-download {
+  align-self: center;
+}

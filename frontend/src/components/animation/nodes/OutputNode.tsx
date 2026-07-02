@@ -24,6 +24,8 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     groupClock,
     groupPlaying,
     segStart = 0,
+    finalOutputId,
+    setFinalOutput,
   } = ctx || {};
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -223,6 +225,10 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     ? `rendering ${Math.round(progress.done / fps)}s / ${Math.round(progress.total / fps)}s`
     : "rendering…";
 
+  // Whether THIS output is the segment's marked "final" render (what the export
+  // stage stitches). Toggling passes "" to clear the mark.
+  const isFinal = finalOutputId === node.id;
+
   return (
     <NodeFrame
       node={node}
@@ -253,6 +259,21 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
         />
       }
     >
+      {/* Mark this output as the segment's FINAL render — the one the export stage
+          stitches into the full-track clip. One per segment; toggling clears it. */}
+      {setFinalOutput && (
+        <button
+          className={"anim-final-btn" + (isFinal ? " on" : "")}
+          onClick={() => setFinalOutput(isFinal ? "" : node.id)}
+          title={
+            isFinal
+              ? "This output is the segment's final (exported) render — click to unmark"
+              : "Mark this output as the segment's final (exported) render"
+          }
+        >
+          {isFinal ? "★ final" : "☆ mark final"}
+        </button>
+      )}
       <div className="anim-output-well" style={{ "--out-aspect": aspect } as CSSProperties}>
         {videoUrl ? (
           <video

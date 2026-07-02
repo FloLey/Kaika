@@ -46,3 +46,12 @@ export const patchStatic = (nodeId: string, patch: Record<string, unknown>): Upd
         : n
     ),
   });
+
+// Set the fluid node's cross-segment continuity layer (data.layer, not a static param).
+export const setFluidLayer = (nodeId: string, layer: number): Updater =>
+  (g) => ({
+    ...g,
+    nodes: g.nodes.map((n) =>
+      n.id === nodeId && n.type === "fluid" ? ({ ...n, data: { ...n.data, layer } } as GraphNode) : n
+    ),
+  });

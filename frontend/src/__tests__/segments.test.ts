@@ -136,4 +136,25 @@ describe("copyLayout (copy cards to the next segment)", () => {
     const target = seg("B", [sig("s-tgt")], null);
     expect(copyLayout(seg("A", [], null), target)).toBe(target);
   });
+
+  it("carries over the source's final-output marker (node id survives the copy)", () => {
+    const g = {
+      version: 8,
+      nodes: [
+        { id: "n-sig", type: "signal", x: 0, y: 0, data: { signalId: "s-src" } },
+        { id: "n-out", type: "output", x: 0, y: 0, data: { title: "preview" } },
+      ],
+      edges: [],
+    } as unknown as Graph;
+    const source = { ...seg("A", [sig("s-src")], g), finalOutputId: "n-out" };
+    const out = copyLayout(source, seg("B", [sig("s-tgt")], null));
+    expect(out.finalOutputId).toBe("n-out");
+    expect(out.graph!.nodes.some((n) => n.id === "n-out")).toBe(true); // marker still resolves
+  });
+
+  it("clears a stale final marker on the target when the source has none", () => {
+    const source = seg("A", [sig("s-src")], graphWith("s-src")); // no finalOutputId
+    const target = { ...seg("B", [sig("s-tgt")], null), finalOutputId: "old-out" };
+    expect(copyLayout(source, target).finalOutputId).toBeUndefined();
+  });
 });
