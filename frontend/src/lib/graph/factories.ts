@@ -16,6 +16,7 @@ import type {
   GateNode,
   Graph,
   ImageNode,
+  ImagegenNode,
   LfoNode,
   LyricsNode,
   MathNode,
@@ -297,6 +298,27 @@ export function videoNode(x: number, y: number): VideoNode {
       start: 0,
       loop: true,
       ports: coercePorts("video", undefined),
+    },
+  };
+}
+export function imagegenNode(x: number, y: number): ImagegenNode {
+  return {
+    id: mkNodeId(),
+    type: "imagegen",
+    x,
+    y,
+    data: {
+      assetUrls: [],
+      box_x: 0,
+      box_y: 0,
+      box_w: 1,
+      box_h: 1,
+      fit: "cover",
+      threshold: 0.5,
+      hysteresis: 0.1,
+      prompt: "",
+      seed: 1,
+      ports: coercePorts("imagegen", undefined),
     },
   };
 }

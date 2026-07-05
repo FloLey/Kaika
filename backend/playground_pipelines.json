@@ -3252,5 +3252,91 @@
       ],
       "version": 6
     }
+  },
+  {
+    "key": "imagegen",
+    "label": "Image gen",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "lfo",
+          "target": "ig",
+          "sourcePort": "out",
+          "targetPort": "trigger"
+        },
+        {
+          "id": "e1",
+          "source": "ig",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 60,
+          "y": 60,
+          "id": "lfo",
+          "data": {
+            "duty": 0.5,
+            "rate": 3,
+            "phase": 0,
+            "shape": "square",
+            "rateMode": "cycles"
+          },
+          "type": "lfo"
+        },
+        {
+          "x": 320,
+          "y": 40,
+          "id": "ig",
+          "data": {
+            "fit": "cover",
+            "seed": 1,
+            "box_h": 1.0,
+            "box_w": 1.0,
+            "box_x": 0.0,
+            "box_y": 0.0,
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "trigger": {
+                "binding": {
+                  "hi": 1.0,
+                  "lo": 0.0,
+                  "kind": "node",
+                  "nodeId": "lfo"
+                }
+              }
+            },
+            "prompt": "",
+            "assetUrls": [
+              "/assets/playground/sample.png",
+              "/assets/playground/sample2.png",
+              "/assets/playground/sample3.png"
+            ],
+            "threshold": 0.5,
+            "hysteresis": 0.1
+          },
+          "type": "imagegen"
+        },
+        {
+          "x": 640,
+          "y": 80,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 1
+    }
   }
 ]

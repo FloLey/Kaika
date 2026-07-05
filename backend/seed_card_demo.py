@@ -35,20 +35,31 @@ OUTPUT = {"width": 1080, "height": 1920, "quality": "draft", "fps": 24}
 # without an upload). Generated on seed/open; the graphs point at these URLs.
 SAMPLE_IMAGE_URL = f"/assets/{JOB_ID}/sample.png"
 SAMPLE_VIDEO_URL = f"/assets/{JOB_ID}/sample.mp4"
+# Two more gradient stills so the Image gen card's demo has a slideshow to cycle.
+SAMPLE_SLIDES = [SAMPLE_IMAGE_URL, f"/assets/{JOB_ID}/sample2.png", f"/assets/{JOB_ID}/sample3.png"]
 
 
 def write_sample_assets() -> None:
-    """Create the bundled dummy image + video for the Image/Video cards (idempotent).
-    A soft petal→teal gradient still, and a short animated-gradient clip."""
+    """Create the bundled dummy image(s) + video for the Image/Video/Image-gen cards
+    (idempotent). Soft gradient stills in distinct hue pairs, and a short
+    animated-gradient clip."""
     d = ASSETS_DIR / JOB_ID
     d.mkdir(parents=True, exist_ok=True)
-    png = d / "sample.png"
-    if not png.exists():
-        w, h = 640, 360
-        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-        t = ((xx / w) + (yy / h)) / 2.0
-        arr = np.stack([0.72 - 0.45 * t, 0.29 + 0.40 * t, 0.45 + 0.45 * t], -1)
-        Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8), "RGB").save(png)
+    # (name, channel mix) — each still sweeps between a different hue pair so the
+    # slideshow switch is unmistakable in the demo.
+    gradients = [
+        ("sample.png", lambda t: (0.72 - 0.45 * t, 0.29 + 0.40 * t, 0.45 + 0.45 * t)),
+        ("sample2.png", lambda t: (0.20 + 0.60 * t, 0.55 - 0.30 * t, 0.75 - 0.40 * t)),
+        ("sample3.png", lambda t: (0.85 - 0.20 * t, 0.60 + 0.25 * t, 0.25 + 0.15 * t)),
+    ]
+    for name, mix in gradients:
+        png = d / name
+        if not png.exists():
+            w, h = 640, 360
+            yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+            t = ((xx / w) + (yy / h)) / 2.0
+            arr = np.stack(mix(t), -1)
+            Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8), "RGB").save(png)
     mp4 = d / "sample.mp4"
     if not mp4.exists():
         subprocess.run(

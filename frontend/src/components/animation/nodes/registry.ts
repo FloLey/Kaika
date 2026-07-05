@@ -18,6 +18,7 @@ import LfoNode from "./LfoNode";
 import NoiseNode from "./NoiseNode";
 import ShaperNode from "./ShaperNode";
 import GateNode from "./GateNode";
+import ImagegenNode from "./ImagegenNode";
 import ScopeNode from "./ScopeNode";
 import PatternNode from "./PatternNode";
 import AnimatePointsNode from "./AnimatePointsNode";
@@ -44,6 +45,7 @@ import {
   colorNode,
   lyricsNode,
   imageNode,
+  imagegenNode,
   videoNode,
   backdropNode,
 } from "../../../lib/graphModel";
@@ -331,6 +333,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "sources",
       help: "Uploads an image and places it into a box (cover/contain/stretch) as a video layer. Feed it to a stack combine or an output; opacity is a modulatable port.",
       io: { in: "a signal on opacity", out: "video" },
+    },
+  },
+  imagegen: {
+    type: "imagegen",
+    Component: ImagegenNode,
+    chrome: { title: "image gen", accent: "var(--courant)", outFlow: "video" },
+    factory: imagegenNode,
+    palette: {
+      label: "Image gen",
+      title: "A slideshow of stills advanced by a trigger signal",
+      order: 33.5,
+      category: "sources",
+      help: "Hold several images (uploads, the library, or \u2728 generated) and switch to the NEXT one every time the trigger signal rises past the threshold \u2014 photos that change on the beat.",
+      io: { in: "trigger signal", out: "video" },
     },
   },
   video: {

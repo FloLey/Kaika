@@ -30,6 +30,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   "merge-points": 0,
   lyrics: 8, // font + align/case/reveal + box (visual pad) + outline + outlineWidth + opacity port
   image: 3, // fit + box (visual pad) + opacity port
+  imagegen: 6, // threshold + hysteresis + fit + box + opacity/trigger ports
   video: 7, // fit + sync + start + speed + loop + box + opacity port
   backdrop: 2, // colour swatch + opacity port
 };

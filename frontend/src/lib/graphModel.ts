@@ -32,6 +32,7 @@ export {
   colorNode,
   lyricsNode,
   imageNode,
+  imagegenNode,
   videoNode,
   backdropNode,
 } from "./graph/factories";

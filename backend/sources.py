@@ -276,6 +276,36 @@ def image(nframes, h, w, *, asset_path, box_x=0.0, box_y=0.0, box_w=1.0, box_h=1
     return _apply_opacity(base, nframes, opacity)
 
 
+def imagegen(nframes, h, w, *, asset_paths, index, box_x=0.0, box_y=0.0, box_w=1.0,
+             box_h=1.0, fit="cover", opacity, frame_offset=0) -> np.ndarray:
+    """A slideshow of stills as an RGBA layer `(nframes, h, w, 4)`: frame i shows
+    `asset_paths[index[frame_offset + i]]`. `index` is the WHOLE-SEGMENT per-frame
+    image index (computed once by the handler from the trigger curve), so block
+    K+1 stays consistent with block K — same continuity pattern as the video card.
+    Each distinct still is fitted into the box ONCE; unloadable assets render as a
+    transparent slot rather than failing the render."""
+    out = np.zeros((nframes, h, w, 4), np.uint8)
+    if not asset_paths:
+        return _apply_opacity(out[0] if nframes else np.zeros((h, w, 4), np.uint8), max(nframes, 1), opacity)[:nframes]
+    x0, y0, bw, bh = _place_box(w, h, box_x, box_y, box_w, box_h)
+    fitted: list = []
+    for ap in asset_paths:
+        tile = np.zeros((bh, bw, 4), np.uint8)  # transparent fallback per slot
+        if ap:
+            try:
+                src = np.asarray(Image.open(ap).convert("RGBA"), np.uint8)
+                tile = _fit_rgba(src, bw, bh, fit)
+            except (OSError, ValueError, Image.DecompressionBombError):
+                pass
+        fitted.append(tile)
+    idx = np.asarray(index, np.int64)[frame_offset:frame_offset + nframes] % len(fitted)
+    for i in range(nframes):
+        out[i, y0:y0 + bh, x0:x0 + bw] = fitted[int(idx[i])]
+    op = np.asarray(opacity, np.float32).reshape(-1)[:nframes, None, None]
+    out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
+    return out
+
+
 @lru_cache(maxsize=128)
 def _video_meta(path: str):
     """(duration_sec, width, height) for a video, via ffprobe (cached)."""

@@ -737,6 +737,16 @@ export default function Docs({ section }: { section?: string }) {
             Opacity is modulatable — wire a signal to fade it with the music.
           </li>
           <li>
+            <strong>Image gen</strong> — a <strong>slideshow</strong> layer: load several images
+            (drop files, pick from the <a href="#assets">📚 library</a>, or ✨ generate them
+            locally) and wire a signal into the <em>trigger</em> port — every time it rises past
+            the <em>threshold</em>, the NEXT image shows (wrapping back to the first). The{" "}
+            <em>hysteresis</em> band keeps a hovering signal from machine-gunning the slideshow;
+            for clean beat-driven switching, feed it a drums signal (optionally through a{" "}
+            <a href="#animation-modulators">gate</a>). Same box/fit placement as the image card;{" "}
+            <em>opacity</em> is modulatable too.
+          </li>
+          <li>
             <strong>Video</strong> — same box/fit/library as the image card, for a clip. Extra ways
             in: <strong>import from YouTube</strong> right on the card (paste a URL). Timing
             controls: <em>sync</em> (<em>song</em> keeps a background clip phase-continuous across

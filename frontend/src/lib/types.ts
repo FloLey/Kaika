@@ -259,6 +259,23 @@ export interface VideoData extends ImageData {
   start: number; // start offset into the source, seconds
   loop: boolean; // loop the clip if it's shorter than the window
 }
+// The image-generator / slideshow layer: N stills, advanced by the `trigger` port —
+// each rising edge past the built-in hysteresis threshold shows the NEXT image
+// (wrapping). `prompt`/`seed` feed the local image generation (part B); the images
+// themselves are ordinary content-addressed assets, however they were made.
+export interface ImagegenData {
+  assetUrls: string[]; // ordered slideshow (served /assets/... URLs)
+  box_x: number; // placement box, fractions 0..1 (same semantics as ImageData)
+  box_y: number;
+  box_w: number;
+  box_h: number;
+  fit: LayerFit;
+  threshold: number; // trigger level the built-in gate switches around
+  hysteresis: number; // dead band so a hovering trigger can't machine-gun images
+  prompt: string; // text prompt for ✨ generate
+  seed: number; // generation seed (deterministic; bump for new variations)
+  ports: Record<string, FluidPort>;
+}
 
 // A per-project library asset (image/video), owned by the backend `data.assets`.
 export interface Asset {
@@ -347,6 +364,10 @@ export interface VideoNode extends NodeBase {
   type: "video";
   data: VideoData;
 }
+export interface ImagegenNode extends NodeBase {
+  type: "imagegen";
+  data: ImagegenData;
+}
 export interface BackdropNode extends NodeBase {
   type: "backdrop";
   data: BackdropData;
@@ -371,6 +392,7 @@ export type GraphNode =
   | LyricsNode
   | ImageNode
   | VideoNode
+  | ImagegenNode
   | BackdropNode;
 
 export type NodeType = GraphNode["type"];

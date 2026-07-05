@@ -41,6 +41,7 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "color",
   "lyrics",
   "image",
+  "imagegen",
   "video",
   "backdrop",
 ]);
@@ -58,6 +59,8 @@ const hexColor = (def: string): Coerce => (v) =>
   /^#[0-9a-fA-F]{6}$/.test((v as string) || "") ? v : def;
 const idList: Coerce = (v) =>
   Array.isArray(v) && v.length ? v : [mkInputId(), mkInputId()];
+const strList: Coerce = (v) =>
+  Array.isArray(v) ? v.filter((u): u is string => typeof u === "string") : [];
 const portsFor = (type: string): Coerce => (v) =>
   coercePorts(type, v as Record<string, FluidPort> | undefined);
 
@@ -139,6 +142,19 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     start: num(0),
     loop: boolDefaultTrue,
     ports: portsFor("video"),
+  },
+  imagegen: {
+    assetUrls: strList,
+    box_x: num(0),
+    box_y: num(0),
+    box_w: num(1),
+    box_h: num(1),
+    fit: oneOf(["cover", "contain", "stretch"], "cover"),
+    threshold: num(0.5),
+    hysteresis: num(0.1),
+    prompt: str(""),
+    seed: num(1),
+    ports: portsFor("imagegen"),
   },
   backdrop: { color: hexColor("#101418"), ports: portsFor("backdrop") },
 };
