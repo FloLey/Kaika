@@ -7,9 +7,11 @@ lyrics → it separates stems with [Demucs](https://github.com/adefossez/demucs)
 activity + timbre clustering, labelled by a local LLM with a heuristic fallback),
 and opens a **studio** where each segment turns a stem + frequency band into a
 shaped 0–1 **signal** — and a second tab where you wire those signals into a
-node-graph **fluid animation** that renders to a looping video reacting to the
-music. A separate **Fluid Lab** is a standalone visual sandbox. Work is saved to
-Postgres so you can **resume** later.
+node-graph **animation** (fluid simulations, lyrics, image/video layers,
+backdrops) that renders to a looping video reacting to the music. A final
+**export** stage renders the whole track in HD as one continuous simulation. A
+seeded **Playground** project demos every card. Work is saved to Postgres so you
+can **resume** later.
 
 Backend: Flask + librosa + demucs + Whisper (mlx/faster-whisper) + Ollama (LLM
 section labelling) + yt-dlp.
@@ -20,8 +22,12 @@ Frontend: React + Vite (Web Audio API).
 > top-right of the header (it opens the guide at the section for the screen
 > you're on), or click any small **?** next to a control to jump straight to that
 > control's explanation. The guide is a React view
-> ([`frontend/src/components/Docs.jsx`](frontend/src/components/Docs.jsx)) opened
+> ([`frontend/src/components/Docs.tsx`](frontend/src/components/Docs.tsx)) opened
 > at `/?doc=<section>` — it walks through every screen, feature, and control.
+>
+> **New to the code?** Start with [`ARCHITECTURE.md`](ARCHITECTURE.md) — the
+> newcomer map of the whole system — then [`DEVELOPMENT.md`](DEVELOPMENT.md) for
+> the how-to checklists.
 
 ## Pipeline
 
@@ -36,28 +42,41 @@ Frontend: React + Vite (Web Audio API).
      harmonic, chroma, beat/bar phase) and shape it (attack, release, gamma,
      threshold, gain, offset, invert).
    - **Create animation** — a drag-and-drop **node graph**: wire *signal* cards
-     into a *fluid* simulation card (every parameter, incl. the r/g/b colour, is a
-     modulatable input port with a `[lo, hi]` range) → a *video output* card. A
-     *points* card lets you draw source positions (a source at each point) and wire
-     them into a fluid. A *combine* card composes several fluids — **merge** (their
-     sources share one simulation and interact) or **layered** (stacked with
-     per-input transparency); outputs also pass through, so pipelines can branch. It
-     **auto-renders** (clip = the full segment) at the project's output size /
-     quality / fps / background.
+     (plus *lfo / noise / shaper / math* modulators) into a *fluid* simulation
+     card — every parameter is a modulatable input port with a `[lo, hi]` range —
+     and on to a *video output* card. A *color* card drives the dye; *points /
+     pattern / animate* cards place and move emitters; *lyrics*, *image*, *video*
+     (uploads, a per-project **📚 asset library**, or YouTube import) and
+     *backdrop* cards synthesise non-fluid layers; a *combine* card composes it
+     all — **merge** (sources share one simulation and interact) or **layered**
+     (stacked with per-input transparency). It **auto-renders** in streaming
+     blocks (a long segment previews in ~5s chunks, cancelled on every edit) at
+     the project's output size / quality / fps.
+4. **Export** — mark one output per segment as **★ final**, then render the whole
+   track in HD: one **continuous** simulation carries each layer across segment
+   boundaries (only the wiring rules swap at a cut), streamed progressively and
+   muxed with the original audio.
 
    Everything is **per segment** and autosaves.
 
 ## Documentation
 
-The end-user **user guide** is part of the app — a React view
-([`frontend/src/components/Docs.jsx`](frontend/src/components/Docs.jsx))
-explaining every screen and control (upload, segmentation, the Studio
-features/shaping knobs, the animation node-graph editor, and the Fluid Lab). It
-opens in a new tab at
-`/?doc=<section>`; `main.jsx` renders it instead of the app when the `doc` query
-param is present. Every **?** in the UI does double duty: hover for a one-line
-tooltip, click to open the guide at the matching section (`Info.jsx` takes a
-`section` prop matching an id in `Docs.jsx`). Edit `Docs.jsx` to update the docs.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the newcomer map: pipeline, module
+  layout, the caches, the codegen contract, and the invariants.
+- [`DEVELOPMENT.md`](DEVELOPMENT.md) — how-to checklists (add a param, add a
+  node card) and dev workflow.
+- **In-app user guide** — a React view
+  ([`frontend/src/components/Docs.tsx`](frontend/src/components/Docs.tsx))
+  explaining every screen and control (upload, segmentation, the Studio
+  features/shaping knobs, the animation node-graph editor, assets, export, and
+  the Playground). It opens in a new tab at `/?doc=<section>`; `main.tsx` renders
+  it instead of the app when the `doc` query param is present. Every **?** in the
+  UI does double duty: hover for a one-line tooltip, click to open the guide at
+  the matching section (`ui/Info.tsx` takes a `section` prop matching an id in
+  `Docs.tsx`). Edit `Docs.tsx` to update the docs — a test guards that every
+  linked section exists.
+- [`specs/`](specs/) and [`docs/history/`](docs/history/) — completed design
+  records (the *why* behind features), not a roadmap.
 
 ## Setup
 
@@ -112,14 +131,21 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
   error, result}`.
 - `GET /projects` · `GET|PUT|DELETE /projects/<job_id>` — list / load / autosave
   / delete a project (segments + per-segment isolation edits live in Postgres).
+  `POST /playground` ensures the seeded demo project exists.
 - `GET /audio/<job>/<stem>` (Range/seek) · `GET /spectrogram/<job>/<stem>`.
+- `POST /upload-asset/<job>` · `POST /asset-from-youtube/<job>` ·
+  `GET /assets/<job>` · `DELETE /assets/<job>/<id>` — the per-project image/video
+  **asset library** (content-addressed files served from `/assets/<job>/<name>`).
 - `POST /extract` — one signal's curve for a (stem + band + segment) shaped by the
-  knobs above → `{curve, times}` (the Studio calls this, debounced).
-- `POST /animate` — `{job_id, segment:{start,end,signals}, graph, output}` →
-  resolves the node graph (signal nodes reuse `/extract`; constants and `[lo,hi]`
-  ranges become per-frame fluid params), runs the fluid sim for the whole segment,
-  returns `{url}` to a cached looping mp4. `POST /fluid` powers the standalone
-  Fluid Lab; both are served from `/fluid/<name>.mp4` (Range/seek).
+  knobs above → `{curve, times}` (the Studio calls this, debounced). `POST
+  /resolve` returns one value node's curve (the Scope card's live view).
+- `POST /animate/stream` — `{job_id, segment:{start,end,signals,lyric_lines},
+  graph, output, output_id}` → resolves that output's node graph and renders it
+  in **streaming blocks** (a growing, playable preview after ~one block). Returns
+  `{render_id}`; poll `GET /animate/stream/<id>`, stop with `POST
+  /animate/stream/<id>/cancel` (the UI cancels on every edit). `POST /animate` is
+  the one-shot synchronous variant; `POST /export/stream` (+ status/cancel) is
+  the whole-song HD export. Clips serve from `/fluid/<name>.mp4` (Range/seek).
 
 ## Tests & linting
 
@@ -144,11 +170,16 @@ on restart).
   per-segment stem edits **and animation graph**, plus project-wide **output**
   settings) as JSONB + listing columns.
 - **Filesystem** under `data/` (gitignored): `uploads/`, `separated/`,
-  `spectrograms/` per `job_id`, plus `analysis/<job>.json` (vocal envelope +
-  aligned lyrics, so resume is instant and Whisper doesn't re-run).
-- **Render cache** `data/fluid/<hash>.mp4`: rendered clips keyed by the output's
-  contributing-subgraph hash. Bounded by `render_cache` (LRU + age; tune via
-  `FLUID_CACHE_MAX_BYTES` / `FLUID_CACHE_MAX_AGE_DAYS`); `make clean-cache` drops all.
+  `spectrograms/` per `job_id`, `assets/<job>/` (image/video layer assets,
+  content-addressed), plus `analysis/<job>.json` (vocal envelope + aligned
+  lyrics, so resume is instant and Whisper doesn't re-run).
+- **Caches** (see [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full story):
+  `data/fluid/<hash>.mp4` — encoded clips keyed by the output's
+  contributing-subgraph hash; `data/fluid_cache/*.npy` — raw simulation frames
+  keyed by physics params, so downstream-only edits skip the sim. The primary
+  cleaner is a **reachability sweep** (`cache_gc`, runs on save/startup) that
+  keeps only what saved projects still point to; LRU + age caps are the backstop
+  (`FLUID_CACHE_*` / `FLUID_FRAME_CACHE_*`); `make clean-cache` drops everything.
 
 The project JSONB carries a `schema_version`; graphs carry a `version`, migrated
 forward on load (`normalizeGraph`).

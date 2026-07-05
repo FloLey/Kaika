@@ -1,8 +1,10 @@
 # Development
 
 A developer map of Kaika: the render pipeline, where things live, and the checklists
-for the two changes that touch several files at once (adding a fluid param, adding a
-node type). For the consolidation backlog see [`CODE_REVIEW.md`](CODE_REVIEW.md).
+for the two changes that touch several files at once (adding a param, adding a node
+type). For the full newcomer walkthrough see [`ARCHITECTURE.md`](ARCHITECTURE.md);
+completed design records live in [`specs/`](specs/) and
+[`docs/history/`](docs/history/).
 
 ## Run it
 
@@ -19,7 +21,9 @@ make lint            # ruff + eslint
 make build           # vite production build
 make coverage        # pytest --cov + vitest --coverage
 make format          # Black (python) + Prettier (frontend) — see "Formatting"
-make clean-cache     # drop rendered clips (data/fluid/*.mp4)
+make clean-cache     # drop rendered clips + raw-frame cache
+make gc-cache        # reachability sweep (what saved projects no longer use)
+make gen-params      # regenerate frontend/src/lib/fluidParams.js from the backend specs
 ```
 
 ## Architecture
@@ -31,43 +35,69 @@ review ──> segment proposal (Whisper align + LLM structure) ──> segments
   │
 studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
   │              │
-  │        animation NODE GRAPH (signal | fluid | combine | points | output)
+  │        animation NODE GRAPH (signal · modulators · fluid · color · points/
+  │              │               pattern/animate · lyrics/image/video/backdrop ·
+  │              │               combine · output)
   │              │
-  └──────> /animate ──> graph executor ──> fluid.simulate ──> mp4 (cached) ──> <video>
+  └──> /animate/stream ──> graph executor ──> fluid.simulate (block-streamed,
+        cached) ──> growing mp4 ──> <video>;  /export/stream ──> whole-song HD
 ```
 
 - **Backend** (`backend/`, Flask :5000, pure JSON API):
-  - `app.py` — routes (`/upload`, `/segment`, `/extract`, `/fluid`, `/animate`, `/projects`, `/logs`).
-  - `graph.py` — the graph executor: validate → per-output hash (cache key) → resolve
-    the video DAG (`_Dag`) → `build_params` → `fluid.simulate`. Background applied at
-    the terminal.
+  - `app.py` — creates the app + registers the blueprints in `backend/routes/`
+    (`uploads`, `animation`, `export`, `projects`, `serving` — absolute URLs, no
+    prefixes) and kicks the startup cache GC.
+  - `graph.py` — a thin **facade** over the graph package: `graph_common.py`
+    (shared lookups + `composite`), `graph_validate.py` (`validate` → HTTP 400),
+    `graph_hash.py` (`output_hash`, `RENDER_VERSION`), `graph_modulators.py`
+    (value curves, colour cards, points pipelines), `graph_render.py`
+    (`build_params`, the `Dag` resolver + handler registries, `render` /
+    `render_stream`). Import from `backend.graph`; implement in the submodules.
   - `fluid.py` — the stable-fluids sim (FFT Poisson solve), per-dye-layer advection
-    (per-component wrap), tonemap, `render_mp4`.
-  - `animation_params.py` — **the** fluid param spec (`FLUID_PARAM_SPEC`); `PARAMS`
-    and the frontend `fluidParams.js` both derive from it.
+    (per-component wrap), tonemap, the mp4 encoders, resumable `FluidClip`.
+  - `sources.py` — non-fluid video layers (lyrics/image/video/backdrop) + the
+    persistent `VideoClip` block decoder.
+  - `animation_params.py` — **the** param specs (`FLUID_PARAM_SPEC`,
+    `COLOR_PARAM_SPEC`, `SOURCE_PARAM_SPEC`); the executor views and the generated
+    frontend `fluidParams.js` all derive from them.
   - `signals.py` — audio feature extraction + shaping (the 0..1 curves).
   - `segment.py` / `llm.py` — segmentation (beat grid, sections, lyrics).
+  - `song_render.py` — the whole-song HD export (continuous per-layer fields).
   - `db.py` — Postgres persistence (project JSONB, `schema_version`).
-  - `render_cache.py` — LRU/age eviction for `data/fluid/`.
-  - `jobs.py` — background job registry (upload/segment).
+  - `fluid_cache.py` / `render_cache.py` / `cache_gc.py` — raw-frame cache,
+    encoded-clip LRU backstop, and the reachability sweep (the primary cleaner).
+  - `jobs.py` (ingestion, 1 worker) / `render_jobs.py` (renders, cancel-on-edit).
   - `logbus.py` — in-memory ring of backend log records, served at `/logs` (see below).
-- **Frontend** (`frontend/src/`, React + Vite :5173, proxies API to Flask):
-  - `lib/graphModel.js` — node/edge factories, wiring, `validate`, `outputHash`
-    (the render cache key), `normalizeGraph` (version migration).
-  - `lib/fluidParams.js` — **generated** from the backend spec (do not hand-edit).
-  - `components/animation/` — the node-graph editor (`GraphCanvas`, `nodes/*`,
-    `renderAnimNode`).
-  - `components/studio/`, `components/fluid/` — the studio shell and FluidLab.
+- **Frontend** (`frontend/src/`, React + Vite :5173, proxies API to Flask —
+  every backend route prefix **must** be listed in `vite.config.js`):
+  - `lib/graphModel.ts` — a **barrel** over `lib/graph/*`: `core` (ids, producer
+    sets), `factories` (+ `GRAPH_VERSION`), `mutations` (binding↔edge invariant),
+    `normalize` (schema-driven migration), `validate`, `hash` (`outputHash`).
+  - `lib/fluidParams.js` — **generated** from the backend specs (do not hand-edit);
+    `lib/nodeParams.ts` is the registry every card reads.
+  - `components/animation/` — the node-graph editor (`GraphCanvas`, `nodes/*` —
+    19 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
+  - `components/studio/` — the studio shell, signal cards, transport.
+  - `components/assets/`, `components/export/` — asset library, final export.
 
-## Checklist — add a fluid param
+## Checklist — add a param
 
-The param spec is the single source of truth; everything else derives or asserts.
+The backend param specs are the single source of truth; everything else derives
+or asserts. Three spec families live in `backend/animation_params.py`:
+`FLUID_PARAM_SPEC` (the fluid card), `COLOR_PARAM_SPEC` (the dye card), and
+`SOURCE_PARAM_SPEC` (per source card: lyrics / image / video / backdrop).
 
-1. Add an entry to `FLUID_PARAM_SPEC` in `backend/animation_params.py`
-   (`sim_group`/`ui_group`/`label`/`min`/`max`/`step`/`default`/`fmt`).
+1. Add an entry to the right spec in `backend/animation_params.py`
+   (`label`/`min`/`max`/`step`/`default`/`fmt`; fluid rows also carry
+   `sim_group`/`ui_group`).
 2. `make gen-params` — regenerates `frontend/src/lib/fluidParams.js`. Commit it.
-3. Make `fluid.simulate` read the new key (under `source.*` or `fluid.*`).
-4. `make test` — `test_fluid_params_codegen.py` asserts the generated file matches.
+   (`lib/nodeParams.ts` picks it up automatically.)
+3. Make the consumer read the new key: `fluid.simulate` for a fluid param
+   (`source.*` / `fluid.*`), the matching `sources.py` function for a source-card
+   param.
+4. Add a one-line help entry in `frontend/src/lib/paramHelp.ts` — its test fails
+   if a port has no "?" help.
+5. `make test` — `test_fluid_params_codegen.py` asserts the generated file matches.
 
 ## Checklist — add a node type
 
@@ -77,17 +107,25 @@ or the executor's dispatch.
 
 1. **Types** (`lib/types.ts`): add the type to the `NodeType` union + a `<Type>Data`
    interface, and a member to the `GraphNode` discriminated union.
-2. **Model** (`lib/graphModel.ts`): a `<type>Node(x, y)` factory; teach
-   `normalizeGraph` its shape (bump `GRAPH_VERSION` if the persisted shape changes).
-3. **Card** (`components/animation/nodes/<Type>Node.jsx`) + **register it** in
+2. **Model** (`lib/graph/factories.ts`): a `<type>Node(x, y)` factory; teach
+   `normalizeGraph` its shape — for a flat field bag that's one row in the
+   `DATA_SCHEMAS` table in `lib/graph/normalize.ts` (bump `GRAPH_VERSION` if the
+   persisted shape changes). Re-export the factory from the `graphModel.ts` barrel.
+3. **Card** (`components/animation/nodes/<Type>Node.tsx`) + **register it** in
    `nodes/registry.ts` (`NODE_TYPES`): `Component`, `chrome` (title/accent/outFlow),
    and — if it's palette-addable — a `factory` + `palette` entry. That single entry
    wires the palette button, the canvas dispatch, and the minimized card.
-4. **Executor** (`backend/graph.py`): a `_xxx_video` handler (and `_xxx_emitters` if
-   it can feed a merge) registered in `_VIDEO_HANDLERS` / `_EMITTER_HANDLERS`.
+4. **Executor** (`backend/graph_render.py`): a `_xxx_video` handler (+ a
+   `_xxx_block` streaming handler, and `_xxx_emitters` if it can feed a merge)
+   registered in `_VIDEO_HANDLERS` / `_BLOCK_HANDLERS` / `_EMITTER_HANDLERS`.
    `_VIDEO_PRODUCERS` and the output-wiring check pick it up automatically. It's
    already covered by `output_hash`'s contributing-DAG walk (no edit needed).
-5. **Tests**: `registry.test.jsx` and `test_graph_registry.py` already assert every
+5. **Playground pipeline** — every card must have a working demo segment: add its
+   label to `backend/card_demo.py` `CARD_LABELS`, build the pipeline in the live
+   Playground, then `make export-playground` to capture it into
+   `playground_pipelines.json` (never hand-edit that file). `test_card_impact.py`
+   renders every pipeline and fails on a missing/blank one.
+6. **Tests**: `registry.test.tsx` and `test_graph_registry.py` already assert every
    registered type round-trips; add behaviour tests for the new card/handler.
 
 ## The render cache
@@ -95,9 +133,15 @@ or the executor's dispatch.
 A clip is keyed by `output_hash` (backend) / `outputHash` (frontend): the
 contributing sub-DAG of one output + referenced signal defs + segment bounds + the
 project output settings + `RENDER_VERSION`. Editing anything that changes the
-rendered output changes the key. Bump `RENDER_VERSION` (`backend/graph.py`) when
-render *semantics* change so old clips invalidate. Clips live in `data/fluid/` and
-are evicted by `render_cache` (LRU + age); `make clean-cache` drops them all.
+rendered output changes the key. Bump `RENDER_VERSION` (`backend/graph_hash.py`)
+when render *semantics* change so old clips invalidate.
+
+Three layers cooperate (full story in [`ARCHITECTURE.md`](ARCHITECTURE.md)):
+raw sim frames in `data/fluid_cache/*.npy` (keyed by physics params only, so a
+colour/FX tweak reuses the sim), encoded clips in `data/fluid/*.mp4`, and the
+`cache_gc` **reachability sweep** (the primary cleaner — keeps what saved
+projects still point to; runs on save/startup). `render_cache`'s LRU + age caps
+are the backstop; `make clean-cache` drops everything, `make gc-cache` sweeps.
 
 ## Logs panel
 
@@ -107,35 +151,15 @@ incremental slices at `GET /logs?since=<seq>`. The frontend Logs panel polls it
 without shell access. It is always on and has no persistence (records reset on
 restart). The `/logs` route must never log (it would feed itself).
 
-## TypeScript (incremental migration)
+## TypeScript
 
-The frontend is mid-migration to TypeScript, set up to convert **one file at a time**
-with a green build the whole way:
-
-- `tsconfig.json` — `allowJs: true` + `checkJs: false`, so `.js`/`.jsx` coexist with
-  `.ts`/`.tsx`; only the `.ts`/`.tsx` files are type-checked (`strict`).
-- `npm run typecheck` (`tsc --noEmit`) — gated in CI.
-- `src/lib/types.ts` — the core domain types: the **discriminated `GraphNode` union**
-  (`SignalData`/`FluidData`/`CombineData`/`PointsData`/`OutputData`), `Graph`,
-  `GraphEdge`, `Binding`, `OutputSettings`, `FluidParam`. Import these as files convert.
-
-**Converted so far:** `lib/types.ts`, `lib/graphModel.ts` (the whole graph model),
-`lib/output.ts`, `lib/useDragPad.ts`, `components/animation/nodes/registry.ts`,
-`components/animation/useGraphEditor.ts`.
-
-**To convert a file** (the established pattern):
-1. Rename `foo.js` → `foo.ts` (or `.jsx` → `.tsx`); add types (import from `types.ts`).
-2. Update its importers' specifiers from `"./foo.js"` to **`"./foo"`** (extensionless)
-   — the production bundler (rollup) won't resolve a `.js` specifier to a `.ts` file,
-   but resolves extensionless to `.ts`.
-3. `npm run typecheck && npm run build && npm test` — all green before committing.
-
-**Remaining tail (mechanical):** the `nodes/*` card components + the canvas/studio
-shells convert `.jsx` → `.tsx` leaf-outward, typed against a shared `NodeProps`
-(`registry.ts`) — at which point `NodeSpec.Component` tightens from `ComponentType<any>`
-to `ComponentType<NodeProps>`. The `Studio`/`FluidLab` sub-component extractions land
-here too (those files are rewritten anyway). Lower priority — the high-value typing
-(the domain model + the registries) is done.
+The frontend is fully TypeScript (`strict`; `npm run typecheck` = `tsc --noEmit`,
+gated in CI). `src/lib/types.ts` holds the core domain types — the discriminated
+`GraphNode` union, `Graph`, `GraphEdge`, `Binding`, `OutputSettings`,
+`FluidParam` — import from there rather than redeclaring shapes. The one
+deliberate exception is the **generated** `lib/fluidParams.js` (plain JS by
+design); `lib/graph/core.ts` and `lib/nodeParams.ts` pin its shapes at the import
+boundary.
 
 ## Formatting
 
@@ -168,8 +192,8 @@ import-sort would break the `matplotlib.use("Agg")` ordering). Blind excepts are
 flagged (`BLE`) and suppressed case-by-case with `# noqa: BLE001` where the fallback
 is deliberate.
 
-The frontend `eslint.config.js` lints **both** `.js/.jsx` and `.ts/.tsx` (via
-`typescript-eslint`): recommended rules + the react-hooks checks, with
+The frontend `eslint.config.js` lints the whole tree via `typescript-eslint`:
+recommended rules + the react-hooks checks, with
 `@typescript-eslint/no-explicit-any` enforced as an error (justified boundaries —
 the dynamic-JSON layers in `lib/api.ts` / `lib/segments.ts` — carry a commented
 disable). `npm run lint` covers the whole TypeScript codebase.
