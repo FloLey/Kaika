@@ -15,6 +15,7 @@ interface AnimationCanvasProps {
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
   lyricLines?: unknown[];
+  onSaveLyricLines?: NodeCtx["onSaveLyricLines"];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;
   onOpenOutput?: () => void;
@@ -38,6 +39,7 @@ export default function AnimationCanvas({
   job,
   output,
   lyricLines,
+  onSaveLyricLines,
   groupClock,
   groupPlaying,
   onOpenOutput,
@@ -65,6 +67,7 @@ export default function AnimationCanvas({
     job,
     output,
     lyricLines,
+    onSaveLyricLines,
     groupClock,
     groupPlaying,
     commitGraph,

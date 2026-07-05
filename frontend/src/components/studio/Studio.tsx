@@ -29,6 +29,7 @@ interface StudioProps {
   output: OutputSettingsT;
   setOutput: (o: OutputSettingsT) => void;
   lyricLines?: unknown[];
+  onSaveLyricLines?: (lines: unknown[]) => Promise<void>;
   onEditSplit?: () => void;
   onExport?: () => void;
 }
@@ -49,6 +50,7 @@ export default function Studio({
   output,
   setOutput,
   lyricLines,
+  onSaveLyricLines,
   onEditSplit,
   onExport,
 }: StudioProps) {
@@ -337,6 +339,7 @@ export default function Studio({
                 job={job}
                 output={output}
                 lyricLines={lyricLines}
+                onSaveLyricLines={onSaveLyricLines}
                 groupClock={refAudio}
                 groupPlaying={allPlaying}
                 isFullscreen={isFull}

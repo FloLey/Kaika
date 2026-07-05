@@ -13,6 +13,7 @@ import { aspectOf } from "../../../lib/output";
 import { useLyricsFont } from "../../../lib/lyricsFont";
 import { listFonts, type FontOption } from "../../../lib/api";
 import BoxPad, { type BoxPreview } from "./BoxPad";
+import LyricsEditor from "../LyricsEditor";
 import type { NodeProps } from "./nodeProps";
 import type { LyricsData, LyricsAlign, LyricsCase, LyricsReveal } from "../../../lib/types";
 
@@ -75,6 +76,7 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
   const fonts = useFonts();
   const set = useNodeData<LyricsData>(node, onGraphChange);
   const lineCount = (ctx?.lyricLines || []).length;
+  const [editorOpen, setEditorOpen] = useState(false);
   // A `color` card can drive the fill and/or the outline colour (else white / black).
   const fillWired = useMemo(
     () => !!(ctx?.graph && videoSource(ctx.graph, node.id, "fillColor")),
@@ -154,9 +156,27 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
         />
       }
     >
-      <div className="anim-fx-hint">
-        {lineCount > 0 ? `${lineCount} aligned line${lineCount === 1 ? "" : "s"} for this track` : "no aligned lyrics for this track"}
+      <div className="anim-fx-hint anim-lyrics-lines">
+        <span>
+          {lineCount > 0 ? `${lineCount} aligned line${lineCount === 1 ? "" : "s"} for this track` : "no aligned lyrics for this track"}
+        </span>
+        {ctx?.onSaveLyricLines && lineCount > 0 && (
+          <button
+            className="btn sm no-drag"
+            onClick={() => setEditorOpen(true)}
+            title="Rewrite the words of each line (timing stays locked to the vocal)"
+          >
+            ✎ edit lines
+          </button>
+        )}
       </div>
+      {editorOpen && ctx?.onSaveLyricLines && (
+        <LyricsEditor
+          lines={lines}
+          onSave={ctx.onSaveLyricLines}
+          onClose={() => setEditorOpen(false)}
+        />
+      )}
       {/* Fill / outline colour: wire a `color` card here to drive them (else white / black).
           The outline stays opaque whatever its colour, so it keeps the text readable. */}
       <div className="anim-pos-row">

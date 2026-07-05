@@ -748,6 +748,12 @@ export default function Docs({ section }: { section?: string }) {
             <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em> input to
             recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
             keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.
+            <br />
+            <strong>✎ edit lines</strong> (on the card) rewrites the <em>words</em> of each aligned
+            line while keeping its timing — for covers and rewritten lyrics: upload the{" "}
+            <em>original</em> lyrics so the alignment locks to the vocal, then swap in your new
+            words line by line. (Uploading different words directly won't align — timing comes from
+            matching what is actually sung.)
           </li>
         </ul>
 

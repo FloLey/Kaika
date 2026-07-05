@@ -1478,6 +1478,67 @@
   min-width: 0;
 }
 
+/* ---- lyrics line editor modal ---------------------------------------------- */
+.anim-modal.lyrics-editor {
+  width: min(620px, 92vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+.lyrics-editor-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lyrics-editor-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+.lyrics-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lyrics-editor-time {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 86px;
+  text-align: right;
+}
+.lyrics-editor-text {
+  flex: 1;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+.lyrics-editor-empty {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.lyrics-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.anim-lyrics-lines {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* ---- asset library modal --------------------------------------------------- */
 .anim-modal.asset-lib {
   width: min(680px, 92vw);

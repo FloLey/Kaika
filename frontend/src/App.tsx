@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Segment } from "./lib/types";
 import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
@@ -72,6 +72,23 @@ export default function App() {
     }, 800);
     return () => clearTimeout(t);
   }, [segments, step, job, output, exportSettings]);
+
+  // ---- lyric line edits ------------------------------------------------------
+  // Rewriting line TEXT (the wedding-lyrics flow) keeps the aligned timings. The
+  // PUT must carry the full autosave payload — the backend writes segments
+  // unconditionally — plus the optional lyric_lines the route persists to the
+  // analysis cache. Local state updates on success so every consumer (lyrics
+  // card preview, render keys) picks the new words up immediately.
+  const saveLyricLines = useCallback(
+    async (lines: unknown[]) => {
+      if (!job) return;
+      const base = { step, segments: serializeSegments(segments), output, export: exportSettings };
+      await api.saveProject(job, { ...base, lyric_lines: lines });
+      setLyricLines(lines);
+      lastSaved.current = JSON.stringify(base); // autosave needn't re-PUT this state
+    },
+    [job, step, segments, output, exportSettings]
+  );
 
   // ---- new track: upload + propose -----------------------------------------
   async function handleUpload({
@@ -286,6 +303,7 @@ export default function App() {
           output={output}
           setOutput={setOutput}
           lyricLines={lyricLines}
+          onSaveLyricLines={saveLyricLines}
           onEditSplit={() => setStep("review")}
           onExport={() => setStep("export")}
         />

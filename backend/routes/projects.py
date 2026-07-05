@@ -57,6 +57,29 @@ def project_get(job_id: str):
     )
 
 
+def _save_lyric_lines(job_id: str, lines: list) -> None:
+    """Overwrite the aligned lyric lines in the analysis cache — the same file
+    `project_get` serves them from. Lets the user rewrite line TEXT in-app (the
+    wedding-lyrics flow: upload the original words for good Whisper timing, then
+    swap in new words per line) while keeping the aligned timings. Only sane
+    entries are kept; timings are coerced to floats."""
+    clean = [
+        {
+            "t0": float(ln.get("t0", 0.0)),
+            "t1": float(ln.get("t1", 0.0)),
+            "text": str(ln.get("text", "")),
+            # Preserve the aligned flag when present (display styling hint).
+            **({"aligned": bool(ln["aligned"])} if "aligned" in ln else {}),
+        }
+        for ln in lines
+        if isinstance(ln, dict)
+    ]
+    cache = ANALYSIS_DIR / f"{job_id}.json"
+    analysis = json.loads(cache.read_text()) if cache.exists() else {}
+    analysis["lyric_lines"] = clean
+    cache.write_text(json.dumps(analysis))
+
+
 @bp.route("/projects/<job_id>", methods=["PUT"])
 def project_save(job_id: str):
     body = request.get_json(silent=True) or {}
@@ -70,6 +93,9 @@ def project_save(job_id: str):
     )
     if not ok:
         abort(404)
+    # Optional: edited lyric lines ride the same autosave PUT (analysis cache, not DB).
+    if isinstance(body.get("lyric_lines"), list):
+        _save_lyric_lines(job_id, body["lyric_lines"])
     # Note: no cache GC here on purpose — sweeping mid-session could unlink a preview
     # clip a still-open editor is playing, and it would add DB-walk latency to every
     # save. The startup sweep (app.py) + `make gc-cache` + render_cache's size/age cap

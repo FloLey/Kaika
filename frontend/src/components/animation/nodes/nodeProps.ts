@@ -37,6 +37,7 @@ export interface NodeCtx {
   signals?: SignalDef[];
   lyricLines?: unknown[]; // aligned lyric lines [{t0,t1,text}] for the lyrics card
   lyricsKey?: string; // JSON of lyricLines, serialized once for the outputs' render keys
+  onSaveLyricLines?: (lines: unknown[]) => Promise<void>; // persist edited line text (keeps timings)
   groupClock?: RefObject<HTMLAudioElement | null>;
   groupPlaying?: boolean;
   segStart?: number;
