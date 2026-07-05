@@ -9,7 +9,7 @@ import shutil
 import numpy as np
 import pytest
 
-from backend import fluid, graph
+from backend import fluid, graph, paths
 
 _OUTPUT = {"width": 64, "height": 64, "quality": "draft", "fps": 12, "background": "#000000"}
 _SEG = {"start": 0.0, "end": 0.5, "signals": []}  # 0.5s @ 12fps -> 6 frames
@@ -54,7 +54,7 @@ def test_dag_resolves_fluid_to_uint8_frames():
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_render_writes_mp4_and_caches(tmp_path, monkeypatch):
-    monkeypatch.setattr(graph, "ANIM_DIR", tmp_path)
+    monkeypatch.setattr(paths, "ANIM_DIR", tmp_path)
     g = _const_graph()
     url = graph.render("job", _SEG, g, _stem_path, _OUTPUT)
     assert url.startswith("/fluid/") and url.endswith(".mp4")

@@ -16,6 +16,7 @@ import pytest
 from backend import cache_gc
 from backend import db
 from backend import graph as G
+from backend import paths
 
 OUT = {"width": 96, "height": 128, "quality": "draft", "fps": 24, "background": "#101418"}
 
@@ -58,7 +59,7 @@ def wired(tmp_path, monkeypatch):
     (tmp_path / "analysis" / "proj1.json").write_text(json.dumps({"lyric_lines": lines}))
 
     monkeypatch.setattr(db, "get_projects_full", lambda: [proj])
-    monkeypatch.setattr(G, "ANIM_DIR", tmp_path / "fluid")
+    monkeypatch.setattr(paths, "ANIM_DIR", tmp_path / "fluid")
     (tmp_path / "fluid").mkdir()
     monkeypatch.setattr(cache_gc, "ASSETS_DIR", tmp_path / "assets")
     (tmp_path / "assets").mkdir()

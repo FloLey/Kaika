@@ -29,9 +29,9 @@ import uuid
 
 import numpy as np
 
-from . import fluid, render_cache
+from . import fluid, paths, render_cache
 from .fluid import close_encoder, encoder_error
-from .graph import ANIM_DIR, STREAM_DIR, _Dag
+from .graph_render import Dag
 
 log = logging.getLogger("kaika.export")
 
@@ -86,7 +86,7 @@ def build_plan(job_id: str, segments: list, lyric_lines: list, export: dict, ste
         if not oid:
             raise ValueError(f"segment {seg.get('id')} has no final output marked")
         seg2 = {**seg, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
-        dag = _Dag(job_id, seg2, seg["graph"], stem_audio_path, out_dict)
+        dag = Dag(job_id, seg2, seg["graph"], stem_audio_path, out_dict)
         fields = dag.field_layers(oid)
         window = max(1, round(dag.duration * fps))
         for f in fields:
@@ -163,7 +163,7 @@ def render_song(
     its URL. `segments` each carry `graph`, `start`, `end`, `signals`, `finalOutputId`.
     See the module docstring for the continuous-field model. Cached by content hash;
     cancellation between segments returns None."""
-    out_path = ANIM_DIR / f"song_{_export_hash(job_id, segments, lyric_lines, export)}.mp4"
+    out_path = paths.ANIM_DIR / f"song_{_export_hash(job_id, segments, lyric_lines, export)}.mp4"
     url = f"/fluid/{out_path.name}"
     ctx = build_plan(job_id, segments, lyric_lines, export, stem_audio_path)
     if out_path.exists():  # identical export already rendered
@@ -173,7 +173,7 @@ def render_song(
         return url
 
     render_id = out_path.stem + uuid.uuid4().hex[:8]
-    scratch = STREAM_DIR / render_id
+    scratch = paths.STREAM_DIR / render_id
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir(parents=True, exist_ok=True)
     silent = scratch / "video.mp4"
@@ -201,7 +201,7 @@ def render_song(
             _mux_audio(silent, audio, out_path)
         else:  # no audio available — ship the silent video
             shutil.move(str(silent), str(out_path))
-        render_cache.evict(ANIM_DIR)
+        render_cache.evict(paths.ANIM_DIR)
         if on_progress:
             on_progress(ctx["total"], ctx["total"], url)
         return url

@@ -21,6 +21,7 @@ import time
 
 from . import db
 from . import graph as graphmod
+from . import paths
 from .paths import ANALYSIS_DIR, ASSETS_DIR, asset_file_for_url
 
 log = logging.getLogger("kaika.cache")
@@ -132,7 +133,7 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
 
     removed = 0
     cutoff = now - keep_recent_sec
-    for p in graphmod.ANIM_DIR.glob("*.mp4"):  # non-recursive: leaves stream/ scratch
+    for p in paths.ANIM_DIR.glob("*.mp4"):  # non-recursive: leaves stream/ scratch
         if p.stem in reachable:
             continue
         try:

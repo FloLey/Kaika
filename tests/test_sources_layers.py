@@ -16,6 +16,7 @@ import pytest
 from PIL import Image
 
 from backend import graph as G
+from backend import paths
 from backend import sources as S
 
 _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
@@ -40,7 +41,7 @@ def assets(tmp_path, monkeypatch):
              "-i", "testsrc=size=48x32:rate=10:duration=2", "-pix_fmt", "yuv420p", str(d / "vid.mp4")],
             check=True)
         vid_url = f"/assets/{job}/vid.mp4"
-    monkeypatch.setattr(G, "ASSETS_DIR", tmp_path)
+    monkeypatch.setattr(paths, "ASSETS_DIR", tmp_path)
     return job, str(d / "img.png"), f"/assets/{job}/img.png", vid_url, str(d / "vid.mp4")
 
 

@@ -17,6 +17,11 @@ SPECTRO_DIR = DATA_DIR / "spectrograms"
 ANALYSIS_DIR = DATA_DIR / "analysis"
 FLUID_DIR = DATA_DIR / "fluid"
 ASSETS_DIR = DATA_DIR / "assets"  # user-uploaded image/video layer assets, per job_id
+# Rendered-clip cache + streaming scratch. ANIM_DIR is the same dir the `/fluid/<name>`
+# route serves (FLUID_DIR) — the render side calls it ANIM_DIR. Consumers read these
+# late-bound (`paths.ANIM_DIR`) so tests patch ONE place.
+ANIM_DIR = FLUID_DIR
+STREAM_DIR = FLUID_DIR / "stream"
 for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, FLUID_DIR, ASSETS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
