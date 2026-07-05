@@ -1,9 +1,11 @@
-// AUTO-GENERATED from backend/animation_params.py (FLUID_PARAM_SPEC).
-// Do NOT edit by hand — run `python -m backend.gen_fluid_params` (or `make
-// gen-params`) and commit the result. A pytest asserts this file matches the spec.
+// AUTO-GENERATED from backend/animation_params.py (FLUID_PARAM_SPEC,
+// COLOR_PARAM_SPEC, SOURCE_PARAM_SPEC). Do NOT edit by hand — run `python -m
+// backend.gen_fluid_params` (or `make gen-params`) and commit the result. A pytest
+// asserts this file matches the specs.
 //
-// The fluid param spec (01 §3.5): native-unit ranges/defaults + UI metadata
-// (label/step/group/fmt). simulate() reads each key under source.* or fluid.*.
+// Native-unit ranges/defaults + UI metadata (label/step/group/fmt) for every
+// modulatable port: the fluid card (01 §3.5), the color (dye) card, and the
+// source layer cards (lyrics / image / video / backdrop).
 
 const fmtFixed = (n) => (v) => v.toFixed(n);
 const fmtDeg = (v) => `${v | 0}°`;
@@ -22,3 +24,30 @@ export const FLUID_PARAMS = [
 export const FLUID_PARAM_KEYS = FLUID_PARAMS.map((p) => p.key);
 
 export const fluidParam = (k) => FLUID_PARAMS.find((p) => p.key === k);
+
+// The color (dye) card's modulatable ports.
+export const COLOR_PARAMS = [
+  { key: "r", label: "red", min: 0, max: 1, step: 0.01, def: 0.27, group: "color", fmt: fmtFixed(2) },
+  { key: "g", label: "green", min: 0, max: 1, step: 0.01, def: 0.69, group: "color", fmt: fmtFixed(2) },
+  { key: "b", label: "blue", min: 0, max: 1, step: 0.01, def: 1, group: "color", fmt: fmtFixed(2) },
+  { key: "intensity", label: "intensity", min: 0, max: 3, step: 0.1, def: 1, group: "color", fmt: fmtFixed(1) },
+  { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.05, def: 1, group: "color", fmt: fmtFixed(2) },
+  { key: "position", label: "position", min: 0, max: 1, step: 0.01, def: 0, group: "color", fmt: fmtFixed(2) },
+];
+
+// Per source-card modulatable ports (lyrics / image / video / backdrop).
+export const SOURCE_PARAMS = {
+  "lyrics": [
+    { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+  ],
+  "image": [
+    { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+  ],
+  "video": [
+    { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+    { key: "speed", label: "speed", min: 0, max: 4, step: 0.05, def: 1, group: "src", fmt: fmtFixed(2) },
+  ],
+  "backdrop": [
+    { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+  ],
+};

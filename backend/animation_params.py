@@ -149,6 +149,31 @@ COLOR_PARAMS: dict[str, tuple[float, float, float]] = {
     p["key"]: (p["min"], p["max"], p["default"]) for p in COLOR_PARAM_SPEC
 }
 
+# Rich per-card port specs for the non-fluid SOURCE cards (lyrics / image / video /
+# backdrop). Same pattern as FLUID_PARAM_SPEC: this is the single source of truth —
+# min/max/default feed the executor's compact view (sources.SOURCE_PARAMS) and
+# label/step/fmt feed the GENERATED frontend table (gen_fluid_params -> nodeParams),
+# so the UI ranges can never drift from what the render maps.
+def _opacity_spec(step: float = 0.01) -> dict:
+    return {"key": "opacity", "label": "opacity", "min": 0.0, "max": 1.0,
+            "step": step, "default": 1.0, "fmt": "dp2"}
+
+
+SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
+    # The lyrics fill/outline colours come from wired `color` cards and the text box
+    # defines size/placement, so `opacity` is the only modulatable port. Image is a
+    # static asset in a box — likewise. Video adds `speed` (the source advances by
+    # speed/fps each frame, so a wired signal time-warps the clip).
+    "lyrics": [_opacity_spec()],
+    "image": [_opacity_spec()],
+    "video": [
+        _opacity_spec(),
+        {"key": "speed", "label": "speed", "min": 0.0, "max": 4.0, "step": 0.05,
+         "default": 1.0, "fmt": "dp2"},
+    ],
+    "backdrop": [_opacity_spec()],
+}
+
 # Static params (not ports in v1; set on the fluid card) and where they nest.
 # `duration`, `fps`, `grid` live at the top level of the params dict; the rest are
 # nested under `source.*` in simulate(). Color/path are deliberately static in v1.

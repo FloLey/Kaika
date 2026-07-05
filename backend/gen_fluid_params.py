@@ -1,7 +1,8 @@
-"""Generate `frontend/src/lib/fluidParams.js` from `animation_params.FLUID_PARAM_SPEC`.
+"""Generate `frontend/src/lib/fluidParams.js` from the backend param specs
+(`animation_params.FLUID_PARAM_SPEC`, `COLOR_PARAM_SPEC`, `SOURCE_PARAM_SPEC`).
 
-The frontend fluid param spec is a pure projection of the backend table, so there
-is no hand-maintained mirror to drift. Run after editing the spec:
+The frontend param tables are a pure projection of the backend specs, so there
+is no hand-maintained mirror to drift. Run after editing a spec:
 
     python -m backend.gen_fluid_params          # rewrite the committed file
     python -m backend.gen_fluid_params --check   # exit 1 if the file is stale
@@ -14,7 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .animation_params import FLUID_PARAM_SPEC
+from .animation_params import COLOR_PARAM_SPEC, FLUID_PARAM_SPEC, SOURCE_PARAM_SPEC
 
 _OUT = Path(__file__).resolve().parent.parent / "frontend" / "src" / "lib" / "fluidParams.js"
 
@@ -28,7 +29,7 @@ def _num(x: float) -> str:
     return str(int(f)) if f == int(f) else repr(f)
 
 
-def _row(p: dict) -> str:
+def _row(p: dict, group: str | None = None, indent: str = "  ") -> str:
     fields = [
         f'key: "{p["key"]}"',
         f'label: "{p["label"]}"',
@@ -36,23 +37,30 @@ def _row(p: dict) -> str:
         f'max: {_num(p["max"])}',
         f'step: {_num(p["step"])}',
         f'def: {_num(p["default"])}',
-        f'group: "{p["ui_group"]}"',
+        f'group: "{group or p["ui_group"]}"',
     ]
     if p["fmt"] is not None:
         fields.append(f'fmt: {_FMT[p["fmt"]]}')
-    return "  { " + ", ".join(fields) + " },"
+    return indent + "{ " + ", ".join(fields) + " },"
 
 
 def render() -> str:
     """The full fluidParams.js source string (deterministic)."""
     rows = "\n".join(_row(p) for p in FLUID_PARAM_SPEC)
+    color_rows = "\n".join(_row(p, group="color") for p in COLOR_PARAM_SPEC)
+    source_blocks = "\n".join(
+        f'  "{card}": [\n' + "\n".join(_row(p, group="src", indent="    ") for p in spec) + "\n  ],"
+        for card, spec in SOURCE_PARAM_SPEC.items()
+    )
     return f"""\
-// AUTO-GENERATED from backend/animation_params.py (FLUID_PARAM_SPEC).
-// Do NOT edit by hand — run `python -m backend.gen_fluid_params` (or `make
-// gen-params`) and commit the result. A pytest asserts this file matches the spec.
+// AUTO-GENERATED from backend/animation_params.py (FLUID_PARAM_SPEC,
+// COLOR_PARAM_SPEC, SOURCE_PARAM_SPEC). Do NOT edit by hand — run `python -m
+// backend.gen_fluid_params` (or `make gen-params`) and commit the result. A pytest
+// asserts this file matches the specs.
 //
-// The fluid param spec (01 §3.5): native-unit ranges/defaults + UI metadata
-// (label/step/group/fmt). simulate() reads each key under source.* or fluid.*.
+// Native-unit ranges/defaults + UI metadata (label/step/group/fmt) for every
+// modulatable port: the fluid card (01 §3.5), the color (dye) card, and the
+// source layer cards (lyrics / image / video / backdrop).
 
 const fmtFixed = (n) => (v) => v.toFixed(n);
 const fmtDeg = (v) => `${{v | 0}}°`;
@@ -64,6 +72,16 @@ export const FLUID_PARAMS = [
 export const FLUID_PARAM_KEYS = FLUID_PARAMS.map((p) => p.key);
 
 export const fluidParam = (k) => FLUID_PARAMS.find((p) => p.key === k);
+
+// The color (dye) card's modulatable ports.
+export const COLOR_PARAMS = [
+{color_rows}
+];
+
+// Per source-card modulatable ports (lyrics / image / video / backdrop).
+export const SOURCE_PARAMS = {{
+{source_blocks}
+}};
 """
 
 

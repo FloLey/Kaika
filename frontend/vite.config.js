@@ -8,7 +8,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // NOTE: every backend route prefix must be listed here or the frontend 404s.
       "/upload": "http://127.0.0.1:5000",
+      "/upload-asset": "http://127.0.0.1:5000",
       "/segment": "http://127.0.0.1:5000",
       "/jobs": "http://127.0.0.1:5000",
       "/extract": "http://127.0.0.1:5000",

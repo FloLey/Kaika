@@ -18,16 +18,14 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from . import fonts as _fonts
+from .animation_params import SOURCE_PARAM_SPEC
 
-# key -> (min, max, default) per source card; mirrors lib/nodeParams.ts. The lyrics
-# fill/outline colours come from wired `color` cards (default white/black); the text
-# size + placement come from the box. So only `opacity` is a modulatable port. The
-# image/video layer cards likewise expose only `opacity` (box/fit/timing are static).
+# key -> (min, max, default) per source card — the executor's compact view, derived
+# from the rich spec in animation_params (which also generates the frontend table,
+# so the UI [lo, hi] can never drift from what the render maps).
 SOURCE_PARAMS: dict[str, dict[str, tuple[float, float, float]]] = {
-    "lyrics": {"opacity": (0.0, 1.0, 1.0)},
-    "image": {"opacity": (0.0, 1.0, 1.0)},
-    "video": {"opacity": (0.0, 1.0, 1.0), "speed": (0.0, 4.0, 1.0)},
-    "backdrop": {"opacity": (0.0, 1.0, 1.0)},
+    card: {p["key"]: (p["min"], p["max"], p["default"]) for p in spec}
+    for card, spec in SOURCE_PARAM_SPEC.items()
 }
 
 
