@@ -304,6 +304,120 @@ def _fit_vf(bw: int, bh: int, fit: str) -> str:
     return f"scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh}"  # cover
 
 
+class VideoClip:
+    """A resumable decoder for one video-layer node — the `fluid.FluidClip` of video.
+
+    Block streaming used to spawn a fresh ffmpeg per ~5s block, each paying seek +
+    pipeline-init and re-decoding overlapping GOP data. Because the block renderer's
+    source times are non-decreasing (speed >= 0, blocks are front-to-back), ONE
+    persistent rawvideo decoder can instead be opened at the first request and simply
+    read FORWARD across `frames()` calls. A backward request (never in normal
+    streaming; safety) transparently reopens the decoder at the new time, so
+    correctness never depends on decoder state.
+    """
+
+    def __init__(self, h, w, fps, *, asset_path, box_x=0.0, box_y=0.0, box_w=1.0,
+                 box_h=1.0, fit="cover", loop=True):
+        self.h, self.w, self.fps = int(h), int(w), int(fps)
+        self.x0, self.y0, self.bw, self.bh = _place_box(self.w, self.h, box_x, box_y, box_w, box_h)
+        self.path = str(asset_path) if asset_path else ""
+        self.fit = fit
+        self.loop = bool(loop)
+        self.dur = _video_meta(self.path)[0] if self.path else 0.0
+        self._proc: "subprocess.Popen | None" = None
+        self._seek = 0.0  # source time of decoded stream frame 0
+        self._fold = 0.0  # whole loops subtracted from request times (loop mode)
+        self._read = 0    # frames consumed from the stream so far
+        self._last: "np.ndarray | None" = None  # most recently decoded frame
+        self._eof = False
+
+    def close(self) -> None:
+        if self._proc is None:
+            return
+        try:
+            self._proc.stdout.close()
+        except OSError:
+            pass
+        self._proc.kill()
+        self._proc.wait()
+        self._proc = None
+
+    def _open(self, t0: float) -> None:
+        """(Re)start the decoder so stream frame 0 is the source frame at time `t0`.
+        With `loop`, whole loops are folded out of the seek (`-stream_loop -1` covers
+        overruns past the clip end); the `fps` filter resamples the source onto the
+        output grid so index math stays uniform. NO `-t`/`-frames:v` cap — frames are
+        pulled lazily, the pipe back-pressures ffmpeg, and `close()` reaps it."""
+        self.close()
+        self._fold = float(np.floor(t0 / self.dur) * self.dur) if (self.loop and self.dur > 0) else 0.0
+        self._seek = t0 - self._fold
+        cmd = ["ffmpeg", "-v", "error"]
+        if self.loop:
+            cmd += ["-stream_loop", "-1"]
+        cmd += ["-ss", f"{max(0.0, self._seek):.4f}", "-i", self.path,
+                "-vf", f"fps={self.fps},format=rgba,{_fit_vf(self.bw, self.bh, self.fit)}",
+                "-pix_fmt", "rgba", "-f", "rawvideo", "-"]
+        self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self._read = 0
+        self._last = None
+        self._eof = False
+
+    def _frame(self, idx: int):
+        """Read forward to stream frame `idx` and return it; at/after EOF (short or
+        non-looping clip) the last decoded frame holds. None until a frame decodes."""
+        n = self.bw * self.bh * 4
+        while self._read <= idx and not self._eof:
+            buf = self._proc.stdout.read(n)
+            if not buf or len(buf) < n:
+                self._eof = True
+                break
+            self._last = np.frombuffer(buf, np.uint8).reshape(self.bh, self.bw, 4)
+            self._read += 1
+        return self._last
+
+    def frames(self, src_t) -> np.ndarray:
+        """RGBA frames `(len(src_t), h, w, 4)` sampling the source at times `src_t`
+        (seconds, non-decreasing within AND across calls), placed into the box. Alpha
+        is the box/letterbox coverage; the caller scales it by `opacity`."""
+        count = len(src_t)
+        out = np.zeros((count, self.h, self.w, 4), np.uint8)
+        if not self.path or count == 0:
+            return out
+        src_t = np.asarray(src_t, np.float64)
+        if self.dur > 0 and not self.loop:  # hold the last frame once past the end
+            src_t = np.clip(src_t, 0.0, max(0.0, self.dur - 1.0 / float(self.fps)))
+        if self._proc is None:
+            self._open(float(src_t[0]))
+        idx = np.round((src_t - self._fold - self._seek) * self.fps).astype(int)
+        if idx[0] < max(0, self._read - 1):  # backward jump -> reopen at the new time
+            self._open(float(src_t[0]))
+            idx = np.round((src_t - self._fold - self._seek) * self.fps).astype(int)
+        idx = np.maximum(idx, 0)
+        for i, k in enumerate(idx):
+            f = self._frame(int(k))
+            if f is not None:
+                out[i, self.y0:self.y0 + self.bh, self.x0:self.x0 + self.bw] = f
+        return out
+
+
+def video_src_times(count, fps, src0, speed) -> np.ndarray:
+    """Source time (s) per output frame: `src_t[i] = src0 + (Σ speed before i) / fps`.
+    speed >= 0, so the times are non-decreasing — what `VideoClip.frames` requires."""
+    count = int(count)
+    sp = np.maximum(0.0, np.asarray(speed, np.float64).reshape(-1))
+    if sp.size < count:  # hold the last (or unit) speed if the array is short/scalar
+        sp = np.concatenate([sp, np.full(count - sp.size, sp[-1] if sp.size else 1.0)])
+    sp = sp[:count]
+    return float(src0) + np.concatenate([[0.0], np.cumsum(sp)[:-1]]) / float(fps)
+
+
+def apply_video_opacity(out: np.ndarray, opacity) -> np.ndarray:
+    """Scale a video layer's alpha by the per-frame `opacity` array, in place."""
+    op = np.asarray(opacity, np.float32).reshape(-1)[: out.shape[0], None, None]
+    out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
+    return out
+
+
 def video(count, h, w, fps, *, asset_path, box_x=0.0, box_y=0.0, box_w=1.0, box_h=1.0,
           fit="cover", loop=True, src0=0.0, speed=1.0, opacity) -> np.ndarray:
     """A video as an RGBA layer `(count, h, w, 4)`, placed into the box per `fit`.
@@ -311,46 +425,16 @@ def video(count, h, w, fps, *, asset_path, box_x=0.0, box_y=0.0, box_w=1.0, box_
     Timing is fully resolved by the caller (`graph._video_*`): `src0` is the source time
     (seconds) of output frame 0, and `speed` is a per-frame array — the source advances by
     `speed[i]/fps` each output frame, so a wired/modulated speed time-warps the clip
-    (constant speed reduces to plain linear playback). Source frames are sampled at those
-    (non-uniform) times from ONE decode of the covering span, resampled to the output rate
-    (`-stream_loop -1` continues past the clip end when `loop`, else the last frame holds).
-    Alpha = box coverage (transparent letterbox for `contain`) × `opacity`."""
+    (constant speed reduces to plain linear playback). Thin wrapper over `VideoClip`
+    (one decode of the covering span); the block renderer holds a `VideoClip` across
+    blocks instead. Alpha = box coverage (transparent letterbox for `contain`) × `opacity`."""
     count = int(count)
-    x0, y0, bw, bh = _place_box(w, h, box_x, box_y, box_w, box_h)
-    out = np.zeros((count, h, w, 4), np.uint8)
-    dur, _vw, _vh = _video_meta(str(asset_path)) if asset_path else (0.0, 16, 16)
     if not asset_path or count <= 0:
-        return _apply_opacity(out[0] if count else np.zeros((h, w, 4), np.uint8), max(count, 1), opacity)[:count]
-
-    sp = np.maximum(0.0, np.asarray(speed, np.float64).reshape(-1))
-    if sp.size < count:  # hold the last (or unit) speed if the array is short/scalar
-        sp = np.concatenate([sp, np.full(count - sp.size, sp[-1] if sp.size else 1.0)])
-    sp = sp[:count]
-    # Source time per output frame: src_t[i] = src0 + (Σ speed before i) / fps. speed>=0,
-    # so src_t is non-decreasing and frame 0 is the earliest — its time is the decode seek.
-    src_t = float(src0) + np.concatenate([[0.0], np.cumsum(sp)[:-1]]) / float(fps)
-    if dur > 0 and loop:  # periodic: fold the seek into [0, dur); stream_loop covers overruns
-        src_t = src_t - np.floor(src_t[0] / dur) * dur
-    elif dur > 0:  # no loop: hold the last frame once past the end
-        src_t = np.clip(src_t, 0.0, max(0.0, dur - 1.0 / float(fps)))
-    seek = float(src_t[0])
-    nsrc = int(np.ceil((src_t[-1] - seek) * fps)) + 2  # decode the span at the output grid rate
-
-    # NO `-t` (an output-duration cap clips frames when speed<1 -> slow-motion freeze); the
-    # `fps` filter resamples the source onto the output grid so index math is uniform.
-    cmd = ["ffmpeg", "-v", "error"]
-    if loop:
-        cmd += ["-stream_loop", "-1"]
-    cmd += ["-ss", f"{max(0.0, seek):.4f}", "-i", str(asset_path),
-            "-vf", f"fps={fps},format=rgba,{_fit_vf(bw, bh, fit)}",
-            "-frames:v", str(nsrc), "-pix_fmt", "rgba", "-f", "rawvideo", "-"]
-    proc = subprocess.run(cmd, capture_output=True)
-    buf = np.frombuffer(proc.stdout, np.uint8)
-    got = buf.size // (bw * bh * 4)
-    if got:
-        dframes = buf[: got * bw * bh * 4].reshape(got, bh, bw, 4)
-        idx = np.clip(np.round((src_t - seek) * fps).astype(int), 0, got - 1)  # nearest source frame
-        out[:, y0:y0 + bh, x0:x0 + bw, :] = dframes[idx]
-    op = np.asarray(opacity, np.float32).reshape(-1)[:count, None, None]
-    out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
-    return out
+        return _apply_opacity(np.zeros((h, w, 4), np.uint8), max(count, 1), opacity)[:count]
+    clip = VideoClip(h, w, fps, asset_path=asset_path, box_x=box_x, box_y=box_y,
+                     box_w=box_w, box_h=box_h, fit=fit, loop=loop)
+    try:
+        out = clip.frames(video_src_times(count, fps, src0, speed))
+    finally:
+        clip.close()
+    return apply_video_opacity(out, opacity)

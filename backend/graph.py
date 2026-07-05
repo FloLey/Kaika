@@ -896,6 +896,7 @@ class _Dag:
         self._block_fns: dict = {}  # node_id -> produce(a, b) (block streaming)
         self._executors: list = []  # per-combine branch pools, shut down by stream_blocks
         self._cache_writers: list = []  # discard() for incremental frame caches (cancel cleanup)
+        self._closers: list = []  # persistent per-node resources (e.g. VideoClip decoders)
 
     def _fluid_params(self, fluid_node):
         # Memoized per fluid: a fluid with drawn points resolves params through both
@@ -1158,6 +1159,9 @@ class _Dag:
             for discard in self._cache_writers:  # drop partial caches (no-op if committed)
                 discard()
             self._cache_writers.clear()
+            for close in self._closers:  # reap persistent decoders (also on cancel)
+                close()
+            self._closers.clear()
 
 
 # --------------------------------------------------------------------------- #
@@ -1466,15 +1470,16 @@ def _video_block(dag: "_Dag", node: dict):
     params = dag._fx_params(node)  # {opacity, speed} full-segment arrays
     speed_full = params["speed"]
     # Integrate speed over the WHOLE segment up front so the source-time origin stays
-    # continuous across stream blocks: src0 for block [a,b) = segment-frame-0 origin plus
-    # the seconds of source already advanced by frame a. `csum[a-1]` = Σ speed[:a] / fps.
-    csum = np.cumsum(speed_full, dtype=np.float64) / float(dag.fps)
+    # continuous across stream blocks — and hold ONE persistent decoder across them
+    # (mirrors the fluid producer's resumable FluidClip) instead of spawning a fresh
+    # seek+decode ffmpeg per block. The dag reaps it on stream end/cancel.
     src_base = _video_src0(d, speed_full, float(dag.segment.get("start", 0.0)))
+    src_t = sources.video_src_times(len(speed_full), dag.fps, src_base, speed_full)
+    clip = sources.VideoClip(gh, gw, dag.fps, asset_path=ap, **static)
+    dag._closers.append(clip.close)
 
     def produce(a, b):
-        src0 = src_base + (float(csum[a - 1]) if a > 0 else 0.0)
-        return sources.video(b - a, gh, gw, dag.fps, asset_path=ap, src0=src0, **static,
-                             speed=speed_full[a:b], opacity=params["opacity"][a:b])
+        return sources.apply_video_opacity(clip.frames(src_t[a:b]), params["opacity"][a:b])
 
     return produce
 
