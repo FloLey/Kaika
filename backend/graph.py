@@ -32,7 +32,7 @@ import numpy as np
 
 from . import fluid, fluid_cache, render_cache, signals, sources
 from .animation_params import COLOR_PARAMS, OUTPUT_DEFAULTS, PARAMS, SOURCE_STATIC_KEYS
-from .paths import ASSETS_DIR
+from .paths import ASSETS_DIR, asset_file_for_url
 
 # Modulatable-port specs for the non-fluid ported cards (FX + sources + the color
 # card): key -> (min, max, default). The single backend lookup for resolving their
@@ -1317,13 +1317,8 @@ def _lyrics_video(dag: "_Dag", node: dict) -> np.ndarray:
 def _asset_path(dag: "_Dag", node: dict) -> str:
     """The on-disk path for an image/video node's `assetUrl` (`/assets/<job>/<name>`),
     or "" if unset/missing (-> a transparent layer)."""
-    url = (node.get("data") or {}).get("assetUrl") or ""
-    parts = url.strip("/").split("/")
-    if len(parts) == 3 and parts[0] == "assets":
-        p = ASSETS_DIR / parts[1] / parts[2]
-        if p.exists():
-            return str(p)
-    return ""
+    p = asset_file_for_url((node.get("data") or {}).get("assetUrl"), ASSETS_DIR)
+    return str(p) if p is not None and p.exists() else ""
 
 
 def _box_static(d: dict) -> dict:
@@ -1548,13 +1543,8 @@ def render(
     return url
 
 
-def _encoder_error(enc: "subprocess.Popen") -> str:
-    """Drain a finished/broken stream encoder's stderr into a RuntimeError message."""
-    try:
-        err = enc.stderr.read() or b""
-    except OSError:
-        err = b""
-    return err.decode(errors="replace")[-2000:] or "ffmpeg stream encoder failed"
+# Back-compat alias — the encoder lifecycle helpers live in fluid.py now.
+_encoder_error = fluid.encoder_error
 
 
 def render_stream(
@@ -1617,14 +1607,14 @@ def render_stream(
             try:
                 enc.stdin.write(data)
             except BrokenPipeError as exc:
-                raise RuntimeError(_encoder_error(enc)) from exc
+                raise RuntimeError(fluid.encoder_error(enc)) from exc
             if on_progress:
                 on_progress(b, tot, f"/fluid/stream/{render_id}/preview.mp4?n={k}")
         if enc is not None:  # finalize: flush the encoder, promote to the cache path
             enc.stdin.close()
             enc.wait()
             if enc.returncode != 0:
-                raise RuntimeError(_encoder_error(enc))
+                raise RuntimeError(fluid.encoder_error(enc))
             enc = None
             shutil.move(str(preview), str(out_path))
             render_cache.evict(ANIM_DIR)
@@ -1632,14 +1622,5 @@ def render_stream(
             on_progress(total, total, url)
         return url
     finally:
-        if enc is not None and enc.poll() is None:  # cancelled / errored mid-stream
-            try:
-                enc.stdin.close()
-            except OSError:
-                pass
-            enc.terminate()
-            try:
-                enc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                enc.kill()
+        fluid.close_encoder(enc)  # no-op unless cancelled / errored mid-stream
         shutil.rmtree(scratch, ignore_errors=True)

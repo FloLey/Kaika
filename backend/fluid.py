@@ -524,6 +524,22 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     return frames, clip.fps, (clip.gh, clip.gw)
 
 
+def _encode_args(in_w: int, in_h: int, fps: int, out_w: int | None, out_h: int | None) -> list:
+    """The shared rawvideo -> libx264 ffmpeg args (one-shot and streaming encoders):
+    rgb24 frames on stdin, yuv420p out, upscaled crisply to `out_w`x`out_h` (default
+    512px square, rounded even for h264). Callers append container flags + the path."""
+    out_w = int(out_w) if out_w else 512
+    out_h = int(out_h) if out_h else 512
+    out_w -= out_w % 2  # h264 yuv420p needs even dimensions
+    out_h -= out_h % 2
+    return [
+        "ffmpeg", "-y", "-v", "error",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{in_w}x{in_h}", "-r", str(fps), "-i", "-",
+        "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-vf", f"scale={out_w}:{out_h}:flags=neighbor",  # upscale crisply
+    ]  # fmt: skip
+
+
 def render_mp4(
     frames: np.ndarray,
     fps: int,
@@ -540,37 +556,8 @@ def render_mp4(
     renderer uses `open_stream_encoder` instead.
     """
     h, w = int(frames.shape[1]), int(frames.shape[2])
-    out_w = int(out_w) if out_w else 512
-    out_h = int(out_h) if out_h else 512
-    out_w -= out_w % 2  # h264 yuv420p needs even dimensions
-    out_h -= out_h % 2
     path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-v",
-        "error",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgb24",
-        "-s",
-        f"{w}x{h}",
-        "-r",
-        str(fps),
-        "-i",
-        "-",
-        "-an",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-vf",
-        f"scale={out_w}:{out_h}:flags=neighbor",  # upscale crisply
-        str(path),
-    ]
+    cmd = _encode_args(w, h, fps, out_w, out_h) + ["-movflags", "+faststart", str(path)]
     proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.decode()[-2000:])
@@ -588,22 +575,40 @@ def open_stream_encoder(
     progressively valid and plays in a `<video>` while it's still growing. The caller
     writes each block, then closes stdin and waits to finalize (see graph.render_stream).
     """
-    out_w = int(out_w) if out_w else 512
-    out_h = int(out_h) if out_h else 512
-    out_w -= out_w % 2  # h264 yuv420p needs even dimensions
-    out_h -= out_h % 2
     path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        "ffmpeg", "-y", "-v", "error",
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{gw}x{gh}", "-r", str(fps), "-i", "-",
-        "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    cmd = _encode_args(gw, gh, fps, out_w, out_h) + [
         # ~1s GOPs with a keyframe at each fragment so partial reads decode cleanly.
         "-g", str(max(1, int(fps))), "-keyint_min", str(max(1, int(fps))), "-sc_threshold", "0",
         "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
-        "-vf", f"scale={out_w}:{out_h}:flags=neighbor",
         str(path),
     ]  # fmt: skip
     return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+
+def encoder_error(enc: "subprocess.Popen") -> str:
+    """Drain a finished/broken stream encoder's stderr into a RuntimeError message."""
+    try:
+        err = enc.stderr.read() or b""
+    except OSError:
+        err = b""
+    return err.decode(errors="replace")[-2000:] or "ffmpeg stream encoder failed"
+
+
+def close_encoder(enc: "subprocess.Popen | None") -> None:
+    """Tear down a stream encoder that is still running (cancelled / errored
+    mid-stream): close its stdin, terminate, and kill after a grace period. A no-op
+    for None or an already-finished process (the success path waits explicitly)."""
+    if enc is None or enc.poll() is not None:
+        return
+    try:
+        enc.stdin.close()
+    except OSError:
+        pass
+    enc.terminate()
+    try:
+        enc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        enc.kill()
 
 
 def params_hash(params: dict) -> str:

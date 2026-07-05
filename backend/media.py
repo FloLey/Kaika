@@ -106,60 +106,16 @@ def stem_audio_path(job_id: str, stem: str) -> Path | None:
     return wav if wav.exists() else None
 
 
-def download_youtube_audio(url: str, out_dir: Path) -> Path:
-    """Download the best available audio of a YouTube URL into ``out_dir`` as
-    ``original.<ext>`` (native container, no re-encode). Returns the path.
-
-    Raises RuntimeError with yt-dlp's output on failure.
-    """
-    out_tmpl = str(out_dir / "original.%(ext)s")
+def _ytdlp_download(url: str, out_dir: Path, stem: str, fmt: str, extra: list, what: str) -> list:
+    """Run yt-dlp with format `fmt` into ``out_dir/<stem>.<ext>`` and return the
+    matching output files (sorted; .txt/.lrc sidecars excluded). `extra` appends
+    download-specific flags; `what` names the output in error messages. Raises
+    RuntimeError with yt-dlp's output on failure/timeout."""
     cmd = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-        "-f",
-        "bestaudio/best",  # best audio-only stream, else best overall
-        "--no-playlist",
-        "--print-to-file",
-        "%(title)s",
-        str(out_dir / "yt_title.txt"),
-        "-o",
-        out_tmpl,
-        url,
-    ]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=YTDLP_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"yt-dlp timed out after {YTDLP_TIMEOUT}s") from None
-    if proc.returncode != 0:
-        raise RuntimeError((proc.stderr or proc.stdout)[-2000:])
-    hits = [
-        p for p in sorted(out_dir.glob("original.*")) if p.suffix.lower() not in (".txt", ".lrc")
-    ]
-    if not hits:
-        raise RuntimeError("yt-dlp finished but produced no audio file")
-    return hits[0]
-
-
-def download_youtube_video(url: str, out_dir: Path, stem: str = "ytvideo") -> Path:
-    """Download the best video+audio of a YouTube URL into ``out_dir`` as
-    ``<stem>.mp4`` (merged), returning the path. Used by the Video card's YouTube
-    import (the pipeline-start YouTube stays audio-only). Raises RuntimeError on
-    failure with yt-dlp's output."""
-    out_tmpl = str(out_dir / f"{stem}.%(ext)s")
-    cmd = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-        "-f",
-        "bv*+ba/b",  # best video+audio, else best single stream
-        "--merge-output-format",
-        "mp4",
-        "--no-playlist",
-        "-o",
-        out_tmpl,
-        url,
-    ]
+        sys.executable, "-m", "yt_dlp",
+        "-f", fmt, "--no-playlist", *extra,
+        "-o", str(out_dir / f"{stem}.%(ext)s"), url,
+    ]  # fmt: skip
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=YTDLP_TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -168,7 +124,36 @@ def download_youtube_video(url: str, out_dir: Path, stem: str = "ytvideo") -> Pa
         raise RuntimeError((proc.stderr or proc.stdout)[-2000:])
     hits = [p for p in sorted(out_dir.glob(f"{stem}.*")) if p.suffix.lower() not in (".txt", ".lrc")]
     if not hits:
-        raise RuntimeError("yt-dlp finished but produced no video file")
+        raise RuntimeError(f"yt-dlp finished but produced no {what} file")
+    return hits
+
+
+def download_youtube_audio(url: str, out_dir: Path) -> Path:
+    """Download the best available audio of a YouTube URL into ``out_dir`` as
+    ``original.<ext>`` (native container, no re-encode). Returns the path.
+
+    Raises RuntimeError with yt-dlp's output on failure.
+    """
+    hits = _ytdlp_download(
+        url, out_dir, "original",
+        "bestaudio/best",  # best audio-only stream, else best overall
+        ["--print-to-file", "%(title)s", str(out_dir / "yt_title.txt")],
+        "audio",
+    )
+    return hits[0]
+
+
+def download_youtube_video(url: str, out_dir: Path, stem: str = "ytvideo") -> Path:
+    """Download the best video+audio of a YouTube URL into ``out_dir`` as
+    ``<stem>.mp4`` (merged), returning the path. Used by the Video card's YouTube
+    import (the pipeline-start YouTube stays audio-only). Raises RuntimeError on
+    failure with yt-dlp's output."""
+    hits = _ytdlp_download(
+        url, out_dir, stem,
+        "bv*+ba/b",  # best video+audio, else best single stream
+        ["--merge-output-format", "mp4"],
+        "video",
+    )
     # Prefer the merged .mp4 if several intermediate files linger.
     return next((p for p in hits if p.suffix.lower() == ".mp4"), hits[0])
 

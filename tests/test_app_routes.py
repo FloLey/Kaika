@@ -9,13 +9,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from backend.app import app  # noqa: E402
-
-
-@pytest.fixture
-def client():
-    app.config["TESTING"] = True
-    return app.test_client()
+# `client` comes from conftest.py.
 
 
 def test_index_ok(client):

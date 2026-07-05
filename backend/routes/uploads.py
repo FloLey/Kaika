@@ -37,6 +37,7 @@ from ..paths import (
     SPECTRO_DIR,
     ANALYSIS_DIR,
     ASSETS_DIR,
+    ASSET_EXTS,
     STEMS,
     COLORMAPS,
     DEMUCS_TIMEOUT,
@@ -44,12 +45,10 @@ from ..paths import (
 
 bp = Blueprint("uploads", __name__)
 
-# Image/video layer assets: kind -> allowed extensions. Content-addressed by hash so
-# an identical re-upload dedupes and the reference is immutable.
-_ASSET_EXTS = {
-    "image": {"png", "jpg", "jpeg", "webp"},
-    "video": {"mp4", "mov", "webm", "m4v"},
-}
+# Assets are content-addressed by hash so an identical re-upload dedupes and the
+# reference is immutable. Allowed extensions live in paths.ASSET_EXTS (shared with
+# the serving route's mimetype table).
+_ASSET_EXTS = ASSET_EXTS
 _ASSET_MAX_BYTES = int(os.environ.get("ASSET_MAX_BYTES", str(200 * 1024**2)))  # 200 MB
 
 

@@ -21,7 +21,7 @@ import time
 
 from . import db
 from . import graph as graphmod
-from .paths import ANALYSIS_DIR, ASSETS_DIR
+from .paths import ANALYSIS_DIR, ASSETS_DIR, asset_file_for_url
 
 log = logging.getLogger("kaika.cache")
 
@@ -66,9 +66,8 @@ def _hashes_from(row: dict, job_id: str) -> set[str]:
 
 
 def _asset_file(url: str):
-    """`/assets/<job>/<name>` -> its on-disk path, or None."""
-    parts = (url or "").strip("/").split("/")
-    return ASSETS_DIR / parts[1] / parts[2] if len(parts) == 3 and parts[0] == "assets" else None
+    """`/assets/<job>/<name>` -> its on-disk path, or None (test-patchable ASSETS_DIR)."""
+    return asset_file_for_url(url, ASSETS_DIR)
 
 
 def _assets_from(row: dict) -> set:

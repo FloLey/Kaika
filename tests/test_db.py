@@ -26,12 +26,7 @@ def test_migrate_is_idempotent():
     assert once == twice
 
 
-@pytest.fixture
-def live_db():
-    try:
-        db.init_schema()
-    except db.DBUnavailable:
-        pytest.skip("no database reachable")
+# `live_db` comes from conftest.py.
 
 
 def test_project_round_trip(live_db):

@@ -18,6 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
+from . import render_cache
+
 log = logging.getLogger("kaika.cache")
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "fluid_cache"
@@ -133,7 +135,7 @@ def evict(
     now: float | None = None,
 ) -> int:
     """Age-out then LRU-evict the frame cache; return the count removed. `now` is
-    injectable for tests. Mirrors `render_cache.evict` (mtime = last use)."""
+    injectable for tests. Shares `render_cache`'s policy (mtime = last use)."""
     now = time.time() if now is None else now
     # Reap abandoned incremental writes (a render cancelled before finalize). Their
     # mtime advances every block while active, so anything untouched for >5 min is dead.
@@ -144,34 +146,11 @@ def evict(
         except OSError:
             pass
 
-    entries: list[tuple[Path, float, int]] = []
-    for p in CACHE_DIR.glob("*.npy"):
-        if p.name.endswith(".tmp.npy"):
-            continue  # not a committed entry
-        try:
-            st = p.stat()
-        except OSError:
-            continue
-        entries.append((p, st.st_mtime, st.st_size))
-
-    removed = 0
-    cutoff = now - max_age_days * 86400
-    kept: list[tuple[Path, float, int]] = []
-    for p, mtime, size in entries:
-        if mtime < cutoff and _rm(p):
-            removed += 1
-        else:
-            kept.append((p, mtime, size))
-
-    total = sum(size for _, _, size in kept)
-    if total > max_bytes:
-        for p, _mtime, size in sorted(kept, key=lambda t: t[1]):  # oldest first
-            if total <= max_bytes:
-                break
-            if _rm(p):
-                removed += 1
-                total -= size
-
+    committed = (p for p in CACHE_DIR.glob("*.npy") if not p.name.endswith(".tmp.npy"))
+    removed = render_cache.evict_entries(
+        render_cache.stat_entries(committed),
+        max_bytes=max_bytes, max_age_days=max_age_days, now=now,
+    )
     if removed:
         log.info("fluid frame cache: evicted %d entr(ies)", removed)
     return removed

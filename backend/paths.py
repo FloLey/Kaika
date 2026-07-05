@@ -20,6 +20,27 @@ ASSETS_DIR = DATA_DIR / "assets"  # user-uploaded image/video layer assets, per 
 for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, FLUID_DIR, ASSETS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
+# Image/video layer assets: kind -> allowed upload extensions, ext -> served mimetype.
+# The single source for the upload validation (routes/uploads) and the file serving
+# (routes/serving); an asset URL is always `/assets/<job_id>/<sha16>.<ext>`.
+ASSET_EXTS = {
+    "image": {"png", "jpg", "jpeg", "webp"},
+    "video": {"mp4", "mov", "webm", "m4v"},
+}
+ASSET_MIME = {
+    "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
+    "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm", "m4v": "video/mp4",
+}
+
+
+def asset_file_for_url(url: str, assets_dir: Path | None = None):
+    """`/assets/<job>/<name>` -> its on-disk path (no existence check), or None for
+    anything else. `assets_dir` lets callers pass their (test-patchable) module copy."""
+    parts = (url or "").strip("/").split("/")
+    base = ASSETS_DIR if assets_dir is None else assets_dir
+    return base / parts[1] / parts[2] if len(parts) == 3 and parts[0] == "assets" else None
+
+
 # Stems demucs produces, plus the synthetic "original" (the uploaded mix).
 STEMS = ["original", "vocals", "drums", "bass", "other"]
 

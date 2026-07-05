@@ -41,25 +41,23 @@ def _rm(p: Path) -> bool:
         return False
 
 
-def evict(
-    cache_dir: Path,
-    *,
-    max_bytes: int = CACHE_MAX_BYTES,
-    max_age_days: float = CACHE_MAX_AGE_DAYS,
-    now: float | None = None,
-) -> int:
-    """Age-out then LRU-evict the clip cache; return the count removed.
-
-    `now` is injectable for tests (defaults to time.time())."""
-    now = time.time() if now is None else now
+def stat_entries(paths) -> list[tuple[Path, float, int]]:
+    """`[(path, mtime, size)]` for the given paths, skipping unstat-able ones."""
     entries: list[tuple[Path, float, int]] = []
-    for p in cache_dir.glob("*.mp4"):
+    for p in paths:
         try:
             st = p.stat()
         except OSError:
             continue
         entries.append((p, st.st_mtime, st.st_size))
+    return entries
 
+
+def evict_entries(
+    entries: list[tuple[Path, float, int]], *, max_bytes: int, max_age_days: float, now: float
+) -> int:
+    """The shared age-out + LRU policy over `[(path, mtime, size)]`; returns the count
+    removed. Used by this clip cache and the raw-frame cache (fluid_cache)."""
     removed = 0
     # 1. Age-out: drop anything unused for longer than the cutoff.
     cutoff = now - max_age_days * 86400
@@ -79,7 +77,24 @@ def evict(
             if _rm(p):
                 removed += 1
                 total -= size
+    return removed
 
+
+def evict(
+    cache_dir: Path,
+    *,
+    max_bytes: int = CACHE_MAX_BYTES,
+    max_age_days: float = CACHE_MAX_AGE_DAYS,
+    now: float | None = None,
+) -> int:
+    """Age-out then LRU-evict the clip cache; return the count removed.
+
+    `now` is injectable for tests (defaults to time.time())."""
+    now = time.time() if now is None else now
+    removed = evict_entries(
+        stat_entries(cache_dir.glob("*.mp4")),
+        max_bytes=max_bytes, max_age_days=max_age_days, now=now,
+    )
     if removed:
         log.info("render cache: evicted %d clip(s)", removed)
     return removed

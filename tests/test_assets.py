@@ -18,20 +18,8 @@ from PIL import Image
 pytest.importorskip("torch")  # importing backend.app pulls torch (matches test_app_routes)
 
 from backend import db  # noqa: E402
-from backend.app import app  # noqa: E402
 
-
-@pytest.fixture
-def client():
-    return app.test_client()
-
-
-@pytest.fixture
-def live_db():
-    try:
-        db.init_schema()
-    except db.DBUnavailable:
-        pytest.skip("no database reachable")
+# `client` and `live_db` come from conftest.py.
 
 
 def _mk_project(job):

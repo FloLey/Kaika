@@ -30,7 +30,8 @@ import uuid
 import numpy as np
 
 from . import fluid, render_cache
-from .graph import ANIM_DIR, STREAM_DIR, _Dag, _encoder_error
+from .fluid import close_encoder, encoder_error
+from .graph import ANIM_DIR, STREAM_DIR, _Dag
 
 log = logging.getLogger("kaika.export")
 
@@ -184,7 +185,7 @@ def render_song(
             try:
                 enc.stdin.write(styled.tobytes())
             except BrokenPipeError as exc:
-                raise RuntimeError(_encoder_error(enc)) from exc
+                raise RuntimeError(encoder_error(enc)) from exc
             if on_progress:
                 on_progress(b, ctx["total"], f"/fluid/stream/{render_id}/video.mp4?n={b}")
         if should_cancel and should_cancel():  # iter stopped early -> cancelled
@@ -193,7 +194,7 @@ def render_song(
             enc.stdin.close()
             enc.wait()
             if enc.returncode != 0:
-                raise RuntimeError(_encoder_error(enc))
+                raise RuntimeError(encoder_error(enc))
             enc = None
         audio = stem_audio_path(job_id, "original")
         if audio is not None:
@@ -205,14 +206,5 @@ def render_song(
             on_progress(ctx["total"], ctx["total"], url)
         return url
     finally:
-        if enc is not None and enc.poll() is None:
-            try:
-                enc.stdin.close()
-            except OSError:
-                pass
-            enc.terminate()
-            try:
-                enc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                enc.kill()
+        close_encoder(enc)  # no-op unless cancelled / errored mid-stream
         shutil.rmtree(scratch, ignore_errors=True)

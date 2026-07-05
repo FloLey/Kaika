@@ -9,7 +9,7 @@ from flask import Blueprint, abort, jsonify, send_file
 from .. import fonts
 from ..media import serve_range, stem_audio_path
 from ..web import validate_job_id
-from ..paths import ASSETS_DIR, FLUID_DIR, SPECTRO_DIR, STEMS
+from ..paths import ASSETS_DIR, ASSET_MIME, FLUID_DIR, SPECTRO_DIR, STEMS
 
 bp = Blueprint("media", __name__)
 
@@ -77,10 +77,7 @@ def audio(job_id: str, stem: str):
     return serve_range(path, mimetype=mimetype)
 
 
-_ASSET_MIME = {
-    "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
-    "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm", "m4v": "video/mp4",
-}
+_ASSET_MIME = ASSET_MIME  # shared ext -> mimetype table (paths.py)
 
 
 @bp.route("/assets/<job_id>/<name>")
