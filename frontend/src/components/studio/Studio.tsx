@@ -30,6 +30,9 @@ interface StudioProps {
   setOutput: (o: OutputSettingsT) => void;
   lyricLines?: unknown[];
   onSaveLyricLines?: (lines: unknown[]) => Promise<void>;
+  // Which mix the shared transport plays ("instrumental" while building a cover
+  // keeps the old vocal from fighting the new words).
+  audioMode?: "original" | "instrumental";
   onEditSplit?: () => void;
   onExport?: () => void;
 }
@@ -51,6 +54,7 @@ export default function Studio({
   setOutput,
   lyricLines,
   onSaveLyricLines,
+  audioMode,
   onEditSplit,
   onExport,
 }: StudioProps) {
@@ -216,7 +220,7 @@ export default function Studio({
       <div className={"studio-main" + (isFull ? " full" : "")} ref={studioMainRef}>
         <audio
           ref={refAudio}
-          src={job ? `/audio/${job}/original` : ""}
+          src={job ? `/audio/${job}/${audioMode === "instrumental" ? "instrumental" : "original"}` : ""}
           preload="auto"
           onLoadedMetadata={(e) => {
             const d = e.currentTarget.duration;

@@ -304,6 +304,7 @@ export default function App() {
           setOutput={setOutput}
           lyricLines={lyricLines}
           onSaveLyricLines={saveLyricLines}
+          audioMode={exportSettings.audioMode}
           onEditSplit={() => setStep("review")}
           onExport={() => setStep("export")}
         />

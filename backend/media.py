@@ -86,8 +86,36 @@ def find_stem_dir(job_out: Path) -> Path:
     return songs[0]
 
 
+def _ensure_instrumental(stem_dir: Path) -> Path | None:
+    """The vocals-removed mix (drums+bass+other), built lazily next to the stems
+    and cached as ``instrumental.wav``. The karaoke track for covers/rewritten
+    lyrics: everything demucs separated except the vocal. `normalize=0` keeps
+    amix from level-shifting the result (the stems already sum to the mix).
+    Returns None if a source stem is missing or ffmpeg fails."""
+    out = stem_dir / "instrumental.wav"
+    if out.exists():
+        return out
+    parts = [stem_dir / f"{s}.wav" for s in ("drums", "bass", "other")]
+    if not all(p.exists() for p in parts):
+        return None
+    cmd = ["ffmpeg", "-y", "-v", "error"]
+    for p in parts:
+        cmd += ["-i", str(p)]
+    cmd += ["-filter_complex", "amix=inputs=3:normalize=0", str(out)]
+    proc = subprocess.run(cmd, capture_output=True)
+    if proc.returncode != 0 or not out.exists():
+        out.unlink(missing_ok=True)
+        return None
+    return out
+
+
 def stem_audio_path(job_id: str, stem: str) -> Path | None:
-    """Resolve the on-disk audio file for a given job/stem, or None."""
+    """Resolve the on-disk audio file for a given job/stem, or None.
+
+    Besides the demucs stems and the uploaded ``original``, accepts the pseudo-stem
+    ``instrumental`` — the lazily-mixed vocals-removed track (see
+    `_ensure_instrumental`). One resolver serves both the export mux and the
+    ``/audio/<job>/<stem>`` transport route."""
     if stem == "original":
         job_uploads = UPLOAD_DIR / job_id
         if not job_uploads.is_dir():
@@ -96,12 +124,14 @@ def stem_audio_path(job_id: str, stem: str) -> Path | None:
         hits = sorted(job_uploads.glob("original.*"))
         return hits[0] if hits else None
 
-    if stem not in STEMS:
+    if stem != "instrumental" and stem not in STEMS:
         return None
     try:
         stem_dir = find_stem_dir(SEPARATED_DIR / job_id)
     except FileNotFoundError:
         return None
+    if stem == "instrumental":
+        return _ensure_instrumental(stem_dir)
     wav = stem_dir / f"{stem}.wav"
     return wav if wav.exists() else None
 

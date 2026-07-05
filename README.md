@@ -55,7 +55,8 @@ Frontend: React + Vite (Web Audio API).
 4. **Export** — mark one output per segment as **★ final**, then render the whole
    track in HD: one **continuous** simulation carries each layer across segment
    boundaries (only the wiring rules swap at a cut), streamed progressively and
-   muxed with the original audio.
+   muxed with the original audio — or the vocals-removed **instrumental** (for
+   covers / karaoke), mixed lazily from the separated stems.
 
    Everything is **per segment** and autosaves.
 
@@ -145,7 +146,9 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
   `{render_id}`; poll `GET /animate/stream/<id>`, stop with `POST
   /animate/stream/<id>/cancel` (the UI cancels on every edit). `POST /animate` is
   the one-shot synchronous variant; `POST /export/stream` (+ status/cancel) is
-  the whole-song HD export. Clips serve from `/fluid/<name>.mp4` (Range/seek).
+  the whole-song HD export (its `export.audioMode` picks the muxed audio:
+  the original mix or the vocals-removed **instrumental**, mixed lazily from the
+  separated stems). Clips serve from `/fluid/<name>.mp4` (Range/seek).
 
 ## Tests & linting
 

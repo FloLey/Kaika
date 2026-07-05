@@ -910,9 +910,12 @@ export default function Docs({ section }: { section?: string }) {
           <li>
             <strong>Render.</strong> The <strong>Final export ▸</strong> button (top of the Studio)
             opens the export stage. Set the <em>size</em> (aspect-locked width×height),{" "}
-            <em>fps</em>, and <em>detail / grid</em> (simulation cells — higher is sharper and
-            slower), then generate. The render streams progressively — a growing preview plays while
-            it works — and finishes with a <strong>download</strong> link.
+            <em>fps</em>, <em>detail / grid</em> (simulation cells — higher is sharper and slower),
+            and the <em>audio</em>: the <strong>original</strong> full mix, or{" "}
+            <strong>instrumental</strong> — the separated stems minus the vocal, for covers and
+            karaoke (the studio transport follows the same choice, so you build against the track
+            you'll ship). Then generate: the render streams progressively — a growing preview plays
+            while it works — and finishes with a <strong>download</strong> link.
           </li>
         </ul>
         <div className="note">

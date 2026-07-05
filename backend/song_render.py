@@ -196,7 +196,12 @@ def render_song(
             if enc.returncode != 0:
                 raise RuntimeError(encoder_error(enc))
             enc = None
-        audio = stem_audio_path(job_id, "original")
+        # audioMode "instrumental" muxes the vocals-removed mix (karaoke covers);
+        # fall back to the original if the instrumental can't be built.
+        want = export.get("audioMode", "original")
+        audio = stem_audio_path(job_id, want) if want == "instrumental" else None
+        if audio is None:
+            audio = stem_audio_path(job_id, "original")
         if audio is not None:
             _mux_audio(silent, audio, out_path)
         else:  # no audio available — ship the silent video

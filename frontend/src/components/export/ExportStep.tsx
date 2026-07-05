@@ -269,6 +269,23 @@ export default function ExportStep({
             <span className="export-hint">higher = crisper simulation, but slower to render</span>
           </div>
 
+          <div className="out-field">
+            <span className="out-label">audio</span>
+            <select
+              className="anim-select"
+              value={exportSettings.audioMode}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                set({ audioMode: e.target.value as ExportSettings["audioMode"] })
+              }
+            >
+              <option value="original">original (full mix)</option>
+              <option value="instrumental">instrumental (vocals removed)</option>
+            </select>
+            <span className="export-hint">
+              instrumental = the separated stems minus the vocal — for covers / karaoke
+            </span>
+          </div>
+
           {/* per-segment readiness checklist */}
           <div className="export-checklist">
             <div className="export-checklist-head">SEGMENTS</div>
