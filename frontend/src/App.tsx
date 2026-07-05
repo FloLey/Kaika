@@ -229,7 +229,7 @@ export default function App() {
           </button>
           <a
             className="help-link"
-            href={`/?doc=${step === "upload" || step === "review" || step === "studio" ? step : ""}`}
+            href={`/?doc=${["upload", "review", "studio", "export"].includes(step) ? step : ""}`}
             target="_blank"
             rel="noopener noreferrer"
             title="User guide"

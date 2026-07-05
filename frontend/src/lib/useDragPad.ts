@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import type { RefObject } from "react";
 
 // Pointer-drag plumbing shared by the points-source card (PointsNode) and the
-// FluidLab path editor. Both place/drag normalized points on a rectangular pad.
+// BoxPad. Both place/drag normalized points on a rectangular pad.
 //
 //   const { norm, startDrag } = useDragPad(padRef);
 //   norm(e)                       -> [x, y] in 0..1 within padRef's box (clamped)

@@ -3,8 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useDragPad } from "../lib/useDragPad";
 
-// First coverage of useDragPad — the pointer-drag plumbing shared by PointsNode
-// and the FluidLab PathEditor.
+// Coverage of useDragPad — the pointer-drag plumbing shared by PointsNode and BoxPad.
 afterEach(() => vi.restoreAllMocks());
 
 // A ref to a div whose box is a fixed 100x100 at the origin, so client coords map

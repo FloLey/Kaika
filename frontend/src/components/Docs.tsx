@@ -16,17 +16,18 @@ export const DOC_SECTION_IDS = [
   "animation-modulators",
   "animation-points",
   "animation-sources",
+  "assets",
   "animation-fx",
   "animation-combine",
   "animation-output",
+  "export",
   "fluid-lab",
   "fluid-source",
-  "fluid-path",
   "fluid-medium",
   "tips",
 ] as const;
 
-// In-app user guide. Rendered as its own root (see main.jsx) when the URL has
+// In-app user guide. Rendered as its own root (see main.tsx) when the URL has
 // ?doc=<section>, so every "?" in the app can open it in a new tab scrolled to
 // the relevant section. Section ids are referenced by Info badges and the header
 // help link — keep them in sync (guarded by DOC_SECTION_IDS + paramHelp.test.ts).
@@ -78,6 +79,9 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <a href="#animation">Create animation — the node graph</a>
+          </li>
+          <li>
+            <a href="#export">Final export — the whole track in HD</a>
           </li>
           <li>
             <a href="#fluid-lab">Playground &amp; the fluid card</a>
@@ -539,6 +543,24 @@ export default function Docs({ section }: { section?: string }) {
               </td>
             </tr>
             <tr>
+              <td>image · video</td>
+              <td>
+                Layer an <strong>uploaded picture or clip</strong> into the frame (
+                <a href="#animation-sources">see below</a>): drop a file on the card (or pick from
+                the <a href="#assets">📚 library</a>; the video card can also import from YouTube),
+                place it with the box, choose how it fills, and stack it with fluids in a{" "}
+                <em>layered</em> combine. Each gives a video out.
+              </td>
+            </tr>
+            <tr>
+              <td>backdrop</td>
+              <td>
+                Fills the whole frame with a solid <strong>colour</strong> — the bottom layer of a{" "}
+                <em>layered</em> combine when you want a non-black background (
+                <a href="#animation-sources">see below</a>). One video out.
+              </td>
+            </tr>
+            <tr>
               <td>color</td>
               <td>
                 Sets a fluid's <a href="#animation-fx">dye colour</a> at the source — swatch, RGB
@@ -686,7 +708,7 @@ export default function Docs({ section }: { section?: string }) {
           pipeline is capped at 64 sources.
         </div>
 
-        <h3 id="animation-sources">Other video sources — lyrics &amp; backdrop</h3>
+        <h3 id="animation-sources">Other video sources — lyrics, image, video &amp; backdrop</h3>
         <p>
           Not every layer has to be a fluid. These cards synthesise a video stream you can stack with
           fluids (in a <em>layered</em> combine) or send straight to an output:
@@ -699,6 +721,24 @@ export default function Docs({ section }: { section?: string }) {
             render otherwise flattens onto black). Opacity is modulatable.
           </li>
           <li>
+            <strong>Image</strong> — layers an uploaded picture into the frame.{" "}
+            <strong>Drop a file</strong> on the card (or click it to browse, or pick from the{" "}
+            <a href="#assets">📚 library</a>); drag the <em>placement box</em> to position it and
+            pull a corner to size it, then choose how the picture fills the box: <em>cover</em>{" "}
+            (fill + crop), <em>contain</em> (fit inside, transparent letterbox), or <em>stretch</em>.
+            Opacity is modulatable — wire a signal to fade it with the music.
+          </li>
+          <li>
+            <strong>Video</strong> — same box/fit/library as the image card, for a clip. Extra ways
+            in: <strong>import from YouTube</strong> right on the card (paste a URL). Timing
+            controls: <em>sync</em> (<em>song</em> keeps a background clip phase-continuous across
+            segments; <em>segment</em> restarts it at each cut), a <em>start</em> offset into the
+            source, and <em>loop</em> (off = the last frame holds). Both <em>opacity</em> and{" "}
+            <em>speed</em> are modulatable — a signal on <em>speed</em>{" "}
+            <strong>time-warps the clip</strong> (slow-motion in the quiet bars, whip-fast on the
+            drop).
+          </li>
+          <li>
             <strong>Lyrics</strong> — burns this track's <strong>aligned lyrics</strong> into the
             frame, timed to the vocal (the same alignment the review screen uses). Pick a{" "}
             <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs <em>word</em>{" "}
@@ -708,6 +748,31 @@ export default function Docs({ section }: { section?: string }) {
             <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em> input to
             recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
             keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.
+          </li>
+        </ul>
+
+        <h3 id="assets">The asset library — 📚</h3>
+        <p>
+          Every image or video you bring in lands in the project's <strong>asset library</strong>.
+          Open it with the <strong>📚 assets</strong> button in the bar at the bottom of the Studio,
+          or from any image/video card's <strong>📚 library</strong> button to pick an existing
+          asset instead of re-uploading.
+        </p>
+        <ul>
+          <li>
+            <strong>One copy, many cards.</strong> Files are stored by content, so uploading the
+            same file twice (even on different cards) keeps a single copy, and several cards can
+            reference the same asset.
+          </li>
+          <li>
+            <strong>Adding.</strong> Drop a file on an image/video card, browse from the card, or
+            import a YouTube video from the video card — all of them register the asset in the
+            library automatically.
+          </li>
+          <li>
+            <strong>Deleting.</strong> Remove an asset from the library manager (🗑). Cards that
+            still reference it will render an empty (transparent) layer, so delete freely — the
+            worst case is a see-through spot where the picture was.
           </li>
         </ul>
 
@@ -778,6 +843,12 @@ export default function Docs({ section }: { section?: string }) {
           <strong>🔊 volume</strong> (the simulation keeps running at any level), and toggle{" "}
           <strong>loop</strong>.
         </p>
+        <p>
+          Built a pipeline you like? <strong>⧉ copy → next</strong> (in the transport bar) copies
+          the whole card layout onto the <strong>next</strong> segment — and rewires its signal
+          cards onto that segment's own signals (cloning any it's missing), so the copy reacts to
+          the right audio, not the previous segment's.
+        </p>
 
         <h3 id="animation-output">Output settings</h3>
         <p>
@@ -809,13 +880,48 @@ export default function Docs({ section }: { section?: string }) {
         <div className="note">
           There's no background colour setting: un-dyed pixels render <strong>black</strong>. For a
           non-black background, add a <a href="#animation-sources">Backdrop</a> card as the{" "}
-          <strong>bottom</strong> layer of a <em>layered</em> combine.
+          <strong>bottom</strong> layer of a <em>layered</em> combine. These settings drive the
+          per-segment <em>previews</em>; the final track renders in HD from the{" "}
+          <a href="#export">export stage</a>.
+        </div>
+      </section>
+
+      <section id="export">
+        <h2>
+          <span className="num">7</span>Final export — the whole track in HD
+        </h2>
+        <p>
+          When every segment's animation is ready, render the <strong>whole track</strong> as one
+          continuous HD video (with the original audio muxed in). Two steps:
+        </p>
+        <ul>
+          <li>
+            <strong>Mark each segment's final output.</strong> On the animation tab, every output
+            card carries a <strong>☆ mark final</strong> button — click it (it turns{" "}
+            <strong>★ final</strong>) on the output you want exported for that segment. One per
+            segment; the export screen shows a checklist of any segment still unmarked.
+          </li>
+          <li>
+            <strong>Render.</strong> The <strong>Final export ▸</strong> button (top of the Studio)
+            opens the export stage. Set the <em>size</em> (aspect-locked width×height),{" "}
+            <em>fps</em>, and <em>detail / grid</em> (simulation cells — higher is sharper and
+            slower), then generate. The render streams progressively — a growing preview plays while
+            it works — and finishes with a <strong>download</strong> link.
+          </li>
+        </ul>
+        <div className="note">
+          The export is <strong>not</strong> the segment previews stitched together: the fluid
+          simulation runs <strong>continuously across segment boundaries</strong> (each layer's
+          velocity and dye carry through the cut; only the wiring rules swap), so transitions are
+          seamless. Cards that share a <em>layer</em> number across segments continue into each
+          other; a layer absent in a segment keeps drifting and fades. Like the previews, un-dyed
+          pixels are black — backdrops are layers.
         </div>
       </section>
 
       <section id="fluid-lab">
         <h2>
-          <span className="num">7</span>Playground &amp; the fluid card
+          <span className="num">8</span>Playground &amp; the fluid card
         </h2>
         <p>
           The <strong>Playground</strong> is an always-present sandbox project (open it from the
@@ -884,37 +990,6 @@ export default function Docs({ section }: { section?: string }) {
           </tbody>
         </table>
 
-        <h3 id="fluid-path">The path — moving the source</h3>
-        <p>
-          The source can travel along a path instead of staying put. Click the stage to add points,
-          drag markers to move them, and double-click a marker to remove it.
-        </p>
-        <table>
-          <tbody>
-            <tr>
-              <th>Control</th>
-              <th>Effect</th>
-            </tr>
-            <tr>
-              <td>path speed</td>
-              <td>
-                How many full trips along the points the source makes over the clip (0 = stay on the
-                first point).
-              </td>
-            </tr>
-            <tr>
-              <td>closed</td>
-              <td>Link the last point back to the first so it loops round and round.</td>
-            </tr>
-            <tr>
-              <td>ping-pong</td>
-              <td>
-                Travel back and forth along the points instead of looping (ignored when closed).
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
         <h3 id="fluid-medium">The medium — how the fluid behaves</h3>
         <table>
           <tbody>
@@ -941,14 +1016,14 @@ export default function Docs({ section }: { section?: string }) {
           </tbody>
         </table>
         <p>
-          Set the clip length, render, and you get a seamless looping video. Identical settings are
+          The clip always spans the full segment and loops seamlessly. Identical settings are
           cached, so re-rendering the same look is instant.
         </p>
       </section>
 
       <section id="tips">
         <h2>
-          <span className="num">8</span>Tips &amp; troubleshooting
+          <span className="num">9</span>Tips &amp; troubleshooting
         </h2>
         <ul>
           <li>

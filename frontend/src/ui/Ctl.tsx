@@ -13,11 +13,11 @@ interface CtlProps {
   section?: string;
 }
 
-// Shared slider + checkbox control rows used by SignalCard and FluidLab. The
+// Shared slider + checkbox control rows used by SignalCard and the node cards. The
 // optional `help`/`section` render a clickable "?" that deep-links into the
-// guide. `onChange` receives the parsed value (FluidLab adapts its (key,value)
+// guide. `onChange` receives the parsed value (some callers adapt their (key,value)
 // convention at the call site). `section` defaults to the Studio shaping anchor
-// since that's the most common caller; FluidLab overrides it.
+// since that's the most common caller; others override it.
 export default function Ctl({
   label,
   value,

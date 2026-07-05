@@ -17,7 +17,7 @@ const FLUID_PARAMS = RAW_FLUID_PARAMS as FluidParam[];
 // collapse to stay tidy.
 //
 // PATH: v1 uses a SIMPLIFIED static path — a single center point plus the radial
-// toggle (per 06's recommendation). The full FluidLab path editor is deferred.
+// toggle (per 06's recommendation).
 
 // COLOR is no longer a fluid group — the dye colour was extracted into a standalone
 // `color` card wired into the fluid's `color` input (see the color-input row below).
