@@ -92,7 +92,9 @@ cd frontend && npm install && cd ..
 ```
 
 The first separation downloads the `htdemucs` weights (~80 MB); the first lyric
-alignment downloads a Whisper model.
+alignment downloads a Whisper model; the first ✨ image generation downloads a
+small Stable Diffusion (`stabilityai/sd-turbo`, ~2 GB — override with
+`IMAGEGEN_MODEL`).
 
 ## Run (dev)
 

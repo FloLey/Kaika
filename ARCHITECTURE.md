@@ -137,9 +137,10 @@ combines/outputs). Every modulatable port is either a `const` or a
 Two deliberately separate in-memory managers (single-process, reset on restart —
 fine for a local tool):
 
-- **`jobs.py`** — ingestion (yt-dlp / Demucs / Whisper). **One worker**, so two
-  separations never fight over the GPU (and matplotlib state stays
-  single-threaded).
+- **`jobs.py`** — ingestion (yt-dlp / Demucs / Whisper) **and local image
+  generation** (`imagegen.py`, the Image gen card's ✨ — Stable Diffusion on
+  MPS, lazily loaded). **One worker**, so GPU work never overlaps (and
+  matplotlib state stays single-threaded).
 - **`render_jobs.py`** — streaming renders. Two workers, per-job cancel events;
   the UI cancels the previous render on every edit, so an abandoned render stops
   between blocks.

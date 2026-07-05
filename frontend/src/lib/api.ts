@@ -180,6 +180,18 @@ export async function assetFromYoutube(jobId: string, url: string): Promise<JobA
   return postJson<JobAck>(`/asset-from-youtube/${jobId}`, { url });
 }
 
+// Generate image(s) locally (the Image gen card's ✨). Async — returns a job id;
+// poll it (pollJob) for `{assets: Asset[]}` (runs on the GPU job queue, so a
+// generation waits politely behind a running separation).
+export async function generateImage(
+  jobId: string,
+  prompt: string,
+  seed: number,
+  count = 1
+): Promise<JobAck> {
+  return postJson<JobAck>(`/generate-image/${jobId}`, { prompt, seed, count });
+}
+
 export async function segmentJob(jobId: string): Promise<JobAck> {
   return postJson<JobAck>("/segment", { job_id: jobId });
 }

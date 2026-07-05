@@ -54,6 +54,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     hysteresis: "Dead band under the threshold \u2014 the trigger must fall below it before it can advance again (no machine-gunning).",
     fit: "How each image fills the box: cover (fill + crop), contain (letterbox), stretch.",
     box: "Where the slideshow sits in the frame \u2014 drag to move, pull a corner to size.",
+    prompt: "Describe the image to generate locally \u2014 the result lands in the slideshow and the \ud83d\udcda library.",
+    seed: "Generation seed \u2014 the same prompt + seed reproduces the same image; it bumps automatically after each \u2728.",
   },
   video: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",

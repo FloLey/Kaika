@@ -10,10 +10,11 @@ import { useNodeData } from "./useNodeData";
 import { dp2, FITS } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { IMAGEGEN_PARAMS } from "../../../lib/nodeParams";
+import { generateImage, pollJob } from "../../../lib/api";
 import AssetLibrary from "../../assets/AssetLibrary";
 import BoxPad from "./BoxPad";
 import type { NodeProps } from "./nodeProps";
-import type { ImagegenData, LayerFit } from "../../../lib/types";
+import type { Asset, ImagegenData, LayerFit } from "../../../lib/types";
 
 // The image-generator / slideshow layer: an ordered strip of stills that ADVANCES
 // to the next image on each rising edge of the `trigger` port past the card's
@@ -41,6 +42,45 @@ export default function ImagegenNode({
   const [libOpen, setLibOpen] = useState(false);
 
   const removeAt = (i: number) => set({ assetUrls: urls.filter((_, k) => k !== i) });
+
+  // ✨ local generation: kick a background job (the GPU queue), poll it, and append
+  // the new content-addressed asset URLs to the slideshow. Errors (e.g. the model
+  // stack not installed) surface inline; the card stays fully usable without it.
+  const [genBusy, setGenBusy] = useState(false);
+  const [genErr, setGenErr] = useState<string | null>(null);
+  const onGenerate = async () => {
+    if (!jobId || !d.prompt.trim() || genBusy) return;
+    setGenBusy(true);
+    setGenErr(null);
+    try {
+      const { job_id } = await generateImage(jobId, d.prompt.trim(), d.seed);
+      const result = await pollJob<{ assets: Asset[] }>(job_id);
+      const fresh = (result.assets || []).map((a) => a.url);
+      // Re-read the node's CURRENT list via the updater (urls may be stale by now),
+      // then bump the seed so the next ✨ gives a new variation by default.
+      set({ seed: d.seed + fresh.length });
+      if (fresh.length) {
+        onGraphChange((g) => ({
+          ...g,
+          nodes: g.nodes.map((n) =>
+            n.id === node.id
+              ? ({
+                  ...n,
+                  data: {
+                    ...n.data,
+                    assetUrls: [...((n.data as ImagegenData).assetUrls || []), ...fresh],
+                  },
+                } as typeof n)
+              : n
+          ),
+        }));
+      }
+    } catch (ex) {
+      setGenErr(ex instanceof Error ? ex.message : "generation failed");
+    } finally {
+      setGenBusy(false);
+    }
+  };
 
   return (
     <NodeFrame
@@ -89,6 +129,26 @@ export default function ImagegenNode({
       <button className="btn sm anim-asset-libbtn no-drag" onClick={() => setLibOpen(true)}>
         📚 library
       </button>
+      {/* ✨ local generation (Stable Diffusion on the GPU job queue). */}
+      <div className="anim-imagegen-gen no-drag">
+        <input
+          className="anim-imagegen-prompt"
+          type="text"
+          placeholder="describe an image to generate…"
+          value={d.prompt}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => set({ prompt: e.target.value })}
+          {...{ title: argHelp("imagegen", "prompt").help }}
+        />
+        <button
+          className="btn sm"
+          onClick={onGenerate}
+          disabled={genBusy || !d.prompt.trim()}
+          title="Generate an image locally (first run downloads the model, ~2 GB)"
+        >
+          {genBusy ? "…" : "✨ generate"}
+        </button>
+      </div>
+      {genErr && <div className="anim-asset-err">{genErr}</div>}
       {err && <div className="anim-asset-err">{err}</div>}
       {libOpen && (
         <AssetLibrary

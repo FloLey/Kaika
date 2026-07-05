@@ -744,7 +744,11 @@ export default function Docs({ section }: { section?: string }) {
             <em>hysteresis</em> band keeps a hovering signal from machine-gunning the slideshow;
             for clean beat-driven switching, feed it a drums signal (optionally through a{" "}
             <a href="#animation-modulators">gate</a>). Same box/fit placement as the image card;{" "}
-            <em>opacity</em> is modulatable too.
+            <em>opacity</em> is modulatable too. <strong>✨ generate</strong> runs a small Stable
+            Diffusion locally (the first run downloads the model, ~2 GB; set{" "}
+            <code>IMAGEGEN_MODEL</code> to swap it) — generated stills land in the slideshow and
+            the <a href="#assets">library</a> like any upload. Generation is seeded, so the same
+            prompt + seed reproduces the same image.
           </li>
           <li>
             <strong>Video</strong> — same box/fit/library as the image card, for a clip. Extra ways

@@ -62,6 +62,16 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS projects_updated_at_idx ON projects (updated_at DESC);
+
+-- Runtime-generated "card builder" cards. Unlike the built-in cards (which live in
+-- the frontend registry + backend handlers, shipped in git), these are user data:
+-- one JSONB definition per generated value-modulator card, loaded live so a new
+-- card is usable without a restart. See backend/card_plugins.py.
+CREATE TABLE IF NOT EXISTS generated_cards (
+  type       TEXT PRIMARY KEY,
+  data       JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
 """
 
 
@@ -246,4 +256,36 @@ def remove_asset(job_id: str, asset_id: str) -> bool:
             """,
             {"job_id": job_id, "id": str(asset_id)},
         )
+        return cur.rowcount > 0
+
+
+# --------------------------------------------------------------------------- #
+# Runtime-generated cards (card builder). One JSONB definition per card, keyed by
+# its node type. Read live by `card_plugins`, so a save is visible immediately.
+# --------------------------------------------------------------------------- #
+def save_card(card: dict) -> None:
+    """Insert or replace a generated card definition (keyed by `card["type"]`)."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO generated_cards (type, data) VALUES (%s, %s)
+            ON CONFLICT (type) DO UPDATE SET data = EXCLUDED.data
+            """,
+            (str(card["type"]), Jsonb(card)),
+        )
+
+
+def list_cards() -> list[dict[str, Any]]:
+    """Every generated card definition, oldest first (stable palette order)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT data FROM generated_cards ORDER BY created_at ASC"
+        ).fetchall()
+    return [row["data"] for row in rows]
+
+
+def delete_card(card_type: str) -> bool:
+    """Drop a generated card by type. False if it didn't exist."""
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM generated_cards WHERE type = %s", (card_type,))
         return cur.rowcount > 0

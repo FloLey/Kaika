@@ -13,7 +13,7 @@ from typing import Callable
 
 import numpy as np
 
-from . import fluid, signals
+from . import card_plugins, fluid, signals
 from .animation_params import COLOR_PARAMS, SOURCE_STATIC_KEYS
 from .graph_common import _POINT_CAP, FLUID_FPS, _video_source
 
@@ -243,6 +243,30 @@ def _gate_curve(base: np.ndarray, data: dict) -> np.ndarray:
     return out
 
 
+def _generated_curve(spec, graph, node_id, data, nframes, fps, resolve_source) -> np.ndarray:
+    """Run a generated card's sandboxed `curve(data, nframes, fps, inputs)`, resolving
+    its declared value-input ports first. Any failure (invalid curve, a raise, a
+    wrong-shaped return) degrades that node to flat 0 so one bad card can't break a
+    render. The result is coerced to float32 (nframes,) and clamped to 0..1."""
+    fn = card_plugins.curve_for(spec)
+    if fn is None:
+        return np.zeros(nframes, np.float32)
+    ins = []
+    for pid in spec.get("inputs", []):
+        src = _video_source(graph, node_id, pid)
+        ins.append(resolve_source(src) if src else np.zeros(nframes, np.float32))
+    try:
+        raw = fn(data, nframes, fps, ins)
+        out = np.asarray(raw, dtype=np.float32).reshape(-1)
+    except Exception:  # noqa: BLE001 - a broken generated card must not fail the render
+        log.warning("generated card '%s' failed at render; using flat 0", spec.get("type"), exc_info=True)
+        return np.zeros(nframes, np.float32)
+    if out.shape != (nframes,):
+        # Tolerate a length mismatch (resize by tiling/truncation) rather than crash.
+        out = np.resize(out, nframes).astype(np.float32) if out.size else np.zeros(nframes, np.float32)
+    return np.clip(np.nan_to_num(out), 0.0, 1.0)
+
+
 def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals_by_id, stem_audio_path):
     """A memoized value resolver: `node_id` -> 0..1 curve (length nframes),
     type-dispatched (signal / lfo / noise / shaper / math) and recursing through value
@@ -250,6 +274,10 @@ def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals
     cycle degrades to flat 0 instead of looping forever. Shared by `build_params`
     (fluid ports) and `_Dag` (FX-card ports)."""
     cache: dict[str, np.ndarray] = {}
+    # Generated ("card builder") value modulators, loaded once per render. Any node
+    # whose type isn't a built-in falls through to this map; an unknown type still
+    # degrades to flat 0. See backend/card_plugins.py.
+    gen_specs = card_plugins.specs_by_type()
 
     def resolve_source(node_id: str) -> np.ndarray:
         if node_id in cache:
@@ -284,6 +312,8 @@ def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals
                 src = _video_source(graph, node_id, pid)
                 ins.append(resolve_source(src) if src else np.zeros(nframes, np.float32))
             out = _math_combine(ins, data.get("op", "multiply"), float(data.get("mix", 0.5)), nframes)
+        elif t in gen_specs:
+            out = _generated_curve(gen_specs[t], graph, node_id, data, nframes, fps, resolve_source)
         else:
             out = np.zeros(nframes, np.float32)
         cache[node_id] = out

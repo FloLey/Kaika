@@ -150,6 +150,45 @@ def _download_asset_video(job_id: str, url: str) -> dict:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@bp.route("/generate-image/<job_id>", methods=["POST"])
+@json_body
+def generate_image(body, job_id):
+    """Generate image(s) locally (Stable Diffusion on MPS — see backend/imagegen.py)
+    and store them as library assets. Runs on the SAME single-worker job queue as
+    demucs/Whisper so GPU work never overlaps; the Image gen card polls /jobs/<id>
+    for `{assets: [...]}` and appends the URLs to its slideshow."""
+    if not validate_job_id(job_id):
+        return error_response("bad job id", 404)
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return error_response("provide a prompt", 400)
+    seed = int(body.get("seed") or 1)
+    count = max(1, min(4, int(body.get("count") or 1)))  # bound a single request
+    gen_job = uuid4().hex[:8]
+    jobs.submit(gen_job, "generating", lambda: _generate_assets(job_id, prompt, seed, count))
+    return jsonify({"job_id": gen_job})
+
+
+def _generate_assets(job_id: str, prompt: str, seed: int, count: int) -> dict:
+    """Background worker: run the local model, PNG-encode each image, and register
+    them as content-addressed library assets (so identical generations dedupe and
+    the render cache stays correct). Raises with a clean message when the model
+    stack isn't available — the job error surfaces on the card."""
+    import io
+
+    from .. import imagegen
+
+    images = imagegen.generate(prompt, seed=seed, count=count)
+    assets = []
+    for i, img in enumerate(images):
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        assets.append(
+            _store_asset(job_id, buf.getvalue(), f"gen-{seed + i}-{prompt[:24]}.png", kind="image")
+        )
+    return {"assets": assets}
+
+
 @bp.route("/upload", methods=["POST"])
 def upload():
     """Stage 1: take the audio (+ optional lyrics), then run the slow work

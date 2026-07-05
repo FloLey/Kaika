@@ -1513,6 +1513,23 @@
   border-radius: 0 0 0 4px;
 }
 
+.anim-imagegen-gen {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0;
+}
+.anim-imagegen-prompt {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+
 /* ---- lyrics line editor modal ---------------------------------------------- */
 .anim-modal.lyrics-editor {
   width: min(620px, 92vw);
