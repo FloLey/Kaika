@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent } from "react";
 import SegmentRail from "./SegmentRail";
 import SignalCard from "./SignalCard";
+import TransportClock from "./TransportClock";
 import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
 import AssetLibrary from "../assets/AssetLibrary";
@@ -9,7 +10,6 @@ import VolumeControl from "./VolumeControl";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
 import { STEM_META, seedSignal, copyLayout } from "../../lib/segments";
-import { fmtTime } from "../../lib/mel";
 import type {
   Graph,
   OutputSettings as OutputSettingsT,
@@ -94,7 +94,8 @@ export default function Studio({
     refAudio,
     audioProps,
     allPlaying,
-    clockT,
+    subscribeClock,
+    getClockT,
     volume,
     setVolume,
     loop,
@@ -261,19 +262,12 @@ export default function Studio({
             >
               {allPlaying ? "❚❚" : "▶"}
             </button>
-            <input
-              className="seg-timeline"
-              type="range"
-              min={0}
-              max={segLen}
-              step={0.01}
-              value={Math.min(clockT, segLen)}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => seek(parseFloat(e.target.value))}
-              title="segment timeline — scrub to navigate"
+            <TransportClock
+              subscribe={subscribeClock}
+              getClockT={getClockT}
+              segLen={segLen}
+              seek={seek}
             />
-            <span className="seg-time">
-              {fmtTime(clockT)} / {fmtTime(segLen)}
-            </span>
             <VolumeControl value={volume} onChange={setVolume} />
             <label className="loop-toggle" title="Loop the segment">
               <input

@@ -28,10 +28,27 @@ export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: Playb
   const [allPlaying, setAllPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
   const [volume, setVolume] = useState(1); // full-mix playback volume (0..1)
-  const [clockT, setClockT] = useState(0); // playhead within the segment (s)
   const [, setPlaying] = useState<Set<string>>(() => new Set()); // solo bookkeeping
   const audioEls = useRef(new Map<string, HTMLAudioElement>());
   const refAudio = useRef<HTMLAudioElement>(null); // clean full-mix reference
+
+  // The playhead (seconds within the segment) lives OUTSIDE React state: timeupdate
+  // fires ~4×/s and a setState here would re-render the whole studio tree (every
+  // SignalCard + the animation canvas) per tick. Only the transport readout cares,
+  // so it subscribes narrowly via useSyncExternalStore (see TransportClock).
+  const clockRef = useRef(0);
+  const clockSubs = useRef(new Set<() => void>());
+  const setClock = useCallback((t: number) => {
+    clockRef.current = t;
+    clockSubs.current.forEach((fn) => fn());
+  }, []);
+  const subscribeClock = useCallback((fn: () => void) => {
+    clockSubs.current.add(fn);
+    return () => {
+      clockSubs.current.delete(fn);
+    };
+  }, []);
+  const getClockT = useCallback(() => clockRef.current, []);
 
   // Seek the shared segment clock to `t` seconds within the segment (0..segLen).
   const seek = useCallback(
@@ -40,9 +57,9 @@ export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: Playb
       if (!a) return;
       const clamped = Math.min(Math.max(t, 0), segLen);
       a.currentTime = winStart + clamped;
-      setClockT(clamped);
+      setClock(clamped);
     },
-    [winStart, segLen]
+    [winStart, segLen, setClock]
   );
 
   // Tear down the Web Audio graph when leaving the studio.
@@ -117,8 +134,8 @@ export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: Playb
     if (refAudio.current) refAudio.current.pause();
     setPlaying(new Set());
     setAllPlaying(false);
-    setClockT(0);
-  }, []);
+    setClock(0);
+  }, [setClock]);
 
   const onTimeUpdate = useCallback(
     (e: SyntheticEvent<HTMLAudioElement>) => {
@@ -127,17 +144,17 @@ export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: Playb
       if (ct >= winEnd) {
         if (loop) {
           el.currentTime = winStart; // restart the segment
-          setClockT(0);
+          setClock(0);
         } else {
           el.pause();
           el.currentTime = winEnd;
-          setClockT(segLen);
+          setClock(segLen);
         }
         return;
       }
-      setClockT(Math.max(0, ct - winStart));
+      setClock(Math.max(0, ct - winStart));
     },
-    [winEnd, winStart, loop, segLen]
+    [winEnd, winStart, loop, segLen, setClock]
   );
 
   // Spread onto the reference <audio> element in Studio.
@@ -152,7 +169,8 @@ export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: Playb
     refAudio,
     audioProps,
     allPlaying,
-    clockT,
+    subscribeClock,
+    getClockT,
     volume,
     setVolume,
     loop,

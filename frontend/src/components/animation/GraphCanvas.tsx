@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as RPointerEvent, ReactNode } from "react";
 import usePanZoom from "./usePanZoom";
 import type { View } from "./usePanZoom";
@@ -22,6 +22,27 @@ interface PortMeta {
 type Updater = (g: Graph) => Graph;
 
 const EMPTY_SEL: ReadonlySet<string> = new Set();
+
+interface NodeCardProps {
+  node: GraphNode;
+  helpers: Omit<NodeHelpers, "onTitlePointerDown" | "selected">;
+  mkTitleDown: (node: GraphNode) => NodeHelpers["onTitlePointerDown"];
+  selected: boolean;
+  renderNode: (node: GraphNode, helpers: NodeHelpers) => ReactNode;
+}
+
+// One node card, memoized: while a drag/pan/edge tick re-renders the canvas many
+// times per second, a card whose node/selection/ctx didn't change is skipped
+// entirely (the expensive part of the tree — previews, params, video elements).
+const NodeCard = memo(function NodeCard({
+  node,
+  helpers,
+  mkTitleDown,
+  selected,
+  renderNode,
+}: NodeCardProps) {
+  return <>{renderNode(node, { ...helpers, onTitlePointerDown: mkTitleDown(node), selected })}</>;
+});
 
 interface GraphCanvasProps {
   graph: Graph;
@@ -122,6 +143,11 @@ export default function GraphCanvas({
   }, [tick]);
 
   // --- node dragging (moves the whole selection in one go) -------------------
+  // The gesture is LOCAL to the canvas: per pointermove we track the offset and
+  // re-render only this component (a tick) — the moving position wrappers update,
+  // while the memoized cards and the app-level graph state stay untouched. The
+  // graph is committed ONCE on pointer-up (one onGraphChange, one normalize pass),
+  // instead of per move.
   interface DragItem {
     id: string;
     origX: number;
@@ -134,6 +160,8 @@ export default function GraphCanvas({
     clickedId: string;
     wasGroup: boolean; // grabbed a node already part of a multi-selection
     moved: boolean;
+    dx: number; // live offset in graph units (applied to items' wrappers)
+    dy: number;
   }
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -170,6 +198,8 @@ export default function GraphCanvas({
         clickedId: node.id,
         wasGroup,
         moved: false,
+        dx: 0,
+        dy: 0,
       });
     },
     [onSelectionChange, toggleSel]
@@ -183,16 +213,23 @@ export default function GraphCanvas({
       const dx = (e.clientX - d.startX) / scaleRef.current;
       const dy = (e.clientY - d.startY) / scaleRef.current;
       if (!d.moved && Math.abs(dx) + Math.abs(dy) > 0.5) d.moved = true;
-      onGraphChange?.((g) => ({
-        ...g,
-        nodes: g.nodes.map((n) => {
-          const it = d.items.find((i) => i.id === n.id);
-          return it ? { ...n, x: it.origX + dx, y: it.origY + dy } : n;
-        }),
-      }));
+      d.dx = dx;
+      d.dy = dy;
+      tick(); // re-render the wrappers/edges only — no graph commit while dragging
     };
     const up = () => {
       const d = dragRef.current;
+      if (d && d.moved) {
+        // Commit the final positions in ONE graph update.
+        const { items, dx, dy } = d;
+        onGraphChange?.((g) => ({
+          ...g,
+          nodes: g.nodes.map((n) => {
+            const it = items.find((i) => i.id === n.id);
+            return it ? { ...n, x: it.origX + dx, y: it.origY + dy } : n;
+          }),
+        }));
+      }
       // A plain click (no drag) on a node inside a group collapses to just that node.
       if (d && !d.moved && d.wasGroup) onSelectionChange?.(new Set([d.clickedId]));
       setDrag(null);
@@ -203,7 +240,7 @@ export default function GraphCanvas({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, onGraphChange, onSelectionChange]);
+  }, [drag, onGraphChange, onSelectionChange, tick]);
 
   // --- connecting (drag from an out port to an in port) ----------------------
   interface Wire {
@@ -434,17 +471,27 @@ export default function GraphCanvas({
     })
     .filter((e): e is NonNullable<typeof e> => e !== null);
 
-  const helpers = {
-    onMove: (id: string, x: number, y: number) =>
-      onGraphChange?.((g) => ({
-        ...g,
-        nodes: g.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)),
-      })),
-    portRef,
-    startConnect,
-    onTitlePointerDown,
-    onLayoutChange: tick,
-  };
+  // Stable helper bag (all members are stable callbacks) so the memoized NodeCards
+  // can skip re-renders during drag/pan/edge ticks.
+  const helpers = useMemo(
+    () => ({
+      onMove: (id: string, x: number, y: number) =>
+        onGraphChange?.((g) => ({
+          ...g,
+          nodes: g.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)),
+        })),
+      portRef,
+      startConnect,
+      onLayoutChange: tick,
+    }),
+    [onGraphChange, portRef, startConnect, tick]
+  );
+
+  // Live drag offsets for the grabbed selection (graph state is untouched mid-drag;
+  // dragRef mutates per pointermove and each move tick()s, so this stays current).
+  const liveDrag = dragRef.current;
+  const dragIds =
+    liveDrag && liveDrag.moved ? new Set(liveDrag.items.map((i) => i.id)) : null;
 
   return (
     <div
@@ -501,13 +548,19 @@ export default function GraphCanvas({
               if (el) nodeEls.current.set(node.id, el);
               else nodeEls.current.delete(node.id);
             }}
-            style={{ position: "absolute", left: node.x, top: node.y }}
+            style={{
+              position: "absolute",
+              left: node.x + (dragIds?.has(node.id) ? liveDrag!.dx : 0),
+              top: node.y + (dragIds?.has(node.id) ? liveDrag!.dy : 0),
+            }}
           >
-            {renderNode(node, {
-              ...helpers,
-              onTitlePointerDown: onTitlePointerDown(node),
-              selected: selected.has(node.id),
-            })}
+            <NodeCard
+              node={node}
+              helpers={helpers}
+              mkTitleDown={onTitlePointerDown}
+              selected={selected.has(node.id)}
+              renderNode={renderNode}
+            />
           </div>
         ))}
       </div>

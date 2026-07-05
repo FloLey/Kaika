@@ -21,6 +21,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
     output,
     signals,
     lyricLines,
+    lyricsKey,
     groupClock,
     groupPlaying,
     segStart = 0,
@@ -64,10 +65,11 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
           ) +
           JSON.stringify(output || {}) +
           // The backend folds a lyrics card's burned-in text into output_hash, so a
-          // change to the aligned lines (which arrive async) must re-trigger the render.
-          `|ly:${JSON.stringify(lyricLines || [])}`
+          // change to the aligned lines (which arrive async) must re-trigger the
+          // render. The editor serializes them ONCE (ctx.lyricsKey) for all outputs.
+          `|ly:${lyricsKey ?? JSON.stringify(lyricLines || [])}`
         : "",
-    [graph, node.id, job, segment?.start, segment?.end, signals, output, lyricLines]
+    [graph, node.id, job, segment?.start, segment?.end, signals, output, lyricsKey, lyricLines]
   );
 
   // Auto-render this output (debounced) whenever its render key changes. The render
@@ -110,13 +112,20 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
         }
         myRender = render_id;
         activeRender.current = render_id;
+        // Poll with backoff (250→500→1000ms) while nothing changes; a progress
+        // advance resets to the fast cadence. N rendering outputs would otherwise
+        // stack 4N req/s against the backend for the whole render.
+        let pollMs = 250;
+        let lastDone = -1;
         for (;;) {
           const st = await api.getStreamStatus(render_id);
           if (stopped || id !== reqId.current) return; // a newer edit took over
           if (st.total) setProgress({ done: st.frames_done, total: st.total });
           if (st.state === "running") {
             if (st.preview_url) setVideoUrl(st.preview_url); // grows block by block
-            await new Promise((r) => setTimeout(r, 250));
+            pollMs = st.frames_done !== lastDone ? 250 : Math.min(pollMs * 2, 1000);
+            lastDone = st.frames_done;
+            await new Promise((r) => setTimeout(r, pollMs));
             continue;
           }
           if (st.state === "done") {

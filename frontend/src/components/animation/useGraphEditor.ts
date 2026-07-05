@@ -156,28 +156,62 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   );
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 
-  // The context handed to every node card (renderAnimNode).
-  const ctx: NodeCtx = {
-    segment,
-    stems,
-    job,
-    output,
-    signals: segment.signals,
-    lyricLines,
-    graph,
-    groupClock,
-    groupPlaying,
-    segStart: segment.start,
-    minimized, // collapsed cards -> renderAnimNode swaps in MinimizedCard
-    finalOutputId: segment.finalOutputId, // which output the OutputNode shows as "final"
-    setFinalOutput, // OutputNode marks itself final for this segment
-    onGraphChange: applyUpdater,
-    onDetach: (fluidId: string, key: string) => applyUpdater((g) => disconnect(g, fluidId, key)),
-    onDeleteNode: (id: string) => {
+  const onDetach = useCallback(
+    (fluidId: string, key: string) => applyUpdater((g) => disconnect(g, fluidId, key)),
+    [applyUpdater]
+  );
+  const onDeleteNode = useCallback(
+    (id: string) => {
       applyUpdater((g) => removeNode(g, id));
       deselect(id);
     },
-  };
+    [applyUpdater, deselect]
+  );
+
+  // Serialized once here so each OutputNode doesn't re-stringify the lyric lines
+  // for its render key (they can be long, and there can be several outputs).
+  const lyricsKey = useMemo(() => JSON.stringify(lyricLines || []), [lyricLines]);
+
+  // The context handed to every node card (renderAnimNode). Memoized so cards can
+  // be skipped via React.memo when nothing they read has changed — without this,
+  // a fresh ctx identity per render forces every card to re-render on any edit.
+  const ctx: NodeCtx = useMemo(
+    () => ({
+      segment,
+      stems,
+      job,
+      output,
+      signals: segment.signals,
+      lyricLines,
+      lyricsKey,
+      graph,
+      groupClock,
+      groupPlaying,
+      segStart: segment.start,
+      minimized, // collapsed cards -> renderAnimNode swaps in MinimizedCard
+      finalOutputId: segment.finalOutputId, // which output the OutputNode shows as "final"
+      setFinalOutput, // OutputNode marks itself final for this segment
+      onGraphChange: applyUpdater,
+      onDetach,
+      onDeleteNode,
+    }),
+    [
+      segment,
+      stems,
+      job,
+      output,
+      lyricLines,
+      lyricsKey,
+      graph,
+      groupClock,
+      groupPlaying,
+      minimized,
+      setFinalOutput,
+      applyUpdater,
+      onDetach,
+      onDeleteNode,
+    ]
+  );
 
   return {
     graph,

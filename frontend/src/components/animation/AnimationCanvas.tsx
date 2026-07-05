@@ -1,12 +1,13 @@
 import { useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 import GraphCanvas from "./GraphCanvas";
 import Palette from "./Palette";
 import renderAnimNode from "./renderAnimNode";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
 import type { View } from "./usePanZoom";
-import type { Graph, OutputSettings, Segment } from "../../lib/types";
-import type { NodeCtx } from "./nodes/nodeProps";
+import type { Graph, GraphNode, OutputSettings, Segment } from "../../lib/types";
+import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 
 interface AnimationCanvasProps {
   segment: Segment;
@@ -73,6 +74,12 @@ export default function AnimationCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<View>(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
 
+  // Stable while ctx is unchanged, so GraphCanvas's memoized cards can skip renders.
+  const renderNode = useCallback(
+    (node: GraphNode, helpers: NodeHelpers): ReactNode => renderAnimNode(node, helpers, ctx),
+    [ctx]
+  );
+
   // Fullscreen is owned by Studio (it fullscreens the whole panel so the timeline +
   // output modal stay visible); we just relay its state/toggle to the toolbar.
 
@@ -116,7 +123,7 @@ export default function AnimationCanvas({
             onViewChange={(v) => {
               viewRef.current = v;
             }}
-            renderNode={(node, helpers) => renderAnimNode(node, helpers, ctx)}
+            renderNode={renderNode}
           />
         </MinimizeContext.Provider>
       </div>
