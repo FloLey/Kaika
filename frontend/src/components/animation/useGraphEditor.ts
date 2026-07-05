@@ -3,9 +3,9 @@ import {
   emptyGraph,
   normalizeGraph,
   connect,
+  connectVideo,
   disconnect,
   removeNode,
-  mkEdgeId,
 } from "../../lib/graphModel";
 import { nodeParam } from "../../lib/nodeParams";
 import type { Graph, GraphEdge, OutputSettings, Segment } from "../../lib/types";
@@ -86,15 +86,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
         if (tgt && nodeParam(tgt.type, tgtPort)) {
           return connect(g, srcId, tgtId, tgtPort);
         }
-        const edges = g.edges.filter((e) => !(e.target === tgtId && e.targetPort === tgtPort));
-        edges.push({
-          id: mkEdgeId(),
-          source: srcId,
-          sourcePort: srcPort,
-          target: tgtId,
-          targetPort: tgtPort,
-        });
-        return { ...g, edges };
+        return connectVideo(g, srcId, srcPort, tgtId, tgtPort); // last-wins per port
       });
     },
     [applyUpdater]

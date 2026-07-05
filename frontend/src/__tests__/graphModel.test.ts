@@ -27,6 +27,13 @@ import {
   removePoint,
   animatePointsNode,
   shaperNode,
+  colorNode,
+  videoNode,
+  mathNode,
+  patchNodeData,
+  addInputPort,
+  removeInputPort,
+  setCombineLayer,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
@@ -39,6 +46,7 @@ import type {
   Point,
   PointsData,
   SignalData,
+  VideoNode as VideoNodeT,
 } from "../lib/types";
 
 const STEMS = { original: { sr: 44100 }, drums: { sr: 44100 } };
@@ -138,6 +146,105 @@ describe("normalizeGraph migrates older saves", () => {
   it("returns the same object when nothing needs migrating", () => {
     const { g } = wiredGraph();
     expect(normalizeGraph(g)).toBe(g);
+  });
+
+  it("drops a pre-v8 `color` (grade FX) node + its edges (v8 rename -> v10 removal)", () => {
+    // Before v8 a `color` node was the grade video-FX card. normalizeGraph renames it
+    // to `grade` (an unknown type as of v10) and the unknown-type filter drops it —
+    // it must NOT be mis-coerced into the modern `color` (dye) card.
+    const g = emptyGraph();
+    const out = outputNode(0, 0);
+    const legacyGrade = {
+      id: "n-legacy",
+      type: "color",
+      x: 0,
+      y: 0,
+      data: { brightness: 1.2, contrast: 0.9 }, // old grade data, no ports/stops
+    } as unknown as GraphNode;
+    g.version = 7;
+    g.nodes = [legacyGrade, out];
+    g.edges = [
+      { id: "e1", source: "n-legacy", sourcePort: "out", target: out.id, targetPort: "video" },
+    ];
+    const norm = normalizeGraph(g);
+    expect(norm.nodes.find((n) => n.id === "n-legacy")).toBeUndefined();
+    expect(norm.edges.length).toBe(0);
+    expect(norm.version).toBe(GRAPH_VERSION);
+  });
+
+  it("keeps a v8+ `color` node as the dye card (no legacy rename)", () => {
+    const g = emptyGraph(); // already GRAPH_VERSION
+    const dye = colorNode(0, 0);
+    g.nodes = [dye];
+    const norm = normalizeGraph(g);
+    const kept = norm.nodes.find((n) => n.id === dye.id);
+    expect(kept?.type).toBe("color");
+  });
+
+  it("migrates a legacy static video `speed` into a const port binding", () => {
+    const g = emptyGraph();
+    const v = videoNode(0, 0);
+    // A pre-port save: static speed field, no speed port persisted.
+    (v.data as unknown as { speed?: number }).speed = 1.5;
+    delete (v.data.ports as Record<string, unknown>).speed;
+    const saved = { ...v, data: { ...v.data, ports: { ...v.data.ports } } };
+    delete (saved.data as unknown as { speed?: number }).speed;
+    (saved.data as unknown as { speed?: number }).speed = 1.5;
+    g.nodes = [saved as GraphNode];
+    const norm = normalizeGraph(g);
+    const n = norm.nodes[0] as VideoNodeT;
+    expect(n.data.ports.speed.binding).toEqual({ kind: "const", value: 1.5 });
+    expect((n.data as unknown as { speed?: number }).speed).toBeUndefined();
+  });
+
+  it("a legacy static `speed` does NOT clobber an existing speed port", () => {
+    const g = emptyGraph();
+    const v = videoNode(0, 0);
+    (v.data as unknown as { speed?: number }).speed = 1.5;
+    v.data.ports.speed = { binding: { kind: "node", nodeId: "n-lfo", lo: 0.5, hi: 2 } };
+    g.nodes = [v as GraphNode, { id: "n-lfo", type: "lfo", x: 0, y: 0, data: {} } as GraphNode];
+    const norm = normalizeGraph(g);
+    const n = norm.nodes[0] as VideoNodeT;
+    expect(n.data.ports.speed.binding).toMatchObject({ kind: "node", nodeId: "n-lfo" });
+  });
+});
+
+describe("data mutation helpers", () => {
+  it("patchNodeData shallow-merges a patch into one node's data", () => {
+    const g = emptyGraph();
+    const sh = shaperNode(0, 0);
+    g.nodes = [sh];
+    const out = patchNodeData(g, sh.id, { gain: 2, invert: true });
+    const n = out.nodes[0] as typeof sh;
+    expect(n.data.gain).toBe(2);
+    expect(n.data.invert).toBe(true);
+    expect(n.data.release).toBe(250); // untouched fields survive
+    expect((g.nodes[0] as typeof sh).data.gain).toBe(1); // immutably
+  });
+
+  it("addInputPort appends an input id; removeInputPort drops it AND its wired edge", () => {
+    const g = emptyGraph();
+    const m = mathNode(0, 0);
+    const lfo = { id: "n-lfo", type: "lfo", x: 0, y: 0, data: {} } as GraphNode;
+    g.nodes = [m, lfo];
+    const g2 = addInputPort(g, m.id);
+    const m2 = g2.nodes.find((n) => n.id === m.id) as typeof m;
+    expect(m2.data.inputs.length).toBe(3);
+
+    const port = m2.data.inputs[2];
+    g2.edges.push({ id: "e-in", source: "n-lfo", sourcePort: "out", target: m.id, targetPort: port });
+    const g3 = removeInputPort(g2, m.id, port);
+    const m3 = g3.nodes.find((n) => n.id === m.id) as typeof m;
+    expect(m3.data.inputs).not.toContain(port);
+    expect(g3.edges.find((e) => e.targetPort === port)).toBeUndefined();
+  });
+
+  it("setCombineLayer stamps the cross-segment continuity layer", () => {
+    const g = emptyGraph();
+    const cb = combineNode(0, 0);
+    g.nodes = [cb];
+    const out = setCombineLayer(g, cb.id, 3);
+    expect((out.nodes[0] as typeof cb).data.layer).toBe(3);
   });
 });
 
