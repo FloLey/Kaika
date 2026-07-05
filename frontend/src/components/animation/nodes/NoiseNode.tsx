@@ -2,7 +2,7 @@ import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import MiniSpark from "./MiniSpark";
 import { useResolvedCurve } from "./useResolvedCurve";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
 import { argHelp } from "../../../lib/paramHelp";
 import type { NodeProps } from "./nodeProps";
 import type { NoiseData } from "../../../lib/types";
@@ -21,8 +21,7 @@ export default function NoiseNode({
 }: NodeProps) {
   const d = node.data as NoiseData;
   const { curve } = useResolvedCurve(ctx, node.id, JSON.stringify(d));
-  const set = (patch: Partial<NoiseData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<NoiseData>(node, onGraphChange);
 
   return (
     <NodeFrame

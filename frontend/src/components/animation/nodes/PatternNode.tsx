@@ -3,7 +3,8 @@ import type { ChangeEvent, CSSProperties } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
+import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { patternPoints } from "../../../lib/pointsGen";
 import { aspectOf } from "../../../lib/output";
@@ -19,8 +20,7 @@ export default function PatternNode({ node, selected, helpers, ctx, onGraphChang
   const d = node.data as PatternData;
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
   const pts = useMemo(() => patternPoints(d), [d]);
-  const set = (patch: Partial<PatternData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<PatternData>(node, onGraphChange);
 
   return (
     <NodeFrame
@@ -82,7 +82,7 @@ export default function PatternNode({ node, selected, helpers, ctx, onGraphChang
         min={0}
         max={0.5}
         step={0.01}
-        fmt={(v) => v.toFixed(2)}
+        fmt={dp2}
         onChange={(v) => set({ radius: v })}
         {...argHelp("pattern", "radius")}
       />
@@ -102,7 +102,7 @@ export default function PatternNode({ node, selected, helpers, ctx, onGraphChang
         min={-0.5}
         max={0.5}
         step={0.01}
-        fmt={(v) => v.toFixed(2)}
+        fmt={dp2}
         onChange={(v) => set({ offsetX: v })}
         {...argHelp("pattern", "offsetX")}
       />
@@ -112,7 +112,7 @@ export default function PatternNode({ node, selected, helpers, ctx, onGraphChang
         min={-0.5}
         max={0.5}
         step={0.01}
-        fmt={(v) => v.toFixed(2)}
+        fmt={dp2}
         onChange={(v) => set({ offsetY: v })}
         {...argHelp("pattern", "offsetY")}
       />

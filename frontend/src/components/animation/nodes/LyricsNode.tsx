@@ -4,7 +4,9 @@ import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import Ctl, { Toggle } from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
-import { patchNodeData, videoSource } from "../../../lib/graphModel";
+import { videoSource } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
+import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { LYRICS_PARAMS } from "../../../lib/nodeParams";
 import { aspectOf } from "../../../lib/output";
@@ -21,7 +23,6 @@ import type { LyricsData, LyricsAlign, LyricsCase, LyricsReveal } from "../../..
 const ALIGNS: LyricsAlign[] = ["left", "center", "right"];
 const CASES: LyricsCase[] = ["none", "upper", "lower"];
 const REVEALS: LyricsReveal[] = ["line", "word"];
-const dp2 = (v: number) => v.toFixed(2);
 
 interface LyricLine {
   t0?: number;
@@ -72,8 +73,7 @@ function useFonts(): FontOption[] {
 export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange, onDetach, onDelete }: NodeProps) {
   const d = node.data as LyricsData;
   const fonts = useFonts();
-  const set = (patch: Partial<LyricsData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<LyricsData>(node, onGraphChange);
   const lineCount = (ctx?.lyricLines || []).length;
   // A `color` card can drive the fill and/or the outline colour (else white / black).
   const fillWired = useMemo(

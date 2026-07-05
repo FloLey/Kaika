@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl, { Toggle } from "../../../ui/Ctl";
 import MiniSpark from "./MiniSpark";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
+import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { shaperPreview } from "../../../lib/modPreview";
 import type { NodeProps } from "./nodeProps";
@@ -22,8 +23,7 @@ export default function ShaperNode({
 }: NodeProps) {
   const d = node.data as ShaperData;
   const preview = useMemo(() => shaperPreview(d), [d]);
-  const set = (patch: Partial<ShaperData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<ShaperData>(node, onGraphChange);
 
   return (
     <NodeFrame
@@ -105,7 +105,7 @@ export default function ShaperNode({
           min={0}
           max={0.9}
           step={0.01}
-          fmt={(v) => v.toFixed(2)}
+          fmt={dp2}
           onChange={(v) => set({ threshold: v })}
           {...argHelp("shaper", "threshold")}
         />
@@ -115,7 +115,7 @@ export default function ShaperNode({
           min={0.2}
           max={4}
           step={0.05}
-          fmt={(v) => v.toFixed(2)}
+          fmt={dp2}
           onChange={(v) => set({ gamma: v })}
           {...argHelp("shaper", "gamma")}
         />
@@ -125,7 +125,7 @@ export default function ShaperNode({
           min={0}
           max={2}
           step={0.05}
-          fmt={(v) => v.toFixed(2)}
+          fmt={dp2}
           onChange={(v) => set({ gain: v })}
           {...argHelp("shaper", "gain")}
         />
@@ -135,7 +135,7 @@ export default function ShaperNode({
           min={-0.5}
           max={0.5}
           step={0.01}
-          fmt={(v) => v.toFixed(2)}
+          fmt={dp2}
           onChange={(v) => set({ offset: v })}
           {...argHelp("shaper", "offset")}
         />
@@ -147,7 +147,7 @@ export default function ShaperNode({
             min={0}
             max={1}
             step={0.01}
-            fmt={(v) => v.toFixed(2)}
+            fmt={dp2}
             onChange={(v) => set({ lo: Math.min(v, d.hi) })}
             {...argHelp("shaper", "lo")}
           />
@@ -157,7 +157,7 @@ export default function ShaperNode({
             min={0}
             max={1}
             step={0.01}
-            fmt={(v) => v.toFixed(2)}
+            fmt={dp2}
             onChange={(v) => set({ hi: Math.max(v, d.lo) })}
             {...argHelp("shaper", "hi")}
           />

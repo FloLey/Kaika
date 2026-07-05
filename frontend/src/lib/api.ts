@@ -76,9 +76,10 @@ export interface StreamStartResult {
   render_id: string;
 }
 
-// Live status of a progressive block render (see backend/render_jobs.py). While
+// Live status of a progressive block render (see backend/render_jobs.py) — the same
+// shape for a single-segment stream render AND the final full-track export. While
 // `running`, show `preview_url` (grows block by block); once `done`, use `url`.
-export interface StreamStatus {
+export interface RenderStatus {
   // "gone" = the backend no longer knows this render_id (e.g. its in-memory job was
   // dropped when the dev server hot-reloaded). Benign — the caller just stops quietly.
   state: "running" | "done" | "cancelled" | "error" | "gone";
@@ -89,7 +90,11 @@ export interface StreamStatus {
   error: string | null;
 }
 
-const GONE_STATUS: StreamStatus = {
+// The historical per-endpoint names, kept as aliases for existing importers.
+export type StreamStatus = RenderStatus;
+export type ExportStatus = RenderStatus;
+
+const GONE_STATUS: RenderStatus = {
   state: "gone",
   frames_done: 0,
   total: 0,
@@ -97,17 +102,6 @@ const GONE_STATUS: StreamStatus = {
   url: null,
   error: null,
 };
-
-// Live status of the final full-track export (same progressive-block model as a
-// stream render — while `running`, show `preview_url`; once `done`, use `url`).
-export interface ExportStatus {
-  state: "running" | "done" | "cancelled" | "error";
-  frames_done: number;
-  total: number;
-  preview_url: string | null;
-  url: string | null;
-  error: string | null;
-}
 
 async function jsonOrThrow<T = unknown>(res: Response): Promise<T> {
   const ct = res.headers.get("content-type") || "";
@@ -126,6 +120,24 @@ async function jsonOrThrow<T = unknown>(res: Response): Promise<T> {
     throw new Error(msg);
   }
   return data as T;
+}
+
+// The two dominant call shapes, so each endpoint wrapper is one line: send a JSON
+// body (POST unless overridden) / plain GET, and parse the JSON response through
+// jsonOrThrow. Endpoints with a different shape (FormData, DELETE, raw 404
+// handling) still call fetch + jsonOrThrow directly.
+async function postJson<T>(url: string, body: unknown, method: "POST" | "PUT" = "POST"): Promise<T> {
+  return jsonOrThrow<T>(
+    await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+  );
+}
+
+async function getJson<T>(url: string): Promise<T> {
+  return jsonOrThrow<T>(await fetch(url));
 }
 
 // Backend log feed for the Logs panel. Deliberately bypasses jsonOrThrow so a
@@ -154,7 +166,7 @@ export async function uploadAsset(jobId: string, file: File): Promise<Asset> {
 
 // The project's asset library (`data.assets`).
 export async function listAssets(jobId: string): Promise<Asset[]> {
-  return jsonOrThrow(await fetch(`/assets/${jobId}`));
+  return getJson<Asset[]>(`/assets/${jobId}`);
 }
 
 // Remove a library asset by id (unlinks the file + drops the entry).
@@ -165,27 +177,15 @@ export async function deleteAsset(jobId: string, assetId: string): Promise<{ ok:
 // Import a YouTube video into the library (Video card action). Async — returns a job id;
 // poll it (pollJob) for the resulting Asset.
 export async function assetFromYoutube(jobId: string, url: string): Promise<JobAck> {
-  return jsonOrThrow<JobAck>(
-    await fetch(`/asset-from-youtube/${jobId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    })
-  );
+  return postJson<JobAck>(`/asset-from-youtube/${jobId}`, { url });
 }
 
 export async function segmentJob(jobId: string): Promise<JobAck> {
-  return jsonOrThrow<JobAck>(
-    await fetch("/segment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId }),
-    })
-  );
+  return postJson<JobAck>("/segment", { job_id: jobId });
 }
 
 export async function getJob(jobId: string): Promise<JobStatus> {
-  return jsonOrThrow<JobStatus>(await fetch(`/jobs/${jobId}`));
+  return getJson<JobStatus>(`/jobs/${jobId}`);
 }
 
 // Human-readable label per backend step (jobs.py / worker `set_step`).
@@ -216,13 +216,7 @@ export async function pollJob<T = unknown>(
 }
 
 export async function extractSignal(params: Record<string, unknown>): Promise<ExtractResult> {
-  return jsonOrThrow<ExtractResult>(
-    await fetch("/extract", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-    })
-  );
+  return postJson<ExtractResult>("/extract", params);
 }
 
 // Resolve one value node's 0..1 curve for a segment+graph — the Scope card's live view.
@@ -232,13 +226,7 @@ export async function resolveCurve(params: {
   graph: unknown;
   node_id: string;
 }): Promise<ExtractResult> {
-  return jsonOrThrow<ExtractResult>(
-    await fetch("/resolve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-    })
-  );
+  return postJson<ExtractResult>("/resolve", params);
 }
 
 
@@ -257,13 +245,7 @@ export async function renderGraph({
   output?: unknown;
   output_id?: unknown;
 }): Promise<RenderResult> {
-  return jsonOrThrow<RenderResult>(
-    await fetch("/animate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id, segment, graph, output, output_id }),
-    })
-  );
+  return postJson<RenderResult>("/animate", { job_id, segment, graph, output, output_id });
 }
 
 // Progressive render: start a background block render and poll it. Renders the same
@@ -277,21 +259,20 @@ export async function startStreamRender(body: {
   output?: unknown;
   output_id?: unknown;
 }): Promise<StreamStartResult> {
-  return jsonOrThrow<StreamStartResult>(
-    await fetch("/animate/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-  );
+  return postJson<StreamStartResult>("/animate/stream", body);
 }
 
-export async function getStreamStatus(renderId: string): Promise<StreamStatus> {
-  const res = await fetch(`/animate/stream/${renderId}`);
-  // A 404 means the render_id is unknown (typically the dev server reloaded and dropped
-  // the in-memory job). Report it as "gone" — a benign stop — instead of throwing/logging.
+// Poll a progressive render (stream or export). A 404 means the render_id is unknown
+// (typically the dev server reloaded and dropped the in-memory job). Report it as
+// "gone" — a benign stop — instead of throwing/logging.
+async function getRenderStatus(url: string): Promise<RenderStatus> {
+  const res = await fetch(url);
   if (res.status === 404) return GONE_STATUS;
-  return jsonOrThrow<StreamStatus>(res);
+  return jsonOrThrow<RenderStatus>(res);
+}
+
+export async function getStreamStatus(renderId: string): Promise<RenderStatus> {
+  return getRenderStatus(`/animate/stream/${renderId}`);
 }
 
 // Fire-and-forget: signal a render to stop after its current block. Swallows errors
@@ -304,17 +285,11 @@ export async function cancelStreamRender(renderId: string): Promise<void> {
 // stitched) and poll it the same way as a stream render. 400s if any segment lacks
 // a final output (the message lists the missing segment ids).
 export async function startExport(jobId: string): Promise<StreamStartResult> {
-  return jsonOrThrow<StreamStartResult>(
-    await fetch("/export/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId }),
-    })
-  );
+  return postJson<StreamStartResult>("/export/stream", { job_id: jobId });
 }
 
-export async function getExportStatus(renderId: string): Promise<ExportStatus> {
-  return jsonOrThrow<ExportStatus>(await fetch(`/export/stream/${renderId}`));
+export async function getExportStatus(renderId: string): Promise<RenderStatus> {
+  return getRenderStatus(`/export/stream/${renderId}`);
 }
 
 // Fire-and-forget: signal the export to stop after its current block. Swallows
@@ -325,7 +300,7 @@ export async function cancelExport(renderId: string): Promise<void> {
 }
 
 export async function listProjects(): Promise<ProjectSummary[]> {
-  return jsonOrThrow<ProjectSummary[]>(await fetch("/projects"));
+  return getJson<ProjectSummary[]>("/projects");
 }
 
 export interface FontOption {
@@ -335,11 +310,11 @@ export interface FontOption {
 
 // The bundled lyric fonts for the lyrics card's font picker.
 export async function listFonts(): Promise<FontOption[]> {
-  return jsonOrThrow<FontOption[]>(await fetch("/fonts"));
+  return getJson<FontOption[]>("/fonts");
 }
 
 export async function getProject(jobId: string): Promise<Project> {
-  return jsonOrThrow<Project>(await fetch(`/projects/${jobId}`));
+  return getJson<Project>(`/projects/${jobId}`);
 }
 
 // Ensure the always-present Playground project exists (built lazily on first call) and
@@ -349,13 +324,7 @@ export async function ensurePlayground(): Promise<{ job_id: string }> {
 }
 
 export async function saveProject(jobId: string, payload: unknown): Promise<{ ok: boolean }> {
-  return jsonOrThrow<{ ok: boolean }>(
-    await fetch(`/projects/${jobId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-  );
+  return postJson<{ ok: boolean }>(`/projects/${jobId}`, payload, "PUT");
 }
 
 export async function deleteProject(jobId: string): Promise<{ ok: boolean }> {

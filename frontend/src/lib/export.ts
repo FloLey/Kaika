@@ -3,6 +3,8 @@
 // There is no background — un-dyed pixels are black; backdrops are layers. One
 // object per project, persisted under `export`, sent when the full-track render runs.
 
+import { withDefaults } from "./defaults";
+
 export interface ExportSettings {
   width: number;
   height: number;
@@ -19,5 +21,5 @@ export const EXPORT_DEFAULTS: ExportSettings = {
 
 // Fill any missing fields from defaults (stored export may be partial/empty).
 export function withExportDefaults(o?: Partial<ExportSettings> | null): ExportSettings {
-  return { ...EXPORT_DEFAULTS, ...(o || {}) };
+  return withDefaults(EXPORT_DEFAULTS, o);
 }

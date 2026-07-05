@@ -3,6 +3,7 @@
 // background setting — un-dyed pixels are black; any backdrop is a bottom layer
 // (image/video card). One object per project, edited in the settings modal.
 
+import { withDefaults } from "./defaults";
 import type { OutputSettings } from "./types";
 
 export const OUTPUT_DEFAULTS: OutputSettings = {
@@ -39,7 +40,7 @@ type Size = Pick<OutputSettings, "width" | "height">;
 
 // Fill any missing fields from defaults (stored output may be partial/empty).
 export function withOutputDefaults(o?: Partial<OutputSettings> | null): OutputSettings {
-  return { ...OUTPUT_DEFAULTS, ...(o || {}) };
+  return withDefaults(OUTPUT_DEFAULTS, o);
 }
 
 // The orientation preset key matching the current size, or "custom".

@@ -133,7 +133,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onDelete }: N
           } else if (st.state === "error") {
             throw new Error(st.error || "render failed");
           }
-          break; // done | error | cancelled
+          break; // done | error | cancelled | gone
         }
       } catch (e) {
         if (id === reqId.current) setError((e as Error)?.message || String(e));

@@ -8,10 +8,9 @@ import Ctl from "../../ui/Ctl";
 import { engine } from "../../lib/audio";
 import { fmtTime, fmtHz, clamp } from "../../lib/mel";
 import { stemColor } from "../../lib/segments";
-import { extractSignal } from "../../lib/api";
+import { FEATURES, FEATURE_HELP, HELP } from "./signalCatalog";
+import { useSignalCurve } from "./useSignalCurve";
 import type { Signal, StemInfo } from "../../lib/types";
-
-const FPS = 30;
 
 interface SignalCardProps {
   signal: Signal;
@@ -28,64 +27,6 @@ interface SignalCardProps {
   groupClock?: RefObject<HTMLAudioElement | null>;
   groupPlaying?: boolean;
 }
-
-// Feature types (must match signals.py `_RAW`) with a one-line explanation.
-const FEATURES = [
-  { key: "energy", label: "energy", help: "Loudness of the band over time — the default driver." },
-  {
-    key: "onset",
-    label: "onset",
-    help: "A spike on each hit in the band (use release to add the decay). Great for discrete events.",
-  },
-  { key: "flux", label: "flux", help: "How fast the band is changing — its 'busy-ness'." },
-  {
-    key: "brightness",
-    label: "brightness",
-    help: "Where the energy sits in the band (low=dull, high=bright).",
-  },
-  {
-    key: "harmonic",
-    label: "harmonic",
-    help: "Tonal/sustained share vs percussive/noisy in the band.",
-  },
-  {
-    key: "chroma",
-    label: "chroma",
-    help: "Dominant pitch class in the band (stepped) — handy for driving color.",
-  },
-  {
-    key: "beat",
-    label: "beat phase",
-    help: "A 0→1 ramp locked to each beat (sawtooth). The frequency band is ignored.",
-  },
-  {
-    key: "bar",
-    label: "bar phase",
-    help: "A 0→1 ramp locked to each 4-beat bar. The frequency band is ignored.",
-  },
-];
-const FEATURE_HELP: Record<string, string> = Object.fromEntries(
-  FEATURES.map((f) => [f.key, f.help])
-);
-
-const HELP = {
-  signal:
-    "A signal = this track's loudness in the chosen frequency band, over this " +
-    "segment, shaped into a 0–1 curve that drives the simulation. Drag the band " +
-    "edges on the spectrogram; the curve below updates live.",
-  attack:
-    "How fast the curve RISES when the sound gets louder. Low = snaps up instantly on a hit; high = eases up slowly (a gentle swell).",
-  release:
-    "How fast the curve FALLS when the sound gets quieter. Low = drops instantly; high = long smooth tail (e.g. a kick that fades out).",
-  gamma:
-    "Contrast of the curve. >1 emphasizes peaks (only the loud moments register); <1 lifts the quiet detail.",
-  thresh:
-    "Gate: ignore everything below this level, so the signal reacts only to strong hits and not to background.",
-  gain: "Scales the whole curve up/down (multiplies the value).",
-  offset: "Shifts the whole curve up/down (adds a constant) — e.g. so it never reaches zero.",
-  invert:
-    "Flips the curve: loud → low instead of loud → high. Invert + slow attack + fast release = the sidechain pump.",
-};
 
 // One signal: a stem + frequency band (drawn on the spectrogram) shaped into a
 // curve. Re-extracts (debounced) whenever the band/segment/shaping change.
@@ -105,8 +46,6 @@ export default function SignalCard({
   groupPlaying,
 }: SignalCardProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [curve, setCurve] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [frac, setFrac] = useState(0);
   const [collapsed, setCollapsed] = useState(true);
@@ -116,6 +55,8 @@ export default function SignalCard({
   const nyq = Math.round(sr / 2);
   const color = stemColor(signal.stemKey);
   const winLen = Math.max(0.001, segEnd - segStart);
+  // The extracted 0–1 curve, re-extracted (debounced) as the band/segment/shaping change.
+  const { curve, loading } = useSignalCurve(signal, jobId, segStart, segEnd, winLen);
   // beat/bar are tempo-locked phases — the frequency band has no effect.
   const bandIgnored = signal.feature === "beat" || signal.feature === "bar";
 
@@ -160,56 +101,6 @@ export default function SignalCard({
     setFrac(0);
   }, [segStart, segEnd]);
 
-  // Debounced re-extraction of the curve.
-  useEffect(() => {
-    if (!jobId || winLen <= 0.001) return;
-    setLoading(true);
-    const t = setTimeout(() => {
-      extractSignal({
-        job_id: jobId,
-        stem: signal.stemKey,
-        start: segStart,
-        end: segEnd,
-        minHz: signal.minHz,
-        maxHz: signal.maxHz,
-        feature: signal.feature,
-        fps: FPS,
-        attack: signal.attack,
-        release: signal.release,
-        invert: signal.invert,
-        gamma: signal.gamma,
-        gain: signal.gain,
-        offset: signal.offset,
-        threshold: signal.threshold,
-      })
-        .then((d: { curve?: number[] }) => {
-          setCurve(d.curve || []);
-          setLoading(false);
-        })
-        .catch(() => {
-          setCurve([]);
-          setLoading(false);
-        });
-    }, 220);
-    return () => clearTimeout(t);
-  }, [
-    jobId,
-    signal.stemKey,
-    signal.minHz,
-    signal.maxHz,
-    signal.feature,
-    signal.attack,
-    signal.release,
-    signal.invert,
-    signal.gamma,
-    signal.gain,
-    signal.offset,
-    signal.threshold,
-    segStart,
-    segEnd,
-    winLen,
-  ]);
-
   function togglePlay() {
     const el = audioRef.current;
     if (!el) return;
@@ -245,6 +136,31 @@ export default function SignalCard({
     const el = (groupPlaying ? groupClock : audioRef)?.current;
     if (el && isFinite(el.duration)) el.currentTime = segStart + f * winLen;
   }
+
+  // The collapsed mini strip and the expanded body draw the SAME curve + pulse (only
+  // their wrappers differ), so each is built once here and rendered in both places.
+  const curveView = (
+    <CurveView
+      curve={curve}
+      color={color}
+      loading={loading}
+      audioRef={padClock}
+      segStart={segStart}
+      winLen={winLen}
+      playing={padPlaying}
+      onSeek={seekCurve}
+    />
+  );
+  const pulsePad = (
+    <PulsePad
+      audioRef={padClock}
+      curve={curve}
+      segStart={segStart}
+      winLen={winLen}
+      color={color}
+      playing={padPlaying}
+    />
+  );
 
   return (
     <div
@@ -293,28 +209,8 @@ export default function SignalCard({
         )}
         {collapsed && (
           <>
-            <div className="curve-mini">
-              <CurveView
-                curve={curve}
-                color={color}
-                loading={loading}
-                audioRef={padClock}
-                segStart={segStart}
-                winLen={winLen}
-                playing={padPlaying}
-                onSeek={seekCurve}
-              />
-            </div>
-            <div className="pulse-mini">
-              <PulsePad
-                audioRef={padClock}
-                curve={curve}
-                segStart={segStart}
-                winLen={winLen}
-                color={color}
-                playing={padPlaying}
-              />
-            </div>
+            <div className="curve-mini">{curveView}</div>
+            <div className="pulse-mini">{pulsePad}</div>
           </>
         )}
         <button className="iconbtn" title="Remove signal" onClick={() => onRemove(signal.id)}>
@@ -363,25 +259,9 @@ export default function SignalCard({
                 winEnd={segEnd}
                 duration={duration}
               />
-              <CurveView
-                curve={curve}
-                color={color}
-                loading={loading}
-                audioRef={padClock}
-                segStart={segStart}
-                winLen={winLen}
-                playing={padPlaying}
-                onSeek={seekCurve}
-              />
+              {curveView}
             </div>
-            <PulsePad
-              audioRef={padClock}
-              curve={curve}
-              segStart={segStart}
-              winLen={winLen}
-              color={color}
-              playing={padPlaying}
-            />
+            {pulsePad}
           </div>
 
           <div className="signal-ctls">

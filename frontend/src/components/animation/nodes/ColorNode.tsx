@@ -3,7 +3,7 @@ import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import { setConstValue } from "./fluidBindings";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
 import { COLOR_PARAMS } from "../../../lib/nodeParams";
 import type { NodeProps } from "./nodeProps";
 import type { ColorData, ColorMode, ColorStop } from "../../../lib/types";
@@ -28,8 +28,7 @@ const def = (k: string) => COLOR_PARAMS.find((p) => p.key === k)?.def ?? 0;
 export default function ColorNode({ node, selected, helpers, onGraphChange, onDetach, onDelete }: NodeProps) {
   const d = node.data as ColorData;
   const detach = (key: string) => onDetach?.(node.id, key);
-  const patch = (p: Partial<ColorData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, p as Record<string, unknown>));
+  const patch = useNodeData<ColorData>(node, onGraphChange);
 
   // ---- swatch: read/write the r/g/b const ports --------------------------------
   const constVal = (key: string) => {

@@ -2,7 +2,7 @@ import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
 import { BACKDROP_PARAMS } from "../../../lib/nodeParams";
 import type { NodeProps } from "./nodeProps";
 import type { BackdropData } from "../../../lib/types";
@@ -12,8 +12,7 @@ import type { BackdropData } from "../../../lib/types";
 // The colour is a static swatch; `opacity` is the only modulatable port.
 export default function BackdropNode({ node, selected, helpers, onGraphChange, onDetach, onDelete }: NodeProps) {
   const d = node.data as BackdropData;
-  const set = (patch: Partial<BackdropData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<BackdropData>(node, onGraphChange);
 
   return (
     <NodeFrame

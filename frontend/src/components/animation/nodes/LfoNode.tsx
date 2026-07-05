@@ -4,7 +4,8 @@ import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
 import MiniSpark from "./MiniSpark";
 import { useResolvedCurve } from "./useResolvedCurve";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
+import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import type { NodeProps } from "./nodeProps";
 import type { LfoData, LfoShape } from "../../../lib/types";
@@ -18,8 +19,7 @@ const SHAPES: LfoShape[] = ["sine", "triangle", "saw", "square"];
 export default function LfoNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as LfoData;
   const { curve } = useResolvedCurve(ctx, node.id, JSON.stringify(d));
-  const set = (patch: Partial<LfoData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<LfoData>(node, onGraphChange);
 
   return (
     <NodeFrame
@@ -89,7 +89,7 @@ export default function LfoNode({ node, selected, helpers, ctx, onGraphChange, o
           min={0}
           max={1}
           step={0.01}
-          fmt={(v) => v.toFixed(2)}
+          fmt={dp2}
           onChange={(v) => set({ phase: v })}
           {...argHelp("lfo", "phase")}
         />
@@ -100,7 +100,7 @@ export default function LfoNode({ node, selected, helpers, ctx, onGraphChange, o
             min={0.05}
             max={0.95}
             step={0.05}
-            fmt={(v) => v.toFixed(2)}
+            fmt={dp2}
             onChange={(v) => set({ duty: v })}
             {...argHelp("lfo", "duty")}
           />

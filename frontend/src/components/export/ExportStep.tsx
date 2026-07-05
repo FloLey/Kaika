@@ -88,7 +88,9 @@ export default function ExportStep({
           } else if (st.state === "error") {
             throw new Error(st.error || "export failed");
           }
-          break; // done | error | cancelled
+          // "gone" (the backend forgot this render_id, e.g. after a dev-server reload)
+          // ends the attempt quietly, same as a stream render — no error banner.
+          break; // done | error | cancelled | gone
         }
       } catch (e) {
         terminal = true; // a failed poll (e.g. the render expired) ends this attempt

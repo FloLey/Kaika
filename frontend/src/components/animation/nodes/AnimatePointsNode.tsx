@@ -2,7 +2,8 @@ import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
-import { patchNodeData } from "../../../lib/graphModel";
+import { useNodeData } from "./useNodeData";
+import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import type { NodeProps } from "./nodeProps";
 import type { AnimatePointsData, AnimatePointsMode } from "../../../lib/types";
@@ -17,8 +18,7 @@ const MODES: AnimatePointsMode[] = ["orbit", "drift", "chase"];
 
 export default function AnimatePointsNode({ node, selected, helpers, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as AnimatePointsData;
-  const set = (patch: Partial<AnimatePointsData>) =>
-    onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
+  const set = useNodeData<AnimatePointsData>(node, onGraphChange);
 
   return (
     <NodeFrame
@@ -72,7 +72,7 @@ export default function AnimatePointsNode({ node, selected, helpers, onGraphChan
           min={0}
           max={0.5}
           step={0.01}
-          fmt={(v) => v.toFixed(2)}
+          fmt={dp2}
           onChange={(v) => set({ amount: v })}
           {...argHelp("animate-points", "amount")}
         />
@@ -117,7 +117,7 @@ export default function AnimatePointsNode({ node, selected, helpers, onGraphChan
             min={0}
             max={1}
             step={0.05}
-            fmt={(v) => v.toFixed(2)}
+            fmt={dp2}
             onChange={(v) => set({ fade: v })}
             {...argHelp("animate-points", "fade")}
           />
