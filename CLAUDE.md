@@ -56,8 +56,17 @@ Backend tests run as `.venv/bin/python -m pytest -q`; frontend as
 - **Tests patch `backend.paths`** for data directories (render code reads them
   late-bound); don't reintroduce per-module dir constants.
 - **`/logs` must never log** (it would feed itself).
-- New/changed user-facing behavior needs matching **in-app docs**
-  (`Docs.tsx` + `lib/paramHelp.ts` — its test fails on a port without "?" help).
+- **Docs stay updated with every change.** These files are part of the
+  deliverable, not an afterthought:
+  - **Every new user-facing control gets a "?"** that deep-links into the guide:
+    a modulatable port gets a `lib/paramHelp.ts` entry (its test FAILS on a port
+    without help); other controls use `ui/Info.tsx` (or `ArgInfo`) with a
+    `section` that exists in `Docs.tsx` `DOC_SECTION_IDS`.
+  - **New/changed user-facing behavior** gets prose in `Docs.tsx` (add the
+    section id to `DOC_SECTION_IDS`; the anchor-guard test keeps links honest).
+  - **Structural changes** (modules, routes, caches, invariants) update
+    `ARCHITECTURE.md` and, if a checklist/command changed, `DEVELOPMENT.md`;
+    new API routes/setup steps update `README.md`.
 
 ## Conventions
 
