@@ -23,6 +23,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   lfo: 4, // shape/rateMode/rate/phase (duty hidden unless square)
   noise: 3,
   shaper: 11,
+  gate: 3, // threshold/hysteresis/invert
   scope: 0,
   pattern: 6, // layout/count/radius/rotation/offsetX/offsetY (seed hidden unless scatter)
   "animate-points": 3, // mode/amount/rate (angle/length/taper are mode-specific)

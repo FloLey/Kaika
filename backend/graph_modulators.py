@@ -218,6 +218,31 @@ def _math_combine(curves: list, op: str, mix: float, nframes: int) -> np.ndarray
     return np.clip(out.astype(np.float32), 0.0, 1.0)
 
 
+def _gate_curve(base: np.ndarray, data: dict) -> np.ndarray:
+    """A gate node -> a clean 0/1 curve via HYSTERESIS thresholding: the gate arms
+    (goes 1) when the input crosses `threshold + hysteresis/2` and re-arms (drops
+    to 0) only below `threshold - hysteresis/2` — so a signal hovering around the
+    threshold can't flicker. `invert` flips the result. The stateful sweep is what
+    a plain comparison can't give you; the imagegen card reuses this to derive
+    stable rising-edge triggers."""
+    base = np.clip(np.asarray(base, np.float32), 0.0, 1.0)
+    threshold = float(data.get("threshold", 0.5))
+    hyst = max(0.0, float(data.get("hysteresis", 0.1)))
+    hi = min(1.0, threshold + hyst / 2.0)
+    lo = max(0.0, threshold - hyst / 2.0)
+    out = np.zeros(len(base), np.float32)
+    state = 0.0
+    for i, v in enumerate(base):
+        if state == 0.0 and v >= hi:
+            state = 1.0
+        elif state == 1.0 and v < lo:
+            state = 0.0
+        out[i] = state
+    if data.get("invert"):
+        out = 1.0 - out
+    return out
+
+
 def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals_by_id, stem_audio_path):
     """A memoized value resolver: `node_id` -> 0..1 curve (length nframes),
     type-dispatched (signal / lfo / noise / shaper / math) and recursing through value
@@ -245,6 +270,10 @@ def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals
             src = _video_source(graph, node_id, "in")
             base = resolve_source(src) if src else np.zeros(nframes, np.float32)
             out = _shaper_curve(base, data, fps)
+        elif t == "gate":
+            src = _video_source(graph, node_id, "in")
+            base = resolve_source(src) if src else np.zeros(nframes, np.float32)
+            out = _gate_curve(base, data)
         elif t == "scope":
             # a pure monitor: passes its input value through unchanged.
             src = _video_source(graph, node_id, "in")

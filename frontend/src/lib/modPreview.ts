@@ -4,7 +4,7 @@
 // shaping TRANSFER curve (input 0..1 → output), not a time signal — there's no input
 // to resolve when the card is dangling.
 
-import type { ShaperData } from "./types";
+import type { GateData, ShaperData } from "./types";
 
 const L = 64; // preview sample count
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -25,6 +25,23 @@ export function shaperPreview(d: ShaperData): number[] {
     const lo = d.lo ?? 0;
     const hi = d.hi ?? 1;
     out.push(clamp01(lo + (hi - lo) * y));
+  }
+  return out;
+}
+
+// The Gate's preview: a sample sine swept through the SAME hysteresis logic the
+// backend applies (arm at threshold + hyst/2, release below threshold - hyst/2),
+// so the square wave on the card shows exactly how the thresholds will cut.
+export function gatePreview(d: GateData): number[] {
+  const hi = Math.min(1, (d.threshold ?? 0.5) + (d.hysteresis ?? 0.1) / 2);
+  const lo = Math.max(0, (d.threshold ?? 0.5) - (d.hysteresis ?? 0.1) / 2);
+  const out: number[] = [];
+  let state = 0;
+  for (let i = 0; i < L; i++) {
+    const v = 0.5 + 0.5 * Math.sin((i / (L - 1)) * Math.PI * 4); // two demo cycles
+    if (state === 0 && v >= hi) state = 1;
+    else if (state === 1 && v < lo) state = 0;
+    out.push(d.invert ? 1 - state : state);
   }
   return out;
 }

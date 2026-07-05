@@ -156,6 +156,14 @@ export interface ShaperData {
   hi: number; // output remap ceiling
 }
 
+// Hysteresis threshold: turns any 0..1 value into a clean 0/1 square — arms above
+// threshold + hysteresis/2, releases below threshold - hysteresis/2 (no flicker).
+export interface GateData {
+  threshold: number; // the level the gate switches around
+  hysteresis: number; // dead band width centred on the threshold
+  invert: boolean; // flip the output (1 while BELOW the threshold)
+}
+
 // A pure monitor: shows its input value (sparkline + pulse pad) and passes it through.
 export interface ScopeData {
   label?: string;
@@ -303,6 +311,10 @@ export interface ShaperNode extends NodeBase {
   type: "shaper";
   data: ShaperData;
 }
+export interface GateNode extends NodeBase {
+  type: "gate";
+  data: GateData;
+}
 export interface ScopeNode extends NodeBase {
   type: "scope";
   data: ScopeData;
@@ -350,6 +362,7 @@ export type GraphNode =
   | LfoNode
   | NoiseNode
   | ShaperNode
+  | GateNode
   | ScopeNode
   | PatternNode
   | AnimatePointsNode

@@ -33,6 +33,7 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "lfo",
   "noise",
   "shaper",
+  "gate",
   "scope",
   "pattern",
   "animate-points",
@@ -104,6 +105,7 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     fade: num(1),
   },
   "merge-points": { inputs: idList },
+  gate: { threshold: num(0.5), hysteresis: num(0.1), invert: bool },
   lyrics: {
     font: str("inter"),
     align: orDefault("center"),

@@ -26,7 +26,7 @@ PIPELINES_PATH = Path(__file__).resolve().parent / "playground_pipelines.json"
 # the export's label→key mapping.
 CARD_LABELS = {
     "signal": "Signal", "lfo": "LFO", "noise": "Noise", "math": "Math",
-    "shaper": "Shaper", "scope": "Scope",
+    "shaper": "Shaper", "gate": "Gate", "scope": "Scope",
     "points": "Points", "pattern": "Pattern", "animate-points": "Animate points",
     "merge-points": "Merge points",
     "fluid": "Fluid", "lyrics": "Lyrics", "image": "Image", "video": "Video",

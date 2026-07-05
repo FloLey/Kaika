@@ -660,6 +660,14 @@ export default function Docs({ section }: { section?: string }) {
             copy lands just after each beat as the second thump.
           </li>
           <li>
+            <strong>Gate</strong> — turns any signal into a clean <strong>0/1 switch</strong>: 1
+            while the input is above the <em>threshold</em>, 0 below it. The <em>hysteresis</em>{" "}
+            band (centred on the threshold) keeps a hovering signal from flickering — the gate only
+            releases once the input falls below the band. Use it to drive on/off-style ports: an{" "}
+            image generator's <em>trigger</em>, a fluid's <em>emit</em>, a lyrics <em>opacity</em>.{" "}
+            <em>invert</em> flips it.
+          </li>
+          <li>
             <strong>Scope</strong> — a monitor: wire any value into it (an lfo, signal, noise,
             math…) and it shows that value on a live sparkline + pulse pad, exactly like the signal
             card. It <em>passes the value straight through</em>, so you can splice it inline

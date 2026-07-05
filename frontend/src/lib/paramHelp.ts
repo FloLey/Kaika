@@ -102,6 +102,11 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     lo: "Output floor — the value 0 maps to.",
     hi: "Output ceiling — the value 1 maps to.",
   },
+  gate: {
+    threshold: "The level the gate switches around: input above \u2192 1, below \u2192 0.",
+    hysteresis: "Dead band centred on the threshold \u2014 wider = harder for a hovering signal to flicker the gate.",
+    invert: "Flip the output: 1 while the input is BELOW the threshold.",
+  },
   math: {
     op: "How to fold the inputs: multiply, add, subtract, max, min, or mix (crossfade).",
     mix: "Crossfade between the first two inputs (0 = first, 1 = second).",
@@ -129,6 +134,7 @@ export const ARG_SECTION: Record<string, string> = {
   noise: "animation-modulators",
   math: "animation-modulators",
   shaper: "animation-modulators",
+  gate: "animation-modulators",
   combine: "animation-combine",
 };
 

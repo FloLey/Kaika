@@ -40,5 +40,29 @@ drive its behaviour live.
 - [ ] Derivative shaper (react to change) and accumulator/build shaper.
 - [ ] Per-signal output range remap (min→max), quantize/steps.
 
+## Card builder — generate new cards from a description (idea, not scheduled)
+Let the user describe a card in three fields — **input**, **output**, and **what
+it does** — and have the app author the card, register it, and make it usable
+immediately, without a manual code change per card. The end state: a single
+"registry of tools" that both *describes* every card and *implements* it, so cards
+can be loaded dynamically and new ones added on the fly.
+- [ ] UI: a "new card" form with the three fields (input schema / output schema /
+      behaviour description) — probably a new palette entry or Studio panel.
+- [ ] Codegen: turn the description into a real card = the surfaces adding a card
+      touches today, so a generator has to produce all of them in lockstep:
+      frontend `nodes/registry.ts` entry + a `*Node` component + a `graphModel`
+      factory; backend param spec (`animation_params.py`) + whole-clip *and*
+      block-streaming render handlers (`graph_render.py`); a Playground pipeline
+      (`card_demo.py` `CARD_LABELS` + re-export); and docs/help (`paramHelp.ts` /
+      `Docs.tsx` section). See DEVELOPMENT.md "Checklist — add a node type".
+- [ ] Dynamic loading: a place where all cards are described + implemented so they
+      can be loaded at runtime and new ones appended — decide static-file codegen
+      (write files + reload) vs. a true runtime plugin registry, and how generated
+      cards stay compatible with `RENDER_VERSION` / `GRAPH_VERSION` + the codegen
+      contract that keeps backend specs the source of truth.
+- [ ] Safety: generated card code runs in the render pipeline — sandbox/validate
+      it (schema-check the param spec, lint/typecheck before it goes live, guard
+      the render handlers against bad output).
+
 ## Cleanup — DONE
 - [x] Removed dead `TrackRow.jsx`, `FreqControls.jsx`, `Modal.jsx` + their CSS.

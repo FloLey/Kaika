@@ -17,6 +17,7 @@ import MathNode from "./MathNode";
 import LfoNode from "./LfoNode";
 import NoiseNode from "./NoiseNode";
 import ShaperNode from "./ShaperNode";
+import GateNode from "./GateNode";
 import ScopeNode from "./ScopeNode";
 import PatternNode from "./PatternNode";
 import AnimatePointsNode from "./AnimatePointsNode";
@@ -35,6 +36,7 @@ import {
   lfoNode,
   noiseNode,
   shaperNode,
+  gateNode,
   scopeNode,
   patternNode,
   animatePointsNode,
@@ -217,6 +219,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "modulators",
       help: "Re-curves one signal (attack/release, gamma, threshold, invert, range remap) per use, without editing the studio.",
       io: { in: "1 signal", out: "signal" },
+    },
+  },
+  gate: {
+    type: "gate",
+    Component: GateNode,
+    chrome: { title: "gate", accent: "var(--mod)", outFlow: "value" },
+    factory: gateNode,
+    palette: {
+      label: "Gate",
+      title: "Turn a signal into a clean 0/1 switch (hysteresis threshold)",
+      order: 13.5,
+      category: "modulators",
+      help: "Any value in \u2192 a clean 0/1 square out. Arms above the threshold, releases below it minus the hysteresis band, so a hovering signal can't flicker. Drives triggers and on/off ports.",
+      io: { in: "1 signal", out: "0/1 signal" },
     },
   },
   scope: {

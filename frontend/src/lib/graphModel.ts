@@ -24,6 +24,7 @@ export {
   lfoNode,
   noiseNode,
   shaperNode,
+  gateNode,
   scopeNode,
   patternNode,
   animatePointsNode,

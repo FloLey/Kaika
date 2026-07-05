@@ -13,6 +13,7 @@ import type {
   CombineNode,
   CombineSlot,
   FluidNode,
+  GateNode,
   Graph,
   ImageNode,
   LfoNode,
@@ -178,6 +179,9 @@ export function shaperNode(x: number, y: number): ShaperNode {
       hi: 1,
     },
   };
+}
+export function gateNode(x: number, y: number): GateNode {
+  return { id: mkNodeId(), type: "gate", x, y, data: { threshold: 0.5, hysteresis: 0.1, invert: false } };
 }
 export function scopeNode(x: number, y: number): ScopeNode {
   return { id: mkNodeId(), type: "scope", x, y, data: {} };
