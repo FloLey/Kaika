@@ -157,7 +157,7 @@ def composite(layers: list, opacities: list) -> np.ndarray:
     by the layer's `opacity`. The result stays dye-on-transparent, 3-channel (the
     terminal `fluid.flatten` renders it over black)."""
     acc = np.zeros(layers[0].shape[:-1] + (3,), dtype=np.float32)
-    for layer, op in reversed(list(zip(layers, opacities))):  # bottom -> top
+    for layer, op in zip(reversed(layers), reversed(opacities)):  # bottom -> top
         f = layer.astype(np.float32) / 255.0
         op = float(op)
         if layer.shape[-1] == 4:  # RGBA: explicit alpha, straight (un-premultiplied) rgb

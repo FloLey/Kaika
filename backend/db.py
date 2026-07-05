@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS projects_updated_at_idx ON projects (updated_at DESC);
 """
 
 
@@ -168,6 +169,17 @@ def list_projects() -> list[dict[str, Any]]:
             WHERE job_id <> 'playground'  -- the app-managed Playground is not a user project
             ORDER BY updated_at DESC
             """).fetchall()
+    return rows
+
+
+def get_projects_full() -> list[dict[str, Any]]:
+    """Every project row's (job_id, data) — Playground included — in ONE query/
+    connection, each blob migrated. For whole-corpus scans (cache GC reachability)
+    that would otherwise pay a connection per project."""
+    with _connect() as conn:
+        rows = conn.execute("SELECT job_id, data FROM projects").fetchall()
+    for row in rows:
+        row["data"] = migrate_project_data(row.get("data"))
     return rows
 
 

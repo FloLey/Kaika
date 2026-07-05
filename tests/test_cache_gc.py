@@ -57,8 +57,7 @@ def wired(tmp_path, monkeypatch):
     lines = [{"t0": 0.2, "t1": 1.5, "text": "les avions dessinent dans le ciel"}]
     (tmp_path / "analysis" / "proj1.json").write_text(json.dumps({"lyric_lines": lines}))
 
-    monkeypatch.setattr(db, "list_projects", lambda: [{"job_id": "proj1"}])
-    monkeypatch.setattr(db, "get_project", lambda jid: proj if jid == "proj1" else None)
+    monkeypatch.setattr(db, "get_projects_full", lambda: [proj])
     monkeypatch.setattr(G, "ANIM_DIR", tmp_path / "fluid")
     (tmp_path / "fluid").mkdir()
     monkeypatch.setattr(cache_gc, "ASSETS_DIR", tmp_path / "assets")
@@ -126,7 +125,7 @@ def test_sweep_bails_when_db_unavailable(wired, monkeypatch):
     def boom():
         raise db.DBUnavailable("postgres down")
 
-    monkeypatch.setattr(db, "list_projects", boom)
+    monkeypatch.setattr(db, "get_projects_full", boom)
     monkeypatch.setattr(cache_gc, "_last_run", 0.0)
     assert cache_gc.sweep() == 0
     assert stale.exists()  # a DB outage must NOT be read as "nothing is reachable"

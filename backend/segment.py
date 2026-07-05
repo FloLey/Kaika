@@ -586,7 +586,10 @@ def propose_segments(
             lyric_lines = [
                 {"t0": l.t0, "t1": l.t1, "text": l.text, "aligned": l.aligned} for l in disp
             ]
-        except Exception:  # noqa: BLE001  (intentional fallback)
+        except Exception as e:  # noqa: BLE001  (intentional fallback)
+            # Log it — a silent swallow makes a real transcription bug look like
+            # "this song just has no lyrics".
+            _log.warning("lyrics transcription/alignment failed (%s); continuing without", e)
             res_lines, lyric_lines = [], []
 
     # --- primary: LLM on a per-bar audio+lyrics table ---

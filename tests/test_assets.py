@@ -227,8 +227,7 @@ def test_cache_gc_keeps_library_asset_with_no_node(monkeypatch):
         "assets": [{"id": "z", "url": "/assets/p2/z.mp4", "kind": "video", "name": "z", "addedAt": 1}],
         "segments": [{"graph": {"nodes": [{"type": "fluid", "data": {}}]}}],
     }}
-    monkeypatch.setattr(cache_gc.db, "list_projects", lambda: [{"job_id": "p2"}])
-    monkeypatch.setattr(cache_gc.db, "get_project", lambda jid: proj if jid == "p2" else None)
+    monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
     assert "z.mp4" in {p.name for p in cache_gc.reachable_assets()}
 
 

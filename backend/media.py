@@ -208,11 +208,21 @@ def serve_range(path: Path, mimetype: str = "audio/wav") -> Response:
         return resp
 
     length = end - start + 1
-    with open(path, "rb") as f:
-        f.seek(start)
-        chunk = f.read(length)
 
-    resp = Response(chunk, status=206, mimetype=mimetype, direct_passthrough=True)
+    def _stream(chunk_size: int = 64 * 1024):
+        # Stream the range instead of buffering it whole — a big video seek would
+        # otherwise pull the entire tail of the file into memory.
+        with open(path, "rb") as f:
+            f.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = f.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    resp = Response(_stream(), status=206, mimetype=mimetype, direct_passthrough=True)
     resp.headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
     resp.headers["Accept-Ranges"] = "bytes"
     resp.headers["Content-Length"] = str(length)

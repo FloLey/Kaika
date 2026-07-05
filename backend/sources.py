@@ -139,6 +139,11 @@ def lyrics(nframes, h, w, fps, *, lines, seg_start, align, case, reveal,
     resize = (th, tw) != (h, w)
     bx, by = int(box_x * tw), int(box_y * th)
     bw, bh = max(1, int(box_w * tw)), max(1, int(box_h * th))
+    # The fitted layout depends only on the (post-case) line text — the box, font and
+    # stroke are constant for the whole call — so solve each distinct line ONCE instead
+    # of re-running the shrink loop every frame (a 10s@30fps clip hits ~300 frames).
+    fits: dict[str, tuple] = {}
+    wraps: dict[tuple[str, str], str] = {}  # word-reveal blocks, keyed (line, shown)
     for i in range(nframes):
         t = seg_start + (frame_offset + i) * dt
         line = next((ln for ln in lines if float(ln.get("t0", 0)) <= t < float(ln.get("t1", 0))), None)
@@ -155,16 +160,21 @@ def lyrics(nframes, h, w, fps, *, lines, seg_start, align, case, reveal,
         draw = ImageDraw.Draw(img)
         # Fit the font to the FULL line (stroke included) so word-reveal fills a FIXED
         # layout instead of rescaling/reflowing the already-shown words every frame.
-        fnt, px, full_block, sw, spacing, bbox = _fit(
-            text, font, bh, bw, bh, draw, outline_width if outline else 0.0
-        )
+        fit = fits.get(text)
+        if fit is None:
+            fit = fits[text] = _fit(
+                text, font, bh, bw, bh, draw, outline_width if outline else 0.0
+            )
+        fnt, px, full_block, sw, spacing, bbox = fit
         if reveal == "word":
             words = text.split()
             t0 = float(line.get("t0", 0.0))
             t1 = max(t0 + 0.1, float(line.get("t1", t0 + 1.0)))
             frac = max(0.0, min(1.0, (t - t0) / (t1 - t0)))
             shown = " ".join(words[: max(1, int(np.ceil(frac * len(words))))])
-            block = "\n".join(_wrap(shown, fnt, bw - 2 * sw, draw))  # same breaks as the full line
+            block = wraps.get((text, shown))
+            if block is None:  # same breaks as the full line
+                block = wraps[text, shown] = "\n".join(_wrap(shown, fnt, bw - 2 * sw, draw))
         else:
             block = full_block
         fill = (int(r[i] * 255), int(g[i] * 255), int(b[i] * 255), 255)

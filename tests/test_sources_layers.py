@@ -144,8 +144,7 @@ def test_reachable_assets_collects_image_video_urls(monkeypatch):
         {"type": "video", "data": {"assetUrl": "/assets/proj1/bbb.mp4"}},
         {"type": "fluid", "data": {}},
     ]}}]}}
-    monkeypatch.setattr(cache_gc.db, "list_projects", lambda: [{"job_id": "proj1"}])
-    monkeypatch.setattr(cache_gc.db, "get_project", lambda jid: proj if jid == "proj1" else None)
+    monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
     assert {p.name for p in cache_gc.reachable_assets()} == {"aaa.png", "bbb.mp4"}
 
 

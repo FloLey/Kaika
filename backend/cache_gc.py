@@ -29,10 +29,6 @@ log = logging.getLogger("kaika.cache")
 # render refreshes mtime), so a generous idle window keeps them even across a pause.
 KEEP_RECENT_SEC = int(os.environ.get("FLUID_CACHE_KEEP_RECENT_SEC", "1800"))  # 30 min
 
-# The Playground is app-managed and excluded from list_projects(), but its clips are
-# just as worth keeping — enumerate it explicitly.
-_PLAYGROUND = "playground"
-
 _last_run = 0.0  # module-level throttle so rapid saves don't re-sweep every time
 
 
@@ -94,19 +90,16 @@ def _assets_from(row: dict) -> set:
 
 
 def _reachable() -> tuple[set[str], set]:
-    """(reachable clip hashes, reachable asset files) across ALL saved projects (+
-    Playground), in a SINGLE pass — each project row is fetched/migrated once.
+    """(reachable clip hashes, reachable asset files) across ALL saved projects (the
+    Playground row included), in a SINGLE query — one connection instead of one per
+    project.
 
     Raises `db.DBUnavailable` if the project list can't be read — callers MUST treat
     that as "unknown" and NOT delete anything (empty sets would nuke the caches)."""
-    job_ids = [p["job_id"] for p in db.list_projects()] + [_PLAYGROUND]
     hashes: set[str] = set()
     assets: set = set()
-    for jid in job_ids:
-        row = db.get_project(jid)
-        if row is None:
-            continue
-        hashes |= _hashes_from(row, jid)
+    for row in db.get_projects_full():
+        hashes |= _hashes_from(row, row["job_id"])
         assets |= _assets_from(row)
     return hashes, assets
 
