@@ -4,6 +4,7 @@ import SegmentRail from "./SegmentRail";
 import SignalCard from "./SignalCard";
 import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
+import AssetLibrary from "../assets/AssetLibrary";
 import VolumeControl from "./VolumeControl";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
@@ -56,6 +57,7 @@ export default function Studio({
   // project opens on signals (extract first, then animate).
   const [tab, setTab] = useState(job === "playground" ? "animation" : "signals"); // "signals" | "animation"
   const [showOutput, setShowOutput] = useState(false); // output-settings modal
+  const [showAssets, setShowAssets] = useState(false); // asset-library manager modal
 
   // Fullscreen the WHOLE studio panel (timeline + canvas + output modal + tabs), not
   // just the canvas — so the segment transport stays visible and the settings modal,
@@ -358,6 +360,7 @@ export default function Studio({
             onClose={() => setShowOutput(false)}
           />
         )}
+        {showAssets && <AssetLibrary jobId={job} onClose={() => setShowAssets(false)} />}
 
         <nav className="mode-bar">
           <button
@@ -371,6 +374,9 @@ export default function Studio({
             onClick={() => setTab("animation")}
           >
             create animation
+          </button>
+          <button className="mode-tab mode-tab-assets" onClick={() => setShowAssets(true)}>
+            📚 assets
           </button>
         </nav>
       </div>

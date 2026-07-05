@@ -9,7 +9,7 @@ from flask import Blueprint, abort, jsonify, send_file
 from .. import fonts
 from ..media import serve_range, stem_audio_path
 from ..web import validate_job_id
-from ..paths import FLUID_DIR, SPECTRO_DIR, STEMS
+from ..paths import ASSETS_DIR, FLUID_DIR, SPECTRO_DIR, STEMS
 
 bp = Blueprint("media", __name__)
 
@@ -24,6 +24,16 @@ def index():
 def fonts_list():
     # The bundled lyric fonts [{key, label}] for the lyrics card's font picker.
     return jsonify(fonts.list_fonts())
+
+
+@bp.route("/fonts/<key>")
+def font_file(key: str):
+    # The TTF for one bundled font, so the browser can load it (@font-face) and draw a
+    # live text preview on the lyrics card in the chosen typeface.
+    path = fonts.font_path(key)
+    if not path:
+        abort(404)
+    return send_file(path, mimetype="font/ttf")
 
 
 @bp.route("/fluid/<name>")
@@ -65,6 +75,26 @@ def audio(job_id: str, stem: str):
         ".m4a": "audio/mp4",
     }.get(ext, "audio/wav")
     return serve_range(path, mimetype=mimetype)
+
+
+_ASSET_MIME = {
+    "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
+    "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm", "m4v": "video/mp4",
+}
+
+
+@bp.route("/assets/<job_id>/<name>")
+def asset_file(job_id: str, name: str):
+    """A user-uploaded image/video layer asset (data/assets/<job_id>/<sha>.<ext>).
+    Video is range-served so `<video>` can seek; images are sent whole."""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if not validate_job_id(job_id) or ext not in _ASSET_MIME or not name.split(".")[0].isalnum():
+        abort(404)
+    p = ASSETS_DIR / job_id / name
+    if not p.exists():
+        abort(404)
+    mimetype = _ASSET_MIME[ext]
+    return serve_range(p, mimetype=mimetype) if mimetype.startswith("video/") else send_file(str(p), mimetype=mimetype)
 
 
 @bp.route("/spectrogram/<job_id>/<stem>")

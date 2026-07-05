@@ -166,16 +166,14 @@ SOURCE_STATIC_KEYS: tuple[str, ...] = (
 # Project-level OUTPUT render settings (not modulatable ports; one shared object
 # per project, edited in the animation settings modal and persisted in the project
 # JSONB). Threaded into the simulate() params as a top-level `output` dict, where
-# they drive the rectangular grid (via fluid.grid_from_output), fps, and the
-# background composite. Keys + defaults:
+# they drive the rectangular grid (via fluid.grid_from_output) and fps. There is no
+# background setting — un-dyed pixels are black; any backdrop is a bottom layer. Keys:
 #   width/height (px) — output size; orientation is implied by which is larger.
 #   quality          — "draft"|"normal"|"high" -> short-side sim cells (fluid._QUALITY_CELLS).
 #   fps              — frames per second of the encoded clip.
-#   background       — solid background color (hex) composited behind the dye.
 OUTPUT_DEFAULTS: dict = {
     "width": 1080,
     "height": 1920,
     "quality": "normal",
     "fps": 24,
-    "background": "#000000",
 }

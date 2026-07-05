@@ -78,4 +78,6 @@ def test_every_card_is_present_in_the_playground():
     assert not card_demo.missing_cards()
     from backend.graph import _VIDEO_HANDLERS
 
+    # EVERY video card — including image/video (which demo a bundled sample asset) — must
+    # have a Playground pipeline. Nothing is excluded from the Playground.
     assert set(_VIDEO_HANDLERS) <= covered, f"video cards missing: {sorted(set(_VIDEO_HANDLERS) - covered)}"

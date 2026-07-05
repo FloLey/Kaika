@@ -141,6 +141,38 @@ def download_youtube_audio(url: str, out_dir: Path) -> Path:
     return hits[0]
 
 
+def download_youtube_video(url: str, out_dir: Path, stem: str = "ytvideo") -> Path:
+    """Download the best video+audio of a YouTube URL into ``out_dir`` as
+    ``<stem>.mp4`` (merged), returning the path. Used by the Video card's YouTube
+    import (the pipeline-start YouTube stays audio-only). Raises RuntimeError on
+    failure with yt-dlp's output."""
+    out_tmpl = str(out_dir / f"{stem}.%(ext)s")
+    cmd = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "-f",
+        "bv*+ba/b",  # best video+audio, else best single stream
+        "--merge-output-format",
+        "mp4",
+        "--no-playlist",
+        "-o",
+        out_tmpl,
+        url,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=YTDLP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"yt-dlp timed out after {YTDLP_TIMEOUT}s") from None
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout)[-2000:])
+    hits = [p for p in sorted(out_dir.glob(f"{stem}.*")) if p.suffix.lower() not in (".txt", ".lrc")]
+    if not hits:
+        raise RuntimeError("yt-dlp finished but produced no video file")
+    # Prefer the merged .mp4 if several intermediate files linger.
+    return next((p for p in hits if p.suffix.lower() == ".mp4"), hits[0])
+
+
 def lyrics_path(job_id: str) -> Path | None:
     """The frozen lyrics file for a job (lyrics.txt / lyrics.lrc), if any."""
     job_uploads = UPLOAD_DIR / job_id

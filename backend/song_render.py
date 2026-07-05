@@ -75,9 +75,8 @@ def build_plan(job_id: str, segments: list, lyric_lines: list, export: dict, ste
     fps = int(export.get("fps", 24))
     w, h = int(export.get("width", 1080)), int(export.get("height", 1920))
     cells = int(export.get("gridCells", 144))
-    bg = export.get("background", "#000000")
     gh, gw = fluid.grid_for(w, h, cells)
-    out_dict = {"width": w, "height": h, "fps": fps, "background": bg, "gridCells": cells}
+    out_dict = {"width": w, "height": h, "fps": fps, "gridCells": cells}
     plan: list = []  # per segment: (dag, output_id, [field...], window_len)
     layer_sources: dict = {}  # layer number -> accumulated source dicts (for dye layout)
     total = 0
@@ -97,16 +96,16 @@ def build_plan(job_id: str, segments: list, lyric_lines: list, export: dict, ste
         total += window
     dye_layout = {n: fluid._dye_layout(srcs) for n, srcs in layer_sources.items()}  # n -> (modes, wrap)
     return {"plan": plan, "dye_layout": dye_layout, "total": total, "gh": gh, "gw": gw,
-            "fps": fps, "w": w, "h": h, "bg": bg}
+            "fps": fps, "w": w, "h": h}
 
 
 def iter_song_windows(ctx: dict, should_cancel=None):
     """Yield `(a, b, styled_window)` per segment — the continuous render. The K persistent
     `FluidSim` fields carry across yields (that's the whole point): entering a segment
-    only swaps the injected rules. `styled_window` is post-background `[win, gh, gw, 3]`.
+    only swaps the injected rules. `styled_window` is flattened RGB `[win, gh, gw, 3]`.
     Stops early (returns) if `should_cancel()` before a segment. Pure/no I/O, so tests can
     concatenate the windows and assert continuity without ffmpeg."""
-    dye_layout, gh, gw, bg = ctx["dye_layout"], ctx["gh"], ctx["gw"], ctx["bg"]
+    dye_layout, gh, gw = ctx["dye_layout"], ctx["gh"], ctx["gw"]
     fields_sim: dict = {}  # layer number -> persistent FluidSim (carries across segments)
     done = 0
     for dag, oid, fields, window in ctx["plan"]:
@@ -140,10 +139,10 @@ def iter_song_windows(ctx: dict, should_cancel=None):
                 captured[nid][i] = fluid._tonemap(fields_sim[layer_n].current_dye())
 
         # Style the window through the segment's own DAG, feeding it the continuous
-        # fields (pre-seed the video memo), then composite the background.
+        # fields (pre-seed the video memo), then flatten RGBA -> RGB on black.
         for nid, frames in captured.items():
             dag._video[nid] = frames
-        styled = fluid.apply_background(dag.video(oid), bg)
+        styled = fluid.flatten(dag.video(oid))
         a = done
         done += window
         yield a, done, styled

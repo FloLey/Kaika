@@ -267,19 +267,6 @@ export default function ExportStep({
             <span className="export-hint">higher = crisper simulation, but slower to render</span>
           </div>
 
-          <div className="out-field">
-            <span className="out-label">background</span>
-            <div className="out-bg">
-              <input
-                type="color"
-                className="out-color"
-                value={exportSettings.background}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ background: e.target.value })}
-              />
-              <span className="out-bg-hex">{exportSettings.background}</span>
-            </div>
-          </div>
-
           {/* per-segment readiness checklist */}
           <div className="export-checklist">
             <div className="export-checklist-head">SEGMENTS</div>

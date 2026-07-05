@@ -57,7 +57,7 @@ def test_field_carries_across_boundary():
     # Control: seg2 rendered ALONE starts from a blank field -> ~black.
     dag = G._Dag("job", {**segs[1], "lyric_lines": []}, segs[1]["graph"], NOAUDIO,
                  {**EXPORT, "quality": "draft"})
-    solo = G.fluid.apply_background(dag.video("o"), "#000000")
+    solo = G.fluid.flatten(dag.video("o"))
     assert solo[1].mean() < 1.0
 
 

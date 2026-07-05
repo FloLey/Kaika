@@ -29,8 +29,8 @@ CARD_LABELS = {
     "shaper": "Shaper", "scope": "Scope",
     "points": "Points", "pattern": "Pattern", "animate-points": "Animate points",
     "merge-points": "Merge points",
-    "fluid": "Fluid", "lyrics": "Lyrics",
-    "color": "Color",
+    "fluid": "Fluid", "lyrics": "Lyrics", "image": "Image", "video": "Video",
+    "color": "Color", "backdrop": "Backdrop",
     "combine": "Combine", "output": "Output",
 }
 ALL_CARDS = set(CARD_LABELS)

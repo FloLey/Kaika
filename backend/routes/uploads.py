@@ -4,10 +4,14 @@ Stage 1 (`/upload`) and stage 2 (`/segment`) submit slow work to the job manager
 and return a job id; the UI polls `/jobs/<id>` (and `/logs` for the backend feed).
 """
 
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,6 +28,7 @@ from ..media import (
     lyrics_path,
     make_spectrogram,
     download_youtube_audio,
+    download_youtube_video,
     DEVICE,
 )
 from ..paths import (
@@ -31,12 +36,119 @@ from ..paths import (
     SEPARATED_DIR,
     SPECTRO_DIR,
     ANALYSIS_DIR,
+    ASSETS_DIR,
     STEMS,
     COLORMAPS,
     DEMUCS_TIMEOUT,
 )
 
 bp = Blueprint("uploads", __name__)
+
+# Image/video layer assets: kind -> allowed extensions. Content-addressed by hash so
+# an identical re-upload dedupes and the reference is immutable.
+_ASSET_EXTS = {
+    "image": {"png", "jpg", "jpeg", "webp"},
+    "video": {"mp4", "mov", "webm", "m4v"},
+}
+_ASSET_MAX_BYTES = int(os.environ.get("ASSET_MAX_BYTES", str(200 * 1024**2)))  # 200 MB
+
+
+@bp.route("/upload-asset/<job_id>", methods=["POST"])
+def upload_asset(job_id: str):
+    """Store an image/video file for a project's layer cards and return its served URL.
+
+    Lightweight + synchronous (no ingestion job): validate the extension, hash the
+    bytes, save under `data/assets/<job_id>/<sha16>.<ext>`, and return
+    `{url, kind, name}`. The Image/Video node stores `url` in its `data.assetUrl`."""
+    if not validate_job_id(job_id):
+        return error_response("bad job id", 404)
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return error_response("no file", 400)
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    kind = next((k for k, exts in _ASSET_EXTS.items() if ext in exts), None)
+    if kind is None:
+        return error_response(f"unsupported file type '.{ext}'", 400)
+    data = f.read()
+    if not data:
+        return error_response("empty file", 400)
+    if len(data) > _ASSET_MAX_BYTES:
+        return error_response(f"file too large (max {_ASSET_MAX_BYTES // 1024**2} MB)", 400)
+    asset = _store_asset(job_id, data, f.filename)
+    return jsonify(asset)
+
+
+def _store_asset(
+    job_id: str, data: bytes, filename: str, kind: str | None = None, *, register: bool = True
+) -> dict:
+    """Content-address `data` into `data/assets/<job>/<sha>.<ext>`, register it in the
+    project's `data.assets` library, and return the asset dict. `filename` supplies the
+    extension + display name; `kind` may be forced (else inferred from the extension).
+
+    `register=False` writes the file but skips `db.add_asset` — for the pipeline-start
+    video, whose project row doesn't exist yet; the caller registers it post-create."""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    kind = kind or next((k for k, exts in _ASSET_EXTS.items() if ext in exts), "image")
+    sha = hashlib.sha256(data).hexdigest()[:16]
+    ext = "jpg" if ext == "jpeg" else (ext or "mp4")
+    dest_dir = ASSETS_DIR / job_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    (dest_dir / f"{sha}.{ext}").write_bytes(data)
+    asset = {"id": sha, "url": f"/assets/{job_id}/{sha}.{ext}", "kind": kind,
+             "name": filename, "addedAt": int(time.time())}
+    if register:
+        db.add_asset(job_id, asset)
+    return asset
+
+
+@bp.get("/assets/<job_id>")
+def list_assets_route(job_id: str):
+    """The project's asset library `[{id, url, kind, name, addedAt}]` (the file route is
+    `/assets/<job>/<name>` — this one-segment path lists the library)."""
+    if not validate_job_id(job_id):
+        return error_response("bad job id", 404)
+    return jsonify(db.list_assets(job_id))
+
+
+@bp.delete("/assets/<job_id>/<asset_id>")
+def delete_asset_route(job_id: str, asset_id: str):
+    """Remove a library asset by id: unlink its file(s) and drop it from `data.assets`."""
+    if not validate_job_id(job_id) or not asset_id.isalnum():
+        return error_response("bad request", 400)
+    for p in (ASSETS_DIR / job_id).glob(f"{asset_id}.*"):
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    db.remove_asset(job_id, asset_id)
+    return jsonify({"ok": True})
+
+
+@bp.route("/asset-from-youtube/<job_id>", methods=["POST"])
+@json_body
+def asset_from_youtube(body, job_id):
+    """Import a YouTube video as a project asset (video card action; the pipeline-start
+    YouTube stays audio-only). Downloads video+audio off-thread, content-addresses it into
+    the library, and returns a job id; the card polls /jobs/<id> for the asset result."""
+    if not validate_job_id(job_id):
+        return error_response("bad job id", 404)
+    url = (body.get("url") or "").strip()
+    if not url:
+        return error_response("provide a YouTube URL", 400)
+    dl_job = uuid4().hex[:8]
+    jobs.submit(dl_job, "downloading", lambda: _download_asset_video(job_id, url))
+    return jsonify({"job_id": dl_job})
+
+
+def _download_asset_video(job_id: str, url: str) -> dict:
+    """Background worker: yt-dlp the video into a temp dir, store it as a library asset,
+    clean up. Returns the asset dict (the job result the card consumes)."""
+    tmp = Path(tempfile.mkdtemp(prefix=f"ytasset-{job_id}-"))
+    try:
+        video = download_youtube_video(url, tmp)
+        return _store_asset(job_id, video.read_bytes(), video.name, kind="video")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @bp.route("/upload", methods=["POST"])
@@ -95,6 +207,29 @@ def _process_upload(job_id, input_path, youtube_url, job_upload_dir, has_lyrics,
         jobs.set_step(job_id, "downloading")
         input_path = download_youtube_audio(youtube_url, job_upload_dir)
 
+    # 1b. Uploaded a VIDEO? Split off its audio for the pipeline (the "original" stem
+    # must be audio, resolved by globbing original.*) and keep the video itself as a
+    # reusable project asset. Gate on the *uploaded* filename — a YouTube bestaudio
+    # download is often a .webm (a "video" extension) but is audio-only, so it stays
+    # on the normal path. The asset is registered AFTER create_project (add_asset needs
+    # the row to exist); until then the file sits in ASSETS_DIR unlinked from the row.
+    video_asset = None
+    if upload_filename and upload_filename.rsplit(".", 1)[-1].lower() in _ASSET_EXTS["video"]:
+        jobs.set_step(job_id, "extracting")
+        wav_path = job_upload_dir / "original.wav"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error", "-i", str(input_path), "-vn", str(wav_path)],
+                check=True, capture_output=True, text=True, timeout=DEMUCS_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("audio extraction timed out") from None
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError("audio extract failed: " + (e.stderr or "")[-1500:]) from None
+        video_asset = _store_asset(
+            job_id, input_path.read_bytes(), upload_filename, kind="video", register=False)
+        input_path.unlink(missing_ok=True)  # so original.* globs the wav, not the video
+        input_path = wav_path
+
     # 2. Separate stems with demucs (GPU/MPS) -> data/separated/<job_id>/...
     jobs.set_step(job_id, "separating")
     job_out = SEPARATED_DIR / job_id
@@ -144,6 +279,8 @@ def _process_upload(job_id, input_path, youtube_url, job_upload_dir, has_lyrics,
         has_lyrics=has_lyrics,
         stems=stems,
     )
+    if video_asset is not None:  # now that the project row exists, add the source video
+        db.add_asset(job_id, video_asset)
     return {
         "job_id": job_id,
         "fmin": FMIN,

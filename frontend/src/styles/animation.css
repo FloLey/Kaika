@@ -1416,6 +1416,244 @@
   overflow: hidden;
   touch-action: none;
 }
+/* ---- image / video layer cards: the upload drop zone + asset thumbnail ------ */
+.anim-asset-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  margin-bottom: 8px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+}
+.anim-asset-drop:hover {
+  border-color: color-mix(in srgb, var(--courant) 45%, var(--line));
+  color: var(--text);
+}
+.anim-asset-drop.has-asset {
+  padding: 6px;
+}
+.anim-asset-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.anim-asset-thumb {
+  display: block;
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #000;
+}
+.anim-asset-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+.anim-asset-err {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--petale);
+}
+/* the "📚 library" button under a card's drop zone + the inline youtube row */
+.anim-asset-libbtn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.asset-lib-yt {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.asset-lib-yt .hz-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- asset library modal --------------------------------------------------- */
+.anim-modal.asset-lib {
+  width: min(680px, 92vw);
+  max-height: 82vh;
+}
+.asset-lib-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.asset-lib-actions .asset-lib-yt {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0;
+}
+.asset-lib-empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.asset-lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.asset-lib-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.asset-lib-item.pickable {
+  cursor: pointer;
+}
+.asset-lib-item.pickable:hover {
+  border-color: color-mix(in srgb, var(--courant) 55%, var(--line));
+}
+.asset-lib-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+.asset-lib-thumb img,
+.asset-lib-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.asset-lib-kind {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px #000);
+}
+.asset-lib-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.asset-lib-del {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  opacity: 0;
+  background: color-mix(in srgb, #000 55%, transparent);
+}
+.asset-lib-item:hover .asset-lib-del {
+  opacity: 1;
+}
+.mode-tab-assets {
+  margin-left: auto;
+}
+
+/* ---- lyrics text-box editor (drag to move, corners to resize) -------------- */
+.anim-box-editor {
+  margin: 4px 0 6px;
+}
+.anim-box-pad {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--out-aspect, 1 / 1);
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 25% 100%,
+    var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+}
+.anim-box-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* live clip preview inside the placement box (video card); the rect + handles sit on top */
+.anim-box-video {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+}
+/* compact one-line drop/replace affordance (video card — the preview is the box) */
+.anim-asset-drop-row {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.anim-asset-drop-row .anim-asset-icon {
+  font-size: 15px;
+}
+.anim-box-rect {
+  position: absolute;
+  box-sizing: border-box;
+  /* transparent fill so the text preview underneath reads; the border marks the box */
+  background: transparent;
+  border: 1.5px solid var(--courant);
+  border-radius: 3px;
+  cursor: grab;
+}
+.anim-box-rect:active {
+  cursor: grabbing;
+}
+.anim-box-handle {
+  position: absolute;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  background: var(--courant);
+  border: 2px solid var(--panel);
+  border-radius: 2px;
+}
+.anim-box-handle.nw {
+  left: -6px;
+  top: -6px;
+  cursor: nwse-resize;
+}
+.anim-box-handle.ne {
+  right: -6px;
+  top: -6px;
+  cursor: nesw-resize;
+}
+.anim-box-handle.sw {
+  left: -6px;
+  bottom: -6px;
+  cursor: nesw-resize;
+}
+.anim-box-handle.se {
+  right: -6px;
+  bottom: -6px;
+  cursor: nwse-resize;
+}
+.anim-box-readout {
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: center;
+}
+
 .anim-points-marker {
   position: absolute;
   width: 12px;
@@ -1520,6 +1758,8 @@
 }
 .anim-select {
   flex: 1;
+  min-width: 0; /* let it shrink below intrinsic size (number inputs overflow the card otherwise) */
+  box-sizing: border-box;
   font: inherit;
   font-size: 12px;
   color: var(--text);

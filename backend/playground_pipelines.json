@@ -2255,6 +2255,201 @@
     }
   },
   {
+    "key": "backdrop",
+    "label": "Backdrop",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "cb",
+          "sourcePort": "out",
+          "targetPort": "s1"
+        },
+        {
+          "id": "e1",
+          "source": "bd",
+          "target": "cb",
+          "sourcePort": "out",
+          "targetPort": "s2"
+        },
+        {
+          "id": "e2",
+          "source": "cb",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 300,
+          "id": "bd",
+          "type": "backdrop",
+          "data": {
+            "color": "#2a1a4a",
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "x": 340,
+          "y": 40,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "b": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "g": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.69
+                }
+              },
+              "r": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.27
+                }
+              },
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.55
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 20
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "intensity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.5,
+                  0.5
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 640,
+          "y": 60,
+          "id": "cb",
+          "type": "combine",
+          "data": {
+            "mode": "stack",
+            "inputs": [
+              {
+                "id": "s1",
+                "opacity": 1
+              },
+              {
+                "id": "s2",
+                "opacity": 1
+              }
+            ],
+            "medium": {
+              "dissipation": 0.95,
+              "velocity_dissipation": 0.97,
+              "viscosity": 0,
+              "vorticity": 6
+            }
+          }
+        },
+        {
+          "x": 900,
+          "y": 70,
+          "id": "out",
+          "type": "output",
+          "data": {
+            "title": "preview"
+          }
+        }
+      ],
+      "version": 6
+    }
+  },
+  {
     "key": "combine",
     "label": "Combine",
     "signals": [],
@@ -2576,6 +2771,293 @@
         }
       ],
       "version": 6
+    }
+  },
+  {
+    "key": "image",
+    "label": "Image",
+    "signals": [],
+    "graph": {
+      "version": 6,
+      "nodes": [
+        {
+          "x": 60,
+          "y": 300,
+          "id": "fl",
+          "type": "fluid",
+          "data": {
+            "ports": {
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 24
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.5,
+                  0.5
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          }
+        },
+        {
+          "x": 60,
+          "y": 60,
+          "id": "lay",
+          "type": "image",
+          "data": {
+            "assetUrl": "/assets/playground/sample.png",
+            "box_x": 0,
+            "box_y": 0,
+            "box_w": 1,
+            "box_h": 1,
+            "fit": "cover",
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "x": 360,
+          "y": 60,
+          "id": "cb",
+          "type": "combine",
+          "data": {
+            "mode": "stack",
+            "inputs": [
+              {
+                "id": "s1",
+                "opacity": 1
+              },
+              {
+                "id": "s2",
+                "opacity": 1
+              }
+            ],
+            "medium": {
+              "viscosity": 0,
+              "vorticity": 6,
+              "dissipation": 0.95,
+              "velocity_dissipation": 0.97
+            }
+          }
+        },
+        {
+          "x": 660,
+          "y": 60,
+          "id": "out",
+          "type": "output",
+          "data": {
+            "title": "preview"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "cb",
+          "sourcePort": "out",
+          "targetPort": "s1"
+        },
+        {
+          "id": "e1",
+          "source": "lay",
+          "target": "cb",
+          "sourcePort": "out",
+          "targetPort": "s2"
+        },
+        {
+          "id": "e2",
+          "source": "cb",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ]
+    }
+  },
+  {
+    "key": "video",
+    "label": "Video",
+    "signals": [],
+    "graph": {
+      "version": 6,
+      "nodes": [
+        {
+          "x": 60,
+          "y": 300,
+          "id": "fl",
+          "type": "fluid",
+          "data": {
+            "ports": {
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 24
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.5,
+                  0.5
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          }
+        },
+        {
+          "x": 60,
+          "y": 60,
+          "id": "lay",
+          "type": "video",
+          "data": {
+            "assetUrl": "/assets/playground/sample.mp4",
+            "box_x": 0,
+            "box_y": 0,
+            "box_w": 1,
+            "box_h": 1,
+            "fit": "cover",
+            "sync": "segment",
+            "start": 0,
+            "loop": true,
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "speed": {
+                "binding": {
+                  "kind": "node",
+                  "nodeId": "vspd",
+                  "lo": 0.5,
+                  "hi": 1.8
+                }
+              }
+            }
+          }
+        },
+        {
+          "x": 360,
+          "y": 60,
+          "id": "cb",
+          "type": "combine",
+          "data": {
+            "mode": "stack",
+            "inputs": [
+              {
+                "id": "s1",
+                "opacity": 1
+              },
+              {
+                "id": "s2",
+                "opacity": 1
+              }
+            ],
+            "medium": {
+              "viscosity": 0,
+              "vorticity": 6,
+              "dissipation": 0.95,
+              "velocity_dissipation": 0.97
+            }
+          }
+        },
+        {
+          "x": 660,
+          "y": 60,
+          "id": "out",
+          "type": "output",
+          "data": {
+            "title": "preview"
+          }
+        },
+        {
+          "x": 60,
+          "y": 360,
+          "id": "vspd",
+          "type": "lfo",
+          "data": {
+            "duty": 0.5,
+            "rate": 1,
+            "phase": 0,
+            "shape": "sine",
+            "rateMode": "cycles"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "cb",
+          "sourcePort": "out",
+          "targetPort": "s1"
+        },
+        {
+          "id": "e1",
+          "source": "lay",
+          "target": "cb",
+          "sourcePort": "out",
+          "targetPort": "s2"
+        },
+        {
+          "id": "e2",
+          "source": "cb",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e-vspd",
+          "source": "vspd",
+          "target": "lay",
+          "sourcePort": "out",
+          "targetPort": "speed"
+        }
+      ]
     }
   }
 ]

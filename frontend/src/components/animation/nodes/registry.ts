@@ -23,6 +23,9 @@ import AnimatePointsNode from "./AnimatePointsNode";
 import MergePointsNode from "./MergePointsNode";
 import ColorNode from "./ColorNode";
 import LyricsNode from "./LyricsNode";
+import ImageNode from "./ImageNode";
+import VideoNode from "./VideoNode";
+import BackdropNode from "./BackdropNode";
 import {
   fluidNode,
   outputNode,
@@ -38,6 +41,9 @@ import {
   mergePointsNode,
   colorNode,
   lyricsNode,
+  imageNode,
+  videoNode,
+  backdropNode,
 } from "../../../lib/graphModel";
 import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
 import type { NodeProps } from "./nodeProps";
@@ -293,8 +299,50 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       title: "Burn the segment's aligned lyrics into the video, timed to the vocal",
       order: 42,
       category: "generators",
-      help: "Burns this track's aligned lyrics into the frame, timed to the vocal (line or word reveal). Needs lyrics on the track.",
-      io: { in: "signals on its params", out: "video" },
+      help: "Burns this track's aligned lyrics into the frame, timed to the vocal (line or word reveal). Wire a color card into fill/outline to recolour them. Needs lyrics on the track.",
+      io: { in: "color cards (fill/outline) + signals on its params", out: "video" },
+    },
+  },
+  image: {
+    type: "image",
+    Component: ImageNode,
+    chrome: { title: "image", accent: "var(--courant)", outFlow: "video" },
+    factory: imageNode,
+    palette: {
+      label: "Image",
+      title: "Place an uploaded image into the frame as a video layer",
+      order: 30,
+      category: "sources",
+      help: "Uploads an image and places it into a box (cover/contain/stretch) as a video layer. Feed it to a stack combine or an output; opacity is a modulatable port.",
+      io: { in: "a signal on opacity", out: "video" },
+    },
+  },
+  video: {
+    type: "video",
+    Component: VideoNode,
+    chrome: { title: "video", accent: "var(--courant)", outFlow: "video" },
+    factory: videoNode,
+    palette: {
+      label: "Video",
+      title: "Place an uploaded video clip into the frame as a video layer",
+      order: 31,
+      category: "sources",
+      help: "Uploads a video clip and places it into a box (cover/contain/stretch), clocked to the song or this segment with start/speed/loop. Feed it to a stack combine or an output; opacity is a modulatable port.",
+      io: { in: "a signal on opacity", out: "video" },
+    },
+  },
+  backdrop: {
+    type: "backdrop",
+    Component: BackdropNode,
+    chrome: { title: "backdrop", accent: "var(--courant)", outFlow: "video" },
+    factory: backdropNode,
+    palette: {
+      label: "Backdrop",
+      title: "Fill the frame with a solid colour as a video layer",
+      order: 29,
+      category: "sources",
+      help: "Fills the whole frame with a solid colour as a video layer. Wire it into the BOTTOM input of a stack combine for a non-black background; opacity is a modulatable port.",
+      io: { in: "a signal on opacity", out: "video" },
     },
   },
 };

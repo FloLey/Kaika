@@ -1,25 +1,51 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import Ctl, { Toggle } from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
-import { patchNodeData } from "../../../lib/graphModel";
+import { patchNodeData, videoSource } from "../../../lib/graphModel";
 import { argHelp } from "../../../lib/paramHelp";
 import { LYRICS_PARAMS } from "../../../lib/nodeParams";
+import { aspectOf } from "../../../lib/output";
+import { useLyricsFont } from "../../../lib/lyricsFont";
 import { listFonts, type FontOption } from "../../../lib/api";
+import BoxPad, { type BoxPreview } from "./BoxPad";
 import type { NodeProps } from "./nodeProps";
-import type { LyricsData, LyricsAlign, LyricsCase, LyricsPosition, LyricsReveal } from "../../../lib/types";
+import type { LyricsData, LyricsAlign, LyricsCase, LyricsReveal } from "../../../lib/types";
 
 // Lyrics source: burns the segment's ALIGNED lyrics into the frame, timed to the
 // vocal (→ video). No input; the lyric lines ride in from the project (ctx.lyricLines).
 // With reveal="word" the active line fills in word-by-word. Text word-wraps and
 // auto-fits the box; a black outline keeps it readable. size/colour/opacity are ports.
-const POSITIONS: LyricsPosition[] = ["top", "center", "bottom"];
 const ALIGNS: LyricsAlign[] = ["left", "center", "right"];
 const CASES: LyricsCase[] = ["none", "upper", "lower"];
 const REVEALS: LyricsReveal[] = ["line", "word"];
 const dp2 = (v: number) => v.toFixed(2);
+
+interface LyricLine {
+  t0?: number;
+  t1?: number;
+  text?: string;
+}
+const applyCase = (t: string, c: LyricsCase) =>
+  c === "upper" ? t.toUpperCase() : c === "lower" ? t.toLowerCase() : t;
+
+// The lyric text visible at song time `t` — mirrors backend sources.lyrics: the active
+// line, and (reveal="word") only the words revealed so far over its [t0, t1].
+function textAtTime(lines: LyricLine[], t: number, reveal: LyricsReveal, c: LyricsCase): string {
+  const line = lines.find((l) => (l.t0 ?? 0) <= t && t < (l.t1 ?? 0));
+  if (!line || !line.text) return "";
+  let text = applyCase(line.text.trim(), c);
+  if (reveal === "word") {
+    const words = text.split(/\s+/).filter(Boolean);
+    const t0 = line.t0 ?? 0;
+    const t1 = Math.max(t0 + 0.1, line.t1 ?? t0 + 1);
+    const frac = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
+    text = words.slice(0, Math.max(1, Math.ceil(frac * words.length))).join(" ");
+  }
+  return text;
+}
 
 // The bundled fonts are fetched once (GET /fonts) and shared across every lyrics node.
 // Falls back to just the default so the card still renders offline / in tests.
@@ -49,6 +75,15 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
   const set = (patch: Partial<LyricsData>) =>
     onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>));
   const lineCount = (ctx?.lyricLines || []).length;
+  // A `color` card can drive the fill and/or the outline colour (else white / black).
+  const fillWired = useMemo(
+    () => !!(ctx?.graph && videoSource(ctx.graph, node.id, "fillColor")),
+    [ctx?.graph, node.id]
+  );
+  const outlineWired = useMemo(
+    () => !!(ctx?.graph && videoSource(ctx.graph, node.id, "outlineColor")),
+    [ctx?.graph, node.id]
+  );
 
   const sel = <K extends keyof LyricsData>(label: string, key: K, opts: readonly string[]) => (
     <label className="anim-select-row">
@@ -68,17 +103,35 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
     </label>
   );
 
-  const box = (label: string, key: "box_x" | "box_y" | "box_w" | "box_h", min: number) => (
-    <Ctl
-      label={label}
-      value={d[key]}
-      min={min}
-      max={1}
-      step={0.01}
-      fmt={dp2}
-      onChange={(v) => set({ [key]: v } as Partial<LyricsData>)}
-      {...argHelp("lyrics", key)}
-    />
+  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const family = useLyricsFont(d.font);
+  // The preview plays the reveal off the shared clock (see BoxPad): `getText(t)` gives the
+  // revealed text at song time t; when paused it shows `idleText` (the longest line so the
+  // box can be sized safely, else a sample when the track has no lyrics).
+  const lines = useMemo(() => (ctx?.lyricLines || []) as LyricLine[], [ctx?.lyricLines]);
+  const getText = useCallback(
+    (t: number) => textAtTime(lines, t, d.reveal, d.case),
+    [lines, d.reveal, d.case]
+  );
+  const idleText = useMemo(() => {
+    let t = "";
+    for (const l of lines) if (l?.text && l.text.length > t.length) t = l.text;
+    return applyCase(t || "Aa Bb Cc", d.case);
+  }, [lines, d.case]);
+  // Stable identity so the preview's rAF loop doesn't tear down every render.
+  const preview = useMemo<BoxPreview>(
+    () => ({
+      getText,
+      idleText,
+      fontFamily: family,
+      align: d.align,
+      outline: d.outline,
+      outlineWidth: d.outlineWidth,
+      clock: ctx?.groupClock,
+      playing: !!ctx?.groupPlaying,
+      time0: ctx?.segStart ?? 0,
+    }),
+    [getText, idleText, family, d.align, d.outline, d.outlineWidth, ctx?.groupClock, ctx?.groupPlaying, ctx?.segStart]
   );
 
   return (
@@ -104,6 +157,32 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
       <div className="anim-fx-hint">
         {lineCount > 0 ? `${lineCount} aligned line${lineCount === 1 ? "" : "s"} for this track` : "no aligned lyrics for this track"}
       </div>
+      {/* Fill / outline colour: wire a `color` card here to drive them (else white / black).
+          The outline stays opaque whatever its colour, so it keeps the text readable. */}
+      <div className="anim-pos-row">
+        <Port
+          kind="in"
+          flow="color"
+          nodeId={node.id}
+          portId="fillColor"
+          portRef={helpers.portRef}
+          title="wire a color card to set the text fill colour"
+        />
+        <span className="anim-pos-label">fill color</span>
+        <span className="anim-pos-count">{fillWired ? "wired" : "white"}</span>
+      </div>
+      <div className="anim-pos-row">
+        <Port
+          kind="in"
+          flow="color"
+          nodeId={node.id}
+          portId="outlineColor"
+          portRef={helpers.portRef}
+          title="wire a color card to set the outline colour"
+        />
+        <span className="anim-pos-label">outline color</span>
+        <span className="anim-pos-count">{outlineWired ? "wired" : "black"}</span>
+      </div>
       <div className="anim-static">
         <label className="anim-select-row">
           <span className="anim-select-label">font</span>
@@ -120,16 +199,19 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
             ))}
           </select>
         </label>
-        {sel("position", "position", POSITIONS)}
         {sel("align", "align", ALIGNS)}
         {sel("case", "case", CASES)}
         {sel("reveal", "reveal", REVEALS)}
         <div className="anim-mod-remap">
-          <span className="anim-mod-remap-label">text box</span>
-          {box("x", "box_x", 0)}
-          {box("y", "box_y", 0)}
-          {box("w", "box_w", 0.1)}
-          {box("h", "box_h", 0.1)}
+          <span className="anim-mod-remap-label">
+            text box <ArgInfo type="lyrics" k="box" />
+          </span>
+          <BoxPad
+            box={{ x: d.box_x, y: d.box_y, w: d.box_w, h: d.box_h }}
+            aspect={aspect}
+            onChange={(b) => set({ box_x: b.x, box_y: b.y, box_w: b.w, box_h: b.h })}
+            preview={preview}
+          />
         </div>
         <Toggle
           label="outline"

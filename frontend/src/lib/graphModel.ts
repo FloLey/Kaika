@@ -34,8 +34,14 @@ import type {
   MergePointsNode,
   ColorData,
   LyricsData,
+  ImageData,
+  VideoData,
+  BackdropData,
   ColorNode,
   LyricsNode,
+  ImageNode,
+  VideoNode,
+  BackdropNode,
   FluidPort,
   Signal,
   ValidationResult,
@@ -143,7 +149,9 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v10: removed the transform / grade video-FX cards — normalizeGraph drops them (and
 //       any pre-v8 `color`→`grade` renames) as unknown types.
 //  v11: lyrics card gained font, a text box (box_x/y/w/h), and outline/outlineWidth.
-export const GRAPH_VERSION = 11;
+//  v12: lyrics dropped `position` + the size/r/g/b ports — the box defines size/placement
+//       and a wired `color` card drives the fill. normalizeGraph drops the retired ports.
+export const GRAPH_VERSION = 12;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -289,7 +297,6 @@ export function lyricsNode(x: number, y: number): LyricsNode {
     y,
     data: {
       font: "inter",
-      position: "bottom",
       align: "center",
       case: "none",
       reveal: "word",
@@ -301,6 +308,56 @@ export function lyricsNode(x: number, y: number): LyricsNode {
       outlineWidth: 0.12,
       ports: coercePorts("lyrics", undefined),
     },
+  };
+}
+
+// Image / video layer sources: an uploaded asset placed full-frame by default, scaled to
+// `fit`. assetUrl starts empty (the card's drop zone fills it via uploadAsset). Only
+// `opacity` is a port; the box + fit (and video timing) are static data.
+export function imageNode(x: number, y: number): ImageNode {
+  return {
+    id: mkNodeId(),
+    type: "image",
+    x,
+    y,
+    data: {
+      assetUrl: "",
+      box_x: 0,
+      box_y: 0,
+      box_w: 1,
+      box_h: 1,
+      fit: "cover",
+      ports: coercePorts("image", undefined),
+    },
+  };
+}
+export function videoNode(x: number, y: number): VideoNode {
+  return {
+    id: mkNodeId(),
+    type: "video",
+    x,
+    y,
+    data: {
+      assetUrl: "",
+      box_x: 0,
+      box_y: 0,
+      box_w: 1,
+      box_h: 1,
+      fit: "cover",
+      sync: "song",
+      start: 0,
+      loop: true,
+      ports: coercePorts("video", undefined),
+    },
+  };
+}
+export function backdropNode(x: number, y: number): BackdropNode {
+  return {
+    id: mkNodeId(),
+    type: "backdrop",
+    x,
+    y,
+    data: { color: "#101418", ports: coercePorts("backdrop", undefined) },
   };
 }
 
@@ -366,7 +423,7 @@ export function removePoint(graph: Graph, id: string, i: number): Graph {
 export const VIDEO_FX = new Set<string>([]);
 
 // Non-fluid video sources (no video input; synthesise frames). Producers, not emitters.
-export const VIDEO_SOURCES = new Set<string>(["lyrics"]);
+export const VIDEO_SOURCES = new Set<string>(["lyrics", "image", "video", "backdrop"]);
 
 export const VIDEO_PRODUCERS = new Set<string>([
   "fluid",
@@ -495,6 +552,9 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "merge-points",
   "color",
   "lyrics",
+  "image",
+  "video",
+  "backdrop",
 ]);
 
 // Upgrade a (possibly older) persisted graph to the current GRAPH_VERSION. Every
@@ -650,7 +710,6 @@ export function normalizeGraph(graph: Graph): Graph {
       const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
       const data: LyricsData = {
         font: typeof d.font === "string" ? d.font : "inter",
-        position: d.position || "bottom",
         align: d.align || "center",
         case: d.case || "none",
         reveal: d.reveal || "word",
@@ -661,6 +720,54 @@ export function normalizeGraph(graph: Graph): Graph {
         outline: d.outline !== false,
         outlineWidth: num(d.outlineWidth, 0.12),
         ports: coercePorts("lyrics", d.ports),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "image") {
+      const d = (n.data || {}) as Partial<ImageData>;
+      const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
+      const data: ImageData = {
+        assetUrl: typeof d.assetUrl === "string" ? d.assetUrl : "",
+        box_x: num(d.box_x, 0),
+        box_y: num(d.box_y, 0),
+        box_w: num(d.box_w, 1),
+        box_h: num(d.box_h, 1),
+        fit: d.fit === "contain" || d.fit === "stretch" ? d.fit : "cover",
+        ports: coercePorts("image", d.ports),
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "video") {
+      const d = (n.data || {}) as Partial<VideoData> & { speed?: number };
+      const num = (v: unknown, def: number) => (typeof v === "number" ? v : def);
+      const ports = coercePorts("video", d.ports);
+      // Migration: `speed` used to be a static field; carry a legacy value into its new
+      // port binding (unless the save already has a wired/const speed port).
+      if (typeof d.speed === "number" && !d.ports?.speed) {
+        ports.speed = { binding: { kind: "const", value: d.speed } };
+      }
+      const data: VideoData = {
+        assetUrl: typeof d.assetUrl === "string" ? d.assetUrl : "",
+        box_x: num(d.box_x, 0),
+        box_y: num(d.box_y, 0),
+        box_w: num(d.box_w, 1),
+        box_h: num(d.box_h, 1),
+        fit: d.fit === "contain" || d.fit === "stretch" ? d.fit : "cover",
+        sync: d.sync === "segment" ? "segment" : "song",
+        start: num(d.start, 0),
+        loop: d.loop !== false,
+        ports,
+      };
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "backdrop") {
+      const d = (n.data || {}) as Partial<BackdropData>;
+      const data: BackdropData = {
+        color: /^#[0-9a-fA-F]{6}$/.test(d.color || "") ? (d.color as string) : "#101418",
+        ports: coercePorts("backdrop", d.ports),
       };
       if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
       return { ...n, data };

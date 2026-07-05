@@ -23,7 +23,7 @@ bp = Blueprint("export", __name__)
 
 # Sensible HD defaults when a project hasn't set export settings yet: portrait 1080x1920,
 # 30fps, and a grid finer than the 'high' preset (144) for a crisp master.
-_EXPORT_DEFAULTS = {"width": 1080, "height": 1920, "fps": 30, "gridCells": 216, "background": "#000000"}
+_EXPORT_DEFAULTS = {"width": 1080, "height": 1920, "fps": 30, "gridCells": 216}
 
 
 @bp.post("/export/stream")

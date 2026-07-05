@@ -16,7 +16,8 @@ SEPARATED_DIR = DATA_DIR / "separated"
 SPECTRO_DIR = DATA_DIR / "spectrograms"
 ANALYSIS_DIR = DATA_DIR / "analysis"
 FLUID_DIR = DATA_DIR / "fluid"
-for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, FLUID_DIR):
+ASSETS_DIR = DATA_DIR / "assets"  # user-uploaded image/video layer assets, per job_id
+for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, FLUID_DIR, ASSETS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 # Stems demucs produces, plus the synthetic "original" (the uploaded mix).

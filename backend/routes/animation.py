@@ -93,7 +93,7 @@ def fluid_route(params):
         render_cache.touch(out)  # keep this hot clip from aging out (LRU)
     else:
         try:
-            frames, fps, _n = fluid.simulate(params)
+            frames, fps, _n = fluid.simulate(params, apply_bg=False)  # dye on black; no bg setting
             fluid.render_mp4(frames, fps, out)
         except (ValueError, KeyError, TypeError) as e:
             log.warning("fluid render bad params: %s", e)

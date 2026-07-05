@@ -113,11 +113,6 @@ def test_simulate_sources_list_equals_single_source():
     assert np.abs(a.astype(int) - b.astype(int)).mean() < 0.01
 
 
-def test_apply_background_paints_empty_pixels():
-    out = fluid.apply_background(np.zeros((2, 4, 4, 3), np.uint8), "#204060")
-    assert np.abs(out[0, 0, 0].astype(int) - np.array([0x20, 0x40, 0x60])).max() <= 1
-
-
 # ---- combine semantics ------------------------------------------------------
 def test_merge_two_emitters_interact():
     fr = _frames(_graph("merge"))

@@ -82,28 +82,6 @@ def test_downstream_edit_reuses_sim_but_fluid_edit_reruns(monkeypatch):
     assert np.array_equal(base, back)        # revert reproduces the original exactly
 
 
-def test_background_only_edit_reuses_sim(monkeypatch):
-    # The sim runs apply_bg=False, so output.background never touches the cached frames:
-    # _fluid_cache_key must ignore it (else a background tweak re-runs the sim) but keep
-    # fps/quality, which DO change the frames.
-    base = {"duration": 2.0, "fps": 24, "source": {}, "fluid": {},
-            "output": {"width": 96, "height": 128, "quality": "draft", "fps": 24, "background": "#101418"}}
-    recolored = {**base, "output": {**base["output"], "background": "#ff0000"}}
-    requalled = {**base, "output": {**base["output"], "quality": "normal"}}
-    assert G._fluid_cache_key(base) == G._fluid_cache_key(recolored)
-    assert G._fluid_cache_key(base) != G._fluid_cache_key(requalled)
-
-    runs = {"n": 0}
-    orig = fluid.FluidClip.__init__
-    monkeypatch.setattr(fluid.FluidClip, "__init__",
-                        lambda self, *a, **k: (runs.__setitem__("n", runs["n"] + 1), orig(self, *a, **k))[1])
-    g = _graph(1.0, 30)
-    _render(g, {**OUT, "background": "#101418"})  # first render: sim runs
-    before = runs["n"]
-    _render(g, {**OUT, "background": "#ff0000"})  # only the background changed
-    assert runs["n"] == before  # background-only edit -> cache hit, no sim
-
-
 def test_streamed_matches_cached_whole(monkeypatch):
     """A cache populated by the whole-clip path serves byte-identical block slices."""
     g = _graph(0, 30)

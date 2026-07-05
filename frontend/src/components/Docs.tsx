@@ -686,17 +686,28 @@ export default function Docs({ section }: { section?: string }) {
           pipeline is capped at 64 sources.
         </div>
 
-        <h3 id="animation-sources">Other video sources — lyrics</h3>
+        <h3 id="animation-sources">Other video sources — lyrics &amp; backdrop</h3>
         <p>
-          Not every layer has to be a fluid. The lyrics card synthesises a video stream you can stack
-          with fluids (in a <em>layered</em> combine) or send straight to an output:
+          Not every layer has to be a fluid. These cards synthesise a video stream you can stack with
+          fluids (in a <em>layered</em> combine) or send straight to an output:
         </p>
         <ul>
           <li>
+            <strong>Backdrop</strong> — fills the whole frame with a solid <em>colour</em> (a swatch),
+            output as a video layer. Wire it into the <strong>bottom</strong> input of a{" "}
+            <em>layered</em> combine to get a non-black background behind everything above it (the
+            render otherwise flattens onto black). Opacity is modulatable.
+          </li>
+          <li>
             <strong>Lyrics</strong> — burns this track's <strong>aligned lyrics</strong> into the
-            frame, timed to the vocal (the same alignment the review screen uses). Choose position /
-            alignment / case, and <em>line</em> vs <em>word</em> reveal (word fills the line in as
-            it's sung). Size, colour and opacity are modulatable. Needs lyrics on the track.
+            frame, timed to the vocal (the same alignment the review screen uses). Pick a{" "}
+            <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs <em>word</em>{" "}
+            reveal (word fills the line in as it's sung). Drag the <em>text box</em> to place it and
+            pull a corner to size it — the text word-wraps and fills the box (the box defines size +
+            placement). A black <em>outline</em> keeps it readable over anything. Wire a{" "}
+            <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em> input to
+            recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
+            keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.
           </li>
         </ul>
 
@@ -737,7 +748,9 @@ export default function Docs({ section }: { section?: string }) {
                 Each input is rendered separately and the clips are{" "}
                 <strong>stacked with transparency</strong>. Every input has an <em>opacity</em>{" "}
                 slider; a brighter upper layer covers what's beneath it, empty areas let lower
-                layers show through. Input order = top → bottom.
+                layers show through. Input order = top → bottom, so the{" "}
+                <strong>bottom input is your background</strong> — put a{" "}
+                <a href="#animation-sources">Backdrop</a> card there for a solid colour.
               </td>
             </tr>
           </tbody>
@@ -791,12 +804,13 @@ export default function Docs({ section }: { section?: string }) {
               <td>fps</td>
               <td>24, 30, or 60 frames per second.</td>
             </tr>
-            <tr>
-              <td>background</td>
-              <td>The solid colour behind the dye.</td>
-            </tr>
           </tbody>
         </table>
+        <div className="note">
+          There's no background colour setting: un-dyed pixels render <strong>black</strong>. For a
+          non-black background, add a <a href="#animation-sources">Backdrop</a> card as the{" "}
+          <strong>bottom</strong> layer of a <em>layered</em> combine.
+        </div>
       </section>
 
       <section id="fluid-lab">

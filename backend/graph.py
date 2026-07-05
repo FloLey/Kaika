@@ -32,6 +32,7 @@ import numpy as np
 
 from . import fluid, fluid_cache, render_cache, signals, sources
 from .animation_params import COLOR_PARAMS, OUTPUT_DEFAULTS, PARAMS, SOURCE_STATIC_KEYS
+from .paths import ASSETS_DIR
 
 # Modulatable-port specs for the non-fluid ported cards (FX + sources + the color
 # card): key -> (min, max, default). The single backend lookup for resolving their
@@ -58,7 +59,9 @@ STREAM_DIR = ANIM_DIR / "stream"
 # the same graph) are invalidated. Folded into `output_hash`.
 #   v2: clip = full segment (duration dropped) + per-frame medium params + r/g/b.
 #   v3: combine nodes + video DAG + background applied at the terminal (was per-sim).
-RENDER_VERSION = 3
+#   v4: lyrics rendered at a resolution-independent text size then downscaled to the
+#       grid (was rasterised at the coarse sim grid → overflowed small boxes at low qual).
+RENDER_VERSION = 4
 
 # Legacy square-grid fallback (cells per side) for pre-output-settings saves that
 # carry no project `output`. The live path derives a rectangular grid from the
@@ -96,14 +99,17 @@ def _output_params(output: dict, fps: int) -> dict:
     """The simulate() top-level `output` block from project render settings.
 
     Shared by `build_params` (single-fluid) and `_Dag._merge_params` (merge combine)
-    so the size/quality/fps/background contract lives in one place."""
-    return {
+    so the size/quality/fps contract lives in one place. `gridCells` (the HD export's
+    explicit grid) passes through when present so the sim grid matches the export."""
+    out = {
         "width": int(output.get("width", OUTPUT_DEFAULTS["width"])),
         "height": int(output.get("height", OUTPUT_DEFAULTS["height"])),
         "quality": output.get("quality", OUTPUT_DEFAULTS["quality"]),
         "fps": fps,
-        "background": output.get("background", OUTPUT_DEFAULTS["background"]),
     }
+    if output.get("gridCells"):
+        out["gridCells"] = int(output["gridCells"])
+    return out
 
 
 def _video_source(graph: dict, target_id: str, target_port: str):
@@ -149,7 +155,7 @@ def composite(layers: list, opacities: list) -> np.ndarray:
     explicit alpha instead — so an opaque BLACK outline occludes what's beneath it
     (brightness alone would treat black as transparent). Both times coverage is scaled
     by the layer's `opacity`. The result stays dye-on-transparent, 3-channel (the
-    terminal output applies the background)."""
+    terminal `fluid.flatten` renders it over black)."""
     acc = np.zeros(layers[0].shape[:-1] + (3,), dtype=np.float32)
     for layer, op in reversed(list(zip(layers, opacities))):  # bottom -> top
         f = layer.astype(np.float32) / 255.0
@@ -438,14 +444,14 @@ def _sample_gradient(stops: list, pos):
     return (np.interp(p, ts, cols[:, 0]), np.interp(p, ts, cols[:, 1]), np.interp(p, ts, cols[:, 2]))
 
 
-def _resolve_fluid_color(graph: dict, fluid_node: dict, nodes: dict, resolve_source) -> dict:
-    """The dye colour params (r/g/b/intensity/opacity) for a fluid, read from a `color`
-    card wired into its `color` input. Each port is a scalar (const) or per-frame array
-    (node binding), exactly like a fluid param. The card has three modes: `swatch` / `rgb`
-    read r/g/b directly; `gradient` samples its colour stops at the modulatable `position`.
-    Returns ``{}`` when nothing is wired, so simulate() falls back to the fluid's static
-    `color` vector. These nest under `source.*` and override the static `color` vector."""
-    cid = _video_source(graph, fluid_node["id"], "color")
+def _resolve_node_color(graph: dict, node: dict, port: str, nodes: dict, resolve_source) -> dict:
+    """The colour params (r/g/b/intensity/opacity) from a `color` card wired into `node`'s
+    `port` input. Each port is a scalar (const) or per-frame array (node binding), exactly
+    like a fluid param. The card has three modes: `swatch` / `rgb` read r/g/b directly;
+    `gradient` samples its colour stops at the modulatable `position`. Returns ``{}`` when
+    nothing is wired. Shared by the fluid dye colour (port "color") and the lyrics
+    fill/outline colour inputs ("fillColor" / "outlineColor")."""
+    cid = _video_source(graph, node["id"], port)
     color_node = nodes.get(cid) if cid else None
     if color_node is None or color_node.get("type") != "color":
         return {}
@@ -837,7 +843,7 @@ def build_params(
 
     # Dye colour comes from a `color` card wired into the fluid's `color` input (or the
     # static fallback when unwired). Overrides the static `color` vector under source.
-    src_params.update(_resolve_fluid_color(graph, fluid_node, nodes, resolve_source))
+    src_params.update(_resolve_node_color(graph, fluid_node, "color", nodes, resolve_source))
 
     params = {
         "duration": duration,
@@ -870,7 +876,8 @@ class _Dag:
                       emitter set, so it can't feed a merge — raises).
 
     Per-render memo dicts (`_video`/`_emit`/`_params`) keep each node's resolution
-    to once. The terminal (`render`) applies the project background after `video`."""
+    to once. The terminal (`render`) flattens `video` onto black — there is no project
+    background; a backdrop is the bottom layer of a stack combine."""
 
     def __init__(self, job_id, segment, graph, stem_audio_path, output):
         self.job_id = job_id
@@ -960,14 +967,12 @@ class _Dag:
             params.pop("source", None)
         return params
 
-    def _fx_params(self, node) -> dict:
-        """A non-fluid ported card's modulatable ports (FX or source) -> {key:
-        length-nframes native array}. Reuses the shared value resolver, so a port wired
-        to a signal/LFO/math resolves exactly like a fluid param does."""
-        nframes = max(1, round(self.duration * self.fps))
+    def _value_resolver(self):
+        """A fresh memoized value resolver over this clip (node_id -> 0..1 curve)."""
         seg = self.segment
+        nframes = max(1, round(self.duration * self.fps))
         signals_by_id = {s["id"]: s for s in seg.get("signals", []) if "id" in s}
-        resolve = _make_value_resolver(
+        return _make_value_resolver(
             self.graph,
             self.nodes,
             self.job_id,
@@ -978,6 +983,13 @@ class _Dag:
             signals_by_id,
             self.stem_audio_path,
         )
+
+    def _fx_params(self, node, resolve=None) -> dict:
+        """A non-fluid ported card's modulatable ports (FX or source) -> {key:
+        length-nframes native array}. Reuses the shared value resolver, so a port wired
+        to a signal/LFO/math resolves exactly like a fluid param does."""
+        nframes = max(1, round(self.duration * self.fps))
+        resolve = resolve or self._value_resolver()
         out = {}
         for key, (pmin, pmax, pdef) in _PORT_SPECS[node["type"]].items():
             b = (node.get("data", {}).get("ports", {}).get(key) or {}).get("binding")
@@ -986,6 +998,45 @@ class _Dag:
             else:
                 lo, hi = float(b.get("lo", pmin)), float(b.get("hi", pmax))
                 out[key] = (lo + (hi - lo) * resolve(b["nodeId"])).astype(np.float32)
+        return out
+
+    def _lyrics_params(self, node) -> dict:
+        """The lyrics card's per-frame arrays: size/opacity + fill r/g/b (+ outline
+        r/g/b). Fill colour comes from a `color` card wired into `fillColor` (else the
+        r/g/b ports); the outline colour from one wired into `outlineColor` (else black).
+        The outline is always drawn fully opaque, so it keeps occluding the fluid
+        regardless of its colour."""
+        nframes = max(1, round(self.duration * self.fps))
+        resolve = self._value_resolver()
+        out = self._fx_params(node, resolve)  # opacity (the only modulatable port)
+        # Fill colour: a wired `color` card, else white. (r/g/b are no longer ports.)
+        fill = _resolve_node_color(self.graph, node, "fillColor", self.nodes, resolve)
+        if fill:
+            inten = fluid._series(fill["intensity"], nframes)
+            for ch in ("r", "g", "b"):
+                out[ch] = np.clip(fluid._series(fill[ch], nframes) * inten, 0.0, 1.0).astype(np.float32)
+        else:
+            for ch in ("r", "g", "b"):
+                out[ch] = np.ones(nframes, np.float32)
+        outline = _resolve_node_color(self.graph, node, "outlineColor", self.nodes, resolve)
+        oint = fluid._series(outline["intensity"], nframes) if outline else np.ones(nframes, np.float32)
+        for ch in ("r", "g", "b"):
+            # Apply the outline card's `intensity` too (fill does), so equally-configured
+            # fill/outline colour cards render at the same brightness.
+            v = fluid._series(outline[ch], nframes) * oint if outline else np.zeros(nframes, np.float32)
+            out[f"outline_{ch}"] = np.clip(v, 0.0, 1.0).astype(np.float32)
+        return out
+
+    def _backdrop_params(self, node) -> dict:
+        """The backdrop card's per-frame arrays: `opacity` (the only modulatable port) +
+        fill r/g/b from the card's colour swatch (`data.color` hex). A full-frame opaque
+        layer for the bottom of a stack combine."""
+        nframes = max(1, round(self.duration * self.fps))
+        out = self._fx_params(node)  # {opacity}
+        r, g, b = fluid._hex_rgb(node.get("data", {}).get("color", "#101418"))
+        out["r"] = np.full(nframes, float(r), np.float32)
+        out["g"] = np.full(nframes, float(g), np.float32)
+        out["b"] = np.full(nframes, float(b), np.float32)
         return out
 
     def _merge_params(self, emitters, medium):
@@ -1114,24 +1165,19 @@ class _Dag:
 
 
 # The stateful fluid sim is the expensive part of a render, so its raw output is
-# cached by `fluid.params_hash` (see fluid_cache): a downstream-only edit (grade / FX
-# / background) leaves the fluid params — hence the key — unchanged, so we reuse the
-# frames and only the cheap per-frame ops re-run. Both the whole-clip and block paths
-# go through these so the cache is shared between the sync and streaming renders.
+# cached by `fluid.params_hash` (see fluid_cache): a downstream-only edit (a stacked
+# layer's opacity, a lyrics/FX tweak) leaves the fluid params — hence the key —
+# unchanged, so we reuse the frames and only the cheap per-frame ops re-run. Both the
+# whole-clip and block paths go through these so the cache is shared across renders.
 def _fluid_cache_key(params: dict) -> str:
-    """Cache key for a fluid node's raw frames. The sim runs with apply_bg=False, so
-    the project `background` never touches the dye-on-transparent frames — drop it from
-    the key, otherwise a background-only edit would miss the cache and re-run the sim.
-    Grid/fps/quality stay in the key: they DO change the frames (size + count)."""
-    out = params.get("output")
-    if out and "background" in out:
-        params = {**params, "output": {k: v for k, v in out.items() if k != "background"}}
+    """Cache key for a fluid node's raw dye-on-transparent frames (grid/fps/quality all
+    matter; there is no background in the params any more)."""
     return fluid.params_hash(params)
 
 
 def _sim_video(params: dict) -> np.ndarray:
     """Fluid frames for `params`, from the cache when hot else simulate + store.
-    Always dye-on-transparent (apply_bg=False); the terminal adds the background."""
+    Always dye-on-transparent (apply_bg=False); the terminal flattens onto black."""
     key = _fluid_cache_key(params)
     cached = fluid_cache.load(key)
     if cached is not None:
@@ -1226,7 +1272,6 @@ def _grid_dims(dag: "_Dag"):
 def _lyrics_static(d: dict) -> dict:
     """The lyrics card's static (non-modulatable) fields -> sources.lyrics kwargs."""
     return dict(
-        position=d.get("position", "bottom"),
         align=d.get("align", "center"),
         case=d.get("case", "none"),
         reveal=d.get("reveal", "word"),
@@ -1253,8 +1298,66 @@ def _lyrics_video(dag: "_Dag", node: dict) -> np.ndarray:
         lines=lines,
         seg_start=float(dag.segment.get("start", 0.0)),
         **_lyrics_static(d),
-        **dag._fx_params(node),
+        **dag._lyrics_params(node),
     )
+
+
+def _asset_path(dag: "_Dag", node: dict) -> str:
+    """The on-disk path for an image/video node's `assetUrl` (`/assets/<job>/<name>`),
+    or "" if unset/missing (-> a transparent layer)."""
+    url = (node.get("data") or {}).get("assetUrl") or ""
+    parts = url.strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "assets":
+        p = ASSETS_DIR / parts[1] / parts[2]
+        if p.exists():
+            return str(p)
+    return ""
+
+
+def _box_static(d: dict) -> dict:
+    """The placement-box fields shared by image/video (fractions 0..1, default full-frame)."""
+    return dict(
+        box_x=float(d.get("box_x", 0.0)), box_y=float(d.get("box_y", 0.0)),
+        box_w=float(d.get("box_w", 1.0)), box_h=float(d.get("box_h", 1.0)),
+        fit=d.get("fit", "cover"),
+    )
+
+
+def _video_static(d: dict) -> dict:
+    """The video node's non-modulatable fields (box/fit + loop). `start`/`sync` feed the
+    source-time origin (`_video_src0`); `speed` is now a modulatable port, not static."""
+    return {**_box_static(d), "loop": bool(d.get("loop", True))}
+
+
+def _video_src0(d: dict, speed_full: np.ndarray, seg_start: float) -> float:
+    """Source time (s) at segment-frame 0: `start` plus, for `sync="song"`, a pre-roll of
+    `seg_start` seconds advanced at the initial speed (so a background clip stays roughly
+    phase-continuous across segments). Variable speed is integrated segment-locally."""
+    base_offset = seg_start if d.get("sync", "song") == "song" else 0.0
+    return float(d.get("start", 0.0)) + base_offset * float(speed_full[0])
+
+
+def _image_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    nframes = max(1, round(dag.duration * dag.fps))
+    return sources.image(nframes, gh, gw, asset_path=_asset_path(dag, node),
+                         **_box_static(node.get("data", {})), **dag._fx_params(node))
+
+
+def _video_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    nframes = max(1, round(dag.duration * dag.fps))
+    d = node.get("data", {})
+    params = dag._fx_params(node)  # {opacity, speed} full-segment arrays
+    src0 = _video_src0(d, params["speed"], float(dag.segment.get("start", 0.0)))
+    return sources.video(nframes, gh, gw, dag.fps, asset_path=_asset_path(dag, node),
+                         src0=src0, **_video_static(d), **params)
+
+
+def _backdrop_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    nframes = max(1, round(dag.duration * dag.fps))
+    return sources.backdrop(nframes, gh, gw, **dag._backdrop_params(node))
 
 
 _VIDEO_HANDLERS = {
@@ -1262,6 +1365,9 @@ _VIDEO_HANDLERS = {
     "output": _output_video,
     "combine": _combine_video,
     "lyrics": _lyrics_video,
+    "image": _image_video,
+    "video": _video_video,
+    "backdrop": _backdrop_video,
 }
 _EMITTER_HANDLERS = {
     "fluid": _fluid_emitters_h,
@@ -1318,7 +1424,7 @@ def _lyrics_block(dag: "_Dag", node: dict):
     d = node.get("data", {})
     gh, gw = _grid_dims(dag)
     lines = dag.segment.get("lyric_lines") or []
-    params = dag._fx_params(node)  # size/r/g/b/opacity, sliced per block
+    params = dag._lyrics_params(node)  # size/opacity/r/g/b + outline_r/g/b, sliced per block
     kw = dict(
         lines=lines,
         seg_start=float(dag.segment.get("start", 0.0)),
@@ -1333,11 +1439,57 @@ def _lyrics_block(dag: "_Dag", node: dict):
     return produce
 
 
+def _image_block(dag: "_Dag", node: dict):
+    gh, gw = _grid_dims(dag)
+    ap, static = _asset_path(dag, node), _box_static(node.get("data", {}))
+    params = dag._fx_params(node)  # {opacity} sliced per block
+
+    def produce(a, b):
+        return sources.image(b - a, gh, gw, asset_path=ap, frame_offset=a, **static,
+                             **{k: v[a:b] for k, v in params.items()})
+
+    return produce
+
+
+def _video_block(dag: "_Dag", node: dict):
+    gh, gw = _grid_dims(dag)
+    d = node.get("data", {})
+    ap, static = _asset_path(dag, node), _video_static(d)
+    params = dag._fx_params(node)  # {opacity, speed} full-segment arrays
+    speed_full = params["speed"]
+    # Integrate speed over the WHOLE segment up front so the source-time origin stays
+    # continuous across stream blocks: src0 for block [a,b) = segment-frame-0 origin plus
+    # the seconds of source already advanced by frame a. `csum[a-1]` = Σ speed[:a] / fps.
+    csum = np.cumsum(speed_full, dtype=np.float64) / float(dag.fps)
+    src_base = _video_src0(d, speed_full, float(dag.segment.get("start", 0.0)))
+
+    def produce(a, b):
+        src0 = src_base + (float(csum[a - 1]) if a > 0 else 0.0)
+        return sources.video(b - a, gh, gw, dag.fps, asset_path=ap, src0=src0, **static,
+                             speed=speed_full[a:b], opacity=params["opacity"][a:b])
+
+    return produce
+
+
+def _backdrop_block(dag: "_Dag", node: dict):
+    gh, gw = _grid_dims(dag)
+    params = dag._backdrop_params(node)  # {opacity, r, g, b} sliced per block
+
+    def produce(a, b):
+        return sources.backdrop(b - a, gh, gw, frame_offset=a,
+                                **{k: v[a:b] for k, v in params.items()})
+
+    return produce
+
+
 _BLOCK_HANDLERS = {
     "fluid": _fluid_block,
     "output": _output_block,
     "combine": _combine_block,
     "lyrics": _lyrics_block,
+    "image": _image_block,
+    "video": _video_block,
+    "backdrop": _backdrop_block,
 }
 # Node types that produce a video stream (used by validate to check output wiring).
 _VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)
@@ -1354,8 +1506,9 @@ def render(
     """Resolve one output's video DAG for `segment`, render an mp4, return its URL.
 
     Walks the producers feeding `output_id` (fluid / combine / output-passthrough),
-    rendering dye-on-transparent frames, then applies the project background ONCE
-    here at the terminal. `output_id` selects which output (N pipelines per graph).
+    rendering dye-on-transparent frames, then flattens them onto black at the terminal
+    (`fluid.flatten`). There is no project background — a non-black backdrop is the bottom
+    layer of a stack combine (a `backdrop` card). `output_id` selects which output.
     Cached by the per-output contributing-subgraph hash. Raises ValueError on a bad
     graph (HTTP 400). `stem_audio_path(job_id, stem)` is injected from app.py.
     """
@@ -1374,7 +1527,7 @@ def render(
         raise ValueError(f"output '{output_id}' has no input")
     dag = _Dag(job_id, segment, graph, stem_audio_path, output)
     frames = dag.video(src)
-    frames = fluid.apply_background(frames, output.get("background", "#000000"))
+    frames = fluid.flatten(frames)  # RGBA -> RGB on black (backgrounds are now layers)
     out_w = int(output.get("width", 0)) or None
     out_h = int(output.get("height", 0)) or None
     fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
@@ -1432,7 +1585,6 @@ def render_stream(
 
     out_w = int(output.get("width", 0)) or None
     out_h = int(output.get("height", 0)) or None
-    bg = output.get("background", "#000000")
     gh, gw = _grid_dims(dag)
     block_frames = max(1, round(block_seconds * dag.fps))
     # Unique per render (not just per output hash) so two concurrent renders of the
@@ -1446,7 +1598,7 @@ def render_stream(
         for k, (_a, b, tot, block) in enumerate(dag.stream_blocks(output_id, block_frames)):
             if should_cancel and should_cancel():
                 return None
-            data = fluid.apply_background(block, bg).tobytes()
+            data = fluid.flatten(block).tobytes()
             if enc is None:  # open the encoder lazily on the first block
                 enc = fluid.open_stream_encoder(preview, dag.fps, gw, gh, out_w, out_h)
             try:

@@ -17,7 +17,8 @@ interface OutputSettingsProps {
 
 // Project-level output settings modal (opened from the CREATE ANIMATION header
 // gear). Edits the one shared `output` object — size/orientation, render quality,
-// fps, and background color — that every render and the live preview read.
+// and fps — that every render and the live preview read. (There is no background
+// setting: un-dyed pixels are black; a backdrop is the bottom layer of a stack combine.)
 export default function OutputSettings({ output, onChange, onClose }: OutputSettingsProps) {
   const set = (patch: Partial<Output>) => onChange({ ...output, ...patch });
   const preset = presetFor(output);
@@ -166,20 +167,6 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
                   {f}
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* background color */}
-          <div className="out-field">
-            <span className="out-label">background</span>
-            <div className="out-bg">
-              <input
-                type="color"
-                className="out-color"
-                value={output.background}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set({ background: e.target.value })}
-              />
-              <span className="out-bg-hex">{output.background}</span>
             </div>
           </div>
         </div>

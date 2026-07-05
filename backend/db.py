@@ -183,3 +183,55 @@ def delete_project(job_id: str) -> bool:
     with _connect() as conn:
         cur = conn.execute("DELETE FROM projects WHERE job_id = %s", (job_id,))
         return cur.rowcount > 0
+
+
+# --------------------------------------------------------------------------- #
+# Per-project asset library (data.assets) — server-managed (upload/YouTube routes
+# append; a card/library pick just references the url). Kept OUT of the frontend
+# autosave payload so an upload can't be clobbered by a concurrent segment save.
+# --------------------------------------------------------------------------- #
+def list_assets(job_id: str) -> list[dict[str, Any]]:
+    """The project's asset library (`data.assets`), or [] if none / no project."""
+    row = get_project(job_id)
+    return (row.get("data") or {}).get("assets") or [] if row else []
+
+
+def add_asset(job_id: str, asset: dict) -> bool:
+    """Append an asset `{id, url, kind, name, addedAt}` to `data.assets` (dedup by id).
+    Targeted jsonb update so it never touches segments/output. False if no project."""
+    with _connect() as conn:
+        cur = conn.execute(
+            """
+            UPDATE projects SET
+              data = jsonb_set(
+                       data, '{assets}',
+                       (SELECT COALESCE(jsonb_agg(a), '[]'::jsonb)
+                          FROM jsonb_array_elements(COALESCE(data->'assets', '[]'::jsonb)) a
+                         WHERE a->>'id' <> %(id)s) || %(asset)s::jsonb,
+                       true),
+              updated_at = now()
+            WHERE job_id = %(job_id)s
+            """,
+            {"job_id": job_id, "id": str(asset.get("id")), "asset": Jsonb([asset])},
+        )
+        return cur.rowcount > 0
+
+
+def remove_asset(job_id: str, asset_id: str) -> bool:
+    """Drop the asset with `asset_id` from `data.assets`. False if no project."""
+    with _connect() as conn:
+        cur = conn.execute(
+            """
+            UPDATE projects SET
+              data = jsonb_set(
+                       data, '{assets}',
+                       (SELECT COALESCE(jsonb_agg(a), '[]'::jsonb)
+                          FROM jsonb_array_elements(COALESCE(data->'assets', '[]'::jsonb)) a
+                         WHERE a->>'id' <> %(id)s),
+                       true),
+              updated_at = now()
+            WHERE job_id = %(job_id)s
+            """,
+            {"job_id": job_id, "id": str(asset_id)},
+        )
+        return cur.rowcount > 0

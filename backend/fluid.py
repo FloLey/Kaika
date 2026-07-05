@@ -283,23 +283,17 @@ def _tonemap(d: np.ndarray, exposure=1.9, gamma=1.15, bg=None) -> np.ndarray:
     return (np.clip(ldr, 0, 1) * 255).astype(np.uint8)
 
 
-def apply_background(frames: np.ndarray, color) -> np.ndarray:
-    """Composite uint8 dye `frames` over a solid `color` (hex or [r,g,b]) -> 3-channel.
-
-    A 3-channel (dye-on-black) stack uses the emissive "screen" blend as `_tonemap`'s
-    `bg`: black bg leaves the dye unchanged; a colour shows through where there's no dye
-    and never darkens the glow. A 4-channel (RGBA) stack — e.g. a lyrics layer sent
-    straight to an output — is normal-`over` the background using its alpha, so an
-    opaque black outline stays black. Used at the TERMINAL output so intermediate layers
-    stay background-free and composite cleanly (spec 10)."""
-    bg = _hex_rgb(color) if isinstance(color, str) else np.asarray(color, np.float32)
+def flatten(frames: np.ndarray) -> np.ndarray:
+    """Flatten dye `frames` to a 3-channel RGB image on BLACK — the terminal step before
+    encoding. A 3-channel (dye-on-black) stack passes straight through; a 4-channel (RGBA,
+    e.g. a lyrics layer sent straight to an output) is composited over black using its
+    alpha, so an opaque black outline stays black. There is no configurable background any
+    more — any backdrop is just the bottom LAYER of a stack combine (spec 10)."""
+    if frames.shape[-1] == 3:  # already dye-on-black RGB
+        return frames
     f = frames.astype(np.float32) / 255.0
-    if frames.shape[-1] == 4:  # RGBA: normal over-background using the explicit alpha
-        a = np.clip(f[..., 3:4], 0.0, 1.0)
-        out = f[..., :3] * a + bg[None, None, None, :] * (1.0 - a)
-    else:  # dye-on-black: emissive screen blend
-        out = 1.0 - (1.0 - bg[None, None, None, :]) * (1.0 - f)
-    return (np.clip(out, 0, 1) * 255).astype(np.uint8)
+    a = np.clip(f[..., 3:4], 0.0, 1.0)  # RGBA over black -> premultiplied rgb
+    return (np.clip(f[..., :3] * a, 0, 1) * 255).astype(np.uint8)
 
 
 def _emitter(src: dict, nframes: int):

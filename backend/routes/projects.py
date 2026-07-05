@@ -6,7 +6,7 @@ import shutil
 from flask import Blueprint, abort, jsonify, request
 
 from .. import db
-from ..paths import UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR
+from ..paths import UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, ASSETS_DIR
 
 bp = Blueprint("projects", __name__)
 
@@ -49,6 +49,7 @@ def project_get(job_id: str):
             "segments": data.get("segments", []),
             "output": data.get("output") or {},
             "export": data.get("export") or {},
+            "assets": data.get("assets") or [],
             "vocal_envelope": analysis.get("vocal_envelope", []),
             "envelope_times": analysis.get("envelope_times", []),
             "lyric_lines": analysis.get("lyric_lines", []),
@@ -79,7 +80,7 @@ def project_save(job_id: str):
 @bp.route("/projects/<job_id>", methods=["DELETE"])
 def project_delete(job_id: str):
     existed = db.delete_project(job_id)
-    for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR):
+    for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ASSETS_DIR):
         shutil.rmtree(d / job_id, ignore_errors=True)
     (ANALYSIS_DIR / f"{job_id}.json").unlink(missing_ok=True)
     if not existed:

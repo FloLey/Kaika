@@ -1,7 +1,7 @@
 // Project-level OUTPUT (render) settings, shared across the animation editor:
-// video size + orientation, render quality (sim resolution), fps, and a solid
-// background color. One object per project, edited in the settings modal,
-// persisted in the project blob, and sent on every /animate render.
+// video size + orientation, render quality (sim resolution), and fps. There is no
+// background setting — un-dyed pixels are black; any backdrop is a bottom layer
+// (image/video card). One object per project, edited in the settings modal.
 
 import type { OutputSettings } from "./types";
 
@@ -10,7 +10,6 @@ export const OUTPUT_DEFAULTS: OutputSettings = {
   height: 1920,
   quality: "normal", // "draft" | "normal" | "high" -> short-side sim cells
   fps: 24,
-  background: "#000000",
 };
 
 interface OrientationPreset {

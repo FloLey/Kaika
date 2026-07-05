@@ -61,6 +61,8 @@ def wired(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "get_project", lambda jid: proj if jid == "proj1" else None)
     monkeypatch.setattr(G, "ANIM_DIR", tmp_path / "fluid")
     (tmp_path / "fluid").mkdir()
+    monkeypatch.setattr(cache_gc, "ASSETS_DIR", tmp_path / "assets")
+    (tmp_path / "assets").mkdir()
     monkeypatch.setattr(cache_gc, "_last_run", 0.0)
     return proj, lines, tmp_path
 
@@ -92,6 +94,26 @@ def test_sweep_keeps_reachable_and_recent_deletes_the_rest(wired):
     removed = cache_gc.sweep()
     assert removed == 1
     assert keep.exists() and recent.exists() and not stale.exists()
+
+
+def test_sweep_reaps_unreferenced_assets(wired):
+    proj, _, tmp = wired
+    assets_dir = tmp / "assets"
+    proj["data"]["assets"] = [{"url": "/assets/proj1/pic.png"}]
+    referenced = assets_dir / "proj1" / "pic.png"   # in the project's asset library
+    orphan = assets_dir / "junk" / "old.png"        # no project references it
+    for p in (referenced, orphan):
+        p.parent.mkdir(exist_ok=True)
+        p.write_bytes(b"x")
+    import os
+    old = cache_gc.KEEP_RECENT_SEC + 3600
+    for p in (referenced, orphan):
+        os.utime(p, (os.stat(p).st_atime, os.stat(p).st_mtime - old))
+
+    removed = cache_gc.sweep()
+    assert removed == 1
+    assert referenced.exists() and not orphan.exists()
+    assert not orphan.parent.exists()  # emptied per-job dir is pruned
 
 
 def test_sweep_bails_when_db_unavailable(wired, monkeypatch):

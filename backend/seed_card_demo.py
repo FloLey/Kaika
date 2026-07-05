@@ -15,19 +15,47 @@ Only the ``signal`` card needs audio; a synthetic drum stem gives it a kick to r
 from __future__ import annotations
 
 import json
+import subprocess
 
 import numpy as np
 import soundfile as sf
+from PIL import Image
 
 from . import card_demo, graph
 from .media import make_spectrogram, stem_audio_path
-from .paths import ANALYSIS_DIR, SEPARATED_DIR, STEMS, UPLOAD_DIR
+from .paths import ANALYSIS_DIR, ASSETS_DIR, SEPARATED_DIR, STEMS, UPLOAD_DIR
 
 JOB_ID = "playground"
 TITLE = "Playground"
 SR = 44100
 SEG_LEN = 3.0  # seconds per segment
-OUTPUT = {"width": 1080, "height": 1920, "quality": "draft", "fps": 24, "background": "#000000"}
+OUTPUT = {"width": 1080, "height": 1920, "quality": "draft", "fps": 24}
+
+# Bundled dummy assets the Image/Video playground cards reference (so those cards demo
+# without an upload). Generated on seed/open; the graphs point at these URLs.
+SAMPLE_IMAGE_URL = f"/assets/{JOB_ID}/sample.png"
+SAMPLE_VIDEO_URL = f"/assets/{JOB_ID}/sample.mp4"
+
+
+def write_sample_assets() -> None:
+    """Create the bundled dummy image + video for the Image/Video cards (idempotent).
+    A soft petal→teal gradient still, and a short animated-gradient clip."""
+    d = ASSETS_DIR / JOB_ID
+    d.mkdir(parents=True, exist_ok=True)
+    png = d / "sample.png"
+    if not png.exists():
+        w, h = 640, 360
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        t = ((xx / w) + (yy / h)) / 2.0
+        arr = np.stack([0.72 - 0.45 * t, 0.29 + 0.40 * t, 0.45 + 0.45 * t], -1)
+        Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8), "RGB").save(png)
+    mp4 = d / "sample.mp4"
+    if not mp4.exists():
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+             "-i", "gradients=s=640x360:d=4:speed=0.08:c0=0xB84A74:c1=0x34808A:c2=0xF2C14E",
+             "-r", "24", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(mp4)],
+            check=False)
 
 
 # --------------------------------------------------------------------------- #
@@ -159,6 +187,7 @@ def _build(db, *, render: bool, log=lambda _m="": None) -> str:
 
     log(f"writing synthetic stems ({duration:.0f}s) …")
     stems_meta = write_synthetic_stems(JOB_ID, duration)
+    write_sample_assets()  # dummy image/video for the Image/Video card demos
     lines = write_analysis(JOB_ID, segments, duration)
 
     log("(re)creating project …")
@@ -192,6 +221,7 @@ def ensure_playground() -> str:
     renders on open. Called by `POST /playground` when the user opens the Playground."""
     from . import db
 
+    write_sample_assets()  # idempotent — ensure the dummy assets exist even for an old playground
     if db.get_project(JOB_ID) is not None and stem_audio_path(JOB_ID, "drums") is not None:
         return JOB_ID
     return _build(db, render=False)

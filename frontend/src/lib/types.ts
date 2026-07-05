@@ -13,7 +13,6 @@ export interface OutputSettings {
   height: number;
   quality: Quality;
   fps: number;
-  background: string;
 }
 
 // ---- studio domain: stems, signals, segments ---------------------------------
@@ -208,13 +207,12 @@ export interface ColorData {
 }
 
 // ---- source cards (→ video) --------------------------------------------------
-export type LyricsPosition = "top" | "center" | "bottom";
+// The text box defines placement + size; `align` justifies horizontally within it.
 export type LyricsAlign = "left" | "center" | "right";
 export type LyricsCase = "none" | "upper" | "lower";
 export type LyricsReveal = "line" | "word";
 export interface LyricsData {
   font: string; // key of a bundled font (GET /fonts); see backend/fonts.py
-  position: LyricsPosition;
   align: LyricsAlign;
   case: LyricsCase;
   reveal: LyricsReveal;
@@ -225,6 +223,42 @@ export interface LyricsData {
   outline: boolean; // black outline under the fill (readable over anything)
   outlineWidth: number; // outline thickness as a fraction of the font size
   ports: Record<string, FluidPort>;
+}
+
+// Image / video layer sources (→ video). An uploaded asset (assetUrl) placed into a
+// normalized box, scaled to `fit`. `opacity` is the only modulatable port; the box + fit
+// (and, for video, the timing fields) are static data. Mirrors backend SOURCE_PARAMS.
+export type LayerFit = "cover" | "contain" | "stretch";
+export interface ImageData {
+  assetUrl: string; // served /assets/... URL from uploadAsset ("" until uploaded)
+  box_x: number; // placement box, fractions 0..1 of the frame (default full-frame)
+  box_y: number;
+  box_w: number;
+  box_h: number;
+  fit: LayerFit; // how the asset scales into the box
+  ports: Record<string, FluidPort>;
+}
+// A solid-colour full-frame fill, output as a video layer — the bottom layer of a stack
+// combine for a non-black background. `color` is a hex swatch; `opacity` is a port.
+export interface BackdropData {
+  color: string; // hex fill colour
+  ports: Record<string, FluidPort>;
+}
+// A video layer adds playback timing on top of the image placement fields. `speed` is a
+// modulatable port (in `ports`), not a static field — a wired signal time-warps the clip.
+export interface VideoData extends ImageData {
+  sync: "song" | "segment"; // clock the playhead to the whole song or just this segment
+  start: number; // start offset into the source, seconds
+  loop: boolean; // loop the clip if it's shorter than the window
+}
+
+// A per-project library asset (image/video), owned by the backend `data.assets`.
+export interface Asset {
+  id: string; // content hash (sha16)
+  url: string; // served /assets/<job>/<name>
+  kind: "image" | "video";
+  name: string; // original filename / display name
+  addedAt: number; // unix seconds
 }
 
 // ---- the discriminated node union --------------------------------------------
@@ -293,6 +327,18 @@ export interface LyricsNode extends NodeBase {
   type: "lyrics";
   data: LyricsData;
 }
+export interface ImageNode extends NodeBase {
+  type: "image";
+  data: ImageData;
+}
+export interface VideoNode extends NodeBase {
+  type: "video";
+  data: VideoData;
+}
+export interface BackdropNode extends NodeBase {
+  type: "backdrop";
+  data: BackdropData;
+}
 
 export type GraphNode =
   | SignalNode
@@ -309,7 +355,10 @@ export type GraphNode =
   | AnimatePointsNode
   | MergePointsNode
   | ColorNode
-  | LyricsNode;
+  | LyricsNode
+  | ImageNode
+  | VideoNode
+  | BackdropNode;
 
 export type NodeType = GraphNode["type"];
 

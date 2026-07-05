@@ -22,6 +22,8 @@ export default defineConfig({
       "/projects": "http://127.0.0.1:5000",
       "/audio": "http://127.0.0.1:5000",
       "/spectrogram": "http://127.0.0.1:5000",
+      "/assets": "http://127.0.0.1:5000",
+      "/asset-from-youtube": "http://127.0.0.1:5000",
     },
   },
   // `npm run test` — pure-logic unit tests default to node; DOM interaction tests

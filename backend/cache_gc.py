@@ -21,7 +21,7 @@ import time
 
 from . import db
 from . import graph as graphmod
-from .paths import ANALYSIS_DIR
+from .paths import ANALYSIS_DIR, ASSETS_DIR
 
 log = logging.getLogger("kaika.cache")
 
@@ -48,12 +48,9 @@ def _lyric_lines(job_id: str) -> list:
         return []
 
 
-def _project_hashes(job_id: str) -> set[str]:
-    """Every render-cache key the CURRENT saved state of `job_id` maps to — one per
+def _hashes_from(row: dict, job_id: str) -> set[str]:
+    """Every render-cache key the given project row's CURRENT state maps to — one per
     (segment × output node). A malformed segment/graph is skipped, not fatal."""
-    row = db.get_project(job_id)
-    if row is None:
-        return set()
     data = row.get("data") or {}
     output = data.get("output") or {}
     lines = _lyric_lines(job_id)
@@ -72,16 +69,56 @@ def _project_hashes(job_id: str) -> set[str]:
     return keys
 
 
-def reachable_hashes() -> set[str]:
-    """The cache keys reachable from ALL saved projects' current state (+ Playground).
+def _asset_file(url: str):
+    """`/assets/<job>/<name>` -> its on-disk path, or None."""
+    parts = (url or "").strip("/").split("/")
+    return ASSETS_DIR / parts[1] / parts[2] if len(parts) == 3 and parts[0] == "assets" else None
+
+
+def _assets_from(row: dict) -> set:
+    """The asset files a project keeps alive: every entry in its `data.assets` LIBRARY
+    plus any node carrying an `assetUrl` (image/video/backdrop). So a library asset stays
+    even before a card uses it, and a card's asset stays even if not (yet) in the library."""
+    data = row.get("data") or {}
+    files: set = set()
+    for a in data.get("assets") or []:
+        f = _asset_file(a.get("url"))
+        if f:
+            files.add(f)
+    for seg in data.get("segments") or []:
+        for n in (seg.get("graph") or {}).get("nodes") or []:
+            f = _asset_file((n.get("data") or {}).get("assetUrl"))
+            if f:
+                files.add(f)
+    return files
+
+
+def _reachable() -> tuple[set[str], set]:
+    """(reachable clip hashes, reachable asset files) across ALL saved projects (+
+    Playground), in a SINGLE pass — each project row is fetched/migrated once.
 
     Raises `db.DBUnavailable` if the project list can't be read — callers MUST treat
-    that as "unknown" and NOT delete anything (an empty set would nuke the cache)."""
+    that as "unknown" and NOT delete anything (empty sets would nuke the caches)."""
     job_ids = [p["job_id"] for p in db.list_projects()] + [_PLAYGROUND]
-    reachable: set[str] = set()
+    hashes: set[str] = set()
+    assets: set = set()
     for jid in job_ids:
-        reachable |= _project_hashes(jid)
-    return reachable
+        row = db.get_project(jid)
+        if row is None:
+            continue
+        hashes |= _hashes_from(row, jid)
+        assets |= _assets_from(row)
+    return hashes, assets
+
+
+def reachable_hashes() -> set[str]:
+    """The cache keys reachable from all saved projects' current state (+ Playground)."""
+    return _reachable()[0]
+
+
+def reachable_assets() -> set:
+    """Every asset file referenced by any saved project (+ Playground)."""
+    return _reachable()[1]
 
 
 def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -> int:
@@ -96,7 +133,7 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
         return 0
     _last_run = now
     try:
-        reachable = reachable_hashes()
+        reachable, keep_assets = _reachable()  # single DB pass for both clips + assets
     except db.DBUnavailable as e:
         log.warning("cache gc: DB unavailable, skipping sweep (%s)", e)
         return 0
@@ -113,8 +150,28 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
             removed += 1
         except OSError:
             continue
+
+    # Reap image/video assets no saved project references (recency protects fresh
+    # uploads for an unsaved edit), then drop any per-job dirs left empty.
+    for p in ASSETS_DIR.glob("*/*"):
+        if p in keep_assets:
+            continue
+        try:
+            if p.stat().st_mtime > cutoff:
+                continue
+            p.unlink()
+            removed += 1
+        except OSError:
+            continue
+    for d in ASSETS_DIR.glob("*"):
+        try:
+            if d.is_dir() and not any(d.iterdir()):
+                d.rmdir()
+        except OSError:
+            continue
+
     if removed:
-        log.info("cache gc: removed %d stale clip(s); kept %d reachable", removed, len(reachable))
+        log.info("cache gc: removed %d stale item(s); kept %d clip(s)", removed, len(reachable))
     return removed
 
 
