@@ -892,6 +892,7 @@ class _Dag:
         self._video: dict = {}
         self._emit: dict = {}
         self._params: dict = {}
+        self._resolver = None  # lazily-built shared value resolver (one per render)
         self._block_fns: dict = {}  # node_id -> produce(a, b) (block streaming)
         self._executors: list = []  # per-combine branch pools, shut down by stream_blocks
         self._cache_writers: list = []  # discard() for incremental frame caches (cancel cleanup)
@@ -968,21 +969,25 @@ class _Dag:
         return params
 
     def _value_resolver(self):
-        """A fresh memoized value resolver over this clip (node_id -> 0..1 curve)."""
-        seg = self.segment
-        nframes = max(1, round(self.duration * self.fps))
-        signals_by_id = {s["id"]: s for s in seg.get("signals", []) if "id" in s}
-        return _make_value_resolver(
-            self.graph,
-            self.nodes,
-            self.job_id,
-            float(seg["start"]),
-            float(seg["end"]),
-            nframes,
-            self.fps,
-            signals_by_id,
-            self.stem_audio_path,
-        )
+        """The per-render memoized value resolver (node_id -> 0..1 curve). Built once
+        and shared by every ported card (fluid params memoize separately), so a signal
+        feeding two cards resolves its follower/shaper/math chain once."""
+        if self._resolver is None:
+            seg = self.segment
+            nframes = max(1, round(self.duration * self.fps))
+            signals_by_id = {s["id"]: s for s in seg.get("signals", []) if "id" in s}
+            self._resolver = _make_value_resolver(
+                self.graph,
+                self.nodes,
+                self.job_id,
+                float(seg["start"]),
+                float(seg["end"]),
+                nframes,
+                self.fps,
+                signals_by_id,
+                self.stem_audio_path,
+            )
+        return self._resolver
 
     def _fx_params(self, node, resolve=None) -> dict:
         """A non-fluid ported card's modulatable ports (FX or source) -> {key:
@@ -1181,7 +1186,10 @@ def _sim_video(params: dict) -> np.ndarray:
     key = _fluid_cache_key(params)
     cached = fluid_cache.load(key)
     if cached is not None:
-        return np.array(cached)  # writable copy off the read-only mmap
+        # Serve the read-only mmap as-is: every downstream op (composite/flatten/
+        # encode) allocates its own output, so copying the whole clip (~50-100MB/min)
+        # into RAM here just to make it writable was pure waste.
+        return cached
     frames, _, _ = fluid.simulate(params, apply_bg=False)
     fluid_cache.store(key, frames)
     return frames
@@ -1195,7 +1203,7 @@ def _sim_blocks(dag: "_Dag", params: dict):
     key = _fluid_cache_key(params)
     cached = fluid_cache.load(key)
     if cached is not None:
-        return lambda a, b: np.array(cached[a:b])
+        return lambda a, b: cached[a:b]  # read-only mmap slice; downstream allocates
     clip = fluid.FluidClip(params, apply_bg=False)
     # Stream frames straight into the cache as they're produced (O(1) memory) instead
     # of holding the whole clip to write at the end; finalize on the last block.
