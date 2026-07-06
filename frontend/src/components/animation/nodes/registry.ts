@@ -149,7 +149,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
   combine: {
     type: "combine",
     Component: CombineNode,
-    chrome: { title: "combine", accent: "#c0902e", outFlow: "video" },
+    chrome: { title: "combine", accent: "var(--fx)", outFlow: "video" },
     factory: combineNode,
     palette: {
       label: "Combine",

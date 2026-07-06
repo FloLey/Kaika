@@ -1,12 +1,13 @@
 /* In-app user guide (Docs.jsx, opened via ?doc=<section>) */
+html {
+  /* anchor TOC links glide instead of jumping (was a dead `.docs html` selector) */
+  scroll-behavior: smooth;
+}
 .docs {
-  --accent: #b84a74;
+  --accent: var(--petale);
   max-width: 860px;
   margin: 0 auto;
   padding: 32px 22px 120px;
-}
-.docs html {
-  scroll-behavior: smooth;
 }
 .docs-head {
   display: flex;
@@ -129,6 +130,10 @@
   border-collapse: collapse;
   margin: 14px 0;
   font-size: 13.5px;
+  /* the param tables are wide + the first column is nowrap: scroll the TABLE on a
+     narrow screen instead of blowing the page out horizontally */
+  display: block;
+  overflow-x: auto;
 }
 .docs th,
 .docs td {

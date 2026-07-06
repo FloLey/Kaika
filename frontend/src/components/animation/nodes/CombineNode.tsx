@@ -48,7 +48,7 @@ export default function CombineNode({
     <NodeFrame
       node={node}
       title="combine"
-      accent="#c0902e"
+      accent="var(--fx)"
       selected={selected}
       onTitlePointerDown={helpers.onTitlePointerDown}
       onDelete={onDelete}

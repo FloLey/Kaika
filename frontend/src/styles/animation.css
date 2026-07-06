@@ -59,6 +59,7 @@
 .mode-bar {
   position: sticky;
   bottom: 0;
+  z-index: 2; /* stay above positioned card content scrolling beneath */
   display: flex;
   gap: 8px;
   margin-top: 14px;
@@ -179,9 +180,9 @@
   max-width: min(440px, 88%);
   padding: 9px 13px;
   border-radius: 10px;
-  background: #fbecee;
-  border: 1px solid #e3b6c0;
-  color: #a33a52;
+  background: var(--hint-bg);
+  border: 1px solid var(--hint-border);
+  color: var(--hint-text);
   font-size: 12px;
   font-family: var(--mono);
   box-shadow: var(--shadow);
@@ -471,6 +472,11 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--accent, var(--petale));
+  /* a long title must never push the header buttons out of the card */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .anim-node-body {
   padding: 9px 10px;
@@ -1034,6 +1040,16 @@
   visibility: visible;
   transform: translateX(0);
 }
+/* Near the panel's right edge the right-anchored tip would be clipped by
+   .anim-wrap's overflow:hidden — Palette measures and flips it to the LEFT. */
+.anim-add-dropdown.tip-left .anim-add-tip {
+  left: auto;
+  right: calc(100% + 8px);
+  transform: translateX(4px);
+}
+.anim-add-dropdown.tip-left .anim-add-item:hover .anim-add-tip {
+  transform: translateX(0);
+}
 .anim-add-tip-help {
   font-size: 11px;
   line-height: 1.4;
@@ -1137,10 +1153,17 @@
   flex: 1 1 auto; /* the timeline lives here and eats the slack */
   min-width: 0;
 }
-/* A faint divider between the two groups (drops away when they wrap). */
+/* A faint divider between the two groups — dropped on narrow widths where the
+   transport wraps onto its own line (a left border there reads as a stray tick). */
 .rh-transport {
   border-left: 1px solid var(--line);
   padding-left: 10px;
+}
+@media (max-width: 900px) {
+  .rh-transport {
+    border-left: none;
+    padding-left: 0;
+  }
 }
 
 /* Segmented copy control: "⧉ copy" label + butted prev/next buttons (same shape as
@@ -1239,7 +1262,7 @@
 .anim-modal-scrim {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 100; /* above every tooltip (.info-tip 60 / .anim-add-tip 70) */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1314,8 +1337,11 @@
   justify-content: center;
 }
 .out-preview {
+  /* sized by the inline aspect-ratio: both maxes transfer through it, so a wide
+     (16:9) shape shrinks instead of distorting against a fixed height */
   width: auto;
-  height: 110px;
+  height: auto;
+  max-height: 110px;
   max-width: 100%;
   background: #0c0d12;
   border: 1px solid var(--line);
@@ -1440,7 +1466,7 @@
 }
 .anim-mode-btn.on {
   color: #fff;
-  background: #c0902e;
+  background: var(--fx);
   border-color: transparent;
 }
 .anim-combine-hint {
@@ -1476,7 +1502,8 @@
 }
 .anim-combine-opacity {
   flex: 1;
-  accent-color: #c0902e;
+  min-width: 0; /* the 230px card: slot label + range + ✕ must not blow out */
+  accent-color: var(--fx);
   cursor: pointer;
 }
 .anim-combine-rm {

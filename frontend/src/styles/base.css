@@ -17,6 +17,12 @@
   --mod: #6f6cae; /* indigo — the modulator (value) card family */
   --fx: #c0902e; /* amber — the video-FX card family (matches combine's tone) */
   --petal-grad: linear-gradient(135deg, #c75a82, #b84a74);
+  --courant-soft: #9ccdc6; /* pale teal — pill borders */
+  --amber-soft: #e6c98a; /* pale amber — pill borders */
+  --amber-deep: #a9791c; /* readable amber text on paper */
+  --hint-bg: #fbecee; /* refused-connect toast family */
+  --hint-border: #e3b6c0;
+  --hint-text: #a33a52;
   --mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --shadow: 0 1px 2px rgba(31, 36, 51, 0.04), 0 10px 30px rgba(31, 36, 51, 0.06);
 }
@@ -514,12 +520,12 @@ header {
   color: var(--petale);
 }
 .pill-studio {
-  border-color: #9ccdc6;
+  border-color: var(--courant-soft);
   color: var(--courant);
 }
 .pill-lyr {
-  border-color: #e6c98a;
-  color: #a9791c;
+  border-color: var(--amber-soft);
+  color: var(--amber-deep);
 }
 .project-del {
   position: absolute;

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { signalNode } from "../../lib/graphModel";
 import { paletteMenu } from "./nodes/registry";
 import { stemColor } from "../../lib/segments";
@@ -20,6 +20,26 @@ interface PaletteProps {
   onGraphChange: (updater: (g: Graph) => Graph) => void;
   viewMode?: "detailed" | "compact";
   onSetViewMode?: ((mode: "detailed" | "compact") => void) | null;
+}
+
+// One open category's item list. Measures itself on mount: when the right-anchored
+// per-item help tip (240px + gap) would cross the panel's right edge — where
+// .anim-wrap's overflow:hidden clips it — the `tip-left` class flips it to the left.
+function CategoryDropdown({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tipLeft, setTipLeft] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const wrap = el.closest(".anim-wrap");
+    const bound = wrap ? wrap.getBoundingClientRect().right : window.innerWidth;
+    setTipLeft(el.getBoundingClientRect().right + 250 > bound);
+  }, []);
+  return (
+    <div ref={ref} className={"anim-add-dropdown" + (tipLeft ? " tip-left" : "")} role="menu">
+      {children}
+    </div>
+  );
 }
 
 export default function Palette({
@@ -97,7 +117,7 @@ export default function Palette({
               {group.label}
             </button>
             {openCat === group.category && (
-              <div className="anim-add-dropdown" role="menu">
+              <CategoryDropdown>
                 {group.specs.map((spec) => {
                   const p = spec.palette!;
                   const io = p.io;
@@ -122,7 +142,7 @@ export default function Palette({
                     </button>
                   );
                 })}
-              </div>
+              </CategoryDropdown>
             )}
             {group.category === "sources" && picking && (
               <div className="anim-signal-picker">

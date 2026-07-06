@@ -132,3 +132,11 @@
 .export-download {
   align-self: center;
 }
+
+/* Narrow screens: stack the settings column above the preview instead of forcing
+   a 280px column + preview past the viewport (horizontal page scroll). */
+@media (max-width: 760px) {
+  .export-body {
+    grid-template-columns: 1fr;
+  }
+}
