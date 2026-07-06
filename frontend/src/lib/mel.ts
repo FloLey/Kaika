@@ -39,6 +39,34 @@ export function fmtTime(t: number): string {
   return `${m}:${s}`;
 }
 
+// `m:ss.cc` with two decimals of a second — the editable form for lyric timings,
+// where sub-second precision matters when nudging a line onto the vocal. Round-
+// trips with parseTimecode.
+export function fmtTimecode(t: number): string {
+  if (!isFinite(t) || t < 0) t = 0;
+  const m = Math.floor(t / 60);
+  const s = t - m * 60;
+  return `${m}:${s.toFixed(2).padStart(5, "0")}`;
+}
+
+// Parse a timecode back to seconds. Accepts `m:ss.cc` (any minutes, seconds < 60)
+// or a bare number of seconds ("83.5"). Returns null on anything unparseable so
+// callers can flag the field instead of silently coercing to 0.
+export function parseTimecode(s: string): number | null {
+  const str = s.trim();
+  if (!str) return null;
+  if (str.includes(":")) {
+    const parts = str.split(":");
+    if (parts.length !== 2) return null;
+    const mins = Number(parts[0]);
+    const secs = Number(parts[1]);
+    if (!isFinite(mins) || !isFinite(secs) || mins < 0 || secs < 0 || secs >= 60) return null;
+    return mins * 60 + secs;
+  }
+  const n = Number(str);
+  return isFinite(n) && n >= 0 ? n : null;
+}
+
 export function fmtHz(hz: number): string {
   if (hz >= 1000) return (hz / 1000).toFixed(hz >= 10000 ? 1 : 2) + " kHz";
   return Math.round(hz) + " Hz";
