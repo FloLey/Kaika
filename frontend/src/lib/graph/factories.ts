@@ -17,6 +17,7 @@ import type {
   Graph,
   ImageNode,
   ImagegenNode,
+  SlideshowNode,
   LfoNode,
   LyricsNode,
   MathNode,
@@ -105,7 +106,10 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v14: loose edges — a wire dropped on a card may persist with the `__in`
 //       sentinel targetPort (no binding) until a port is assigned. Older saves
 //       can't contain the sentinel; normalizeGraph keeps loose edges as-is.
-export const GRAPH_VERSION = 14;
+//  v15: the imagegen card split — pre-v15 `imagegen` (slideshow + generator in one)
+//       becomes `slideshow`; the new `imagegen` is a pure generator (prompts list)
+//       feeding a slideshow's `images` input.
+export const GRAPH_VERSION = 15;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], expanded: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -307,10 +311,10 @@ export function videoNode(x: number, y: number): VideoNode {
     },
   };
 }
-export function imagegenNode(x: number, y: number): ImagegenNode {
+export function slideshowNode(x: number, y: number): SlideshowNode {
   return {
     id: mkNodeId(),
-    type: "imagegen",
+    type: "slideshow",
     x,
     y,
     data: {
@@ -322,10 +326,17 @@ export function imagegenNode(x: number, y: number): ImagegenNode {
       fit: "cover",
       threshold: 0.5,
       hysteresis: 0.1,
-      prompt: "",
-      seed: 1,
-      ports: coercePorts("imagegen", undefined),
+      ports: coercePorts("slideshow", undefined),
     },
+  };
+}
+export function imagegenNode(x: number, y: number): ImagegenNode {
+  return {
+    id: mkNodeId(),
+    type: "imagegen",
+    x,
+    y,
+    data: { prompts: [""], seed: 1, assetUrls: [] },
   };
 }
 export function backdropNode(x: number, y: number): BackdropNode {

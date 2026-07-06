@@ -20,6 +20,7 @@ import NoiseNode from "./NoiseNode";
 import ShaperNode from "./ShaperNode";
 import GateNode from "./GateNode";
 import ImagegenNode from "./ImagegenNode";
+import SlideshowNode from "./SlideshowNode";
 import ScopeNode from "./ScopeNode";
 import PatternNode from "./PatternNode";
 import AnimatePointsNode from "./AnimatePointsNode";
@@ -47,6 +48,7 @@ import {
   lyricsNode,
   imageNode,
   imagegenNode,
+  slideshowNode,
   videoNode,
   backdropNode,
 } from "../../../lib/graphModel";
@@ -336,18 +338,32 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       io: { in: "a signal on opacity", out: "video" },
     },
   },
+  slideshow: {
+    type: "slideshow",
+    Component: SlideshowNode,
+    chrome: { title: "slideshow", accent: "var(--courant)", outFlow: "video" },
+    factory: slideshowNode,
+    palette: {
+      label: "Slideshow",
+      title: "A set of stills advanced by a trigger signal",
+      order: 33.4,
+      category: "sources",
+      help: "Hold several images (uploads, the library, or a wired Image gen card) and switch to the NEXT one each time the trigger rises past the threshold. The card shows how many switches this segment will make.",
+      io: { in: "trigger + images", out: "video" },
+    },
+  },
   imagegen: {
     type: "imagegen",
     Component: ImagegenNode,
-    chrome: { title: "image gen", accent: "var(--courant)", outFlow: "video" },
+    chrome: { title: "image gen", accent: "var(--courant)", outFlow: "images" },
     factory: imagegenNode,
     palette: {
       label: "Image gen",
-      title: "A slideshow of stills advanced by a trigger signal",
+      title: "Generate images locally — one per prompt",
       order: 33.5,
       category: "sources",
-      help: "Hold several images (uploads, the library, or \u2728 generated) and switch to the NEXT one every time the trigger signal rises past the threshold \u2014 photos that change on the beat.",
-      io: { in: "trigger signal", out: "video" },
+      help: "Write one prompt per image and \u2728 generate them locally (seeded, reproducible). Wire the images output into a Slideshow card to show them.",
+      io: { in: "\u2014", out: "images" },
     },
   },
   video: {

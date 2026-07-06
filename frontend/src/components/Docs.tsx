@@ -548,6 +548,15 @@ export default function Docs({ section }: { section?: string }) {
               </td>
             </tr>
             <tr>
+              <td>slideshow · image gen</td>
+              <td>
+                A <strong>slideshow</strong> switches between several images on a trigger signal
+                (<a href="#animation-sources">see below</a>); an <strong>image gen</strong> card
+                generates images locally — one per prompt — and feeds them into a slideshow via
+                its <em>images</em> wire.
+              </td>
+            </tr>
+            <tr>
               <td>image · video</td>
               <td>
                 Layer an <strong>uploaded picture or clip</strong> into the frame (
@@ -753,18 +762,25 @@ export default function Docs({ section }: { section?: string }) {
             Opacity is modulatable — wire a signal to fade it with the music.
           </li>
           <li>
-            <strong>Image gen</strong> — a <strong>slideshow</strong> layer: load several images
-            (drop files, pick from the <a href="#assets">📚 library</a>, or ✨ generate them
-            locally) and wire a signal into the <em>trigger</em> port — every time it rises past
-            the <em>threshold</em>, the NEXT image shows (wrapping back to the first). The{" "}
-            <em>hysteresis</em> band keeps a hovering signal from machine-gunning the slideshow;
-            for clean beat-driven switching, feed it a drums signal (optionally through a{" "}
+            <strong>Slideshow</strong> — a set of stills that <strong>switches</strong> to the
+            next image every time its <em>trigger</em> signal rises past the <em>threshold</em>{" "}
+            (wrapping back to the first). Images come from drops/uploads, the{" "}
+            <a href="#assets">📚 library</a>, <em>and</em> anything wired into its{" "}
+            <em>images</em> input (an Image gen card). The card shows a live counter — how many
+            images it holds and how many times it will switch this segment. The{" "}
+            <em>hysteresis</em> band stops a hovering signal from machine-gunning; you control
+            exactly <em>when</em> it switches by shaping the trigger (e.g. through a{" "}
             <a href="#animation-modulators">gate</a>). Same box/fit placement as the image card;{" "}
-            <em>opacity</em> is modulatable too. <strong>✨ generate</strong> runs a small Stable
-            Diffusion locally (the first run downloads the model, ~2 GB; set{" "}
-            <code>IMAGEGEN_MODEL</code> to swap it) — generated stills land in the slideshow and
-            the <a href="#assets">library</a> like any upload. Generation is seeded, so the same
-            prompt + seed reproduces the same image.
+            <em>opacity</em> is modulatable too.
+          </li>
+          <li>
+            <strong>Image gen</strong> — a pure <strong>generator</strong>: write{" "}
+            <em>one prompt per image</em> (the card shows how many it will make), set a seed, and{" "}
+            <strong>✨ generate</strong> runs a small Stable Diffusion locally (first run
+            downloads the model, ~2 GB; set <code>IMAGEGEN_MODEL</code> to swap it). Results are
+            seeded — the same prompts + seed reproduce the same images — and land in the{" "}
+            <a href="#assets">library</a>. It makes no video itself: wire its <em>images</em>{" "}
+            output into a Slideshow card to show them.
           </li>
           <li>
             <strong>Video</strong> — same box/fit/library as the image card, for a clip. Extra ways

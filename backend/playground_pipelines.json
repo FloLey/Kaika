@@ -3254,8 +3254,8 @@
     }
   },
   {
-    "key": "imagegen",
-    "label": "Image gen",
+    "key": "slideshow",
+    "label": "Slideshow",
     "signals": [],
     "graph": {
       "edges": [
@@ -3294,7 +3294,6 @@
           "id": "ig",
           "data": {
             "fit": "cover",
-            "seed": 1,
             "box_h": 1.0,
             "box_w": 1.0,
             "box_x": 0.0,
@@ -3315,7 +3314,6 @@
                 }
               }
             },
-            "prompt": "",
             "assetUrls": [
               "/assets/playground/sample.png",
               "/assets/playground/sample2.png",
@@ -3324,7 +3322,7 @@
             "threshold": 0.5,
             "hysteresis": 0.1
           },
-          "type": "imagegen"
+          "type": "slideshow"
         },
         {
           "x": 640,
@@ -3337,6 +3335,112 @@
         }
       ],
       "version": 1
+    }
+  },
+  {
+    "key": "imagegen",
+    "label": "Image gen",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "gen",
+          "target": "sl",
+          "sourcePort": "out",
+          "targetPort": "images"
+        },
+        {
+          "id": "e1",
+          "source": "lfo",
+          "target": "sl",
+          "sourcePort": "out",
+          "targetPort": "trigger"
+        },
+        {
+          "id": "e2",
+          "source": "sl",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 40,
+          "id": "gen",
+          "data": {
+            "seed": 1,
+            "prompts": [
+              "soft petals drifting",
+              "golden light rays",
+              "teal ink in water"
+            ],
+            "assetUrls": [
+              "/assets/playground/sample.png",
+              "/assets/playground/sample2.png",
+              "/assets/playground/sample3.png"
+            ]
+          },
+          "type": "imagegen"
+        },
+        {
+          "x": 40,
+          "y": 260,
+          "id": "lfo",
+          "data": {
+            "duty": 0.5,
+            "rate": 3,
+            "phase": 0,
+            "shape": "square",
+            "rateMode": "cycles"
+          },
+          "type": "lfo"
+        },
+        {
+          "x": 340,
+          "y": 40,
+          "id": "sl",
+          "data": {
+            "fit": "cover",
+            "box_h": 1.0,
+            "box_w": 1.0,
+            "box_x": 0.0,
+            "box_y": 0.0,
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "trigger": {
+                "binding": {
+                  "hi": 1.0,
+                  "lo": 0.0,
+                  "kind": "node",
+                  "nodeId": "lfo"
+                }
+              }
+            },
+            "assetUrls": [],
+            "threshold": 0.5,
+            "hysteresis": 0.1
+          },
+          "type": "slideshow"
+        },
+        {
+          "x": 660,
+          "y": 80,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 15
     }
   }
 ]

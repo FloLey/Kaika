@@ -31,6 +31,7 @@ def test_generate_image_stores_assets(client, live_db, tmp_path, monkeypatch):
     db.create_project(job, title="t", source="s", duration=1.0, fmin=20, has_lyrics=False, stems={})
     monkeypatch.setattr(uploads_routes, "ASSETS_DIR", tmp_path)
     # Two distinct tiny stills instead of the real model.
+    # One image per call (the worker calls once per prompt, seeded seed+i).
     monkeypatch.setattr(
         imagegen,
         "generate",
@@ -39,7 +40,7 @@ def test_generate_image_stores_assets(client, live_db, tmp_path, monkeypatch):
         ],
     )
 
-    r = client.post(f"/generate-image/{job}", json={"prompt": "wedding flowers", "seed": 7, "count": 2})
+    r = client.post(f"/generate-image/{job}", json={"prompts": ["wedding flowers", "first dance"], "seed": 7})
     assert r.status_code == 200
     st = _wait_job(client, r.get_json()["job_id"])
     assert st["state"] == "done", st
@@ -54,7 +55,7 @@ def test_generate_image_stores_assets(client, live_db, tmp_path, monkeypatch):
 
 
 def test_generate_image_requires_a_prompt(client):
-    r = client.post("/generate-image/ab12cd99", json={"prompt": "  "})
+    r = client.post("/generate-image/ab12cd99", json={"prompts": ["  ", ""]})
     assert r.status_code == 400
 
 
@@ -63,7 +64,7 @@ def test_generate_image_error_surfaces_on_the_job(client, live_db, monkeypatch):
         raise RuntimeError("image generation needs the diffusers stack")
 
     monkeypatch.setattr(imagegen, "generate", boom)
-    r = client.post("/generate-image/ab12cd99", json={"prompt": "x"})
+    r = client.post("/generate-image/ab12cd99", json={"prompts": ["x"]})
     st = _wait_job(client, r.get_json()["job_id"])
     assert st["state"] == "error"
     assert "diffusers" in st["error"]

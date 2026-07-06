@@ -185,11 +185,10 @@ export async function assetFromYoutube(jobId: string, url: string): Promise<JobA
 // generation waits politely behind a running separation).
 export async function generateImage(
   jobId: string,
-  prompt: string,
-  seed: number,
-  count = 1
+  prompts: string[],
+  seed: number
 ): Promise<JobAck> {
-  return postJson<JobAck>(`/generate-image/${jobId}`, { prompt, seed, count });
+  return postJson<JobAck>(`/generate-image/${jobId}`, { prompts, seed });
 }
 
 export async function segmentJob(jobId: string): Promise<JobAck> {

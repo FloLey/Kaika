@@ -224,6 +224,9 @@ export function resolveDropPort(
     }
     return null;
   }
+  if (flow === "images") {
+    return node.type === "slideshow" && !videoSource(graph, targetId, "images") ? "images" : null;
+  }
   if (flow === "points") {
     return node.type === "fluid" && !videoSource(graph, targetId, "positions") ? "positions" : null;
   }

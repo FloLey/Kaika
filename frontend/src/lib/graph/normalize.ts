@@ -42,6 +42,7 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "lyrics",
   "image",
   "imagegen",
+  "slideshow",
   "video",
   "backdrop",
 ]);
@@ -143,7 +144,7 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     loop: boolDefaultTrue,
     ports: portsFor("video"),
   },
-  imagegen: {
+  slideshow: {
     assetUrls: strList,
     box_x: num(0),
     box_y: num(0),
@@ -152,9 +153,12 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     fit: oneOf(["cover", "contain", "stretch"], "cover"),
     threshold: num(0.5),
     hysteresis: num(0.1),
-    prompt: str(""),
+    ports: portsFor("slideshow"),
+  },
+  imagegen: {
+    prompts: (v) => (Array.isArray(v) && v.length ? v.filter((x) => typeof x === "string") : [""]),
     seed: num(1),
-    ports: portsFor("imagegen"),
+    assetUrls: strList,
   },
   backdrop: { color: hexColor("#101418"), ports: portsFor("backdrop") },
 };
@@ -178,9 +182,16 @@ export function normalizeGraph(graph: Graph): Graph {
   // legacy nodes to `grade` — an unknown type now — and the filter below drops them,
   // rather than mis-coercing old grade data into a dye card.
   const legacy = (graph.version ?? 0) < 8;
+  // v15: the old combined imagegen card becomes the slideshow card (the generator
+  // half moved to the NEW imagegen type); prompt/seed are dropped — any generated
+  // images are already in assetUrls, so nothing user-visible is lost.
+  const preSplit = (graph.version ?? 0) < 15;
   const mapped = graph.nodes.map((node): GraphNode => {
-    const n =
+    let n =
       legacy && node.type === "color" ? ({ ...node, type: "grade" } as unknown as GraphNode) : node;
+    if (preSplit && n.type === "imagegen") {
+      n = { ...n, type: "slideshow" } as unknown as GraphNode;
+    }
     if (n !== node) changed = true;
     const d = (n.data || {}) as Record<string, unknown>;
 

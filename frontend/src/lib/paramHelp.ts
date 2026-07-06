@@ -47,15 +47,17 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     fit: "cover = fill the box, cropping overflow; contain = fit inside, letterboxed; stretch = distort to the box.",
     opacity: "Image opacity over the video.",
   },
-  imagegen: {
-    trigger: "Each RISING edge of this signal past the threshold shows the NEXT image (wrapping).",
+  slideshow: {
+    trigger: "Each RISING edge of this signal past the threshold shows the NEXT image (wrapping). Feed it through a gate card to control exactly when it switches.",
     opacity: "Layer transparency \u2014 wire a signal to fade the slideshow with the music.",
-    threshold: "The trigger level that counts as a beat: rising past it advances the image.",
+    threshold: "The trigger level that counts as a switch: rising past it advances the image.",
     hysteresis: "Dead band under the threshold \u2014 the trigger must fall below it before it can advance again (no machine-gunning).",
     fit: "How each image fills the box: cover (fill + crop), contain (letterbox), stretch.",
     box: "Where the slideshow sits in the frame \u2014 drag to move, pull a corner to size.",
-    prompt: "Describe the image to generate locally \u2014 the result lands in the slideshow and the \ud83d\udcda library.",
-    seed: "Generation seed \u2014 the same prompt + seed reproduces the same image; it bumps automatically after each \u2728.",
+  },
+  imagegen: {
+    prompts: "One image per prompt \u2014 the card generates them in order (image i uses seed + i).",
+    seed: "Generation seed \u2014 the same prompts + seed reproduce the same images; it bumps automatically after each \u2728.",
   },
   video: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",
@@ -136,6 +138,7 @@ export const ARG_SECTION: Record<string, string> = {
   color: "animation-fx",
   lyrics: "animation-sources",
   image: "animation-sources",
+  slideshow: "animation-sources",
   imagegen: "animation-sources",
   video: "animation-sources",
   backdrop: "animation-sources",

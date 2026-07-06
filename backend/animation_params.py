@@ -167,8 +167,8 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
     "lyrics": [_opacity_spec()],
     "image": [_opacity_spec()],
     # The slideshow layer: `trigger` advances to the next image on each rising edge
-    # past the card's built-in hysteresis threshold (see graph_render._imagegen_*).
-    "imagegen": [
+    # past the card's built-in hysteresis threshold (see graph_render._slideshow_*).
+    "slideshow": [
         _opacity_spec(),
         {"key": "trigger", "label": "trigger", "min": 0.0, "max": 1.0, "step": 0.01,
          "default": 0.0, "fmt": "dp2"},

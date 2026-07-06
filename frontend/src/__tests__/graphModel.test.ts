@@ -40,6 +40,7 @@ import {
   connectLoose,
   assignEdge,
   unassignEdge,
+  imagegenNode,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
@@ -865,5 +866,42 @@ describe("loose edges (v14): drop-anywhere wiring", () => {
     const g2 = connectLoose(g, srcId, fluidId);
     const norm = normalizeGraph({ ...g2, version: 13 });
     expect(norm.edges.some((e) => isLooseEdge(e))).toBe(true);
+  });
+});
+
+describe("v15 migration: the imagegen split", () => {
+  it("retypes a pre-v15 imagegen node into slideshow and drops prompt/seed", () => {
+    const g = emptyGraph();
+    g.version = 14;
+    g.nodes = [
+      {
+        id: "n-old",
+        type: "imagegen",
+        x: 0,
+        y: 0,
+        data: {
+          assetUrls: ["/assets/j/a.png"],
+          box_x: 0, box_y: 0, box_w: 1, box_h: 1,
+          fit: "cover", threshold: 0.5, hysteresis: 0.1,
+          prompt: "old combined prompt", seed: 3,
+          ports: {},
+        },
+      } as unknown as GraphNode,
+    ];
+    const norm = normalizeGraph(g);
+    const n = norm.nodes[0] as unknown as { type: string; data: Record<string, unknown> };
+    expect(n.type).toBe("slideshow");
+    expect(n.data.assetUrls).toEqual(["/assets/j/a.png"]); // images survive
+    expect("prompt" in n.data).toBe(false); // generator fields dropped
+    expect("seed" in n.data).toBe(false);
+  });
+
+  it("a v15+ imagegen node stays the generator card", () => {
+    const g = emptyGraph();
+    const gen = imagegenNode(0, 0);
+    g.nodes = [gen];
+    const norm = normalizeGraph(g);
+    expect(norm.nodes[0].type).toBe("imagegen");
+    expect((norm.nodes[0].data as { prompts: string[] }).prompts).toEqual([""]);
   });
 });

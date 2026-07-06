@@ -26,7 +26,7 @@ export const COLOR_PARAMS = GEN_COLOR_PARAMS as FluidParam[];
 // speed/fps each frame, so a wired signal time-warps the clip).
 export const LYRICS_PARAMS: FluidParam[] = SOURCE_PARAMS.lyrics;
 export const IMAGE_PARAMS: FluidParam[] = SOURCE_PARAMS.image;
-export const IMAGEGEN_PARAMS: FluidParam[] = SOURCE_PARAMS.imagegen;
+export const SLIDESHOW_PARAMS: FluidParam[] = SOURCE_PARAMS.slideshow;
 export const VIDEO_PARAMS: FluidParam[] = SOURCE_PARAMS.video;
 export const BACKDROP_PARAMS: FluidParam[] = SOURCE_PARAMS.backdrop;
 
@@ -36,7 +36,7 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   color: COLOR_PARAMS,
   lyrics: LYRICS_PARAMS,
   image: IMAGE_PARAMS,
-  imagegen: IMAGEGEN_PARAMS,
+  slideshow: SLIDESHOW_PARAMS,
   video: VIDEO_PARAMS,
   backdrop: BACKDROP_PARAMS,
 };

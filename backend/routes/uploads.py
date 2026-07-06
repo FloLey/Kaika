@@ -159,28 +159,33 @@ def generate_image(body, job_id):
     for `{assets: [...]}` and appends the URLs to its slideshow."""
     if not validate_job_id(job_id):
         return error_response("bad job id", 404)
-    prompt = (body.get("prompt") or "").strip()
-    if not prompt:
-        return error_response("provide a prompt", 400)
+    # One image per prompt (the Image gen card sends its whole prompts list);
+    # a bare `prompt` string still works for single generations.
+    prompts = body.get("prompts")
+    if not isinstance(prompts, list):
+        prompts = [body.get("prompt") or ""]
+    prompts = [str(p).strip() for p in prompts if str(p).strip()]
+    if not prompts:
+        return error_response("provide at least one prompt", 400)
+    prompts = prompts[:8]  # bound a single request
     seed = int(body.get("seed") or 1)
-    count = max(1, min(4, int(body.get("count") or 1)))  # bound a single request
     gen_job = uuid4().hex[:8]
-    jobs.submit(gen_job, "generating", lambda: _generate_assets(job_id, prompt, seed, count))
+    jobs.submit(gen_job, "generating", lambda: _generate_assets(job_id, prompts, seed))
     return jsonify({"job_id": gen_job})
 
 
-def _generate_assets(job_id: str, prompt: str, seed: int, count: int) -> dict:
-    """Background worker: run the local model, PNG-encode each image, and register
-    them as content-addressed library assets (so identical generations dedupe and
-    the render cache stays correct). Raises with a clean message when the model
+def _generate_assets(job_id: str, prompts: list, seed: int) -> dict:
+    """Background worker: ONE image per prompt (image i seeded seed+i), PNG-encoded
+    and registered as content-addressed library assets (identical generations dedupe
+    and the render cache stays correct). Raises with a clean message when the model
     stack isn't available — the job error surfaces on the card."""
     import io
 
     from .. import imagegen
 
-    images = imagegen.generate(prompt, seed=seed, count=count)
     assets = []
-    for i, img in enumerate(images):
+    for i, prompt in enumerate(prompts):
+        img = imagegen.generate(prompt, seed=seed + i, count=1)[0]
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         assets.append(

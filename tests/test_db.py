@@ -62,15 +62,21 @@ def test_project_round_trip(live_db):
 
 
 def test_list_projects_excludes_the_playground(live_db):
-    # the app-managed Playground must never appear among the user's projects, but is
-    # still openable directly via get_project.
-    db.create_project(
-        "playground", title="Playground", source="synthetic", duration=1.0, fmin=20,
-        has_lyrics=False, stems={},
-    )
+    # The app-managed Playground must never appear among the user's projects, but is
+    # still openable directly via get_project. NON-DESTRUCTIVE against the shared dev
+    # DB: only create (and clean up) a playground row if none exists — this test used
+    # to unconditionally delete the REAL seeded Playground on every suite run.
+    created = False
+    if db.get_project("playground") is None:
+        db.create_project(
+            "playground", title="Playground", source="synthetic", duration=1.0, fmin=20,
+            has_lyrics=False, stems={},
+        )
+        created = True
     try:
         listed = {p["job_id"] for p in db.list_projects()}
         assert "playground" not in listed
         assert db.get_project("playground") is not None  # still openable directly
     finally:
-        db.delete_project("playground")
+        if created:
+            db.delete_project("playground")

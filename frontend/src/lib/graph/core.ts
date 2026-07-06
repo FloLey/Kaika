@@ -51,7 +51,7 @@ export const mkSlotId = (): string => rid("slot");
 // Non-fluid video sources (no video input; synthesise frames). Producers, not emitters.
 // (The video-FX pass-through cards — transform / grade — were removed in v10; a future
 // FX card re-adds its type here AND a wired-`video`-input check in outputRenderable.)
-export const VIDEO_SOURCES = new Set<string>(["lyrics", "image", "imagegen", "video", "backdrop"]);
+export const VIDEO_SOURCES = new Set<string>(["lyrics", "image", "slideshow", "video", "backdrop"]);
 
 export const VIDEO_PRODUCERS = new Set<string>(["fluid", "combine", "output", ...VIDEO_SOURCES]);
 

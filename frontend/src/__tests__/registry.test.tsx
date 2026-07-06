@@ -23,7 +23,7 @@ describe("node-type registry", () => {
       expect(spec.type).toBe(key);
       expect(spec.Component).toBeTruthy();
       expect(spec.chrome.title).toBeTruthy();
-      expect(spec.chrome.outFlow).toMatch(/^(value|video|points|color)$/);
+      expect(spec.chrome.outFlow).toMatch(/^(value|video|points|color|images)$/);
     }
   });
 

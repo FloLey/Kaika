@@ -259,12 +259,12 @@ export interface VideoData extends ImageData {
   start: number; // start offset into the source, seconds
   loop: boolean; // loop the clip if it's shorter than the window
 }
-// The image-generator / slideshow layer: N stills, advanced by the `trigger` port —
-// each rising edge past the built-in hysteresis threshold shows the NEXT image
-// (wrapping). `prompt`/`seed` feed the local image generation (part B); the images
-// themselves are ordinary content-addressed assets, however they were made.
-export interface ImagegenData {
-  assetUrls: string[]; // ordered slideshow (served /assets/... URLs)
+// The slideshow layer: N stills, advanced by the `trigger` port — each rising edge
+// past the built-in hysteresis threshold shows the NEXT image (wrapping). Images come
+// from the card's own picks (uploads / the library) PLUS anything wired into its
+// `images` input (an Image gen card's generated list).
+export interface SlideshowData {
+  assetUrls: string[]; // the card's OWN ordered picks (served /assets/... URLs)
   box_x: number; // placement box, fractions 0..1 (same semantics as ImageData)
   box_y: number;
   box_w: number;
@@ -272,9 +272,15 @@ export interface ImagegenData {
   fit: LayerFit;
   threshold: number; // trigger level the built-in gate switches around
   hysteresis: number; // dead band so a hovering trigger can't machine-gun images
-  prompt: string; // text prompt for ✨ generate
-  seed: number; // generation seed (deterministic; bump for new variations)
   ports: Record<string, FluidPort>;
+}
+// The image GENERATOR: one prompt per image, generated locally (seeded) into a list
+// of content-addressed assets. Not a video producer — its `images` output wires into
+// a Slideshow card's `images` input.
+export interface ImagegenData {
+  prompts: string[]; // one image per prompt — the card shows the count
+  seed: number; // generation seed (image i uses seed + i; deterministic)
+  assetUrls: string[]; // the generated results, in prompt order
 }
 
 // A per-project library asset (image/video), owned by the backend `data.assets`.
@@ -364,6 +370,10 @@ export interface VideoNode extends NodeBase {
   type: "video";
   data: VideoData;
 }
+export interface SlideshowNode extends NodeBase {
+  type: "slideshow";
+  data: SlideshowData;
+}
 export interface ImagegenNode extends NodeBase {
   type: "imagegen";
   data: ImagegenData;
@@ -392,6 +402,7 @@ export type GraphNode =
   | LyricsNode
   | ImageNode
   | VideoNode
+  | SlideshowNode
   | ImagegenNode
   | BackdropNode;
 
@@ -400,7 +411,7 @@ export type NodeType = GraphNode["type"];
 // One node's `data` for a given type (e.g. NodeData<"fluid"> = FluidData).
 export type NodeOf<T extends NodeType> = Extract<GraphNode, { type: T }>;
 
-export type PortFlow = "value" | "video" | "points" | "color";
+export type PortFlow = "value" | "video" | "points" | "color" | "images";
 
 export interface GraphEdge {
   id: string;

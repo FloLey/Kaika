@@ -8,6 +8,7 @@ import type {
   GraphNode,
   ImageData,
   ImagegenData,
+  SlideshowData,
   LyricsData,
   PatternData,
   PointsData,
@@ -82,8 +83,8 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
         <span className="anim-compact-hint">no image</span>
       );
     }
-    case "imagegen": {
-      const urls = (node.data as ImagegenData).assetUrls || [];
+    case "slideshow": {
+      const urls = (node.data as SlideshowData).assetUrls || [];
       return urls.length ? (
         <span className="anim-compact-thumbwrap">
           <img className="anim-compact-thumb" src={urls[0]} alt="" draggable={false} />
@@ -91,6 +92,19 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
         </span>
       ) : (
         <span className="anim-compact-hint">no images</span>
+      );
+    }
+    case "imagegen": {
+      const d = node.data as ImagegenData;
+      const n = (d.prompts || []).filter((p) => p.trim()).length;
+      const urls = d.assetUrls || [];
+      return urls.length ? (
+        <span className="anim-compact-thumbwrap">
+          <img className="anim-compact-thumb" src={urls[0]} alt="" draggable={false} />
+          <span className="anim-compact-count">×{urls.length}</span>
+        </span>
+      ) : (
+        <span className="anim-compact-hint">{n ? `${n} prompt${n === 1 ? "" : "s"}` : "no prompts"}</span>
       );
     }
     case "video": {

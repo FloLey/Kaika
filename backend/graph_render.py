@@ -623,10 +623,16 @@ def _image_video(dag: "_Dag", node: dict) -> np.ndarray:
                          **_box_static(node.get("data", {})), **dag._fx_params(node))
 
 
-def _imagegen_paths(node: dict) -> list:
-    """The card's ordered slideshow -> on-disk paths ("" for a missing asset, so the
-    slot count — and thus the trigger cycling — stays stable even if a file vanished)."""
-    urls = (node.get("data") or {}).get("assetUrls") or []
+def _slideshow_paths(dag: "_Dag", node: dict) -> list:
+    """The slideshow's ordered images -> on-disk paths: the card's OWN picks plus
+    anything wired into its `images` input (an Image gen card's generated list).
+    Missing files become "" so the slot count — and thus the trigger cycling —
+    stays stable even if an asset vanished."""
+    urls = list((node.get("data") or {}).get("assetUrls") or [])
+    gen_id = _video_source(dag.graph, node["id"], "images")
+    gen = dag.nodes.get(gen_id) if gen_id else None
+    if gen is not None and gen.get("type") == "imagegen":
+        urls += list((gen.get("data") or {}).get("assetUrls") or [])
     out = []
     for url in urls:
         p = paths.asset_file_for_url(url, paths.ASSETS_DIR)
@@ -634,7 +640,7 @@ def _imagegen_paths(node: dict) -> list:
     return out
 
 
-def _imagegen_index(trigger: "np.ndarray", n_assets: int, d: dict) -> "np.ndarray":
+def _slideshow_index(trigger: "np.ndarray", n_assets: int, d: dict) -> "np.ndarray":
     """Whole-segment per-frame image index: the trigger curve is gated through the
     card's built-in hysteresis threshold (reusing the gate card's `_gate_curve`),
     and each RISING edge advances to the next image (wrapping). Frame 0 always
@@ -646,13 +652,13 @@ def _imagegen_index(trigger: "np.ndarray", n_assets: int, d: dict) -> "np.ndarra
     return idx % max(1, n_assets)
 
 
-def _imagegen_video(dag: "_Dag", node: dict) -> np.ndarray:
+def _slideshow_video(dag: "_Dag", node: dict) -> np.ndarray:
     gh, gw = _grid_dims(dag)
     nframes = max(1, round(dag.duration * dag.fps))
     d = node.get("data", {})
     params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
-    aps = _imagegen_paths(node)
-    index = _imagegen_index(params["trigger"], len(aps), d)
+    aps = _slideshow_paths(dag, node)
+    index = _slideshow_index(params["trigger"], len(aps), d)
     return sources.imagegen(nframes, gh, gw, asset_paths=aps, index=index,
                             **_box_static(d), opacity=params["opacity"])
 
@@ -679,7 +685,7 @@ _VIDEO_HANDLERS = {
     "combine": _combine_video,
     "lyrics": _lyrics_video,
     "image": _image_video,
-    "imagegen": _imagegen_video,
+    "slideshow": _slideshow_video,
     "video": _video_video,
     "backdrop": _backdrop_video,
 }
@@ -765,14 +771,14 @@ def _image_block(dag: "_Dag", node: dict):
     return produce
 
 
-def _imagegen_block(dag: "_Dag", node: dict):
+def _slideshow_block(dag: "_Dag", node: dict):
     gh, gw = _grid_dims(dag)
     d = node.get("data", {})
     params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
-    aps = _imagegen_paths(node)
+    aps = _slideshow_paths(dag, node)
     # The per-frame index is computed over the WHOLE segment once, so slicing it by
     # block keeps the slideshow continuous across block seams (video-card pattern).
-    index = _imagegen_index(params["trigger"], len(aps), d)
+    index = _slideshow_index(params["trigger"], len(aps), d)
     static = _box_static(d)
 
     def produce(a, b):
@@ -820,7 +826,7 @@ _BLOCK_HANDLERS = {
     "combine": _combine_block,
     "lyrics": _lyrics_block,
     "image": _image_block,
-    "imagegen": _imagegen_block,
+    "slideshow": _slideshow_block,
     "video": _video_block,
     "backdrop": _backdrop_block,
 }

@@ -29,7 +29,7 @@ CARD_LABELS = {
     "shaper": "Shaper", "gate": "Gate", "scope": "Scope",
     "points": "Points", "pattern": "Pattern", "animate-points": "Animate points",
     "merge-points": "Merge points",
-    "fluid": "Fluid", "lyrics": "Lyrics", "image": "Image", "imagegen": "Image gen",
+    "fluid": "Fluid", "lyrics": "Lyrics", "image": "Image", "slideshow": "Slideshow", "imagegen": "Image gen",
     "video": "Video",
     "color": "Color", "backdrop": "Backdrop",
     "combine": "Combine", "output": "Output",

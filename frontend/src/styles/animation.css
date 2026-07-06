@@ -1656,6 +1656,28 @@
   border-radius: 0 0 0 4px;
 }
 
+.anim-imagegen-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+.anim-imagegen-prompt-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.anim-imagegen-slot.gen {
+  border-style: dashed; /* generated (wired-in) slots read differently from own picks */
+}
+.anim-slideshow-count strong {
+  color: var(--text);
+}
+/* the images flow gets its own port hue so slideshow/imagegen wiring reads at a glance */
+.gc-port-images {
+  background: #b07ad6;
+}
+
 .anim-imagegen-gen {
   display: flex;
   gap: 6px;

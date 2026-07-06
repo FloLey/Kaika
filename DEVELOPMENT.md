@@ -76,7 +76,7 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
   - `lib/fluidParams.js` — **generated** from the backend specs (do not hand-edit);
     `lib/nodeParams.ts` is the registry every card reads.
   - `components/animation/` — the node-graph editor (`GraphCanvas`, `nodes/*` —
-    19 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
+    21 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
   - `components/studio/` — the studio shell, signal cards, transport.
   - `components/assets/`, `components/export/` — asset library, final export.
 
