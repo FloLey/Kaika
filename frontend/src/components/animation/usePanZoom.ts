@@ -16,6 +16,27 @@ const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.0;
 const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
 
+// The view that FITS a graph-space bounding box into the viewport with a margin
+// (5% each side), centered, at a clamped zoom capped at 1:1 (fitting two cards
+// must not zoom IN past natural size). Pure — the ⊙ fit button and the empty-
+// canvas double-click feed it the measured node bbox; unit-tested directly.
+export function fitView(
+  bbox: { minX: number; minY: number; maxX: number; maxY: number },
+  viewport: { width: number; height: number },
+  margin = 0.05
+): View {
+  const w = Math.max(1, bbox.maxX - bbox.minX);
+  const h = Math.max(1, bbox.maxY - bbox.minY);
+  const usableW = Math.max(1, viewport.width * (1 - margin * 2));
+  const usableH = Math.max(1, viewport.height * (1 - margin * 2));
+  const scale = clampScale(Math.min(usableW / w, usableH / h, 1));
+  return {
+    scale,
+    tx: (viewport.width - w * scale) / 2 - bbox.minX * scale,
+    ty: (viewport.height - h * scale) / 2 - bbox.minY * scale,
+  };
+}
+
 export default function usePanZoom(
   graph: { view?: View } | null | undefined,
   onViewChange: ((v: View) => void) | undefined,
@@ -103,6 +124,11 @@ export default function usePanZoom(
     [view]
   );
 
+  // Imperative jump (the ⊙ fit-view action) — bypasses the gesture handlers.
+  const applyView = useCallback((v: View) => {
+    setView({ tx: v.tx, ty: v.ty, scale: clampScale(v.scale) });
+  }, []);
+
   return {
     view,
     onWheel,
@@ -110,5 +136,6 @@ export default function usePanZoom(
     onBackgroundPointerMove,
     onBackgroundPointerUp,
     screenToGraph,
+    applyView,
   };
 }

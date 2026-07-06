@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   emptyGraph,
   normalizeGraph,
@@ -9,6 +9,7 @@ import {
   disconnect,
   removeNode,
 } from "../../lib/graphModel";
+import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
 import { nodeParam } from "../../lib/nodeParams";
 import type { Graph, GraphEdge, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
@@ -60,10 +61,50 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   // change on every edit (keeps GraphCanvas/Palette from re-rendering each commit).
   const graphRef = useRef(graph);
   graphRef.current = graph;
+
+  // Undo/redo (session-only, per segment — the editor remounts keyed by segment.id):
+  // every commit records its PRE-EDIT snapshot; rapid commits coalesce into one step
+  // (a slider drag = one Cmd+Z). Safe by reference — the mutation helpers are
+  // strictly immutable, so old snapshots can never be edited under us.
+  const historyRef = useRef(emptyHistory());
   const applyUpdater = useCallback(
-    (updater: (g: Graph) => Graph) => commitGraph(updater(graphRef.current)),
+    (updater: (g: Graph) => Graph) => {
+      const before = graphRef.current;
+      const next = updater(before);
+      if (next !== before) {
+        historyRef.current = recordEdit(historyRef.current, before, Date.now());
+      }
+      commitGraph(next);
+    },
     [commitGraph]
   );
+  const undo = useCallback(() => {
+    const r = undoStep(historyRef.current, graphRef.current);
+    if (!r) return;
+    historyRef.current = r.history;
+    commitGraph(r.graph);
+  }, [commitGraph]);
+  const redo = useCallback(() => {
+    const r = redoStep(historyRef.current, graphRef.current);
+    if (!r) return;
+    historyRef.current = r.history;
+    commitGraph(r.graph);
+  }, [commitGraph]);
+
+  // Cmd/Ctrl+Z / Shift+Cmd+Z — skipped while typing in a field so text-editing
+  // undo keeps working inside inputs, prompts, and the lyrics editor.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   // View modes (v16): the canvas is globally "detailed" (classic full cards — the
   // default) or "compact" (name + preview), switched from the toolbar and persisted

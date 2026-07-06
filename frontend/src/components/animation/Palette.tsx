@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { signalNode } from "../../lib/graphModel";
+import type { GraphProblem } from "../../lib/graphModel";
 import { paletteMenu } from "./nodes/registry";
 import { stemColor } from "../../lib/segments";
 import type { Graph, GraphNode } from "../../lib/types";
@@ -20,6 +21,12 @@ interface PaletteProps {
   onGraphChange: (updater: (g: Graph) => Graph) => void;
   viewMode?: "detailed" | "compact";
   onSetViewMode?: ((mode: "detailed" | "compact") => void) | null;
+  // Fit the view to every card (null while the graph is empty).
+  onFitView?: (() => void) | null;
+  // Dead-wiring warnings (lib/graph/problems) + the click-through that selects and
+  // centers the offending card.
+  problems?: GraphProblem[];
+  onProblemClick?: (nodeId: string) => void;
 }
 
 // One open category's item list. Measures itself on mount: when the right-anchored
@@ -51,12 +58,29 @@ export default function Palette({
   onGraphChange,
   viewMode,
   onSetViewMode,
+  onFitView,
+  problems = [],
+  onProblemClick,
 }: PaletteProps) {
   // Which category dropdown is open (one at a time), and whether the signal picker
   // (opened from the Sources menu's factory-less Signal entry) is showing.
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [problemsOpen, setProblemsOpen] = useState(false);
   const clusterRef = useRef<HTMLDivElement>(null);
+  const problemsRef = useRef<HTMLDivElement>(null);
+
+  // Close the problems dropdown on an outside click (same pattern as the add cluster).
+  useEffect(() => {
+    if (!problemsOpen) return undefined;
+    const onDoc = (e: PointerEvent) => {
+      if (problemsRef.current && !problemsRef.current.contains(e.target as Node)) {
+        setProblemsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDoc);
+    return () => document.removeEventListener("pointerdown", onDoc);
+  }, [problemsOpen]);
 
   // Close any open category menu / signal picker when clicking outside the add cluster.
   useEffect(() => {
@@ -168,6 +192,47 @@ export default function Palette({
 
       <span className="anim-toolbar-spacer" />
 
+      {problems.length > 0 && (
+        // Dead-wiring warnings: things the render happily produces WRONG (flat-0
+        // modulators, flattened ranges, unwired outputs) with no error anywhere.
+        <div className="anim-problems" ref={problemsRef}>
+          <button
+            className={"btn sm anim-problems-btn" + (problemsOpen ? " on" : "")}
+            aria-haspopup="menu"
+            aria-expanded={problemsOpen}
+            title="Wiring problems — these render silently wrong (click a row to jump to the card)"
+            onClick={() => setProblemsOpen((v) => !v)}
+          >
+            ⚠ {problems.length} problem{problems.length === 1 ? "" : "s"}
+          </button>
+          {problemsOpen && (
+            <div className="anim-problems-list" role="menu">
+              {problems.map((p, i) => (
+                <button
+                  key={`${p.nodeId}-${i}`}
+                  role="menuitem"
+                  className="anim-problems-item"
+                  onClick={() => {
+                    onProblemClick?.(p.nodeId);
+                    setProblemsOpen(false);
+                  }}
+                >
+                  {p.message}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {onFitView && (
+        <button
+          className="btn sm"
+          title="Fit view — pan/zoom so every card is visible (double-click empty canvas does the same)"
+          onClick={onFitView}
+        >
+          ⊙ fit
+        </button>
+      )}
       {onSetViewMode && (
         // The canvas view-mode switch: detailed (classic full cards) vs compact
         // (name + preview). Flipping clears the per-card ▢/– overrides — a clean

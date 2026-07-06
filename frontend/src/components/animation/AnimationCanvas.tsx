@@ -1,10 +1,11 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import GraphCanvas from "./GraphCanvas";
 import Palette from "./Palette";
 import renderAnimNode from "./renderAnimNode";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
+import { problemsFor } from "../../lib/graphModel";
 import type { View } from "./usePanZoom";
 import type { Graph, GraphNode, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
@@ -77,6 +78,19 @@ export default function AnimationCanvas({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<View>(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
+  const fitRef = useRef<((ids?: string[]) => void) | null>(null); // GraphCanvas's ⊙ fit action
+
+  // Dead-wiring warnings for the ⚠ toolbar chip; clicking a row selects + centers
+  // the offending card (a stale ★final points at a gone card — fall back to fit-all).
+  const problems = useMemo(() => problemsFor(graph, segment), [graph, segment]);
+  const onProblemClick = useCallback(
+    (nodeId: string) => {
+      const exists = graph.nodes.some((n) => n.id === nodeId);
+      setSelected(new Set(exists ? [nodeId] : []));
+      fitRef.current?.(exists ? [nodeId] : undefined);
+    },
+    [graph, setSelected]
+  );
 
   // Stable while ctx is unchanged, so GraphCanvas's memoized cards can skip renders.
   const renderNode = useCallback(
@@ -112,6 +126,9 @@ export default function AnimationCanvas({
         onGraphChange={applyUpdater}
         viewMode={viewMode}
         onSetViewMode={graph.nodes.length ? setViewMode : null}
+        onFitView={graph.nodes.length ? () => fitRef.current?.() : null}
+        problems={problems}
+        onProblemClick={onProblemClick}
       />
       <div className="anim-stage" ref={wrapRef}>
         <MinimizeContext.Provider value={minimizeCtx}>
@@ -128,6 +145,7 @@ export default function AnimationCanvas({
             onViewChange={(v) => {
               viewRef.current = v;
             }}
+            fitRef={fitRef}
             renderNode={renderNode}
           />
         </MinimizeContext.Provider>

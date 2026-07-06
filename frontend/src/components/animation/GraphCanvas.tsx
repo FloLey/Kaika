@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as RPointerEvent, ReactNode } from "react";
-import usePanZoom from "./usePanZoom";
+import type { MutableRefObject, PointerEvent as RPointerEvent, ReactNode } from "react";
+import usePanZoom, { fitView } from "./usePanZoom";
 import type { View } from "./usePanZoom";
 import { portKey, centerInContainer, edgePath, canConnect, connectIssue } from "./ports";
 import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
@@ -62,6 +62,10 @@ interface GraphCanvasProps {
   selected?: ReadonlySet<string>;
   onSelectionChange?: (next: Set<string>) => void;
   onViewChange?: (v: View) => void;
+  // Imperative fit-view handle: the canvas writes its fit action here so the
+  // toolbar's ⊙ fit button / ⚠ problems rows (owned by Palette, outside this
+  // subtree) can call it — no ids = fit everything, ids = center those cards.
+  fitRef?: MutableRefObject<((ids?: string[]) => void) | null>;
   renderNode: (node: GraphNode, helpers: NodeHelpers) => ReactNode;
 }
 
@@ -76,6 +80,7 @@ export default function GraphCanvas({
   selected = EMPTY_SEL,
   onSelectionChange,
   onViewChange,
+  fitRef,
   renderNode,
 }: GraphCanvasProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -87,6 +92,7 @@ export default function GraphCanvas({
     onBackgroundPointerMove,
     onBackgroundPointerUp,
     screenToGraph,
+    applyView,
   } = usePanZoom(graph, onViewChange, rootRef);
 
   // Latest selection / graph in refs so the pointer handlers (memoized, attached as
@@ -95,6 +101,7 @@ export default function GraphCanvas({
   selectedRef.current = selected;
   const graphRef = useRef(graph);
   graphRef.current = graph;
+
 
   const replaceSel = useCallback(
     (id: string | null) => onSelectionChange?.(id == null ? new Set() : new Set([id])),
@@ -114,6 +121,38 @@ export default function GraphCanvas({
   // offsetWidth/offsetHeight are layout px (unaffected by the stage's CSS scale),
   // so they line up with node.x/node.y which live in the same graph-space units.
   const nodeEls = useRef(new Map<string, HTMLElement>());
+
+  // ⊙ fit view: bbox over the MEASURED cards (exact heights, compact or full) ->
+  // a centered, zoom-clamped view. Recovers any card dragged off-screen. Reached
+  // via the toolbar button (fitRef) and by double-clicking empty canvas.
+  const fitToNodes = useCallback((ids?: string[]) => {
+    const root = rootRef.current;
+    const all = graphRef.current.nodes || [];
+    const nodes = ids?.length ? all.filter((n) => ids.includes(n.id)) : all;
+    if (!root || !nodes.length) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      const el = nodeEls.current.get(n.id);
+      const w = el?.offsetWidth || 230; // fallbacks ≈ default card footprint
+      const h = el?.offsetHeight || 160;
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + w);
+      maxY = Math.max(maxY, n.y + h);
+    }
+    const rect = root.getBoundingClientRect();
+    applyView(fitView({ minX, minY, maxX, maxY }, { width: rect.width, height: rect.height }));
+  }, [applyView]);
+  useEffect(() => {
+    if (!fitRef) return undefined;
+    fitRef.current = fitToNodes;
+    return () => {
+      fitRef.current = null;
+    };
+  }, [fitRef, fitToNodes]);
 
   // --- port registry: portKey -> DOM element ---------------------------------
   const portEls = useRef(new Map<string, Element>());
@@ -516,6 +555,13 @@ export default function GraphCanvas({
       onPointerDown={bgPointerDown}
       onPointerMove={onBackgroundPointerMove}
       onPointerUp={bgPointerUp}
+      onDoubleClick={(e) => {
+        // Double-click on EMPTY canvas (not a card/edge) = fit view — the rescue
+        // gesture when a card was dragged off-screen.
+        const t = e.target as HTMLElement;
+        if (t.closest?.(".anim-node") || t.closest?.(".gc-edge")) return;
+        fitToNodes();
+      }}
     >
       <svg className="gc-edges gc-edges-base" width="100%" height="100%">
         {edges.map((e) => (

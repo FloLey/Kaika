@@ -62,3 +62,5 @@ export {
 export { normalizeGraph } from "./graph/normalize";
 export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/validate";
 export { outputHash, upstreamKey } from "./graph/hash";
+export { problemsFor } from "./graph/problems";
+export type { GraphProblem } from "./graph/problems";
