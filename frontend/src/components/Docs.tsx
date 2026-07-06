@@ -503,6 +503,19 @@ export default function Docs({ section }: { section?: string }) {
           wires). The <em>output</em> card is the one exception — its body is the live render
           preview, so it always shows in full.
         </p>
+        <p>
+          Three more canvas tools: <strong>⊙ fit</strong> (toolbar, or{" "}
+          <strong>double-click empty canvas</strong>) pans and zooms so every card is in view — the
+          rescue move when a card was dragged off-screen. <kbd>Cmd</kbd>+<kbd>Z</kbd> /{" "}
+          <kbd>Shift</kbd>+<kbd>Cmd</kbd>+<kbd>Z</kbd> <strong>undo/redo</strong> graph edits
+          (wires, cards, knob drags — a whole slider drag reverts as one step; typing in a text
+          field keeps its own undo). And when the graph contains <strong>dead wiring</strong> that
+          would render silently wrong — a gate with no input (a flat 0), a wired port whose lo–hi
+          range collapsed to zero width (the signal is flattened, so e.g. a slideshow trigger never
+          fires), an output with no input, a stale ★ final mark — a{" "}
+          <strong>⚠ problems</strong> chip appears in the toolbar; click a row to jump straight to
+          the offending card.
+        </p>
         <table>
           <tbody>
             <tr>

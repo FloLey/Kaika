@@ -103,6 +103,11 @@ the implementation lives in five modules:
   **`Dag`** resolver (memoized per-node video/emitter resolution), the per-type
   handler registries (`_VIDEO_HANDLERS` whole-clip, `_BLOCK_HANDLERS` streaming,
   `_EMITTER_HANDLERS` merge), and the entry points `render` / `render_stream`.
+  Their `output_id` may be an **output node** (render the video wired into it) or
+  **any video producer directly** (fluid/combine — the per-card live previews);
+  `_render_target` is the one shared resolver of that contract, so the sync and
+  streaming paths can't drift. The frontend mirror is `nodeRenderable`
+  (`lib/graph/validate.ts`) — cards only stream what the backend would accept.
 
 A node graph has three edge flows: **value** (0..1 curves into modulatable
 ports, each mapped through a per-port `[lo, hi]` range), **points** (emitter
@@ -159,7 +164,12 @@ fine for a local tool):
    file the **current state of every saved project** points to, and deletes the
    rest (minus a 30-min recency window for the live editing session). It bails
    without deleting when the DB is unreachable — "can't tell what's reachable"
-   must never read as "nothing is reachable".
+   must never read as "nothing is reachable". Whole-song HD exports
+   (`song_<hash>.mp4`) are reachable too, via the stem **recorded at export time**
+   in the analysis cache (`song_exports`) plus a best-effort recompute — the
+   recorded stem is required because the export's HD image regeneration swaps
+   imagegen assetUrls in memory only, so its hash can't be rebuilt from the saved
+   row.
 
 **The `output_hash` contract**: the cache key covers one output's *contributing*
 sub-DAG (nodes + edges upstream of that output), the referenced signal
@@ -291,6 +301,20 @@ So a UI slider's range can never drift from what the render maps.
   `graph_*.py` / `lib/graph/*`.
 - The graph is guaranteed **acyclic** by validate, so node resolution is plain
   memoized recursion — no topological sort anywhere.
+
+### Accepted trade-offs (audited, deliberately not "fixed")
+
+Single-user local app — these are known and fine at this scale; revisit if the
+deployment model changes:
+
+- **200 MB JSON body cap** (`app.py`): big graphs parse whole into RAM per
+  request.
+- **`delete_project` leaves files until the next GC sweep** — reachability reaps
+  them; deletion isn't immediate on disk.
+- **Cross-job asset reads**: a graph may reference `/assets/<other-job>/…`; the
+  GC then keeps that file alive under the referencing project.
+- **`_gate_curve` is a per-frame Python loop** — O(frames) per gate node per
+  export; profile before optimizing.
 
 ## Where to read more
 
