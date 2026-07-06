@@ -51,3 +51,23 @@ export function presetFor(o: Size): string {
 
 // CSS aspect-ratio value ("w / h") for sizing previews to the chosen shape.
 export const aspectOf = (o: Size): string => `${o.width} / ${o.height}`;
+
+// A reduced "w : h" label for the aspect (1920×1080 -> "16 : 9"), for UI readouts.
+export function ratioLabel(o: Size): string {
+  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+  const w = Math.max(1, Math.round(o.width));
+  const h = Math.max(1, Math.round(o.height));
+  const d = gcd(w, h) || 1;
+  return `${w / d} : ${h / d}`;
+}
+
+// Snap a size onto `ratio` (w/h) while KEEPING its longer edge, so the resolution
+// magnitude survives when a shape is imposed — used to make the final export follow
+// the studio canvas aspect. Clamped to the same render bounds as the size inputs.
+export function fitToRatio(size: Size, ratio: number): Size {
+  const clamp = (v: number) => Math.max(16, Math.min(4096, Math.round(v)));
+  const long = Math.max(size.width, size.height);
+  return ratio >= 1
+    ? { width: clamp(long), height: clamp(long / ratio) }
+    : { width: clamp(long * ratio), height: clamp(long) };
+}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { outputHash } from "../../../lib/graphModel";
+import { nodeRenderable, outputHash } from "../../../lib/graphModel";
 import { useStreamRender } from "./useStreamRender";
 import type { NodeCtx } from "./nodeProps";
 import type { GraphNode } from "../../../lib/types";
@@ -10,13 +10,17 @@ interface Props {
   ctx?: NodeCtx;
   aspect?: string;
   compact?: boolean;
+  // Gate rendering (on top of viewport visibility). Fluid/combine cards pass their
+  // SELECTED state so only the card you're focused on streams — with just 2 render
+  // workers, streaming every producer in a dense graph starves the Output previews.
+  active?: boolean;
 }
 
 // The live streamed-render preview for a video producer (fluid / combine / output):
 // the block-streamed <video>, slaved to the shared segment clock when playing and
 // looping on its own when idle — the same behaviour the Output card has, factored out.
-// Only streams while on-screen (viewport-gated) so a graph full of sims stays light.
-export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = false }: Props) {
+// Streams only while on-screen AND `active` so a graph full of sims stays light.
+export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = false, active = true }: Props) {
   const { graph, segment, job, signals, lyricLines, lyricsKey, groupClock, groupPlaying, segStart = 0, output } = ctx || {};
   const fps = (output as { fps?: number } | undefined)?.fps || 24;
   // This node's subgraph render key (same hash the Output card uses, for any producer).
@@ -46,7 +50,16 @@ export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = f
     return () => io.disconnect();
   }, []);
 
-  const { videoUrl, busy, error, progress } = useStreamRender(ctx, node.id, renderKey, visible);
+  // Only stream what the backend would accept: a half-wired producer (combine with
+  // no input, dangling binding…) holds its last frame instead of posting a render
+  // that can only 400 — mid-wiring stays quiet.
+  const renderable = useMemo(() => (graph ? nodeRenderable(graph, node.id) : false), [graph, node.id]);
+  const { videoUrl, busy, error, progress } = useStreamRender(
+    ctx,
+    node.id,
+    renderKey,
+    visible && active && renderable
+  );
 
   // Preserve the playback position as the growing preview swaps <video> src.
   useEffect(() => {

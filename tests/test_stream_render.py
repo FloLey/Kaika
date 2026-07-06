@@ -83,7 +83,11 @@ def test_fluidclip_advance_must_be_contiguous():
         clip.advance(10, 15)  # skipped [5,10): the sim can't jump ahead
 
 
-@pytest.mark.parametrize("build,out_id", [(_mod_graph, "o1"), (_stack_lyrics_graph, "out1")])
+# `out_id` is an OUTPUT (stream its input) OR a producer node streamed DIRECTLY
+# (`f1`, the fluid) — the per-node card-preview path. Both must equal `.video(id)`.
+@pytest.mark.parametrize(
+    "build,out_id", [(_mod_graph, "o1"), (_mod_graph, "f1"), (_stack_lyrics_graph, "out1")]
+)
 def test_stream_blocks_equal_video(build, out_id):
     g = build()
     G.validate(g)

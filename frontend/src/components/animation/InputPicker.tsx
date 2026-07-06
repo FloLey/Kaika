@@ -1,8 +1,12 @@
 import type { ChangeEvent } from "react";
 import { chromeFor } from "./nodes/registry";
+import ArgInfo from "./nodes/ArgInfo";
+import { ParamRow } from "./nodes/FluidParamRow";
 import { videoSource, isLooseEdge } from "../../lib/graphModel";
 import { connect, connectVideo, disconnect } from "../../lib/graph/mutations";
+import { nodeParam } from "../../lib/nodeParams";
 import { cardInputs, sourcesForFlow, type InputDesc } from "./nodeInputs";
+import type { NodeHelpers } from "./nodes/nodeProps";
 import type { Graph, GraphNode } from "../../lib/types";
 
 interface Props {
@@ -12,11 +16,21 @@ interface Props {
   onGraphChange: (updater: (g: Graph) => Graph) => void;
 }
 
-// The settings window's INPUTS panel: one dropdown per input (every card, not just
-// ported ones), listing the available signals/sources of the input's flow — so you can
-// wire gate/math/shaper/… inputs without dragging on the canvas. Dynamic groups
-// (math/merge inputs, combine layers) get + add / per-row ✕. Const/range editing for
-// param ports stays in the card body's ParamRow.
+// The settings window has no wiring canvas, so a param's ParamRow port dot registers
+// into the void (it's CSS-hidden); the value slider + source dropdown do the work.
+const NOOP_HELPERS = {
+  portRef: () => () => {},
+  startConnect: () => {},
+  onTitlePointerDown: () => {},
+  onLayoutChange: () => {},
+} as unknown as NodeHelpers;
+
+// The settings window's INPUTS panel: the single, complete editor for every input on
+// every card. A `param` row shows its VALUE control (const slider / [lo,hi] range via
+// ParamRow) AND a source dropdown; an `edge` row shows a source dropdown; both carry a
+// "?". Dynamic groups (math/merge inputs, combine layers) get + add / per-row ✕. This
+// makes value + source editing mode-independent — the card body's own value sliders are
+// hidden in the modal (see .node-settings CSS).
 export default function InputPicker({ node, graph, signals, onGraphChange }: Props) {
   const { inputs, dynamic } = cardInputs(node);
   if (!inputs.length && !dynamic) return null;
@@ -45,7 +59,6 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
   const onPick = (input: InputDesc) => (e: ChangeEvent<HTMLSelectElement>) => {
     const srcId = e.target.value;
     onGraphChange((g) => {
-      // Clear
       if (!srcId) {
         return input.kind === "param"
           ? disconnect(g, node.id, input.portId)
@@ -71,20 +84,38 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
       {inputs.map((input) => {
         const cur = currentSource(input);
         const opts = sourcesForFlow(graph, input.flow, node.id);
+        const param = input.kind === "param" ? nodeParam(node.type, input.portId) : undefined;
+        const dropdown = (
+          <select className="anim-select" value={cur || ""} onChange={onPick(input)}>
+            <option value="">— none —</option>
+            {opts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {srcLabel(s.id)}
+              </option>
+            ))}
+            {cur && !opts.some((s) => s.id === cur) && (
+              <option value={cur}>{srcLabel(cur)}</option>
+            )}
+          </select>
+        );
         return (
-          <label className="port-connections-row" key={input.portId}>
-            <span className="port-connections-label">{input.label}</span>
-            <select className="anim-select" value={cur || ""} onChange={onPick(input)}>
-              <option value="">— none —</option>
-              {opts.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {srcLabel(s.id)}
-                </option>
-              ))}
-              {cur && !opts.some((s) => s.id === cur) && (
-                <option value={cur}>{srcLabel(cur)}</option>
-              )}
-            </select>
+          <div className="port-connections-row" key={input.portId}>
+            {param ? (
+              // ParamRow carries the label + "?" + the const slider / [lo,hi] range.
+              <ParamRow
+                node={node}
+                param={param}
+                helpers={NOOP_HELPERS}
+                onGraphChange={onGraphChange}
+                onDetach={(k) => onGraphChange((g) => disconnect(g, node.id, k))}
+              />
+            ) : (
+              <>
+                <span className="port-connections-label">{input.label}</span>
+                <ArgInfo type={node.type} k={input.helpKey ?? input.portId} />
+              </>
+            )}
+            {dropdown}
             {dynamic && (
               <button
                 type="button"
@@ -95,7 +126,7 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
                 ✕
               </button>
             )}
-          </label>
+          </div>
         );
       })}
       {dynamic && (

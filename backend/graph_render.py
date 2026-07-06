@@ -134,6 +134,21 @@ def build_params(
 # --------------------------------------------------------------------------- #
 # Render
 # --------------------------------------------------------------------------- #
+def _render_target(graph: dict, nodes: dict, output_id: str) -> str:
+    """The producer node a render of `output_id` should resolve. An OUTPUT node
+    renders the video wired into it (no input -> the classic ValueError, an HTTP
+    400); any other id is a producer previewed directly (fluid / combine — the
+    per-node card preview). ONE helper shared by the sync `render()` path and
+    `stream_blocks` so the two contracts can never drift (lockstep invariant)."""
+    node = nodes.get(output_id)
+    if node is not None and node.get("type") == "output":
+        target = _video_source(graph, output_id, "video")
+        if target is None:
+            raise ValueError(f"output '{output_id}' has no input")
+        return target
+    return output_id  # a producer node previewed directly
+
+
 class Dag:
     """Resolves the video DAG feeding an output (spec 10).
 
@@ -409,14 +424,15 @@ class Dag:
         return produce
 
     def stream_blocks(self, output_id, block_frames):
-        """Yield `(a, b, total, frames)` dye-on-transparent blocks feeding `output_id`.
+        """Yield `(a, b, total, frames)` dye-on-transparent blocks for `output_id`.
         `total` is the clip's frame count. The terminal (`render_stream`) applies the
         background per block and streams it to the encoder. Owns the lifetime of the
-        per-combine branch pools built while wiring the producers — shut down on exit."""
-        src = _video_source(self.graph, output_id, "video")
-        if src is None:
-            raise ValueError(f"output '{output_id}' has no input")
-        produce = self._block_producer(src)  # builds the producer chain (+ branch pools)
+        per-combine branch pools built while wiring the producers — shut down on exit.
+
+        `output_id` may be an OUTPUT node (stream the video wired into it) OR any
+        video-producing node directly (fluid / combine — for the per-node card preview)."""
+        target = _render_target(self.graph, self.nodes, output_id)
+        produce = self._block_producer(target)  # builds the producer chain (+ branch pools)
         total = max(1, round(self.duration * self.fps))
         block_frames = max(1, int(block_frames))
         try:
@@ -885,10 +901,8 @@ def render(
         render_cache.touch(out_path)  # keep this hot clip from aging out (LRU)
         return url
 
-    src = _video_source(graph, output_id, "video")
-    if src is None:
-        raise ValueError(f"output '{output_id}' has no input")
     dag = _Dag(job_id, segment, graph, stem_audio_path, output)
+    src = _render_target(graph, dag.nodes, output_id)  # output OR direct producer preview
     frames = dag.video(src)
     frames = fluid.flatten(frames)  # RGBA -> RGB on black (backgrounds are now layers)
     out_w = int(output.get("width", 0)) or None

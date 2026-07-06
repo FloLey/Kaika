@@ -67,13 +67,13 @@ export function outputContributing(graph: Graph, outputId: string): Set<string> 
   return seen;
 }
 
-// Whether one output is renderable: a video producer feeds it AND its whole
-// contributing video DAG is complete (fluid bindings resolve, each combine has a
-// wired input, merges are emitter-resolvable, passthrough outputs have an input).
-export function outputRenderable(graph: Graph, outputId: string): boolean {
-  if (!videoInput(graph, outputId)) return false;
+// Whether the contributing video DAG upstream of `rootId` (inclusive) is complete:
+// fluid bindings resolve, each combine has a wired input, merges are
+// emitter-resolvable, passthrough outputs have an input. Shared by the output check
+// and the producer-preview check below.
+function contributingComplete(graph: Graph, rootId: string): boolean {
   const byId = new Map<string, GraphNode>((graph.nodes || []).map((n) => [n.id, n]));
-  for (const nid of outputContributing(graph, outputId)) {
+  for (const nid of outputContributing(graph, rootId)) {
     const n = byId.get(nid);
     if (!n) continue;
     for (const port of Object.values(portsOf(n) || {})) {
@@ -89,11 +89,29 @@ export function outputRenderable(graph: Graph, outputId: string): boolean {
           if (src != null && !isEmitterSource(graph, src, byId)) return false;
         }
       }
-    } else if (n.type === "output" && nid !== outputId) {
+    } else if (n.type === "output" && nid !== rootId) {
       if (videoSource(graph, nid, "video") == null) return false;
     }
   }
   return true;
+}
+
+// Whether one output is renderable: a video producer feeds it AND its whole
+// contributing video DAG is complete.
+export function outputRenderable(graph: Graph, outputId: string): boolean {
+  if (!videoInput(graph, outputId)) return false;
+  return contributingComplete(graph, outputId);
+}
+
+// Whether ANY node's video can render: an output defers to outputRenderable; any
+// other node is a producer previewed directly (fluid / combine card previews) —
+// mirrors the backend's _render_target contract, so the card only streams what the
+// backend would accept.
+export function nodeRenderable(graph: Graph, nodeId: string): boolean {
+  const node = (graph.nodes || []).find((n) => n.id === nodeId);
+  if (!node) return false;
+  if (node.type === "output") return outputRenderable(graph, nodeId);
+  return contributingComplete(graph, nodeId);
 }
 
 export function validate(graph: Graph): ValidationResult {

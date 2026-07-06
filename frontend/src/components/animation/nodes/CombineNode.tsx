@@ -64,8 +64,14 @@ export default function CombineNode({
         />
       }
     >
-      {/* Live composite preview — the combined output, streamed. */}
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      {/* Live composite preview — streams only while this card is SELECTED, so a
+          dense graph doesn't starve the Output previews (the frame holds otherwise). */}
+      <StreamPreview
+        node={node}
+        ctx={ctx}
+        aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
+        active={selected}
+      />
       <div className="anim-combine-modes">
         <button
           className={"anim-mode-btn" + (mode === "merge" ? " on" : "")}

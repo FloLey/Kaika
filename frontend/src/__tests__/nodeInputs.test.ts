@@ -40,6 +40,24 @@ describe("cardInputs", () => {
     expect(cardInputs(node("s", "signal")).inputs).toEqual([]);
     expect(cardInputs(node("l", "lfo")).inputs).toEqual([]);
   });
+
+  it("gives animate-points its points input (was missing)", () => {
+    const a = cardInputs(node("a", "animate-points"));
+    expect(a.inputs).toEqual([{ portId: "in", flow: "points", label: "points", kind: "edge" }]);
+  });
+
+  it("lists only the colour params relevant to the current mode", () => {
+    const keys = (mode: string) =>
+      cardInputs(node("c", "color", { mode, ports: {} })).inputs.map((i) => i.portId).sort();
+    expect(keys("swatch")).toEqual(["intensity", "opacity"]);
+    expect(keys("rgb")).toEqual(["b", "g", "intensity", "opacity", "r"]);
+    expect(keys("gradient")).toEqual(["intensity", "opacity", "position"]);
+  });
+
+  it("tags dynamic rows with a constant helpKey", () => {
+    expect(cardInputs(node("m", "math", { inputs: ["p1"] })).inputs[0].helpKey).toBe("input");
+    expect(cardInputs(node("c", "combine", { inputs: [{ id: "s1" }] })).inputs[0].helpKey).toBe("layer");
+  });
 });
 
 describe("sourcesForFlow", () => {

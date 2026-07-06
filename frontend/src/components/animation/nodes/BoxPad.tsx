@@ -204,13 +204,29 @@ export default function BoxPad({
       return t;
     };
     if (!vp.playing) {
-      v.pause();
+      // Idle: loop the clip on its own so it reads as "alive" — matching the sim /
+      // output / slideshow previews — instead of freezing on the playhead frame. (The
+      // browser pauses backgrounded <video> and autoplay won't re-fire, so a watchdog
+      // nudges it back like the Output card does.)
+      v.loop = true;
       v.playbackRate = speed;
-      const t = srcTime();
-      if (Math.abs(v.currentTime - t) > 0.05) v.currentTime = t;
-      return undefined;
+      const play = () => {
+        if (document.visibilityState !== "visible") return;
+        v.play()?.catch(() => {});
+      };
+      play();
+      v.addEventListener("canplay", play);
+      const watchdog = setInterval(() => {
+        if (v.paused) play();
+      }, 1000);
+      return () => {
+        v.removeEventListener("canplay", play);
+        clearInterval(watchdog);
+        v.pause();
+      };
     }
     // Playing: seed the position once, then let it run and gently self-correct.
+    v.loop = vp.loop;
     if (Math.abs(v.currentTime - srcTime()) > 0.4) v.currentTime = srcTime();
     v.playbackRate = speed;
     v.play()?.catch(() => {});

@@ -110,7 +110,7 @@ export default function CompactCard({
           title="open settings"
           onClick={() => setSettingsOpen(true)}
         >
-          <CompactPreview node={node} ctx={ctx} accent={accent} />
+          <CompactPreview node={node} ctx={ctx} accent={accent} selected={helpers.selected} />
         </button>
       </NodeFrame>
       {settingsOpen && (

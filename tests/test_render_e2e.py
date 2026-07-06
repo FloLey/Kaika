@@ -62,3 +62,22 @@ def test_render_writes_mp4_and_caches(tmp_path, monkeypatch):
     assert out.exists() and out.stat().st_size > 0
     # Second call hits the cache: same url, no re-encode.
     assert graph.render("job", _SEG, g, _stem_path, _OUTPUT) == url
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_render_accepts_a_producer_id_directly(tmp_path, monkeypatch):
+    # The per-node card preview renders a PRODUCER (fluid/combine) by its own id —
+    # the sync path must accept it exactly like stream_blocks does (lockstep).
+    monkeypatch.setattr(paths, "ANIM_DIR", tmp_path)
+    g = _const_graph()
+    url = graph.render("job", _SEG, g, _stem_path, _OUTPUT, "n-f")  # the fluid, not the output
+    assert (tmp_path / url.rsplit("/", 1)[1]).exists()
+
+
+def test_render_still_rejects_an_unwired_output():
+    # An OUTPUT node with no video input is still a clean ValueError (an HTTP 400):
+    # validate() catches it graph-wide before _render_target's own guard would.
+    g = _const_graph()
+    g["edges"] = []  # unwire the output
+    with pytest.raises(ValueError, match="must be wired"):
+        graph.render("job", _SEG, g, _stem_path, _OUTPUT, "n-o")

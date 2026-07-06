@@ -2,15 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
-import { aspectOf } from "../../lib/output";
+import { aspectOf, fitToRatio, ratioLabel } from "../../lib/output";
 import type { ExportSettings } from "../../lib/export";
-import type { Segment } from "../../lib/types";
+import type { OutputSettings, Segment } from "../../lib/types";
 
 interface ExportStepProps {
   job?: string;
   segments: Segment[];
   exportSettings: ExportSettings;
   setExportSettings: (o: ExportSettings) => void;
+  // The studio canvas (output) settings — the export aspect is locked to match this,
+  // so the whole-track render keeps the exact shape the flow was composed for.
+  output: OutputSettings;
   onBack: () => void;
 }
 
@@ -25,20 +28,26 @@ export default function ExportStep({
   segments,
   exportSettings,
   setExportSettings,
+  output,
   onBack,
 }: ExportStepProps) {
   const set = (patch: Partial<ExportSettings>) => setExportSettings({ ...exportSettings, ...patch });
   const clampDim = (v: number) => Math.max(16, Math.min(4096, Math.round(v || 0)));
 
-  // Aspect-ratio lock: when on, editing one dimension derives the other so the export
-  // keeps its shape. `ratio` (w/h) is (re)captured whenever the lock is engaged.
-  const [locked, setLocked] = useState(true);
-  const [ratio, setRatio] = useState(() => exportSettings.width / exportSettings.height);
-  const toggleLock = () =>
-    setLocked((was) => {
-      if (!was) setRatio(exportSettings.width / exportSettings.height);
-      return !was;
-    });
+  // The export aspect is LOCKED to the studio canvas (output settings): the flow's
+  // fluid grid + fractional-box layers are composed for that shape, so a different
+  // export aspect would reframe everything. The user picks the resolution/fps; the
+  // shape follows the canvas. Editing one side derives the other from this ratio.
+  const canvasRatio = output.width / (output.height || 1);
+  useEffect(() => {
+    // Snap the stored export size onto the canvas aspect on entry and whenever the
+    // canvas orientation changes — keep the longer edge so the resolution survives.
+    const fitted = fitToRatio(exportSettings, canvasRatio);
+    if (fitted.width !== exportSettings.width || fitted.height !== exportSettings.height) {
+      set(fitted);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasRatio]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoUrl, setVideoUrl] = useState(""); // growing preview while running, final file when done
@@ -202,7 +211,7 @@ export default function ExportStep({
                 value={exportSettings.width}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => {
                   const w = clampDim(parseFloat(e.target.value));
-                  set(locked ? { width: w, height: clampDim(w / ratio) } : { width: w });
+                  set({ width: w, height: clampDim(w / canvasRatio) });
                 }}
               />
               <span className="out-x">×</span>
@@ -215,24 +224,16 @@ export default function ExportStep({
                 value={exportSettings.height}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => {
                   const h = clampDim(parseFloat(e.target.value));
-                  set(locked ? { height: h, width: clampDim(h * ratio) } : { height: h });
+                  set({ width: clampDim(h * canvasRatio), height: h });
                 }}
               />
               <span className="out-unit">px</span>
-              <button
-                type="button"
-                className={"iconbtn out-lock" + (locked ? " on" : "")}
-                title={
-                  locked
-                    ? "Aspect ratio locked — editing one side scales the other. Click to unlock."
-                    : "Lock aspect ratio to the current shape"
-                }
-                aria-label="Lock aspect ratio"
-                aria-pressed={locked}
-                onClick={toggleLock}
+              <span
+                className="export-ratio-lock"
+                title="The export keeps your canvas shape (output settings) so the animation isn't reframed — change the orientation in the editor's ⚙ output."
               >
-                {locked ? "🔒" : "🔓"}
-              </button>
+                🔒 {ratioLabel(output)}
+              </span>
             </div>
           </div>
 

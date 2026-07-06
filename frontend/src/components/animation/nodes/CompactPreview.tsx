@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import ValuePreview from "./ValuePreview";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
@@ -59,9 +60,12 @@ interface CompactPreviewProps {
   node: GraphNode;
   ctx: NodeCtx;
   accent: string;
+  // The card's selection state — stream previews (fluid/combine) only go live while
+  // selected, matching the full-size cards.
+  selected?: boolean;
 }
 
-export default function CompactPreview({ node, ctx, accent }: CompactPreviewProps) {
+export default function CompactPreview({ node, ctx, accent, selected }: CompactPreviewProps) {
   if (VALUE_TYPES.has(node.type)) {
     return <ValuePreview node={node} ctx={ctx} color={accent} compact />;
   }
@@ -115,15 +119,20 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
     case "video": {
       const d = node.data as VideoData;
       return d.assetUrl ? (
-        <video
-          className="anim-compact-thumb"
-          src={d.assetUrl}
-          muted
-          loop
-          autoPlay
-          playsInline
-          preload="metadata"
-        />
+        <div
+          className="anim-output-well anim-output-well-sm"
+          style={{ "--out-aspect": ctx?.output ? aspectOf(ctx.output) : "1 / 1" } as CSSProperties}
+        >
+          <video
+            className="anim-output-video"
+            src={d.assetUrl}
+            muted
+            loop
+            autoPlay
+            playsInline
+            preload="metadata"
+          />
+        </div>
       ) : (
         <span className="anim-compact-hint">🎞 no video</span>
       );
@@ -165,6 +174,7 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
           ctx={ctx}
           aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
           compact
+          active={selected}
         />
       );
     default:

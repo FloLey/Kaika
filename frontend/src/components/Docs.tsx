@@ -979,8 +979,10 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>Render.</strong> The <strong>Final export ▸</strong> button (top of the Studio)
-            opens the export stage. Set the <em>size</em> (aspect-locked width×height),{" "}
-            <em>fps</em>, <em>detail / grid</em> (simulation cells — higher is sharper and slower),
+            opens the export stage. Set the <em>size</em> — its <strong>aspect ratio is locked to
+            your canvas</strong> (the editor's ⚙ output orientation), so you only pick the resolution
+            and the export keeps the exact shape you built for; editing one side scales the other.
+            Also set <em>fps</em>, <em>detail / grid</em> (simulation cells — higher is sharper and slower),
             and the <em>audio</em>: the <strong>original</strong> full mix, or{" "}
             <strong>instrumental</strong> — the separated stems minus the vocal, for covers and
             karaoke (the studio transport follows the same choice, so you build against the track

@@ -59,7 +59,13 @@ export default function NodeSettingsModal({
   const Card = spec.Component;
 
   return createPortal(
-    <div className="anim-modal-scrim" onPointerDown={onClose}>
+    <div
+      className="anim-modal-scrim"
+      onPointerDown={onClose}
+      // The modal is portaled, but React events bubble through the REACT tree — so a
+      // wheel here would reach the canvas onWheel and pan it "behind". Swallow it.
+      onWheel={(e) => e.stopPropagation()}
+    >
       <div
         className="anim-modal node-settings"
         role="dialog"

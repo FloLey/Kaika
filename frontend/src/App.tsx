@@ -316,6 +316,7 @@ export default function App() {
           segments={segments}
           exportSettings={exportSettings}
           setExportSettings={setExportSettings}
+          output={output}
           onBack={() => setStep("studio")}
         />
       )}

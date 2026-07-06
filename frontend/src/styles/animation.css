@@ -1252,6 +1252,7 @@
   max-width: 100%;
   max-height: 88vh;
   overflow: auto;
+  overscroll-behavior: contain; /* the modal's own scroll never chains to the page */
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1297,6 +1298,15 @@
 }
 .node-settings .anim-node-head {
   cursor: default; /* no drag either (the stub handler is a no-op) */
+}
+/* The INPUTS panel (a sibling of the card, so NOT .anim-node) now owns all input
+   editing — value + source + "?". Hide the card BODY's duplicate input controls in the
+   modal: modulatable param rows, the fluid param GROUPS, and the fluid positions/colour
+   rows. The card body keeps its structural controls (mode, box, toggles, previews). */
+.node-settings .anim-node .anim-param-row,
+.node-settings .anim-node .anim-group,
+.node-settings .anim-node .anim-pos-row {
+  display: none;
 }
 
 .out-preview-wrap {
@@ -1355,6 +1365,18 @@
 }
 .out-lock.on {
   color: var(--petale);
+}
+/* Read-only badge: the export shape is pinned to the studio canvas ratio. */
+.export-ratio-lock {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
 }
 .out-x,
 .out-unit {
@@ -1731,9 +1753,8 @@
 .anim-points-pad-sm {
   max-height: 72px;
 }
-.anim-output-well-sm {
-  max-height: 84px;
-}
+/* Compact producer previews (fluid/combine) render at the full output aspect — the
+   same size as the Output card's well — just with a smaller loader. */
 .anim-output-well-sm .anim-loader-orb {
   width: 5px;
   height: 5px;

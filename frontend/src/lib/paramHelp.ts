@@ -22,6 +22,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     enabled: "Turn this fluid's dye emission on or off.",
     radial: "Push dye outward from the centre instead of along a fixed heading.",
     wrap: "On: dye leaving one edge re-enters the opposite (a looping torus). Off: it's gone for good.",
+    positions: "Wire a Points / Pattern card here to emit a source at each drawn point (else one source at the centre).",
+    color: "Wire a Colour card here to set the dye colour (else the fluid's static colour).",
   },
   color: {
     mode: "swatch = one solid colour; rgb = drive r/g/b with signals; gradient = scrub along stops.",
@@ -41,6 +43,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     outline: "Draw a black outline under the text so it stays readable over anything.",
     outlineWidth: "Outline thickness, as a fraction of the font size.",
     opacity: "Text opacity over the video.",
+    fillColor: "Wire a Colour card here to drive the text fill colour (else white).",
+    outlineColor: "Wire a Colour card here to drive the outline colour (else black).",
   },
   image: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The image is scaled into it by `fit`.",
@@ -54,8 +58,10 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     hysteresis: "Dead band under the threshold \u2014 the trigger must fall below it before it can advance again (no machine-gunning).",
     fit: "How each image fills the box: cover (fill + crop), contain (letterbox), stretch.",
     box: "Where the slideshow sits in the frame \u2014 drag to move, pull a corner to size.",
+    images: "Wire an Image gen card here to feed its generated list into the slideshow.",
   },
   imagegen: {
+    in: "Wire a gate here to size the prompt list to its pulses (one image per switch).",
     prompts: "One image per prompt \u2014 the card generates them in order (image i uses seed + i).",
     seed: "Generation seed \u2014 the same prompts + seed reproduce the same images; it bumps automatically after each \u2728.",
     model: "Which model the \u2728 draft uses: SD-Turbo is fast and low-res for building; Z-Image-Turbo is HD but slow. The final export always regenerates in HD regardless.",
@@ -83,6 +89,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     seed: "Random seed for the scatter layout — change it for a different arrangement.",
   },
   "animate-points": {
+    in: "Wire a Points / Pattern card here — the set this card animates over the clip.",
     mode: "orbit = each point circles the centre; drift = slides along a heading; chase = a moving lit snake.",
     amount: "Orbit radius / drift distance (0–0.5 of the frame).",
     rate: "How many loops over the clip (chase: how fast the snake sweeps).",
@@ -103,6 +110,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     seed: "Random seed — change for a different wander (renders stay stable).",
   },
   shaper: {
+    in: "The 0..1 value to re-shape — wire a signal / LFO / noise / math here.",
     delay: "Time-shift the value later, in ms — delay its response to the input.",
     wrap: "Wrap the shifted tail back to the start instead of padding the gap with zero.",
     invert: "Flip the curve: loud → low, quiet → high.",
@@ -116,6 +124,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     hi: "Output ceiling — the value 1 maps to.",
   },
   gate: {
+    in: "The 0..1 value to gate \u2014 wire a signal / LFO / noise / math here.",
     threshold: "The level the gate switches around: input above \u2192 1, below \u2192 0.",
     hysteresis: "Dead band centred on the threshold \u2014 wider = harder for a hovering signal to flicker the gate.",
     minGap: "Minimum seconds between spikes: a rising edge closer than this to the last kept one is dropped. Caps the spike RATE by time (0 = off).",
@@ -123,15 +132,26 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     invert: "Flip the output: 1 while the input is BELOW the threshold.",
   },
   math: {
+    input: "A 0..1 value to fold in — wire a signal / LFO / noise / gate here.",
     op: "How to fold the inputs: multiply, add, subtract, max, min, or mix (crossfade).",
     mix: "Crossfade between the first two inputs (0 = first, 1 = second).",
   },
   combine: {
+    layer: "A video source to composite — wire a fluid / another combine / a layer card.",
     mode: "merge = inputs share one simulation (they interact); layered = stack with transparency.",
     dissipation: "Shared medium: how fast dye fades in the merged simulation.",
     velocity_dissipation: "Shared medium: how fast motion settles in the merged simulation.",
     viscosity: "Shared medium: thickness of the merged fluid.",
     vorticity: "Shared medium: swirl added back into the merged fluid.",
+  },
+  scope: {
+    in: "The value to monitor — it passes straight through, unchanged.",
+  },
+  "merge-points": {
+    input: "A points set to merge in — wire a Points / Pattern / Animate card.",
+  },
+  output: {
+    video: "The video to render — wire a fluid or a combine into this output.",
   },
 };
 
@@ -152,6 +172,9 @@ export const ARG_SECTION: Record<string, string> = {
   math: "animation-modulators",
   shaper: "animation-modulators",
   gate: "animation-modulators",
+  scope: "animation-modulators",
+  "merge-points": "animation-points",
+  output: "animation-output",
   combine: "animation-combine",
 };
 

@@ -17,9 +17,12 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-# A couple of workers so two output nodes can stream at once; renders never share the
-# ingestion pool (which is deliberately single-worker to serialise demucs/GPU work).
-_POOL = ThreadPoolExecutor(max_workers=int(os.environ.get("RENDER_WORKERS", "2")))
+# Enough workers that the output-node streams AND the per-card fluid/combine sim
+# previews can render together without starving each other (the sim is GPU/MPS-bound,
+# so extra workers mostly overlap the CPU-side ffmpeg encodes). Renders never share the
+# ingestion pool (deliberately single-worker to serialise demucs/GPU work). Tune with
+# RENDER_WORKERS (lower it if a big graph thrashes; raise it for snappier previews).
+_POOL = ThreadPoolExecutor(max_workers=int(os.environ.get("RENDER_WORKERS", "4")))
 _LOCK = threading.Lock()
 _JOBS: dict[str, dict] = {}
 _MAX_JOBS = 64  # prune finished jobs beyond this (most-recently-updated kept)

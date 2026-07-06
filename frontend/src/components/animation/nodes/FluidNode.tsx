@@ -97,8 +97,14 @@ export default function FluidNode({
         />
       }
     >
-      {/* Live sim preview — the fluid's own dye-on-transparent output, streamed. */}
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      {/* Live sim preview — streams only while this card is SELECTED, so a dense
+          graph doesn't starve the Output previews (the frame holds otherwise). */}
+      <StreamPreview
+        node={node}
+        ctx={ctx}
+        aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
+        active={selected}
+      />
       {/* Source positions: a labelled `points` input. Wire a points card here to put
           a source at each drawn point (otherwise a single source at the centre). */}
       <div className="anim-pos-row">
