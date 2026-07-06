@@ -161,6 +161,8 @@ export interface ShaperData {
 export interface GateData {
   threshold: number; // the level the gate switches around
   hysteresis: number; // dead band width centred on the threshold
+  minGap: number; // min seconds between spikes — rises closer than this are dropped (0 = off)
+  divide: number; // keep only every Nth spike (1/N divider; 1 = keep all)
   invert: boolean; // flip the output (1 while BELOW the threshold)
 }
 
@@ -280,7 +282,9 @@ export interface SlideshowData {
 export interface ImagegenData {
   prompts: string[]; // one image per prompt — the card shows the count
   seed: number; // generation seed (image i uses seed + i; deterministic)
-  assetUrls: string[]; // the generated results, in prompt order
+  assetUrls: string[]; // the generated results, aligned 1:1 with prompts by index
+  model?: string; // which model the ✨ draft uses (export always regenerates in HD)
+  activeCount?: number; // set by a wired gate: only the first N images are shown + output
 }
 
 // A per-project library asset (image/video), owned by the backend `data.assets`.

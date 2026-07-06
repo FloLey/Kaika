@@ -181,26 +181,30 @@ export default function Studio({
     [activeSegId, setSegments]
   );
 
-  // Copy the current segment's card layout (its whole animation graph) onto the NEXT
-  // segment, so you can build once and reuse the pipeline down the track. `copyLayout`
-  // deep-copies the graph AND rewires its signal cards onto the next segment's own
-  // signals (matching bands, cloning any it's missing) — so the copy drives the right
-  // segment, never the previous one.
+  // Copy the current segment's card layout (its whole animation graph) onto an
+  // ADJACENT segment (previous or next), so you can build once and reuse the pipeline
+  // up or down the track. `copyLayout` deep-copies the graph AND rewires its signal
+  // cards onto the target segment's own signals (matching bands, cloning any it's
+  // missing) — so the copy drives the right segment, never the source.
   const segIdx = useMemo(() => segments.findIndex((s) => s.id === activeSegId), [segments, activeSegId]);
+  const prevSeg = segIdx > 0 ? segments[segIdx - 1] : null;
   const nextSeg = segIdx >= 0 && segIdx + 1 < segments.length ? segments[segIdx + 1] : null;
-  const canCopyLayout = !!(nextSeg && activeSeg?.graph?.nodes?.length);
-  const copyLayoutToNext = useCallback(() => {
-    if (!nextSeg || !activeSeg?.graph?.nodes?.length) return;
-    if (
-      nextSeg.graph?.nodes?.length &&
-      !window.confirm(`Replace “${nextSeg.label}”'s animation with this segment's layout?`)
-    ) {
-      return;
-    }
-    const updated = copyLayout(activeSeg, nextSeg);
-    setSegments((prev) => prev.map((s) => (s.id === nextSeg.id ? updated : s)));
-    selectSegment(nextSeg.id); // follow the copy onto the next segment
-  }, [nextSeg, activeSeg, setSegments, selectSegment]);
+  const hasCards = !!activeSeg?.graph?.nodes?.length;
+  const copyLayoutTo = useCallback(
+    (target: Segment | null) => {
+      if (!target || !activeSeg?.graph?.nodes?.length) return;
+      if (
+        target.graph?.nodes?.length &&
+        !window.confirm(`Replace “${target.label}”'s animation with this segment's layout?`)
+      ) {
+        return;
+      }
+      const updated = copyLayout(activeSeg, target);
+      setSegments((prev) => prev.map((s) => (s.id === target.id ? updated : s)));
+      selectSegment(target.id); // follow the copy onto the target segment
+    },
+    [activeSeg, setSegments, selectSegment]
+  );
 
   return (
     <div className={"studio" + (railOpen ? "" : " rail-collapsed")}>
@@ -230,59 +234,84 @@ export default function Studio({
         />
         <div className="results-head">
           <span className="section-title">
-            {activeSeg ? activeSeg.label.toUpperCase() : "FULL TRACK"} ·{" "}
-            {tab === "signals" ? "EXTRACT SIGNALS BY TRACK" : "CREATE ANIMATION"}
+            {activeSeg ? activeSeg.label.toUpperCase() : "FULL TRACK"}
+            {/* The active tab already names the mode, so only the (informative) "by
+                track" nuance of the signals tab is worth spelling out in the title. */}
+            {tab === "signals" ? " · EXTRACT SIGNALS BY TRACK" : ""}
           </span>
           <div className="controls">
-            <button className="btn sm edit-split" onClick={onEditSplit}>
-              ↩ edit split
-            </button>
-            {onExport && (
-              <button
-                className="btn sm final-export"
-                onClick={onExport}
-                title="Render the whole track in HD (mark a final output per segment first)"
-              >
-                Final export ▸
+            {/* Segment ACTIONS — kept visually distinct from the transport cluster. */}
+            <div className="rh-actions">
+              <button className="btn sm edit-split" onClick={onEditSplit}>
+                ↩ edit split
               </button>
-            )}
-            {tab === "animation" && (
+              {onExport && (
+                <button
+                  className="btn sm final-export"
+                  onClick={onExport}
+                  title="Render the whole track in HD (mark a final output per segment first)"
+                >
+                  Final export ▸
+                </button>
+              )}
+              {tab === "animation" && (
+                // One segmented control: copy this segment's card layout onto the
+                // previous / next neighbour. Each side disables at its end of the track.
+                <span className="rh-copy" role="group" aria-label="copy layout to a neighbour">
+                  <span className="rh-copy-label">⧉ copy</span>
+                  <button
+                    className="btn sm rh-copy-btn"
+                    onClick={() => copyLayoutTo(prevSeg)}
+                    disabled={!(prevSeg && hasCards)}
+                    title={
+                      prevSeg
+                        ? `Copy these cards to the previous segment (${prevSeg.label})`
+                        : "No previous segment to copy to"
+                    }
+                  >
+                    ‹ prev
+                  </button>
+                  <button
+                    className="btn sm rh-copy-btn"
+                    onClick={() => copyLayoutTo(nextSeg)}
+                    disabled={!(nextSeg && hasCards)}
+                    title={
+                      nextSeg
+                        ? `Copy these cards to the next segment (${nextSeg.label})`
+                        : "No next segment to copy to"
+                    }
+                  >
+                    next ›
+                  </button>
+                </span>
+              )}
+            </div>
+            {/* TRANSPORT — grows to fill the row so the timeline stretches. */}
+            <div className="rh-transport">
               <button
-                className="btn sm"
-                onClick={copyLayoutToNext}
-                disabled={!canCopyLayout}
-                title={
-                  nextSeg
-                    ? `Copy these cards to the next segment (${nextSeg.label})`
-                    : "No next segment to copy to"
-                }
+                className="btn on seg-play"
+                onClick={playAll}
+                title={allPlaying ? "Pause" : "Play segment"}
+                aria-label={allPlaying ? "Pause" : "Play segment"}
               >
-                ⧉ copy → next
+                {allPlaying ? "❚❚" : "▶"}
               </button>
-            )}
-            <button
-              className="btn on seg-play"
-              onClick={playAll}
-              title={allPlaying ? "Pause" : "Play segment"}
-              aria-label={allPlaying ? "Pause" : "Play segment"}
-            >
-              {allPlaying ? "❚❚" : "▶"}
-            </button>
-            <TransportClock
-              subscribe={subscribeClock}
-              getClockT={getClockT}
-              segLen={segLen}
-              seek={seek}
-            />
-            <VolumeControl value={volume} onChange={setVolume} />
-            <label className="loop-toggle" title="Loop the segment">
-              <input
-                type="checkbox"
-                checked={loop}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setLoop(e.target.checked)}
+              <TransportClock
+                subscribe={subscribeClock}
+                getClockT={getClockT}
+                segLen={segLen}
+                seek={seek}
               />
-              loop
-            </label>
+              <VolumeControl value={volume} onChange={setVolume} />
+              <label className="loop-toggle" title="Loop the segment">
+                <input
+                  type="checkbox"
+                  checked={loop}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setLoop(e.target.checked)}
+                />
+                loop
+              </label>
+            </div>
           </div>
         </div>
 

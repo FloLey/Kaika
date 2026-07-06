@@ -13,6 +13,10 @@ export interface ExportSettings {
   // Which audio the final mp4 carries: the uploaded mix, or the vocals-removed
   // "instrumental" (drums+bass+other — the karaoke track for covers).
   audioMode: "original" | "instrumental";
+  // Long-edge px for the HD regeneration of Image-gen cards at export (they preview
+  // as fast low-res drafts; the export regenerates them fresh in HD at this size,
+  // scaled to the export aspect). Higher = sharper but slower.
+  imageSize: number;
 }
 
 export const EXPORT_DEFAULTS: ExportSettings = {
@@ -21,6 +25,7 @@ export const EXPORT_DEFAULTS: ExportSettings = {
   fps: 30,
   gridCells: 216, // simulation short-side cells — higher = sharper + slower
   audioMode: "original",
+  imageSize: 1024, // HD generated-image long edge (Z-Image native max)
 };
 
 // Fill any missing fields from defaults (stored export may be partial/empty).

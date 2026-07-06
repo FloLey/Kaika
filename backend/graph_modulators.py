@@ -218,19 +218,27 @@ def _math_combine(curves: list, op: str, mix: float, nframes: int) -> np.ndarray
     return np.clip(out.astype(np.float32), 0.0, 1.0)
 
 
-def _gate_curve(base: np.ndarray, data: dict) -> np.ndarray:
+def _gate_curve(base: np.ndarray, data: dict, fps: float | None = None) -> np.ndarray:
     """A gate node -> a clean 0/1 curve via HYSTERESIS thresholding: the gate arms
     (goes 1) when the input crosses `threshold + hysteresis/2` and re-arms (drops
     to 0) only below `threshold - hysteresis/2` — so a signal hovering around the
     threshold can't flicker. `invert` flips the result. The stateful sweep is what
     a plain comparison can't give you; the imagegen card reuses this to derive
-    stable rising-edge triggers."""
+    stable rising-edge triggers.
+
+    Two optional THINNERS drop whole "on" pulses before invert (a pulse = one
+    maximal run of 1s, i.e. one spike). `divide` keeps only every Nth pulse (1/N —
+    a musical divider off the input rate). `minGap` (seconds; needs `fps`) enforces
+    a minimum start-to-start spacing, capping the spike RATE by absolute time. Both
+    at defaults (divide 1, minGap 0) leave the square untouched, so existing graphs
+    render identically. When both are set a pulse must clear BOTH to pass."""
     base = np.clip(np.asarray(base, np.float32), 0.0, 1.0)
     threshold = float(data.get("threshold", 0.5))
     hyst = max(0.0, float(data.get("hysteresis", 0.1)))
     hi = min(1.0, threshold + hyst / 2.0)
     lo = max(0.0, threshold - hyst / 2.0)
-    out = np.zeros(len(base), np.float32)
+    n = len(base)
+    out = np.zeros(n, np.float32)
     state = 0.0
     for i, v in enumerate(base):
         if state == 0.0 and v >= hi:
@@ -238,6 +246,32 @@ def _gate_curve(base: np.ndarray, data: dict) -> np.ndarray:
         elif state == 1.0 and v < lo:
             state = 0.0
         out[i] = state
+
+    # Pulse thinning. Only worth a second pass if either thinner is active.
+    divide = max(1, int(round(float(data.get("divide", 1)))))
+    min_gap = max(0.0, float(data.get("minGap", 0.0)))
+    gap_frames = int(round(min_gap * fps)) if (min_gap > 0.0 and fps) else 0
+    if divide > 1 or gap_frames > 0:
+        thinned = np.zeros(n, np.float32)
+        pulse_idx = 0  # counts EVERY input pulse, so 1/N is a stable divider
+        last_kept_start: int | None = None
+        i = 0
+        while i < n:
+            if out[i] == 1.0:
+                j = i
+                while j < n and out[j] == 1.0:
+                    j += 1
+                pass_div = pulse_idx % divide == 0
+                pass_gap = last_kept_start is None or (i - last_kept_start) >= gap_frames
+                if pass_div and pass_gap:
+                    thinned[i:j] = 1.0
+                    last_kept_start = i
+                pulse_idx += 1
+                i = j
+            else:
+                i += 1
+        out = thinned
+
     if data.get("invert"):
         out = 1.0 - out
     return out
@@ -273,7 +307,7 @@ def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals
         elif t == "gate":
             src = _video_source(graph, node_id, "in")
             base = resolve_source(src) if src else np.zeros(nframes, np.float32)
-            out = _gate_curve(base, data)
+            out = _gate_curve(base, data, fps)
         elif t == "scope":
             # a pure monitor: passes its input value through unchanged.
             src = _video_source(graph, node_id, "in")

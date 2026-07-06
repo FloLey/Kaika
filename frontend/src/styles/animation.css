@@ -1118,10 +1118,52 @@
 
 /* ---- shared segment transport (Studio results-head, visible in both tabs) -- */
 
-/* Let the transport row fill the width to the right of the section title so the
-   timeline has room to stretch (scoped to the studio so Review is untouched). */
+/* Let the controls row fill the width to the right of the section title so the
+   timeline has room to stretch (scoped to the studio so Review is untouched). The
+   row splits into two groups: ACTIONS (intrinsic width) and TRANSPORT (grows). */
 .studio-main .results-head .controls {
   flex: 1 1 auto;
+}
+.rh-actions,
+.rh-transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rh-actions {
+  flex: none;
+} /* edit split / export / copy — sized to content */
+.rh-transport {
+  flex: 1 1 auto; /* the timeline lives here and eats the slack */
+  min-width: 0;
+}
+/* A faint divider between the two groups (drops away when they wrap). */
+.rh-transport {
+  border-left: 1px solid var(--line);
+  padding-left: 10px;
+}
+
+/* Segmented copy control: "⧉ copy" label + butted prev/next buttons (same shape as
+   the .anim-viewmode segmented toggle). */
+.rh-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rh-copy-label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.rh-copy .rh-copy-btn {
+  border-radius: 0;
+}
+.rh-copy .rh-copy-btn:first-of-type {
+  border-radius: 6px 0 0 6px;
+}
+.rh-copy .rh-copy-btn:last-of-type {
+  border-radius: 0 6px 6px 0;
+  margin-left: -1px;
 }
 
 /* Fixed-width icon play/pause so toggling ▶ <-> ❚❚ never reflows the timeline. */
@@ -1694,11 +1736,35 @@
   background: #b07ad6;
 }
 
-.anim-imagegen-gen {
+.anim-imagegen-controls {
   display: flex;
   gap: 6px;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   margin: 6px 0;
+}
+.anim-imagegen-seed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.anim-imagegen-seed input {
+  width: 56px;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+/* the ✨ generate action: a full-width block so it always sits INSIDE the card */
+.anim-imagegen-generate {
+  width: 100%;
+  justify-content: center;
+  margin-top: 2px;
 }
 .anim-imagegen-prompt {
   flex: 1;

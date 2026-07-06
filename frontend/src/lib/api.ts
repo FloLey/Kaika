@@ -186,9 +186,10 @@ export async function assetFromYoutube(jobId: string, url: string): Promise<JobA
 export async function generateImage(
   jobId: string,
   prompts: string[],
-  seed: number
+  seed: number,
+  model?: string
 ): Promise<JobAck> {
-  return postJson<JobAck>(`/generate-image/${jobId}`, { prompts, seed });
+  return postJson<JobAck>(`/generate-image/${jobId}`, { prompts, seed, model });
 }
 
 export async function segmentJob(jobId: string): Promise<JobAck> {

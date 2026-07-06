@@ -31,17 +31,35 @@ export function shaperPreview(d: ShaperData): number[] {
 
 // The Gate's preview: a sample sine swept through the SAME hysteresis logic the
 // backend applies (arm at threshold + hyst/2, release below threshold - hyst/2),
-// so the square wave on the card shows exactly how the thresholds will cut.
+// so the square wave on the card shows exactly how the thresholds will cut. The
+// `divide` thinner (keep every Nth spike) is applied too — it's count-based, so it
+// shows exactly. `minGap` is time-based (seconds → frames at the sim fps), so like
+// the shaper's attack/release it can't be drawn in this fps-free preview and is
+// omitted. Four demo cycles so a 1/4 divider is legible.
 export function gatePreview(d: GateData): number[] {
   const hi = Math.min(1, (d.threshold ?? 0.5) + (d.hysteresis ?? 0.1) / 2);
   const lo = Math.max(0, (d.threshold ?? 0.5) - (d.hysteresis ?? 0.1) / 2);
-  const out: number[] = [];
+  const divide = Math.max(1, Math.round(d.divide ?? 1));
+  // Pass 1: the raw hysteresis square.
+  const sq: number[] = [];
   let state = 0;
   for (let i = 0; i < L; i++) {
-    const v = 0.5 + 0.5 * Math.sin((i / (L - 1)) * Math.PI * 4); // two demo cycles
+    const v = 0.5 + 0.5 * Math.sin((i / (L - 1)) * Math.PI * 8); // four demo cycles
     if (state === 0 && v >= hi) state = 1;
     else if (state === 1 && v < lo) state = 0;
-    out.push(d.invert ? 1 - state : state);
+    sq.push(state);
   }
-  return out;
+  // Pass 2: keep only every Nth "on" pulse (1/N divider).
+  const out = new Array(L).fill(0);
+  let pulse = 0;
+  for (let i = 0; i < L; ) {
+    if (sq[i] === 1) {
+      let j = i;
+      while (j < L && sq[j] === 1) j++;
+      if (pulse % divide === 0) for (let k = i; k < j; k++) out[k] = 1;
+      pulse++;
+      i = j;
+    } else i++;
+  }
+  return out.map((s) => (d.invert ? 1 - s : s));
 }

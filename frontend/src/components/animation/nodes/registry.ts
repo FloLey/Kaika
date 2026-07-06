@@ -64,16 +64,19 @@ export interface NodeChrome {
 }
 
 // The add-node menu is grouped by these categories, in this display order, following
-// the data-flow: sources feed generators, which are composited, then output.
+// the data-flow: raw sources + value modulators + drawn points feed the generators,
+// which are composited, then output.
 export type PaletteCategory =
   | "sources"
   | "modulators"
+  | "points"
   | "generators"
   | "compositing"
   | "output";
 export const PALETTE_CATEGORIES: { key: PaletteCategory; label: string }[] = [
   { key: "sources", label: "Sources" },
   { key: "modulators", label: "Modulators" },
+  { key: "points", label: "Points" },
   { key: "generators", label: "Generators" },
   { key: "compositing", label: "Compositing" },
   { key: "output", label: "Output" },
@@ -138,7 +141,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Points",
       title: "Draw source points to feed a fluid's positions",
       order: 2,
-      category: "sources",
+      category: "points",
       help: "Draw source points by hand; wire into a fluid's positions to emit one source per point.",
       io: { out: "points" },
     },
@@ -263,7 +266,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Pattern",
       title: "Parametric source layout — circle, grid, spiral…",
       order: 20,
-      category: "sources",
+      category: "points",
       help: "Generates a parametric layout of source points (circle, ring, grid, line, spiral, scatter) instead of placing by hand.",
       io: { out: "points" },
     },
@@ -277,7 +280,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Animate points",
       title: "Move source points over the clip — orbit, drift or chase",
       order: 21,
-      category: "sources",
+      category: "points",
       help: "Moves an incoming points set over the clip: orbit circles the centre, drift slides along a heading and loops, chase keeps the points fixed and cycles which ones are lit.",
       io: { in: "points", out: "points" },
     },
@@ -291,7 +294,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Merge points",
       title: "Concatenate two or more points sets into one",
       order: 22,
-      category: "sources",
+      category: "points",
       help: "Combines several points sets (Pattern / Points / Animate) into a single set — wire each into an input, output to a fluid's positions. Add inputs with + input.",
       io: { in: "points ×N", out: "points" },
     },
@@ -333,7 +336,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Image",
       title: "Place an uploaded image into the frame as a video layer",
       order: 30,
-      category: "sources",
+      category: "generators",
       help: "Uploads an image and places it into a box (cover/contain/stretch) as a video layer. Feed it to a stack combine or an output; opacity is a modulatable port.",
       io: { in: "a signal on opacity", out: "video" },
     },
@@ -347,7 +350,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Slideshow",
       title: "A set of stills advanced by a trigger signal",
       order: 33.4,
-      category: "sources",
+      category: "generators",
       help: "Hold several images (uploads, the library, or a wired Image gen card) and switch to the NEXT one each time the trigger rises past the threshold. The card shows how many switches this segment will make.",
       io: { in: "trigger + images", out: "video" },
     },
@@ -361,7 +364,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Image gen",
       title: "Generate images locally — one per prompt",
       order: 33.5,
-      category: "sources",
+      category: "generators",
       help: "Write one prompt per image and \u2728 generate them locally (seeded, reproducible). Wire the images output into a Slideshow card to show them.",
       io: { in: "\u2014", out: "images" },
     },
@@ -375,7 +378,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Video",
       title: "Place an uploaded video clip into the frame as a video layer",
       order: 31,
-      category: "sources",
+      category: "generators",
       help: "Uploads a video clip and places it into a box (cover/contain/stretch), clocked to the song or this segment with start/speed/loop. Feed it to a stack combine or an output; opacity is a modulatable port.",
       io: { in: "a signal on opacity", out: "video" },
     },
@@ -389,7 +392,7 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       label: "Backdrop",
       title: "Fill the frame with a solid colour as a video layer",
       order: 29,
-      category: "sources",
+      category: "generators",
       help: "Fills the whole frame with a solid colour as a video layer. Wire it into the BOTTOM input of a stack combine for a non-black background; opacity is a modulatable port.",
       io: { in: "a signal on opacity", out: "video" },
     },

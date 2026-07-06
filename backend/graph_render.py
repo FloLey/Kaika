@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import subprocess
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -632,7 +633,15 @@ def _slideshow_paths(dag: "_Dag", node: dict) -> list:
     gen_id = _video_source(dag.graph, node["id"], "images")
     gen = dag.nodes.get(gen_id) if gen_id else None
     if gen is not None and gen.get("type") == "imagegen":
-        urls += list((gen.get("data") or {}).get("assetUrls") or [])
+        # imagegen assetUrls align 1:1 with its prompts. A wired gate caps it via
+        # `activeCount` (take the first N rows); then keep only real images so empty
+        # rows never become blank slideshow slots.
+        gen_data = gen.get("data") or {}
+        gen_urls = gen_data.get("assetUrls") or []
+        cap = gen_data.get("activeCount")
+        if isinstance(cap, (int, float)):
+            gen_urls = gen_urls[: int(cap)]
+        urls += [u for u in gen_urls if u]
     out = []
     for url in urls:
         p = paths.asset_file_for_url(url, paths.ASSETS_DIR)

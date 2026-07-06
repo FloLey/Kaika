@@ -109,7 +109,7 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     fade: num(1),
   },
   "merge-points": { inputs: idList },
-  gate: { threshold: num(0.5), hysteresis: num(0.1), invert: bool },
+  gate: { threshold: num(0.5), hysteresis: num(0.1), minGap: num(0), divide: num(1), invert: bool },
   lyrics: {
     font: str("inter"),
     align: orDefault("center"),
@@ -159,6 +159,8 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     prompts: (v) => (Array.isArray(v) && v.length ? v.filter((x) => typeof x === "string") : [""]),
     seed: num(1),
     assetUrls: strList,
+    model: (v) => (typeof v === "string" && v ? v : "stabilityai/sd-turbo"),
+    activeCount: (v) => (typeof v === "number" && v >= 0 ? v : undefined),
   },
   backdrop: { color: hexColor("#101418"), ports: portsFor("backdrop") },
 };

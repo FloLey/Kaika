@@ -138,8 +138,8 @@ Two deliberately separate in-memory managers (single-process, reset on restart �
 fine for a local tool):
 
 - **`jobs.py`** — ingestion (yt-dlp / Demucs / Whisper) **and local image
-  generation** (`imagegen.py`, the Image gen card's ✨ — Stable Diffusion on
-  MPS, lazily loaded). **One worker**, so GPU work never overlaps (and
+  generation** (`imagegen.py`, the Image gen card's ✨ — a local diffusion model
+  on MPS, lazily loaded). **One worker**, so GPU work never overlaps (and
   matplotlib state stays single-threaded).
 - **`render_jobs.py`** — streaming renders. Two workers, per-job cancel events;
   the UI cancels the previous render on every edit, so an abandoned render stops

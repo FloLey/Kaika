@@ -104,3 +104,38 @@ def test_wired_imagegen_list_feeds_the_slideshow(assets, tmp_path):
     paths_out = _slideshow_paths(dag, dag.nodes["sl"])
     assert len(paths_out) == 2
     assert paths_out[0].endswith("red.png") and paths_out[1].endswith("blue.png")
+
+
+def test_imagegen_active_count_caps_the_passed_images(assets):
+    """A wired gate sets `activeCount` on the imagegen: only the first N of its images
+    pass to the slideshow (the extras are hidden, not deleted)."""
+    from backend.graph_render import _slideshow_paths
+
+    g = {"version": 19, "nodes": [
+        {"id": "gen", "type": "imagegen", "data": {
+            "prompts": ["a", "b", "c"], "seed": 1,
+            "assetUrls": [assets[0], assets[1], assets[0]], "activeCount": 2}},
+        {"id": "sl", "type": "slideshow", "data": {"assetUrls": [], "ports": {}}},
+        {"id": "o", "type": "output", "data": {}},
+    ], "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")]}
+    G.validate(g)
+    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    out = _slideshow_paths(dag, dag.nodes["sl"])
+    assert len(out) == 2  # the third image is hidden by the cap
+
+
+def test_imagegen_empty_rows_dont_become_blank_slots(assets):
+    """Ungenerated ("") rows in the index-aligned assetUrls never reach the slideshow."""
+    from backend.graph_render import _slideshow_paths
+
+    g = {"version": 19, "nodes": [
+        {"id": "gen", "type": "imagegen", "data": {
+            "prompts": ["a", "b", "c"], "seed": 1,
+            "assetUrls": [assets[0], "", assets[1]]}},
+        {"id": "sl", "type": "slideshow", "data": {"assetUrls": [], "ports": {}}},
+        {"id": "o", "type": "output", "data": {}},
+    ], "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")]}
+    G.validate(g)
+    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    out = _slideshow_paths(dag, dag.nodes["sl"])
+    assert len(out) == 2  # the "" slot is dropped, not rendered blank

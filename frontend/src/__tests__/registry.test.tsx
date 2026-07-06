@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import renderAnimNode from "../components/animation/renderAnimNode";
-import { NODE_TYPES, paletteSpecs, chromeFor } from "../components/animation/nodes/registry";
+import {
+  NODE_TYPES,
+  PALETTE_CATEGORIES,
+  paletteMenu,
+  paletteSpecs,
+  chromeFor,
+} from "../components/animation/nodes/registry";
 import { signalNode, VIDEO_PRODUCERS, normalizeGraph, emptyGraph } from "../lib/graphModel";
 import type { GraphNode } from "../lib/types";
 import type { NodeCtx } from "../components/animation/nodes/nodeProps";
@@ -37,6 +43,29 @@ describe("node-type registry", () => {
       expect(node.type).toBe(spec.type);
       expect(node.id).toMatch(/^n-/);
     }
+  });
+
+  it("every palette entry's category is a real menu section (nothing hides off-menu)", () => {
+    const known = new Set(PALETTE_CATEGORIES.map((c) => c.key));
+    for (const spec of Object.values(NODE_TYPES)) {
+      if (!spec.palette) continue;
+      expect(known.has(spec.palette.category), `${spec.type} → "${spec.palette.category}"`).toBe(
+        true
+      );
+    }
+    // Every declared section is actually used (no empty/stale category in the list).
+    const used = new Set(
+      Object.values(NODE_TYPES)
+        .filter((s) => s.palette)
+        .map((s) => s.palette!.category)
+    );
+    for (const c of PALETTE_CATEGORIES) {
+      expect(used.has(c.key), `section "${c.key}" has no cards`).toBe(true);
+    }
+    // The grouped menu covers every palette entry exactly once.
+    const inMenu = paletteMenu().flatMap((g) => g.specs.map((s) => s.type));
+    const withPalette = Object.values(NODE_TYPES).filter((s) => s.palette).length;
+    expect(inMenu.length).toBe(withPalette);
   });
 
   it("renderAnimNode renders a card for every node type via the registry", () => {

@@ -26,6 +26,44 @@ def test_gate_invert_flips():
     assert out.tolist() == [1.0, 0.0]
 
 
+def test_gate_defaults_leave_the_square_untouched():
+    # divide 1 + minGap 0 (the defaults) must render identically to no thinning,
+    # so existing graphs are unaffected.
+    base = np.array([0.0, 0.55, 0.65, 0.5, 0.45, 0.35, 0.55, 0.7], np.float32)
+    plain = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.2})
+    defaulted = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.2, "divide": 1, "minGap": 0}, fps=24)
+    assert defaulted.tolist() == plain.tolist()
+
+
+def test_gate_divide_keeps_every_nth_spike():
+    # Four unit pulses (threshold 0.5, no hysteresis). 1/2 keeps pulses 0 and 2.
+    base = np.array([1, 0, 1, 0, 1, 0, 1, 0], np.float32)
+    out = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.0, "divide": 2})
+    assert out.tolist() == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+
+
+def test_gate_divide_preserves_whole_pulses():
+    # Divide drops/keeps ENTIRE pulses, not single frames. 3 pulses, 1/2 -> keep 1st + 3rd.
+    base = np.array([1, 1, 0, 1, 1, 0, 1, 1], np.float32)
+    out = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.0, "divide": 2})
+    assert out.tolist() == [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0]
+
+
+def test_gate_min_gap_drops_close_spikes():
+    # Pulses every 2 frames; at fps 10 a 0.3s gap = 3 frames, so consecutive spikes
+    # (2 frames apart) get dropped: keep frame 0, next allowed at >= 3 -> keep frame 4.
+    base = np.array([1, 0, 1, 0, 1, 0, 1, 0], np.float32)
+    out = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.0, "minGap": 0.3}, fps=10)
+    assert out.tolist() == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+
+
+def test_gate_min_gap_needs_fps():
+    # Without fps the seconds->frames conversion can't run, so minGap is a no-op.
+    base = np.array([1, 0, 1, 0, 1, 0], np.float32)
+    out = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.0, "minGap": 5.0})
+    assert out.tolist() == [1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+
+
 def test_resolver_dispatches_gate_over_its_input():
     # lfo(square) -> gate: resolves through the value graph like any modulator.
     graph = {

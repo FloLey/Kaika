@@ -111,7 +111,11 @@ export function fluidNode(x: number, y: number): FluidNode {
 //       feeding a slideshow's `images` input.
 //  v16: canvas view MODES — `viewMode` ("detailed" default | "compact") + per-card
 //       `viewOverrides`; the v13 `expanded` set is stripped (old saves open detailed).
-export const GRAPH_VERSION = 16;
+//  v17: imagegen card gained a `model` field (fast draft vs HD); normalizeGraph
+//       defaults it to the draft model for pre-v17 saves.
+//  v19: imagegen gained an optional `activeCount` — set by a wired gate to cap how
+//       many images are shown + passed to the slideshow (extras hidden, not deleted).
+export const GRAPH_VERSION = 19;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -194,7 +198,13 @@ export function shaperNode(x: number, y: number): ShaperNode {
   };
 }
 export function gateNode(x: number, y: number): GateNode {
-  return { id: mkNodeId(), type: "gate", x, y, data: { threshold: 0.5, hysteresis: 0.1, invert: false } };
+  return {
+    id: mkNodeId(),
+    type: "gate",
+    x,
+    y,
+    data: { threshold: 0.5, hysteresis: 0.1, minGap: 0, divide: 1, invert: false },
+  };
 }
 export function scopeNode(x: number, y: number): ScopeNode {
   return { id: mkNodeId(), type: "scope", x, y, data: {} };
@@ -338,7 +348,7 @@ export function imagegenNode(x: number, y: number): ImagegenNode {
     type: "imagegen",
     x,
     y,
-    data: { prompts: [""], seed: 1, assetUrls: [] },
+    data: { prompts: [""], seed: 1, assetUrls: [], model: "stabilityai/sd-turbo" },
   };
 }
 export function backdropNode(x: number, y: number): BackdropNode {

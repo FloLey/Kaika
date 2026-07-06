@@ -58,6 +58,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
   imagegen: {
     prompts: "One image per prompt \u2014 the card generates them in order (image i uses seed + i).",
     seed: "Generation seed \u2014 the same prompts + seed reproduce the same images; it bumps automatically after each \u2728.",
+    model: "Which model the \u2728 draft uses: SD-Turbo is fast and low-res for building; Z-Image-Turbo is HD but slow. The final export always regenerates in HD regardless.",
   },
   video: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",
@@ -117,6 +118,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
   gate: {
     threshold: "The level the gate switches around: input above \u2192 1, below \u2192 0.",
     hysteresis: "Dead band centred on the threshold \u2014 wider = harder for a hovering signal to flicker the gate.",
+    minGap: "Minimum seconds between spikes: a rising edge closer than this to the last kept one is dropped. Caps the spike RATE by time (0 = off).",
+    divide: "Keep only every Nth spike (1/N). 1/1 passes all, 1/4 passes every fourth \u2014 a divider off the input's own rate.",
     invert: "Flip the output: 1 while the input is BELOW the threshold.",
   },
   math: {

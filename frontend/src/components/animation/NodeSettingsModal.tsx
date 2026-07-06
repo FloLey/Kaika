@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { NODE_TYPES, chromeFor } from "./nodes/registry";
-import PortConnections from "./PortConnections";
+import InputPicker from "./InputPicker";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import type { MinimizeCtx } from "./nodes/minimizeContext";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
@@ -67,7 +67,7 @@ export default function NodeSettingsModal({
         onPointerDown={(e) => e.stopPropagation()}
       >
         {ctx.graph && (
-          <PortConnections
+          <InputPicker
             node={node}
             graph={ctx.graph}
             signals={ctx.signals}

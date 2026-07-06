@@ -64,6 +64,17 @@ describe("Studio shell", () => {
     expect(getByText("create animation")).toBeTruthy();
   });
 
+  it("drops the redundant mode from the title on the animation tab and shows the copy control", () => {
+    const { getByText, queryByText } = renderStudio();
+    fireEvent.click(getByText("create animation"));
+    // The active tab already says "create animation", so the title is just the label.
+    expect(getByText(/INTRO/)).toBeTruthy();
+    expect(queryByText(/CREATE ANIMATION/)).toBeNull();
+    // The segmented copy control's two sides are present (disabled here: no cards yet).
+    expect(getByText("‹ prev")).toBeTruthy();
+    expect(getByText("next ›")).toBeTruthy();
+  });
+
   it("selects another segment from the rail", () => {
     const { props, getByText } = renderStudio();
     fireEvent.click(getByText("verse"));

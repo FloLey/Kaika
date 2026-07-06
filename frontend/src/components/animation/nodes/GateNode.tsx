@@ -71,6 +71,26 @@ export default function GateNode({ node, selected, helpers, onGraphChange, onDel
           onChange={(v) => set({ hysteresis: v })}
           {...argHelp("gate", "hysteresis")}
         />
+        <Ctl
+          label="min gap"
+          value={d.minGap ?? 0}
+          min={0}
+          max={10}
+          step={0.1}
+          fmt={(v) => (v > 0 ? `${v.toFixed(1)}s` : "off")}
+          onChange={(v) => set({ minGap: v })}
+          {...argHelp("gate", "minGap")}
+        />
+        <Ctl
+          label="divide"
+          value={d.divide ?? 1}
+          min={1}
+          max={8}
+          step={1}
+          fmt={(v) => `1/${v}`}
+          onChange={(v) => set({ divide: v })}
+          {...argHelp("gate", "divide")}
+        />
         <Toggle
           label="invert"
           value={d.invert}

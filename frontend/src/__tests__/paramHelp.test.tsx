@@ -23,7 +23,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   lfo: 4, // shape/rateMode/rate/phase (duty hidden unless square)
   noise: 3,
   shaper: 11,
-  gate: 3, // threshold/hysteresis/invert
+  gate: 5, // threshold/hysteresis/minGap/divide/invert
   scope: 0,
   pattern: 6, // layout/count/radius/rotation/offsetX/offsetY (seed hidden unless scatter)
   "animate-points": 3, // mode/amount/rate (angle/length/taper are mode-specific)
@@ -31,7 +31,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   lyrics: 8, // font + align/case/reveal + box (visual pad) + outline + outlineWidth + opacity port
   image: 3, // fit + box (visual pad) + opacity port
   slideshow: 6, // threshold + hysteresis + fit + box + opacity/trigger ports
-  imagegen: 1, // seed (prompts use plain title tooltips)
+  imagegen: 2, // seed + model (prompts use plain title tooltips)
   video: 7, // fit + sync + start + speed + loop + box + opacity port
   backdrop: 2, // colour swatch + opacity port
 };
@@ -63,6 +63,7 @@ const INLINE_ARGS: Record<string, string[]> = {
   "animate-points": ["mode", "amount", "rate", "angle", "count", "fade"],
   math: ["op", "mix"],
   combine: ["mode", "dissipation", "velocity_dissipation", "viscosity", "vorticity"],
+  imagegen: ["model"],
 };
 
 describe("per-argument help catalog", () => {

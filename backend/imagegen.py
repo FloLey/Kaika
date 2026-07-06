@@ -1,16 +1,25 @@
 """Local text-to-image generation for the Image gen card's ✨ generate.
 
-Runs Tongyi-MAI's **Z-Image-Turbo** (a ~6B-parameter DiT, ~33 GB of weights,
-8 denoising steps) fully locally via diffusers' `ZImagePipeline`. It's far
-heavier than a distilled SD-Turbo: the first call downloads ~33 GB and loads it
-in bfloat16 (~16 GB resident); on Apple-Silicon MPS a 1024 px image is on the
-order of minutes, not real-time. Everything is LAZY: diffusers imports and the
-pipeline load happen on the first generate call, so the app boots (and runs
-fine) without the packages or the model — generation just raises a clean message
-the job surfaces on the card (the `llm.py` raise-and-fallback shape).
+Two models, picked per call (the card's dropdown / the export's HD pass):
+
+- **draft** `stabilityai/sd-turbo` (~2 GB, 2 steps) — near-instant on MPS, used
+  while building so the on-canvas preview stays fast.
+- **HD** `Tongyi-MAI/Z-Image-Turbo` (a ~6B DiT, ~33 GB, 8 steps) — minutes per
+  image on MPS, used for the fresh regeneration at final export.
+
+Everything is LAZY and per-model cached: diffusers imports + each pipeline load
+happen on first use of that model, so the app boots (and runs) without the
+packages or either model — generation just raises a clean message the job
+surfaces on the card (the `llm.py` raise-and-fallback shape).
+
+Sizing follows the project's aspect: `generate` takes the output `aspect`
+(w, h) and a `long_edge`, and produces an image scaled to that aspect with its
+longest side at `long_edge` (rounded to a multiple of 16, capped at the model's
+native max). Draft calls pass a small `long_edge`; the export HD pass passes the
+size chosen at render time.
 
 Determinism: generation is seeded (`torch.Generator`), so the same
-prompt/seed/size reproduces the same image — and the results are stored as
+prompt/seed/size/model reproduces the same image — and results are stored as
 content-addressed assets anyway, so re-generation never mutates an existing URL
 (which would silently defeat the render cache).
 """
@@ -23,68 +32,115 @@ import threading
 
 log = logging.getLogger("kaika.imagegen")
 
-MODEL = os.environ.get("IMAGEGEN_MODEL", "Tongyi-MAI/Z-Image-Turbo")
-# Z-Image-Turbo is an 8-step (8 DiT forwards) distilled model; guidance is
-# disabled (guidance_scale=0.0), like other turbo models.
-_STEPS = int(os.environ.get("IMAGEGEN_STEPS", "8"))
+# The two known models. `kind` selects the diffusers pipeline class; `steps` is the
+# model's distilled step count; `max_edge` is its native resolution ceiling.
+DRAFT_MODEL = "stabilityai/sd-turbo"
+HD_MODEL = "Tongyi-MAI/Z-Image-Turbo"
+MODELS: dict[str, dict] = {
+    HD_MODEL: {"label": "Z-Image-Turbo (HD)", "kind": "zimage", "steps": 8, "max_edge": 1024},
+    DRAFT_MODEL: {"label": "SD-Turbo (fast draft)", "kind": "auto", "steps": 2, "max_edge": 768},
+}
+# Back-compat env override for the *default* model when a caller passes none.
+DEFAULT_MODEL = os.environ.get("IMAGEGEN_MODEL", HD_MODEL)
+# The long edge (px) for the fast in-editor draft previews.
+DRAFT_EDGE = int(os.environ.get("IMAGEGEN_DRAFT_EDGE", "512"))
 
 _lock = threading.Lock()
-_pipe = None  # lazy singleton — loading takes tens of seconds + GBs, do it once
+_pipes: dict[str, object] = {}  # lazy per-model singletons — loading takes GBs + time
 
 
-def _load_pipe():
-    """Import diffusers + load the pipeline on first use (cached). Raises a clean
-    RuntimeError when the stack isn't installed or the model can't load — the
-    caller (a background job) surfaces the message on the card."""
-    global _pipe
+def model_label(model: str) -> str:
+    """Human label for a model id (falls back to the id itself)."""
+    return (MODELS.get(model) or {}).get("label", model)
+
+
+def _spec(model: str) -> dict:
+    spec = MODELS.get(model)
+    if spec is None:
+        raise RuntimeError(f"unknown image model '{model}' (known: {', '.join(MODELS)})")
+    return spec
+
+
+def _load_pipe(model: str):
+    """Import diffusers + load `model`'s pipeline on first use (cached per model).
+    Raises a clean RuntimeError when the stack isn't installed or the model can't
+    load — the caller (a background job) surfaces the message on the card."""
     with _lock:
-        if _pipe is not None:
-            return _pipe
+        if model in _pipes:
+            return _pipes[model]
+        spec = _spec(model)
         try:
             import torch
-            from diffusers import ZImagePipeline
+            from diffusers import AutoPipelineForText2Image, ZImagePipeline
         except ImportError as e:
             raise RuntimeError(
-                "image generation needs the diffusers stack (with ZImagePipeline) — "
+                "image generation needs the diffusers stack — "
                 "`pip install -r requirements.txt` (diffusers/transformers/safetensors)"
             ) from e
         device = "mps" if torch.backends.mps.is_available() else "cpu"
-        # Z-Image ships fp32 weights; bfloat16 halves the resident footprint and is
-        # the model's recommended runtime dtype (works on MPS and CPU).
-        dtype = torch.bfloat16
         try:
-            # low_cpu_mem_usage=False: load weights directly (not via accelerate's
-            # meta-device path), which ZImagePipeline expects and which avoids
-            # meta-tensor issues on MPS.
-            pipe = ZImagePipeline.from_pretrained(
-                MODEL, torch_dtype=dtype, low_cpu_mem_usage=False
-            )
+            if spec["kind"] == "zimage":
+                # Z-Image ships fp32; bfloat16 halves the resident footprint and is its
+                # recommended runtime dtype. low_cpu_mem_usage=False: load weights
+                # directly (not via accelerate's meta-device path) — avoids MPS
+                # meta-tensor issues that ZImagePipeline hits otherwise.
+                pipe = ZImagePipeline.from_pretrained(
+                    model, torch_dtype=torch.bfloat16, low_cpu_mem_usage=False
+                )
+            else:
+                dtype = torch.float16 if device == "mps" else torch.float32
+                pipe = AutoPipelineForText2Image.from_pretrained(model, torch_dtype=dtype)
         except Exception as e:  # noqa: BLE001 — network/model errors get one clean message
-            raise RuntimeError(f"could not load image model '{MODEL}': {e}") from e
+            raise RuntimeError(f"could not load image model '{model}': {e}") from e
         pipe = pipe.to(device)
-        log.info("imagegen: loaded %s on %s (%s)", MODEL, device, dtype)
-        _pipe = pipe
-        return _pipe
+        log.info("imagegen: loaded %s on %s", model, device)
+        _pipes[model] = pipe
+        return pipe
 
 
-def generate(prompt: str, seed: int = 1, count: int = 1, size: int = 640) -> list:
+def _target_size(long_edge: int, aspect: tuple | None, max_edge: int) -> tuple[int, int]:
+    """(width, height) at the project's aspect, longest side = min(long_edge, max_edge),
+    each rounded to a multiple of 16 and floored at 256. A missing/degenerate aspect
+    falls back to a square."""
+    edge = max(256, min(int(long_edge or max_edge), max_edge))
+    aw, ah = (aspect or (1, 1))
+    aw, ah = float(aw or 1), float(ah or 1)
+    if aw <= 0 or ah <= 0:
+        aw = ah = 1.0
+    if aw >= ah:  # landscape (or square): width is the long edge
+        w, h = edge, edge * ah / aw
+    else:  # portrait: height is the long edge
+        w, h = edge * aw / ah, edge
+    round16 = lambda v: max(256, int(round(v / 16)) * 16)  # noqa: E731
+    return round16(w), round16(h)
+
+
+def generate(
+    prompt: str,
+    seed: int = 1,
+    count: int = 1,
+    model: str | None = None,
+    long_edge: int | None = None,
+    aspect: tuple | None = None,
+) -> list:
     """`count` PIL images for `prompt`, seeded from `seed` (image i uses seed+i so a
-    batch is distinct but reproducible). `size` is the square edge (multiple of 8)."""
+    batch is distinct but reproducible), rendered by `model` at the project `aspect`
+    with its longest side ~`long_edge`."""
     import torch  # torch is a hard app dependency (demucs) — safe to import here
 
-    pipe = _load_pipe()
-    # Z-Image is 1024-native; round to a multiple of 16 (the DiT/VAE want a coarser
-    # grid than SD's /8) and cap at 1024.
-    size = max(256, min(1024, int(size) // 16 * 16))
+    model = model or DEFAULT_MODEL
+    spec = _spec(model)
+    pipe = _load_pipe(model)
+    width, height = _target_size(long_edge or spec["max_edge"], aspect, spec["max_edge"])
     out = []
     for i in range(max(1, int(count))):
         gen = torch.Generator(device="cpu").manual_seed(int(seed) + i)
         result = pipe(
             prompt=str(prompt),
-            num_inference_steps=_STEPS,
-            guidance_scale=0.0,  # Z-Image-Turbo is distilled guidance-free
-            width=size,
-            height=size,
+            num_inference_steps=spec["steps"],
+            guidance_scale=0.0,  # both models are distilled guidance-free
+            width=width,
+            height=height,
             generator=gen,
         )
         out.append(result.images[0])

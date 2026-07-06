@@ -270,6 +270,27 @@ export default function ExportStep({
           </div>
 
           <div className="out-field">
+            <span className="out-label">HD image size</span>
+            <input
+              type="number"
+              className="hz-input"
+              min={256}
+              max={1024}
+              step={64}
+              value={exportSettings.imageSize}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                set({
+                  imageSize: Math.max(256, Math.min(1024, Math.round(parseFloat(e.target.value) || 0))),
+                })
+              }
+            />
+            <span className="export-hint">
+              Image-gen cards regenerate in HD at export — long edge (px), scaled to your
+              aspect. Higher = sharper but much slower.
+            </span>
+          </div>
+
+          <div className="out-field">
             <span className="out-label">audio</span>
             <select
               className="anim-select"

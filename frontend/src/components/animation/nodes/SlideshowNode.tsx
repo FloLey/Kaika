@@ -39,7 +39,16 @@ export default function SlideshowNode({
   // Images wired in via the `images` input (an Image gen card's generated list).
   const genId = ctx?.graph ? videoSource(ctx.graph, node.id, "images") : null;
   const genNode = genId ? ctx?.graph?.nodes.find((n) => n.id === genId) : null;
-  const wired = genNode?.type === "imagegen" ? (genNode.data as ImagegenData).assetUrls || [] : [];
+  // The imagegen's assetUrls align 1:1 with its prompts. When a gate caps it
+  // (`activeCount`), take only the first N rows; then drop empty ("") slots so only
+  // real images become slideshow slots.
+  const genData = genNode?.type === "imagegen" ? (genNode.data as ImagegenData) : null;
+  const wired = genData
+    ? (genData.activeCount != null
+        ? (genData.assetUrls || []).slice(0, genData.activeCount)
+        : genData.assetUrls || []
+      ).filter(Boolean)
+    : [];
   const all = [...own, ...wired];
 
   const { busy, err, onFile, jobId } = useAssetUpload(ctx, (url) =>

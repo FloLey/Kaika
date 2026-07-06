@@ -487,8 +487,10 @@ export default function Docs({ section }: { section?: string }) {
         <h3>The cards</h3>
         <p>
           The palette (top-left of the canvas) groups cards into category buttons —{" "}
-          <strong>Sources</strong>, <strong>Modulators</strong>, <strong>Generators</strong>,{" "}
-          <strong>Compositing</strong>, <strong>Output</strong> (in data-flow order). Open a category
+          <strong>Sources</strong> (signal, colour), <strong>Modulators</strong> (the value cards),{" "}
+          <strong>Points</strong> (source positions for a fluid), <strong>Generators</strong> (fluid,
+          image, video, slideshow, image gen, backdrop, lyrics), <strong>Compositing</strong>,{" "}
+          <strong>Output</strong> (in data-flow order). Open a category
           and <strong>hover any item</strong> for a tip describing what it does and what it takes in
           → puts out, then click to drop it. The canvas has <strong>two views</strong>, switched
           from the toolbar: <strong>▦ detailed</strong> (the default — every card shows its full
@@ -690,7 +692,11 @@ export default function Docs({ section }: { section?: string }) {
             <strong>Gate</strong> — turns any signal into a clean <strong>0/1 switch</strong>: 1
             while the input is above the <em>threshold</em>, 0 below it. The <em>hysteresis</em>{" "}
             band (centred on the threshold) keeps a hovering signal from flickering — the gate only
-            releases once the input falls below the band. Use it to drive on/off-style ports: an{" "}
+            releases once the input falls below the band. Two <strong>thinners</strong> cut down how
+            often it spikes: <em>min gap</em> drops any spike that lands within N seconds of the last
+            kept one (caps the rate by time), and <em>divide</em> keeps only every Nth spike (1/N — a
+            divider off the input's own rate); combine them to, say, advance a slideshow at most once
+            a second and only on every other beat. Use the gate to drive on/off-style ports: an{" "}
             image generator's <em>trigger</em>, a fluid's <em>emit</em>, a lyrics <em>opacity</em>.{" "}
             <em>invert</em> flips it.
           </li>
@@ -777,14 +783,16 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>Image gen</strong> — a pure <strong>generator</strong>: write{" "}
-            <em>one prompt per image</em> (the card shows how many it will make), set a seed, and{" "}
-            <strong>✨ generate</strong> runs an image model fully locally — the default is{" "}
-            <strong>Z-Image-Turbo</strong>, a large high-quality model: the first run downloads{" "}
-            <strong>~33 GB</strong> of weights and each image takes on the order of{" "}
-            <strong>minutes</strong> on Apple-Silicon (set <code>IMAGEGEN_MODEL</code> to a light
-            model like <code>stabilityai/sd-turbo</code>, ~2 GB and near-instant, if you want
-            speed over quality). Results are
-            seeded — the same prompts + seed reproduce the same images — and land in the{" "}
+            <em>one prompt per image</em> (the card shows how many it will make), set a seed, pick a{" "}
+            <em>model</em>, and <strong>✨ generate</strong> runs it fully locally. While building,
+            the ✨ makes <strong>fast, low-res drafts</strong> so the canvas stays responsive — the{" "}
+            <em>model</em> dropdown chooses which model does that: <code>SD-Turbo</code> (~2 GB,
+            near-instant) or <code>Z-Image-Turbo</code> (a ~33 GB HD model, minutes per image). The{" "}
+            <a href="#export">final export</a> then <strong>regenerates every image fresh in HD</strong>{" "}
+            (Z-Image) automatically, at your project's aspect and the export's{" "}
+            <em>HD image size</em> — so drafts stay fast and the master stays crisp. Images generate
+            at the <strong>project aspect</strong> (not a fixed square) and are seeded — the same
+            prompts + seed + size reproduce the same image — and land in the{" "}
             <a href="#assets">library</a>. It makes no video itself: wire its <em>images</em>{" "}
             output into a Slideshow card to show them.
           </li>
@@ -911,10 +919,11 @@ export default function Docs({ section }: { section?: string }) {
           <strong>loop</strong>.
         </p>
         <p>
-          Built a pipeline you like? <strong>⧉ copy → next</strong> (in the transport bar) copies
-          the whole card layout onto the <strong>next</strong> segment — and rewires its signal
-          cards onto that segment's own signals (cloning any it's missing), so the copy reacts to
-          the right audio, not the previous segment's.
+          Built a pipeline you like? The <strong>⧉ copy ‹prev│next›</strong> control (in the
+          transport bar) copies the whole card layout onto the adjacent segment — and rewires its
+          signal cards onto that segment's own signals (cloning any it's missing), so the copy reacts
+          to the right audio, not the source segment's. Each side is disabled at the ends of the
+          track (no segment on that side).
         </p>
 
         <h3 id="animation-output">Output settings</h3>
