@@ -47,7 +47,8 @@ def _lyric_lines(job_id: str) -> list:
 
 def _hashes_from(row: dict, job_id: str) -> set[str]:
     """Every render-cache key the given project row's CURRENT state maps to — one per
-    (segment × output node). A malformed segment/graph is skipped, not fatal."""
+    (segment × output node), plus the whole-song `song_<hash>` export stems. A
+    malformed segment/graph is skipped, not fatal."""
     data = row.get("data") or {}
     output = data.get("output") or {}
     lines = _lyric_lines(job_id)
@@ -63,7 +64,40 @@ def _hashes_from(row: dict, job_id: str) -> set[str]:
                 keys.add(graphmod.output_hash(job_id, seg_h, graph, output_id, output))
         except Exception as e:  # noqa: BLE001 — one bad graph must not sink the sweep
             log.warning("cache gc: skipped a segment of %s (%s)", job_id, e)
+    keys |= _song_export_stems(row, job_id, lines)
     return keys
+
+
+def _song_export_stems(row: dict, job_id: str, lines: list) -> set[str]:
+    """The `song_<hash>` stems of this project's whole-song HD exports — these took
+    minutes (plus HD image regeneration) and must never be reaped as junk. Two
+    sources, both kept:
+
+    - the stems RECORDED at export time (routes/export._record_export) — always
+      exact: the HD regen swaps imagegen assetUrls in memory only, so the rendered
+      hash cannot be recomputed from the saved project;
+    - a best-effort RECOMPUTE from the saved state (exact whenever no imagegen card
+      was regenerated), which covers exports finished before the recording existed.
+    """
+    from . import song_render  # lazy: keeps `python -m backend.cache_gc` startup light
+    from .routes.export import _EXPORT_DEFAULTS  # the route's defaults ARE hash inputs
+
+    stems: set[str] = set()
+    p = ANALYSIS_DIR / f"{job_id}.json"
+    if p.exists():
+        try:
+            stems |= {str(s) for s in json.loads(p.read_text()).get("song_exports", []) or []}
+        except (OSError, ValueError):
+            pass
+    data = row.get("data") or {}
+    segments = data.get("segments") or []
+    if segments and all(s.get("finalOutputId") for s in segments):
+        export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
+        try:
+            stems.add("song_" + song_render._export_hash(job_id, segments, lines, export))
+        except Exception as e:  # noqa: BLE001 — a bad segment must not sink the sweep
+            log.warning("cache gc: couldn't hash %s's song export (%s)", job_id, e)
+    return stems
 
 
 def _asset_file(url: str):

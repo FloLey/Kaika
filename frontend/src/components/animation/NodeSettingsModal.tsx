@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { portalTarget } from "../../lib/portalTarget";
 import { NODE_TYPES, chromeFor } from "./nodes/registry";
 import InputPicker from "./InputPicker";
 import { MinimizeContext } from "./nodes/minimizeContext";
@@ -93,6 +94,6 @@ export default function NodeSettingsModal({
         </MinimizeContext.Provider>
       </div>
     </div>,
-    document.body
+    portalTarget()
   );
 }

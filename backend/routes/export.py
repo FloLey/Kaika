@@ -68,10 +68,32 @@ def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cance
     _regenerate_hd_images(job_id, segments, export, should_cancel)
     if should_cancel and should_cancel():
         return None
-    return song_render.render_song(
+    url = song_render.render_song(
         job_id, segments, lyric_lines, export, stem_audio_path,
         on_progress=on_progress, should_cancel=should_cancel,
     )
+    if url:
+        _record_export(job_id, url)
+    return url
+
+
+def _record_export(job_id: str, url: str) -> None:
+    """Remember the finished export's cache stem (`song_<hash>`) in the analysis cache
+    so `cache_gc` treats the mp4 as reachable. The stem can't always be recomputed from
+    the saved project: the HD image regeneration swaps imagegen assetUrls in MEMORY
+    only, so the hash the export actually rendered under differs from a recompute over
+    the saved (draft) urls. Best-effort — a failed record just means the export ages
+    out like any unreferenced clip."""
+    stem = url.rsplit("/", 1)[-1].removesuffix(".mp4")
+    try:
+        cache = ANALYSIS_DIR / f"{job_id}.json"
+        analysis = json.loads(cache.read_text()) if cache.exists() else {}
+        stems = [s for s in analysis.get("song_exports", []) if s != stem]
+        stems.append(stem)
+        analysis["song_exports"] = stems[-3:]  # the last few exports per project
+        cache.write_text(json.dumps(analysis))
+    except (OSError, ValueError) as e:
+        log.warning("export: couldn't record export stem for %s (%s)", job_id, e)
 
 
 def _regenerate_hd_images(job_id, segments, export, should_cancel):

@@ -116,6 +116,47 @@ def test_sweep_reaps_unreferenced_assets(wired):
     assert not orphan.parent.exists()  # emptied per-job dir is pruned
 
 
+def test_sweep_keeps_recorded_song_exports(wired):
+    # A finished whole-song HD export records its `song_<hash>` stem in the analysis
+    # cache (routes/export._record_export) — the sweep must treat it as reachable
+    # forever, not reap a multi-minute render as junk after 30 minutes.
+    _, _, tmp = wired
+    analysis = tmp / "analysis" / "proj1.json"
+    data = json.loads(analysis.read_text())
+    data["song_exports"] = ["song_feedc0defeedc0de"]
+    analysis.write_text(json.dumps(data))
+
+    fluid_dir = tmp / "fluid"
+    export = fluid_dir / "song_feedc0defeedc0de.mp4"  # recorded -> kept
+    junk = fluid_dir / "song_0000000000000000.mp4"  # unrecorded export junk -> reaped
+    for p in (export, junk):
+        p.write_bytes(b"x")
+    import os
+
+    old = cache_gc.KEEP_RECENT_SEC + 3600
+    for p in (export, junk):
+        os.utime(p, (os.stat(p).st_atime, os.stat(p).st_mtime - old))
+
+    removed = cache_gc.sweep()
+    assert removed == 1
+    assert export.exists() and not junk.exists()
+
+
+def test_reachable_recomputes_song_export_hash_when_final_outputs_marked(wired):
+    # With every segment carrying a finalOutputId, the sweep can recompute the export
+    # stem straight from the saved state (exact when no imagegen HD regen happened).
+    from backend import song_render
+    from backend.routes.export import _EXPORT_DEFAULTS
+
+    proj, lines, _ = wired
+    seg = proj["data"]["segments"][0]
+    seg["finalOutputId"] = "oA"
+    expected = "song_" + song_render._export_hash(
+        "proj1", [seg], lines, {**_EXPORT_DEFAULTS}
+    )
+    assert expected in cache_gc.reachable_hashes()
+
+
 def test_sweep_bails_when_db_unavailable(wired, monkeypatch):
     _, _, tmp = wired
     stale = tmp / "fluid" / "0123456789abcdef.mp4"

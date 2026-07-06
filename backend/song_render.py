@@ -31,15 +31,19 @@ import numpy as np
 
 from . import fluid, paths, render_cache
 from .fluid import close_encoder, encoder_error
+from .graph_hash import RENDER_VERSION
 from .graph_render import Dag
 
 log = logging.getLogger("kaika.export")
 
 
 def _export_hash(job_id, segments, lyric_lines, export) -> str:
-    """Content key for a whole-song export (so an identical re-export is a cache hit)."""
+    """Content key for a whole-song export (so an identical re-export is a cache hit).
+    Folds RENDER_VERSION like output_hash does, so a render-semantics bump invalidates
+    stale HD exports instead of serving them as cache hits."""
     payload = {
         "v": 1,
+        "render_version": RENDER_VERSION,
         "job_id": job_id,
         "export": export,
         "lyrics": lyric_lines,

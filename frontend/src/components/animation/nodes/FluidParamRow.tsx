@@ -3,7 +3,7 @@ import type { ChangeEvent } from "react";
 import Ctl from "../../../ui/Ctl";
 import { Port } from "./NodeFrame";
 import ArgInfo from "./ArgInfo";
-import { setConstValue, setNodeRange } from "./fluidBindings";
+import { clampRangeEdit, setConstValue, setNodeRange } from "./fluidBindings";
 import type { NodeHelpers, PortRef } from "./nodeProps";
 import type { Binding, FluidParam, FluidPort, Graph, GraphNode } from "../../../lib/types";
 
@@ -41,9 +41,12 @@ function RangeControl({ param, binding, onRange, onDetach }: RangeControlProps) 
           max={param.max}
           step={param.step}
           value={binding.lo}
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            onRange(Math.min(parseFloat(e.target.value), binding.hi), binding.hi)
-          }
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            // clampRangeEdit keeps the window ≥ one step wide — lo == hi would map
+            // the whole wired signal to a constant (dead modulation).
+            const r = clampRangeEdit(param, binding, "lo", parseFloat(e.target.value));
+            onRange(r.lo, r.hi);
+          }}
         />
         <input
           type="range"
@@ -53,9 +56,10 @@ function RangeControl({ param, binding, onRange, onDetach }: RangeControlProps) 
           max={param.max}
           step={param.step}
           value={binding.hi}
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            onRange(binding.lo, Math.max(parseFloat(e.target.value), binding.lo))
-          }
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            const r = clampRangeEdit(param, binding, "hi", parseFloat(e.target.value));
+            onRange(r.lo, r.hi);
+          }}
         />
       </div>
       <span className="anim-range-fmt">

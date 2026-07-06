@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import { createPortal } from "react-dom";
+import { portalTarget } from "../../lib/portalTarget";
 import { fmtTimecode, parseTimecode } from "../../lib/mel";
 
 // Loose shape on purpose — lines arrive from ctx.lyricLines (unknown[] at the
@@ -165,6 +166,6 @@ export default function LyricsEditor({ lines, onSave, onClose }: LyricsEditorPro
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget()
   );
 }

@@ -12,6 +12,7 @@ import { Port } from "../components/animation/nodes/NodeFrame";
 import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
 import {
+  clampRangeEdit,
   setConstValue,
   setNodeRange,
   patchStatic,
@@ -191,6 +192,22 @@ describe("FluidNode", () => {
       lo: 0,
       hi: 45,
     });
+  });
+
+  it("a range edit can never collapse the lo–hi window to zero width", () => {
+    // lo == hi maps the whole wired signal to a constant — dead modulation (the
+    // slideshow-trigger bug). Each thumb edit keeps at least one step of width.
+    const param = { min: 0, max: 1, step: 0.01 };
+    // hi dragged all the way down onto lo: floored at lo + step.
+    expect(clampRangeEdit(param, { lo: 0.5, hi: 1 }, "hi", 0.5)).toEqual({ lo: 0.5, hi: 0.51 });
+    // lo dragged all the way up onto hi: capped at hi - step.
+    expect(clampRangeEdit(param, { lo: 0, hi: 0.5 }, "lo", 0.5)).toEqual({ lo: 0.49, hi: 0.5 });
+    // normal edits pass through untouched.
+    expect(clampRangeEdit(param, { lo: 0, hi: 1 }, "lo", 0.25)).toEqual({ lo: 0.25, hi: 1 });
+    expect(clampRangeEdit(param, { lo: 0, hi: 1 }, "hi", 0.75)).toEqual({ lo: 0, hi: 0.75 });
+    // clamped to the param bounds even in degenerate legacy states.
+    expect(clampRangeEdit(param, { lo: 0, hi: 0 }, "lo", 0).lo).toBeGreaterThanOrEqual(0);
+    expect(clampRangeEdit(param, { lo: 1, hi: 1 }, "hi", 1).hi).toBeLessThanOrEqual(1);
   });
 
   it("static patches edit data.static", () => {

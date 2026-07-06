@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { portalTarget } from "../../lib/portalTarget";
 import type { ChangeEvent } from "react";
 import { listAssets, uploadAsset, deleteAsset, assetFromYoutube, pollJob } from "../../lib/api";
 import type { Asset } from "../../lib/types";
@@ -185,6 +186,6 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget()
   );
 }
