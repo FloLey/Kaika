@@ -1,11 +1,13 @@
 """Local text-to-image generation for the Image gen card's ✨ generate.
 
-Runs a small distilled Stable Diffusion (default `stabilityai/sd-turbo`, ~2 GB,
-1-4 denoising steps — near-real-time on Apple-Silicon MPS at 512-768 px) fully
-locally. Everything is LAZY: diffusers imports and the pipeline load happen on
-the first generate call, so the app boots (and runs fine) without the packages
-or the model — generation just raises a clean message the job surfaces on the
-card (the `llm.py` raise-and-fallback shape).
+Runs Tongyi-MAI's **Z-Image-Turbo** (a ~6B-parameter DiT, ~33 GB of weights,
+8 denoising steps) fully locally via diffusers' `ZImagePipeline`. It's far
+heavier than a distilled SD-Turbo: the first call downloads ~33 GB and loads it
+in bfloat16 (~16 GB resident); on Apple-Silicon MPS a 1024 px image is on the
+order of minutes, not real-time. Everything is LAZY: diffusers imports and the
+pipeline load happen on the first generate call, so the app boots (and runs
+fine) without the packages or the model — generation just raises a clean message
+the job surfaces on the card (the `llm.py` raise-and-fallback shape).
 
 Determinism: generation is seeded (`torch.Generator`), so the same
 prompt/seed/size reproduces the same image — and the results are stored as
@@ -21,12 +23,13 @@ import threading
 
 log = logging.getLogger("kaika.imagegen")
 
-MODEL = os.environ.get("IMAGEGEN_MODEL", "stabilityai/sd-turbo")
-# sd-turbo is a 1-4 step model; guidance is disabled (it was distilled without it).
-_STEPS = int(os.environ.get("IMAGEGEN_STEPS", "2"))
+MODEL = os.environ.get("IMAGEGEN_MODEL", "Tongyi-MAI/Z-Image-Turbo")
+# Z-Image-Turbo is an 8-step (8 DiT forwards) distilled model; guidance is
+# disabled (guidance_scale=0.0), like other turbo models.
+_STEPS = int(os.environ.get("IMAGEGEN_STEPS", "8"))
 
 _lock = threading.Lock()
-_pipe = None  # lazy singleton — loading takes seconds + RAM, do it once
+_pipe = None  # lazy singleton — loading takes tens of seconds + GBs, do it once
 
 
 def _load_pipe():
@@ -39,20 +42,27 @@ def _load_pipe():
             return _pipe
         try:
             import torch
-            from diffusers import AutoPipelineForText2Image
+            from diffusers import ZImagePipeline
         except ImportError as e:
             raise RuntimeError(
-                "image generation needs the diffusers stack — "
+                "image generation needs the diffusers stack (with ZImagePipeline) — "
                 "`pip install -r requirements.txt` (diffusers/transformers/safetensors)"
             ) from e
         device = "mps" if torch.backends.mps.is_available() else "cpu"
-        dtype = torch.float16 if device == "mps" else torch.float32
+        # Z-Image ships fp32 weights; bfloat16 halves the resident footprint and is
+        # the model's recommended runtime dtype (works on MPS and CPU).
+        dtype = torch.bfloat16
         try:
-            pipe = AutoPipelineForText2Image.from_pretrained(MODEL, torch_dtype=dtype)
+            # low_cpu_mem_usage=False: load weights directly (not via accelerate's
+            # meta-device path), which ZImagePipeline expects and which avoids
+            # meta-tensor issues on MPS.
+            pipe = ZImagePipeline.from_pretrained(
+                MODEL, torch_dtype=dtype, low_cpu_mem_usage=False
+            )
         except Exception as e:  # noqa: BLE001 — network/model errors get one clean message
             raise RuntimeError(f"could not load image model '{MODEL}': {e}") from e
         pipe = pipe.to(device)
-        log.info("imagegen: loaded %s on %s", MODEL, device)
+        log.info("imagegen: loaded %s on %s (%s)", MODEL, device, dtype)
         _pipe = pipe
         return _pipe
 
@@ -63,14 +73,16 @@ def generate(prompt: str, seed: int = 1, count: int = 1, size: int = 640) -> lis
     import torch  # torch is a hard app dependency (demucs) — safe to import here
 
     pipe = _load_pipe()
-    size = max(256, min(1024, int(size) // 8 * 8))
+    # Z-Image is 1024-native; round to a multiple of 16 (the DiT/VAE want a coarser
+    # grid than SD's /8) and cap at 1024.
+    size = max(256, min(1024, int(size) // 16 * 16))
     out = []
     for i in range(max(1, int(count))):
         gen = torch.Generator(device="cpu").manual_seed(int(seed) + i)
         result = pipe(
             prompt=str(prompt),
             num_inference_steps=_STEPS,
-            guidance_scale=0.0,  # sd-turbo is distilled guidance-free
+            guidance_scale=0.0,  # Z-Image-Turbo is distilled guidance-free
             width=size,
             height=size,
             generator=gen,

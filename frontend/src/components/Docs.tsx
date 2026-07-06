@@ -778,8 +778,12 @@ export default function Docs({ section }: { section?: string }) {
           <li>
             <strong>Image gen</strong> — a pure <strong>generator</strong>: write{" "}
             <em>one prompt per image</em> (the card shows how many it will make), set a seed, and{" "}
-            <strong>✨ generate</strong> runs a small Stable Diffusion locally (first run
-            downloads the model, ~2 GB; set <code>IMAGEGEN_MODEL</code> to swap it). Results are
+            <strong>✨ generate</strong> runs an image model fully locally — the default is{" "}
+            <strong>Z-Image-Turbo</strong>, a large high-quality model: the first run downloads{" "}
+            <strong>~33 GB</strong> of weights and each image takes on the order of{" "}
+            <strong>minutes</strong> on Apple-Silicon (set <code>IMAGEGEN_MODEL</code> to a light
+            model like <code>stabilityai/sd-turbo</code>, ~2 GB and near-instant, if you want
+            speed over quality). Results are
             seeded — the same prompts + seed reproduce the same images — and land in the{" "}
             <a href="#assets">library</a>. It makes no video itself: wire its <em>images</em>{" "}
             output into a Slideshow card to show them.

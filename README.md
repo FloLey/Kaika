@@ -92,9 +92,10 @@ cd frontend && npm install && cd ..
 ```
 
 The first separation downloads the `htdemucs` weights (~80 MB); the first lyric
-alignment downloads a Whisper model; the first ✨ image generation downloads a
-small Stable Diffusion (`stabilityai/sd-turbo`, ~2 GB — override with
-`IMAGEGEN_MODEL`).
+alignment downloads a Whisper model; the first ✨ image generation downloads the
+image model — the default `Tongyi-MAI/Z-Image-Turbo` is **~33 GB** (high quality,
+minutes per image on MPS); set `IMAGEGEN_MODEL=stabilityai/sd-turbo` for a light
+~2 GB near-instant alternative.
 
 ## Run (dev)
 
