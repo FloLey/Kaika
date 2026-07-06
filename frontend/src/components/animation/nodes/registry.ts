@@ -1,11 +1,12 @@
 // THE node-type registry: one entry per node type is the single source of truth for
 // how it's created, rendered, themed, and added from the palette. Adding a node type
 // = add a Component + one entry here (+ a backend handler) — no edits to Palette,
-// renderAnimNode, or MinimizedCard.
+// renderAnimNode, or CompactCard.
 //
 // Import direction (no cycles): registry -> node components + graphModel factories.
-// Consumers (Palette / renderAnimNode / MinimizedCard) import the registry; the node
-// components and graphModel must NOT import it.
+// Consumers (Palette / renderAnimNode / CompactCard / NodeSettingsModal) import the
+// registry; the node components and graphModel must NOT import it. (CompactCard lives
+// in nodes/ but is a consumer, not a registered card — it may import the registry.)
 
 import type { ComponentType } from "react";
 import SignalNode from "./SignalNode";

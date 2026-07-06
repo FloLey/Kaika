@@ -390,6 +390,82 @@
 .anim-min-anchor {
   pointer-events: auto;
 }
+/* A compact card — the DEFAULT view: header + a small live preview. The whole body
+   is a button that opens the settings modal; wires converge on the header-side
+   anchors exactly like the old minimized view. */
+.anim-node.compact {
+  width: auto;
+  min-width: 150px;
+  max-width: 230px;
+}
+.anim-node.compact .anim-node-body {
+  padding: 0; /* the body button owns its own padding so its hover fills the card */
+}
+.anim-compact-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 30px; /* stays clickable even when the preview renders null */
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 0 0 12px 12px;
+}
+.anim-compact-body:hover {
+  background: var(--panel-2);
+}
+.anim-compact-body .anim-mini-spark {
+  height: 26px;
+  pointer-events: none; /* clicks land on the body button */
+}
+.anim-compact-swatch {
+  width: 100%;
+  height: 16px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.anim-compact-thumbwrap {
+  position: relative;
+  display: inline-flex;
+}
+.anim-compact-thumb {
+  max-width: 100%;
+  max-height: 54px;
+  border-radius: 6px;
+  object-fit: cover;
+  pointer-events: none;
+}
+.anim-compact-count {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  font: 600 10px/1.4 var(--mono);
+  color: var(--text);
+}
+.anim-compact-hint {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the lyrics snippet: card-font-ish (bold, tight) with an ellipsis */
+.anim-compact-lyric {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .anim-node-title {
   font: 600 11px/1 var(--mono);
   letter-spacing: 0.09em;
@@ -1156,6 +1232,29 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* ---- node settings modal (a full card rendered in a modal) ----------------- */
+
+.anim-modal.node-settings {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 10px;
+}
+/* the card fills the modal; there's no wiring canvas in here */
+.node-settings .anim-node {
+  width: 100%;
+  box-shadow: none;
+}
+.node-settings .gc-port {
+  display: none; /* port dots are meaningless without a canvas to wire on */
+}
+.node-settings .anim-node-min {
+  display: none; /* expand-on-canvas doesn't apply inside the modal */
+}
+.node-settings .anim-node-head {
+  cursor: default; /* no drag either (the stub handler is a no-op) */
 }
 
 .out-preview-wrap {

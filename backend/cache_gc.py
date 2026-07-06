@@ -83,9 +83,15 @@ def _assets_from(row: dict) -> set:
             files.add(f)
     for seg in data.get("segments") or []:
         for n in (seg.get("graph") or {}).get("nodes") or []:
-            f = _asset_file((n.get("data") or {}).get("assetUrl"))
+            d = n.get("data") or {}
+            f = _asset_file(d.get("assetUrl"))
             if f:
                 files.add(f)
+            # The imagegen card carries a LIST of slideshow assets.
+            for url in d.get("assetUrls") or []:
+                f = _asset_file(url)
+                if f:
+                    files.add(f)
     return files
 
 

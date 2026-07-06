@@ -490,9 +490,14 @@ export default function Docs({ section }: { section?: string }) {
           <strong>Sources</strong>, <strong>Modulators</strong>, <strong>Generators</strong>,{" "}
           <strong>Compositing</strong>, <strong>Output</strong> (in data-flow order). Open a category
           and <strong>hover any item</strong> for a tip describing what it does and what it takes in
-          → puts out, then click to drop it. Every card has a <strong>✕</strong> in its top-right
-          corner to delete it (which also removes its wires); ports sit on the card's sides — inputs
-          on the left, outputs on the right.
+          → puts out, then click to drop it. Cards land <strong>compact</strong>: just the name, a
+          small live preview, and one input + one output dot. <strong>Click a compact card's
+          body</strong> to open its settings window (all the controls, editing the graph live —{" "}
+          <kbd>Esc</kbd> or a click outside closes it), or hit the <strong>▢</strong> in its title
+          bar to expand the full card on the canvas (<strong>–</strong> collapses it back). Every
+          card has a <strong>✕</strong> in its top-right corner to delete it (which also removes
+          its wires). The <em>output</em> card is the one exception — its body is the live render
+          preview, so it always shows in full.
         </p>
         <table>
           <tbody>
@@ -594,6 +599,12 @@ export default function Docs({ section }: { section?: string }) {
           <li>
             <strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the
             fluid's video output onto the output card).
+          </li>
+          <li>
+            <strong>Compact cards keep their wires</strong> — all of a compact card's inbound wires
+            converge on its single left dot and its output leaves from the single right dot; a wire
+            dropped on a compact card lands on that anchor. Expand the card (▢) to wire a specific
+            port.
           </li>
           <li>
             <strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its

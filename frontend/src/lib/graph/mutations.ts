@@ -188,7 +188,11 @@ export function removeNode(graph: Graph, nodeId: string): Graph {
     });
   const edges = graph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
   const out: Graph = { ...graph, nodes, edges };
-  // Drop the removed node from the persisted minimize set (no stale ids).
+  // Drop the removed node from the persisted expand set (no stale ids) — and from the
+  // legacy pre-v13 minimize set, in case a save is mutated before normalizeGraph ran.
+  if (Array.isArray(graph.expanded) && graph.expanded.includes(nodeId)) {
+    out.expanded = graph.expanded.filter((id) => id !== nodeId);
+  }
   if (Array.isArray(graph.minimized) && graph.minimized.includes(nodeId)) {
     out.minimized = graph.minimized.filter((id) => id !== nodeId);
   }

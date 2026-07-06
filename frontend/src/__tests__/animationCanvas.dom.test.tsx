@@ -45,3 +45,37 @@ describe("AnimationCanvas + useGraphEditor (jsdom)", () => {
     expect(getByText("2+ video → video")).toBeTruthy();
   });
 });
+
+// v13 compact-by-default: a node NOT in graph.expanded renders the CompactCard
+// (preview body + one in/out anchor); clicking its body opens the settings modal
+// with the FULL card; a node in graph.expanded renders its full card on canvas.
+describe("compact cards + settings modal (jsdom)", () => {
+  const gateGraph = (expanded: string[]) => ({
+    version: 13,
+    nodes: [{ id: "n-g", type: "gate", x: 0, y: 0, data: { threshold: 0.5, hysteresis: 0.1, invert: false } }],
+    edges: [],
+    expanded,
+    view: { tx: 0, ty: 0, scale: 1 },
+  });
+
+  it("a non-expanded node renders compact; clicking the body opens the settings modal", () => {
+    const seg = { ...baseSegment, graph: gateGraph([]) } as Segment;
+    const { container, getByRole } = render(
+      <AnimationCanvas segment={seg} onGraphChange={() => {}} />
+    );
+    const body = container.querySelector(".anim-compact-body");
+    expect(body).toBeTruthy(); // compact view is the default
+    expect(container.querySelector('input[type="range"]')).toBeNull(); // no full controls on canvas
+    fireEvent.click(body!);
+    const dialog = getByRole("dialog"); // the settings modal (portal to body)
+    expect(dialog.className).toContain("node-settings");
+    expect(dialog.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0); // full card inside
+  });
+
+  it("an expanded node renders its full card on canvas", () => {
+    const seg = { ...baseSegment, graph: gateGraph(["n-g"]) } as Segment;
+    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    expect(container.querySelector(".anim-compact-body")).toBeNull();
+    expect(container.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0);
+  });
+});

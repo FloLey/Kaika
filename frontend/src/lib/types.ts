@@ -415,6 +415,11 @@ export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   view?: { tx: number; ty: number; scale: number };
+  // Which cards show their FULL body on the canvas (v13+); everything else renders
+  // as a compact card. Ignored by outputHash so toggling never busts the render cache.
+  expanded?: string[];
+  // Legacy pre-v13 field (the inverse set: which cards were collapsed). normalizeGraph
+  // inverts it into `expanded` and strips it; typed here so the migration can read it.
   minimized?: string[];
 }
 

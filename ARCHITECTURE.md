@@ -194,8 +194,12 @@ Framework-free domain logic, imported through the barrel:
 
 Every card is one component registered in **`registry.ts`** (`NODE_TYPES`):
 component + chrome (title/accent/out-flow) + palette entry + factory. The
-canvas, palette, minimized card and dispatch all read the registry — adding a
-card touches no shared component. Shared plumbing: `NodeFrame` (chrome + ports),
+canvas, palette, compact card and dispatch all read the registry — adding a
+card touches no shared component. Cards render **compact by default** (header +
+live preview + one in/one out anchor; the body opens the full card in a settings
+modal) — which cards are expanded on canvas persists as `graph.expanded`
+(GRAPH_VERSION 13, the inverse of the old `minimized` set); `output` never
+compacts. Shared plumbing: `NodeFrame` (chrome + ports),
 `useNodeData` (the patch-`data` hook), `AssetLayerCard` (the image/video shell),
 `BoxPad` (normalized placement box), `useAssetUpload` (upload/YouTube flow).
 

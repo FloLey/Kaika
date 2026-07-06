@@ -7,7 +7,7 @@ import FluidNode from "../components/animation/nodes/FluidNode";
 import OutputNode from "../components/animation/nodes/OutputNode";
 import CombineNode from "../components/animation/nodes/CombineNode";
 import PointsNode from "../components/animation/nodes/PointsNode";
-import MinimizedCard from "../components/animation/nodes/MinimizedCard";
+import CompactCard from "../components/animation/nodes/CompactCard";
 import { Port } from "../components/animation/nodes/NodeFrame";
 import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
@@ -16,6 +16,7 @@ import {
   setNodeRange,
   patchStatic,
 } from "../components/animation/nodes/fluidBindings";
+import { MinimizeContext } from "../components/animation/nodes/minimizeContext";
 import type { FluidData, Graph, GraphNode, Segment, Signal } from "../lib/types";
 import type { NodeHelpers, NodeProps } from "../components/animation/nodes/nodeProps";
 
@@ -271,7 +272,7 @@ describe("PointsNode (spec 11)", () => {
   });
 });
 
-describe("MinimizedCard", () => {
+describe("CompactCard", () => {
   const fluid = fluidNode(0, 0);
   const out = outputNode(0, 0);
   const sig = signalNode({ id: "s1", name: "kick" }, 0, 0);
@@ -292,34 +293,39 @@ describe("MinimizedCard", () => {
     selected: false,
   };
 
-  it("collapses a fluid card to its header with consolidated in/out anchors", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(MinimizedCard, {
-        node: fluid,
-        helpers,
-        ctx: { graph, signals: [] },
-        onDelete: () => {},
-      })
+  // On canvas a compact card sits in the editor's compact set — provide it so the
+  // header toggle reads "expand" (▢), exactly as renderAnimNode renders it.
+  const renderCompact = (node: GraphNode) =>
+    renderToStaticMarkup(
+      React.createElement(
+        MinimizeContext.Provider,
+        { value: { minimized: new Set([node.id]), toggle: () => {} } },
+        React.createElement(CompactCard, {
+          node,
+          helpers,
+          ctx: { graph, signals: [] },
+          onGraphChange: () => {},
+          onDelete: () => {},
+        })
+      )
     );
-    expect(html).toContain("anim-node-fluid min"); // collapsed card class
+
+  it("renders compact (preview body, no controls) with consolidated in/out anchors", () => {
+    const html = renderCompact(fluid);
+    expect(html).toContain("anim-node-fluid"); // card chrome kept
+    expect(html).toContain("compact"); // compact-view class (body = preview only)
     expect(html).toContain("fluid"); // header title kept
-    expect(html).toContain("▢"); // restore button
+    expect(html).toContain("▢"); // expand-on-canvas button
     expect(html).toContain('data-port="out"'); // single output anchor
     // inbound wires (force + r) consolidate onto ONE input anchor
     expect(html).toMatch(/data-port="(force|r)"/);
-    expect(html).not.toContain('type="range"'); // body controls hidden
+    expect(html).not.toContain('type="range"'); // full-card controls hidden
+    expect(html).toContain("anim-compact-body"); // click target for the settings modal
   });
 
   it("a node with no inbound wires shows only the output anchor", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(MinimizedCard, {
-        node: sig,
-        helpers,
-        ctx: { graph, signals: [] },
-        onDelete: () => {},
-      })
-    );
-    expect(html).toContain("anim-node-signal min");
+    const html = renderCompact(sig);
+    expect(html).toContain("anim-node-signal");
     expect(html).toContain('data-port="out"');
     expect(html).not.toContain("gc-port-in"); // no input anchor rendered
   });

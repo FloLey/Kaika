@@ -266,6 +266,26 @@ export function normalizeGraph(graph: Graph): Graph {
       !(fluidIds.has(e.target) && !valid.has(e.targetPort))
   );
   if (edges.length !== (graph.edges || []).length) changed = true;
+  // v13: compact-by-default. The persisted set inverted from `minimized` (collapsed
+  // cards) to `expanded` (full-body cards). A save without `expanded` gets it derived:
+  // the inverse of its `minimized` set — which, for an old save with NO minimized
+  // field, means ALL node ids (old saves showed full cards; preserve their look).
+  // A v13+ save keeps its `expanded`, filtered to live node ids. `minimized` is
+  // always stripped from the result.
+  let expanded: string[];
+  if (Array.isArray(graph.expanded)) {
+    expanded = graph.expanded.filter((id) => liveIds.has(id));
+    if (expanded.length === graph.expanded.length) expanded = graph.expanded;
+    else changed = true;
+  } else {
+    const min = new Set(graph.minimized ?? []);
+    expanded = nodes.filter((n) => !min.has(n.id)).map((n) => n.id);
+    changed = true;
+  }
+  if (graph.minimized !== undefined) changed = true; // legacy field present: strip it
   if (graph.version !== GRAPH_VERSION) changed = true; // re-stamp after migrating
-  return changed ? { ...graph, version: GRAPH_VERSION, nodes, edges } : graph;
+  if (!changed) return graph;
+  const out: Graph = { ...graph, version: GRAPH_VERSION, nodes, edges, expanded };
+  delete out.minimized;
+  return out;
 }

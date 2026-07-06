@@ -63,16 +63,29 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [commitGraph]
   );
 
-  // Collapsed-to-header cards live ON the graph (`graph.minimized`) so they persist,
-  // but the field is ignored by outputHash so toggling never busts the render cache.
-  const minimized = useMemo(() => new Set<string>(graph.minimized || []), [graph.minimized]);
+  // Compact-by-default (v13): the graph persists which cards are EXPANDED
+  // (`graph.expanded` — ignored by outputHash so toggling never busts the render
+  // cache); every other card renders compact. Downstream consumers (ctx.minimized,
+  // MinimizeContext, renderAnimNode) keep receiving the derived COMPACT set so their
+  // contract is unchanged; `toggleMinimize` (kept name) now flips `expanded` membership.
+  const expanded = useMemo(() => new Set<string>(graph.expanded || []), [graph.expanded]);
+  // `output` never compacts — its body IS the live render preview — so it's excluded
+  // here at the source (NodeFrame also hides its toggle) rather than special-cased
+  // by every consumer of the compact set.
+  const minimized = useMemo(
+    () =>
+      new Set(
+        graph.nodes.filter((n) => n.type !== "output" && !expanded.has(n.id)).map((n) => n.id)
+      ),
+    [graph.nodes, expanded]
+  );
   const toggleMinimize = useCallback(
     (id: string) => {
       applyUpdater((g) => {
-        const cur = new Set(g.minimized || []);
+        const cur = new Set(g.expanded || []);
         if (cur.has(id)) cur.delete(id);
         else cur.add(id);
-        return { ...g, minimized: [...cur] };
+        return { ...g, expanded: [...cur] };
       });
     },
     [applyUpdater]
@@ -136,9 +149,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater, clearSelected]
   );
 
-  const allMinimized = graph.nodes.length > 0 && graph.nodes.every((n) => minimized.has(n.id));
+  const allMinimized = graph.nodes.length > 0 && expanded.size === 0;
   const toggleMinimizeAll = useCallback(() => {
-    applyUpdater((g) => ({ ...g, minimized: allMinimized ? [] : g.nodes.map((n) => n.id) }));
+    applyUpdater((g) => ({ ...g, expanded: allMinimized ? g.nodes.map((n) => n.id) : [] }));
   }, [applyUpdater, allMinimized]);
 
   // Provided to every NodeFrame's minimize/restore button; a stable key feeds
@@ -182,7 +195,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       groupClock,
       groupPlaying,
       segStart: segment.start,
-      minimized, // collapsed cards -> renderAnimNode swaps in MinimizedCard
+      minimized, // the compact set -> renderAnimNode swaps in CompactCard
       finalOutputId: segment.finalOutputId, // which output the OutputNode shows as "final"
       setFinalOutput, // OutputNode marks itself final for this segment
       onGraphChange: applyUpdater,

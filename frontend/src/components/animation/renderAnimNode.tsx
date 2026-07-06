@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import MinimizedCard from "./nodes/MinimizedCard";
+import CompactCard from "./nodes/CompactCard";
 import { NODE_TYPES } from "./nodes/registry";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 import type { GraphNode } from "../../lib/types";
@@ -20,9 +20,20 @@ export default function renderAnimNode(
     onGraphChange: ctx.onGraphChange ?? (() => {}),
     onDelete: () => ctx.onDeleteNode?.(node.id),
   };
-  // Collapsed to header only: a generic card with consolidated wire anchors.
-  if (ctx.minimized && ctx.minimized.has(node.id)) {
-    return <MinimizedCard node={node} helpers={helpers} ctx={ctx} onDelete={common.onDelete} />;
+  // The default view: a compact card (header + live preview + consolidated wire
+  // anchors; its body opens the settings modal). `output` is the exception — its
+  // body IS the live render preview, so compacting it would kill the pipeline UX.
+  if (ctx.minimized && ctx.minimized.has(node.id) && node.type !== "output") {
+    return (
+      <CompactCard
+        node={node}
+        helpers={helpers}
+        ctx={ctx}
+        onGraphChange={common.onGraphChange}
+        onDetach={ctx.onDetach}
+        onDelete={common.onDelete}
+      />
+    );
   }
   const spec = NODE_TYPES[node.type];
   if (!spec) return null;

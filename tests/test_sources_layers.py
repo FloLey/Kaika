@@ -149,6 +149,17 @@ def test_reachable_assets_collects_image_video_urls(monkeypatch):
     assert {p.name for p in cache_gc.reachable_assets()} == {"aaa.png", "bbb.mp4"}
 
 
+def test_reachable_assets_collects_imagegen_slideshow(monkeypatch):
+    """The imagegen card's assetUrls LIST must keep its slideshow alive — a singular
+    assetUrl-only walk silently let the GC sweep every generated/added slide."""
+    from backend import cache_gc
+    proj = {"job_id": "proj1", "data": {"segments": [{"graph": {"nodes": [
+        {"type": "imagegen", "data": {"assetUrls": ["/assets/proj1/s1.png", "/assets/proj1/s2.png"]}},
+    ]}}]}}
+    monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
+    assert {p.name for p in cache_gc.reachable_assets()} == {"s1.png", "s2.png"}
+
+
 @_needs_ffmpeg
 def test_video_layer_through_dag(assets):
     job, _ip, _iu, vid_url, _vp = assets

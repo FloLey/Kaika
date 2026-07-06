@@ -99,10 +99,13 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v11: lyrics card gained font, a text box (box_x/y/w/h), and outline/outlineWidth.
 //  v12: lyrics dropped `position` + the size/r/g/b ports — the box defines size/placement
 //       and a wired `color` card drives the fill. normalizeGraph drops the retired ports.
-export const GRAPH_VERSION = 12;
+//  v13: cards render COMPACT by default; the persisted set inverted from `minimized`
+//       (which cards were collapsed) to `expanded` (which cards show their full body).
+//       normalizeGraph inverts a pre-v13 save's `minimized` into `expanded` and strips it.
+export const GRAPH_VERSION = 13;
 
 export function emptyGraph(): Graph {
-  return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
+  return { version: GRAPH_VERSION, nodes: [], edges: [], expanded: [], view: { tx: 0, ty: 0, scale: 1 } };
 }
 
 // ---- combine node (spec 10) --------------------------------------------------

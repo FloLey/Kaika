@@ -151,10 +151,14 @@ export default function Palette({
       {onToggleMinimizeAll && (
         <button
           className="btn sm"
-          title={allMinimized ? "Expand all cards" : "Minimize all cards to their header"}
+          title={
+            allMinimized
+              ? "Expand every card to its full on-canvas view"
+              : "Collapse every card back to its compact view"
+          }
           onClick={onToggleMinimizeAll}
         >
-          {allMinimized ? "▢ expand all" : "– minimize all"}
+          {allMinimized ? "▢ expand all" : "– collapse all"}
         </button>
       )}
       {onOpenOutput && (

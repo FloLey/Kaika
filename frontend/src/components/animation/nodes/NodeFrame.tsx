@@ -108,6 +108,7 @@ interface NodeFrameProps {
   sideIn?: ReactNode;
   sideOut?: ReactNode;
   minimized?: boolean;
+  compact?: boolean;
   children?: ReactNode;
 }
 
@@ -122,18 +123,27 @@ export default function NodeFrame({
   headExtra,
   sideIn,
   sideOut,
-  minimized = false,
+  minimized,
+  compact = false,
   children,
 }: NodeFrameProps) {
   const { minimized: minSet, toggle } = useContext(MinimizeContext) as {
     minimized?: Set<string>;
     toggle?: (id: string) => void;
   };
-  const isMin = minimized || (minSet && minSet.has && minSet.has(node.id));
+  // Collapse STATE vs body VISUALS: `stateMin` is whether the editor holds this card
+  // compact (drives the toggle button's glyph/title); `isMin` is whether THIS frame
+  // hides its body. CompactCard passes minimized={false} so its preview body shows
+  // while the toggle still reads "expand"; full cards pass nothing (state == visuals).
+  const stateMin = !!(minSet && minSet.has && minSet.has(node.id));
+  const isMin = minimized !== undefined ? minimized : stateMin;
   return (
     <div
       className={
-        `anim-node anim-node-${node.type}` + (selected ? " sel" : "") + (isMin ? " min" : "")
+        `anim-node anim-node-${node.type}` +
+        (selected ? " sel" : "") +
+        (isMin ? " min" : "") +
+        (compact ? " compact" : "")
       }
       style={{ "--accent": accent } as CSSProperties}
     >
@@ -148,18 +158,19 @@ export default function NodeFrame({
         </span>
         <span className="anim-node-head-right">
           {headExtra}
-          {toggle && (
+          {/* output never compacts (its body IS the render preview) — no toggle. */}
+          {toggle && node.type !== "output" && (
             <button
               className="anim-node-min no-drag"
-              title={isMin ? "expand card" : "minimize to header"}
-              aria-label={isMin ? "expand card" : "minimize card"}
+              title={stateMin ? "expand full card on canvas" : "collapse to compact card"}
+              aria-label={stateMin ? "expand card" : "collapse card"}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 toggle(node.id);
               }}
             >
-              {isMin ? "▢" : "–"}
+              {stateMin ? "▢" : "–"}
             </button>
           )}
           {onDelete && (

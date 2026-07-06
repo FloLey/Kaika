@@ -102,7 +102,7 @@ or asserts. Three spec families live in `backend/animation_params.py`:
 ## Checklist — add a node type
 
 Node types are driven by two registries (frontend + backend), so adding one is a
-component + two registrations — no edits to Palette / renderAnimNode / MinimizedCard
+component + two registrations — no edits to Palette / renderAnimNode / CompactCard
 or the executor's dispatch.
 
 1. **Types** (`lib/types.ts`): add the type to the `NodeType` union + a `<Type>Data`
