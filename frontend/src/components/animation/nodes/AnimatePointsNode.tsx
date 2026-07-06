@@ -2,9 +2,12 @@ import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
+import PointsPad from "./PointsPad";
+import { useResolvedPoints } from "./useResolvedPoints";
 import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
+import { aspectOf } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { AnimatePointsData, AnimatePointsMode } from "../../../lib/types";
 
@@ -16,9 +19,12 @@ import type { AnimatePointsData, AnimatePointsMode } from "../../../lib/types";
 // emission gate. Both are part of the render. Input `in` (points) → `out` (points).
 const MODES: AnimatePointsMode[] = ["orbit", "drift", "chase"];
 
-export default function AnimatePointsNode({ node, selected, helpers, onGraphChange, onDelete }: NodeProps) {
+export default function AnimatePointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as AnimatePointsData;
   const set = useNodeData<AnimatePointsData>(node, onGraphChange);
+  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const { points } = useResolvedPoints(ctx, node.id, depKey);
 
   return (
     <NodeFrame
@@ -50,6 +56,7 @@ export default function AnimatePointsNode({ node, selected, helpers, onGraphChan
         />
       }
     >
+      <PointsPad points={points} aspect={aspect} />
       <label className="anim-select-row">
         <span className="anim-select-label">motion</span>
         <ArgInfo type="animate-points" k="mode" />

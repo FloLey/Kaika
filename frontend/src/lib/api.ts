@@ -241,6 +241,16 @@ export async function resolveCurve(params: {
   return postJson<ExtractResult>("/resolve", params);
 }
 
+// Resolve one points node's positions for a segment+graph — the points cards' preview.
+export async function resolvePoints(params: {
+  job_id: string;
+  segment: unknown;
+  graph: unknown;
+  node_id: string;
+}): Promise<{ points: [number, number][] }> {
+  return postJson<{ points: [number, number][] }>("/resolve-points", params);
+}
+
 
 // Render an animation graph for one segment. The segment's signal defs ride in
 // the request (Issue 1A) so the backend can resolve `signal` node references.

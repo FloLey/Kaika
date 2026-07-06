@@ -2,6 +2,8 @@ import type { ChangeEvent } from "react";
 import Ctl from "../../../ui/Ctl";
 import NodeFrame, { Port } from "./NodeFrame";
 import ArgInfo from "./ArgInfo";
+import StreamPreview from "./StreamPreview";
+import { aspectOf } from "../../../lib/output";
 import { fluidParam } from "../../../lib/fluidParams.js";
 import { argHelp } from "../../../lib/paramHelp";
 import {
@@ -34,6 +36,7 @@ export default function CombineNode({
   node,
   selected,
   helpers,
+  ctx,
   onGraphChange,
   onDelete,
 }: NodeProps) {
@@ -61,6 +64,8 @@ export default function CombineNode({
         />
       }
     >
+      {/* Live composite preview — the combined output, streamed. */}
+      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
       <div className="anim-combine-modes">
         <button
           className={"anim-mode-btn" + (mode === "merge" ? " on" : "")}

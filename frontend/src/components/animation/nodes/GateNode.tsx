@@ -1,11 +1,9 @@
-import { useMemo } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl, { Toggle } from "../../../ui/Ctl";
-import MiniSpark from "./MiniSpark";
+import ValuePreview from "./ValuePreview";
 import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
-import { gatePreview } from "../../../lib/modPreview";
 import type { NodeProps } from "./nodeProps";
 import type { GateData } from "../../../lib/types";
 
@@ -14,9 +12,8 @@ import type { GateData } from "../../../lib/types";
 // threshold − hysteresis/2 — a signal hovering at the threshold can't flicker).
 // The binary signal drives on/off-style ports anywhere: an imagegen trigger, a
 // fluid's emit, a lyrics opacity… Input `in` (value) → `out` (value).
-export default function GateNode({ node, selected, helpers, onGraphChange, onDelete }: NodeProps) {
+export default function GateNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as GateData;
-  const preview = useMemo(() => gatePreview(d), [d]);
   const set = useNodeData<GateData>(node, onGraphChange);
 
   return (
@@ -50,7 +47,7 @@ export default function GateNode({ node, selected, helpers, onGraphChange, onDel
       }
     >
       <div className="anim-mod">
-        <MiniSpark values={preview} />
+        <ValuePreview node={node} ctx={ctx} />
         <Ctl
           label="threshold"
           value={d.threshold}

@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import type { ChangeEvent, CSSProperties } from "react";
+import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
+import PointsPad from "./PointsPad";
 import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
@@ -42,15 +43,7 @@ export default function PatternNode({ node, selected, helpers, ctx, onGraphChang
         />
       }
     >
-      <div className="anim-points-pad anim-points-pad-ro" style={{ "--out-aspect": aspect } as CSSProperties}>
-        {pts.map(([x, y], i) => (
-          <span
-            key={i}
-            className="anim-points-marker anim-points-marker-ro"
-            style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
-          />
-        ))}
-      </div>
+      <PointsPad points={pts} aspect={aspect} />
       <label className="anim-select-row">
         <span className="anim-select-label">layout</span>
         <ArgInfo type="pattern" k="layout" />

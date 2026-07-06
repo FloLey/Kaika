@@ -2,8 +2,7 @@ import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
-import MiniSpark from "./MiniSpark";
-import { useResolvedCurve } from "./useResolvedCurve";
+import ValuePreview from "./ValuePreview";
 import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
@@ -18,7 +17,6 @@ const SHAPES: LfoShape[] = ["sine", "triangle", "saw", "square"];
 
 export default function LfoNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as LfoData;
-  const { curve } = useResolvedCurve(ctx, node.id, JSON.stringify(d));
   const set = useNodeData<LfoData>(node, onGraphChange);
 
   return (
@@ -42,7 +40,7 @@ export default function LfoNode({ node, selected, helpers, ctx, onGraphChange, o
       }
     >
       <div className="anim-mod">
-        <MiniSpark values={curve} />
+        <ValuePreview node={node} ctx={ctx} />
         <div className="anim-select-row">
           <span className="anim-select-label">shape</span>
           <ArgInfo type="lfo" k="shape" />

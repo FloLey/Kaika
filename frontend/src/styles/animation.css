@@ -1725,6 +1725,19 @@
   gap: 4px;
   align-items: center;
 }
+
+/* Compact-card previews: small variants of the points pad / render well so a
+   compacted fluid/combine/points card shows its output without taking full height. */
+.anim-points-pad-sm {
+  max-height: 72px;
+}
+.anim-output-well-sm {
+  max-height: 84px;
+}
+.anim-output-well-sm .anim-loader-orb {
+  width: 5px;
+  height: 5px;
+}
 .anim-imagegen-slot.gen {
   border-style: dashed; /* generated (wired-in) slots read differently from own picks */
 }

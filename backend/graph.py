@@ -81,6 +81,7 @@ from .graph_render import (  # noqa: F401
     build_params,
     render,
     render_stream,
+    resolve_node_points,
 )
 
 # Back-compat alias — the encoder lifecycle helpers live in fluid.py now.

@@ -4,6 +4,8 @@ import NodeFrame, { Port } from "./NodeFrame";
 import { argHelp } from "../../../lib/paramHelp";
 import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
+import { aspectOf } from "../../../lib/output";
+import StreamPreview from "./StreamPreview";
 import { patchStatic, setFluidLayer } from "./fluidBindings";
 import { ParamRow, GroupAnchor } from "./FluidParamRow";
 import type { NodeProps } from "./nodeProps";
@@ -95,6 +97,8 @@ export default function FluidNode({
         />
       }
     >
+      {/* Live sim preview — the fluid's own dye-on-transparent output, streamed. */}
+      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
       {/* Source positions: a labelled `points` input. Wire a points card here to put
           a source at each drawn point (otherwise a single source at the centre). */}
       <div className="anim-pos-row">

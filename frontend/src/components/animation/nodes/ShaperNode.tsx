@@ -1,28 +1,25 @@
-import { useMemo } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl, { Toggle } from "../../../ui/Ctl";
-import MiniSpark from "./MiniSpark";
+import ValuePreview from "./ValuePreview";
 import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
-import { shaperPreview } from "../../../lib/modPreview";
 import type { NodeProps } from "./nodeProps";
 import type { ShaperData } from "../../../lib/types";
 
 // The shaper / remap card: re-curve ONE value per use (sharpen, soften, invert,
 // remap its range) without touching the studio signal it came from. Reuses the exact
-// studio shaping order on the backend. Input `in` (value) → `out` (value). The
-// preview shows the static transfer curve (the attack/release follower shapes timing,
-// not level, so it isn't drawn).
+// studio shaping order on the backend. Input `in` (value) → `out` (value). The preview
+// shows the card's REAL resolved output (flat until an input is wired).
 export default function ShaperNode({
   node,
   selected,
   helpers,
+  ctx,
   onGraphChange,
   onDelete,
 }: NodeProps) {
   const d = node.data as ShaperData;
-  const preview = useMemo(() => shaperPreview(d), [d]);
   const set = useNodeData<ShaperData>(node, onGraphChange);
 
   return (
@@ -56,7 +53,7 @@ export default function ShaperNode({
       }
     >
       <div className="anim-mod">
-        <MiniSpark values={preview} />
+        <ValuePreview node={node} ctx={ctx} />
         <Ctl
           label="delay"
           value={d.delay}

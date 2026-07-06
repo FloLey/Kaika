@@ -437,6 +437,21 @@ class Dag:
             self._closers.clear()
 
 
+def resolve_node_points(job_id, segment, graph, node_id, stem_audio_path) -> dict:
+    """Resolve a points node's positions for a card preview -> ``{points: [[x,y],…]}``
+    (each emitter's base position, 0..1). No render, no DB — mirrors
+    `resolve_node_curve` for the value cards, so points/pattern/animate/merge can show
+    a live scatter in the editor."""
+    dag = Dag(job_id, segment, graph, stem_audio_path, {})
+    specs = dag._resolve_points(node_id)
+    pts = [
+        [float(s["points"][0][0]), float(s["points"][0][1])]
+        for s in specs
+        if s.get("points")
+    ]
+    return {"points": pts}
+
+
 # --------------------------------------------------------------------------- #
 # Node-type handler registry (spec 10)
 # --------------------------------------------------------------------------- #

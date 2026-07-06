@@ -1,6 +1,9 @@
-import MiniSpark from "./MiniSpark";
-import { useResolvedCurve } from "./useResolvedCurve";
-import { assetName } from "./useAssetUpload";
+import ValuePreview from "./ValuePreview";
+import PointsPad from "./PointsPad";
+import StreamPreview from "./StreamPreview";
+import { useResolvedPoints } from "./useResolvedPoints";
+import { patternPoints } from "../../../lib/pointsGen";
+import { aspectOf } from "../../../lib/output";
 import type { NodeCtx } from "./nodeProps";
 import type {
   BackdropData,
@@ -15,20 +18,22 @@ import type {
   VideoData,
 } from "../../../lib/types";
 
-// The tiny live preview inside a CompactCard's body — one cheap glance at what the
-// card produces, switched on node.type. Deliberately LIGHT: no <video> elements, no
-// param rows, no per-frame clocks; the full card (settings modal / expanded view) owns
-// the rich preview. Types with nothing cheap to show (fluid, combine, output…) render
-// null — the compact body stays a clickable title-only strip.
+// The live preview inside a CompactCard's body — one glance at what the card produces,
+// switched on node.type: value cards pulse, points cards scatter, fluid/combine stream
+// their sim, layer cards show their content. Output never compacts (its body IS the
+// render). All heavy previews are viewport-gated inside their components.
 
-// Value cards preview their REAL resolved 0..1 curve (same `/resolve` the Scope and
-// full cards use), so the compact sparkline can't drift from what renders.
+// Value cards preview their REAL resolved 0..1 output (same `/resolve` the Scope and
+// full cards use) as a pulsing pad — so a compact signal reads as "alive" and can't
+// drift from what renders.
 const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math", "scope"]);
 
-// Split out so the hook only mounts for value cards (hooks can't be conditional).
-function SparkPreview({ node, ctx, accent }: { node: GraphNode; ctx: NodeCtx; accent: string }) {
-  const { curve } = useResolvedCurve(ctx, node.id, JSON.stringify(node.data));
-  return <MiniSpark values={curve} accent={accent} />;
+// animate/merge points depend on upstream + transforms, so their scatter is resolved
+// from the backend (hooks can't be conditional — split into its own component).
+function ResolvedPointsPreview({ node, ctx }: { node: GraphNode; ctx: NodeCtx }) {
+  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const { points } = useResolvedPoints(ctx, node.id, depKey);
+  return <PointsPad points={points} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} compact />;
 }
 
 // ---- colour helpers (mirrors ColorNode's swatch math, kept tiny) ----------------
@@ -58,7 +63,7 @@ interface CompactPreviewProps {
 
 export default function CompactPreview({ node, ctx, accent }: CompactPreviewProps) {
   if (VALUE_TYPES.has(node.type)) {
-    return <SparkPreview node={node} ctx={ctx} accent={accent} />;
+    return <ValuePreview node={node} ctx={ctx} color={accent} compact />;
   }
   switch (node.type) {
     case "color":
@@ -109,10 +114,18 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
     }
     case "video": {
       const d = node.data as VideoData;
-      return (
-        <span className="anim-compact-hint">
-          🎞 {d.assetUrl ? assetName(d.assetUrl) : "no video"}
-        </span>
+      return d.assetUrl ? (
+        <video
+          className="anim-compact-thumb"
+          src={d.assetUrl}
+          muted
+          loop
+          autoPlay
+          playsInline
+          preload="metadata"
+        />
+      ) : (
+        <span className="anim-compact-hint">🎞 no video</span>
       );
     }
     case "lyrics": {
@@ -127,16 +140,34 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
     }
     case "points":
       return (
-        <span className="anim-compact-hint">
-          ⁘ {((node.data as PointsData).points || []).length} pts
-        </span>
+        <PointsPad
+          points={(node.data as PointsData).points || []}
+          aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
+          compact
+        />
       );
     case "pattern":
-      return <span className="anim-compact-hint">⁘ {(node.data as PatternData).count} pts</span>;
+      return (
+        <PointsPad
+          points={patternPoints(node.data as PatternData)}
+          aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
+          compact
+        />
+      );
     case "animate-points":
     case "merge-points":
-      return <span className="anim-compact-hint">⁘</span>;
+      return <ResolvedPointsPreview node={node} ctx={ctx} />;
+    case "fluid":
+    case "combine":
+      return (
+        <StreamPreview
+          node={node}
+          ctx={ctx}
+          aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
+          compact
+        />
+      );
     default:
-      return null; // fluid / combine / output…: title-only compact body
+      return null; // output never compacts (its body IS the render)
   }
 }

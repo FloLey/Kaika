@@ -1,15 +1,21 @@
 import NodeFrame, { Port } from "./NodeFrame";
+import PointsPad from "./PointsPad";
+import { useResolvedPoints } from "./useResolvedPoints";
 import { addInputPort, removeInputPort } from "../../../lib/graphModel";
+import { aspectOf } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { MergePointsData } from "../../../lib/types";
 
 // The merge-points card: concatenates 2+ points inputs into one set (e.g. two Pattern
 // cards → one fluid's positions). Inputs are ordered points-edge slots targeted by
 // port id — the backend (`_resolve_points`) resolves each and appends them (capped at
-// the emitter limit). One `out` points port. No settings beyond the input count.
-export default function MergePointsNode({ node, selected, helpers, onGraphChange, onDelete }: NodeProps) {
+// the emitter limit). One `out` points port. The preview is the REAL merged scatter.
+export default function MergePointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as MergePointsData;
   const inputs = d.inputs || [];
+  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const { points } = useResolvedPoints(ctx, node.id, depKey);
 
   return (
     <NodeFrame
@@ -31,6 +37,7 @@ export default function MergePointsNode({ node, selected, helpers, onGraphChange
         />
       }
     >
+      <PointsPad points={points} aspect={aspect} />
       <div className="anim-math-inputs">
         {inputs.map((portId, i) => (
           <div className="anim-math-row" key={portId}>

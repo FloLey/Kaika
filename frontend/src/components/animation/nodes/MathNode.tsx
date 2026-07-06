@@ -2,6 +2,7 @@ import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
+import ValuePreview from "./ValuePreview";
 import { patchNodeData, addInputPort, removeInputPort } from "../../../lib/graphModel";
 import { argHelp } from "../../../lib/paramHelp";
 import type { NodeProps } from "./nodeProps";
@@ -19,7 +20,7 @@ const OPS: { op: MathOp; label: string }[] = [
   { op: "mix", label: "≈ mix" },
 ];
 
-export default function MathNode({ node, selected, helpers, onGraphChange, onDelete }: NodeProps) {
+export default function MathNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
   const d = node.data as MathData;
   const inputs = d.inputs || [];
 
@@ -44,6 +45,7 @@ export default function MathNode({ node, selected, helpers, onGraphChange, onDel
       }
     >
       <div className="anim-mod">
+        <ValuePreview node={node} ctx={ctx} />
         <label className="anim-select-row">
           <span className="anim-select-label">op</span>
           <ArgInfo type="math" k="op" />

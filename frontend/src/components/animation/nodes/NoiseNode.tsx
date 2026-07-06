@@ -1,7 +1,6 @@
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
-import MiniSpark from "./MiniSpark";
-import { useResolvedCurve } from "./useResolvedCurve";
+import ValuePreview from "./ValuePreview";
 import { useNodeData } from "./useNodeData";
 import { argHelp } from "../../../lib/paramHelp";
 import type { NodeProps } from "./nodeProps";
@@ -20,7 +19,6 @@ export default function NoiseNode({
   onDelete,
 }: NodeProps) {
   const d = node.data as NoiseData;
-  const { curve } = useResolvedCurve(ctx, node.id, JSON.stringify(d));
   const set = useNodeData<NoiseData>(node, onGraphChange);
 
   return (
@@ -44,7 +42,7 @@ export default function NoiseNode({
       }
     >
       <div className="anim-mod">
-        <MiniSpark values={curve} />
+        <ValuePreview node={node} ctx={ctx} />
         <Ctl
           label="rate"
           value={d.rate}
