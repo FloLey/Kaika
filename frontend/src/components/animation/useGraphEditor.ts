@@ -4,6 +4,8 @@ import {
   normalizeGraph,
   connect,
   connectVideo,
+  connectLoose,
+  resolveDropPort,
   disconnect,
   removeNode,
 } from "../../lib/graphModel";
@@ -101,6 +103,23 @@ export function useGraphEditor(opts: GraphEditorOpts) {
           return connect(g, srcId, tgtId, tgtPort);
         }
         return connectVideo(g, srcId, srcPort, tgtId, tgtPort); // last-wins per port
+      });
+    },
+    [applyUpdater]
+  );
+
+  // A wire released over a CARD (not a specific port): auto-assign when the
+  // destination is unambiguous (output video / free combine slot / positions /
+  // the only unbound param), else PARK it as a loose gray edge — the settings
+  // window assigns it later.
+  const onCardDrop = useCallback(
+    (srcId: string, srcFlow: string, tgtId: string) => {
+      applyUpdater((g) => {
+        const port = resolveDropPort(g, tgtId, srcFlow);
+        if (!port) return connectLoose(g, srcId, tgtId);
+        const tgt = g.nodes.find((n) => n.id === tgtId);
+        if (tgt && nodeParam(tgt.type, port)) return connect(g, srcId, tgtId, port);
+        return connectVideo(g, srcId, "out", tgtId, port);
       });
     },
     [applyUpdater]
@@ -233,6 +252,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     allMinimized,
     toggleMinimizeAll,
     onConnect,
+    onCardDrop,
     onEdgeDelete,
     onDeleteSelection,
   };

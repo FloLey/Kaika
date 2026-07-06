@@ -44,6 +44,12 @@ def _output_params(output: dict, fps: int) -> dict:
     return out
 
 
+# The frontend's "loose edge" sentinel targetPort (unassigned drop-anywhere wires).
+# Loose edges feed nothing: every backend walk (validate, contributing-ids, cycle
+# check) must ignore them — mirrored from lib/graph/core.ts LOOSE_PORT.
+LOOSE_PORT = "__in"
+
+
 def _video_source(graph: dict, target_id: str, target_port: str):
     """The node id wired into (target_id, target_port) via an edge, or None."""
     for e in graph.get("edges", []):

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { NODE_TYPES, chromeFor } from "./nodes/registry";
+import PortConnections from "./PortConnections";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import type { MinimizeCtx } from "./nodes/minimizeContext";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
@@ -65,6 +66,14 @@ export default function NodeSettingsModal({
         aria-label={`${chromeFor(node.type).title} settings`}
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {ctx.graph && (
+          <PortConnections
+            node={node}
+            graph={ctx.graph}
+            signals={ctx.signals}
+            onGraphChange={onGraphChange}
+          />
+        )}
         <MinimizeContext.Provider value={MODAL_MIN_CTX}>
           <Card
             node={node}

@@ -59,6 +59,7 @@ export default function AnimationCanvas({
     allMinimized,
     toggleMinimizeAll,
     onConnect,
+    onCardDrop,
     onEdgeDelete,
     onDeleteSelection,
   } = useGraphEditor({
@@ -119,6 +120,7 @@ export default function AnimationCanvas({
             layoutKey={minimizedKey}
             onGraphChange={applyUpdater}
             onConnect={onConnect}
+            onCardDrop={onCardDrop}
             onEdgeDelete={onEdgeDelete}
             onDeleteSelection={onDeleteSelection}
             selected={selected}

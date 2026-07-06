@@ -4,7 +4,7 @@ inside a render."""
 
 from __future__ import annotations
 
-from .graph_common import _PORT_SPECS, _is_emitter_source, _nodes_of, _video_source
+from .graph_common import _PORT_SPECS, LOOSE_PORT, _is_emitter_source, _nodes_of, _video_source
 
 
 def _video_producers() -> tuple:
@@ -98,6 +98,8 @@ def validate(graph: dict) -> None:
     # Acyclic over ALL edges (value bindings + video edges).
     adj: dict[str, list[str]] = {nid: [] for nid in nodes}
     for e in graph.get("edges", []):
+        if e.get("targetPort") == LOOSE_PORT:
+            continue  # loose (unassigned) wires feed nothing — can't form a real cycle
         if e.get("target") in adj and e.get("source") in nodes:
             adj[e["target"]].append(e["source"])
     if _has_cycle(adj):

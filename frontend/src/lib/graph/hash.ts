@@ -2,6 +2,7 @@
 // output. The backend computes the authoritative cache-path hash; this only needs
 // to match itself between renders.
 
+import { isLooseEdge } from "./core";
 import { outputContributing } from "./validate";
 import type { Graph, Signal } from "../types";
 
@@ -76,7 +77,9 @@ export function outputHash(
     outputId,
     nodes,
     edges: (graph.edges || [])
-      .filter((e) => contributing.has(e.source) && contributing.has(e.target))
+      // A loose (unassigned) wire feeds nothing — parking/assigning one must not
+      // bust the render cache of pipelines it merely dangles near.
+      .filter((e) => !isLooseEdge(e) && contributing.has(e.source) && contributing.has(e.target))
       .map((e) => ({
         source: e.source,
         sourcePort: e.sourcePort,

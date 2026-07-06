@@ -102,7 +102,10 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v13: cards render COMPACT by default; the persisted set inverted from `minimized`
 //       (which cards were collapsed) to `expanded` (which cards show their full body).
 //       normalizeGraph inverts a pre-v13 save's `minimized` into `expanded` and strips it.
-export const GRAPH_VERSION = 13;
+//  v14: loose edges — a wire dropped on a card may persist with the `__in`
+//       sentinel targetPort (no binding) until a port is assigned. Older saves
+//       can't contain the sentinel; normalizeGraph keeps loose edges as-is.
+export const GRAPH_VERSION = 14;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], expanded: [], view: { tx: 0, ty: 0, scale: 1 } };

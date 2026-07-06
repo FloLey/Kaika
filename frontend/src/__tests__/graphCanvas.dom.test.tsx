@@ -105,3 +105,54 @@ describe("GraphCanvas interactions (jsdom)", () => {
     expect(onGraphChange).not.toHaveBeenCalled();
   });
 });
+
+// Loose edges: releasing a wire over a CARD (not a port) hands it to the editor
+// via onCardDrop — the canvas only reports (src, flow, target); assigning/parking
+// is the graph model's job. jsdom has no real hit-testing, so elementFromPoint is
+// stubbed to the target card's wrapper (which carries data-node-id).
+describe("drop-anywhere wiring (jsdom)", () => {
+  it("releasing a wire over a card calls onCardDrop with the source flow", () => {
+    const onCardDrop = vi.fn();
+    const graph = {
+      version: 14,
+      nodes: [
+        { id: "src", type: "x", x: 0, y: 0, data: {} },
+        { id: "tgt", type: "y", x: 200, y: 0, data: {} },
+      ],
+      edges: [],
+      view: { tx: 0, ty: 0, scale: 1 },
+    };
+    const renderNode = (node: GraphNode, helpers: { portRef: (n: string, p: string, k: string, f: string) => (el: Element | null) => void; startConnect: (n: string, p: string, f: string, e: unknown) => void }) => (
+      <div data-testid={`node-${node.id}`}>
+        <span
+          data-testid={`out-${node.id}`}
+          ref={helpers.portRef(node.id, "out", "out", "value")}
+          onPointerDown={(e) => helpers.startConnect(node.id, "out", "value", e)}
+        />
+      </div>
+    );
+    const { getByTestId, container } = render(
+      <GraphCanvas
+        graph={graph as unknown as Graph}
+        renderNode={renderNode as never}
+        onCardDrop={onCardDrop}
+      />
+    );
+    // Start a wire from src's out port…
+    act(() => {
+      getByTestId("out-src").dispatchEvent(
+        Object.assign(new Event("pointerdown", { bubbles: true }), { clientX: 5, clientY: 5 })
+      );
+    });
+    // …and release it over tgt's card wrapper (hit-test stubbed).
+    const tgtWrapper = container.querySelector('[data-node-id="tgt"]')!;
+    // jsdom doesn't implement elementFromPoint at all — install a stub directly.
+    const orig = document.elementFromPoint;
+    document.elementFromPoint = () => tgtWrapper;
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event("pointerup"), { clientX: 210, clientY: 10 }));
+    });
+    document.elementFromPoint = orig;
+    expect(onCardDrop).toHaveBeenCalledWith("src", "value", "tgt");
+  });
+});

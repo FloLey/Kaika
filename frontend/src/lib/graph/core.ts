@@ -60,3 +60,11 @@ export function videoSource(graph: Graph, targetId: string, targetPort: string):
   const e = (graph.edges || []).find((x) => x.target === targetId && x.targetPort === targetPort);
   return e ? e.source : null;
 }
+
+// The "loose edge" sentinel targetPort: a wire dropped on a card whose destination
+// port couldn't be auto-resolved. Loose edges draw gray, carry NO binding, and are
+// INVISIBLE to validation, renderability and the output hash (both frontends of the
+// contract filter them; the backend mirrors it) — they're a UI parking state until
+// the settings window assigns a real port.
+export const LOOSE_PORT = "__in";
+export const isLooseEdge = (e: { targetPort: string }): boolean => e.targetPort === LOOSE_PORT;

@@ -2,7 +2,7 @@
 // contributing-subgraph walks (backend/graph_validate.py, graph_hash.py) — the
 // backend stays authoritative; this gates obviously-broken graphs client-side.
 
-import { VIDEO_PRODUCERS, portsOf, videoSource } from "./core";
+import { VIDEO_PRODUCERS, isLooseEdge, portsOf, videoSource } from "./core";
 import type { CombineNode, Graph, GraphEdge, GraphNode, ValidationResult } from "../types";
 
 // Whether `nodeId` resolves to fluid emitter(s) for a merge (no stack upstream).
@@ -51,6 +51,8 @@ export function videoInput(graph: Graph, outputId: string): GraphNode | null {
 export function outputContributing(graph: Graph, outputId: string): Set<string> {
   const incoming = new Map<string, string[]>();
   for (const e of graph.edges || []) {
+    if (isLooseEdge(e)) continue; // an unassigned wire feeds nothing
+
     if (!incoming.has(e.target)) incoming.set(e.target, []);
     incoming.get(e.target)!.push(e.source);
   }
@@ -147,7 +149,9 @@ export function validate(graph: Graph): ValidationResult {
   }
 
   // 3. no cycles (still assert acyclic for forward-compat).
-  if (hasCycle(nodes, graph.edges || [])) return { ok: false, error: "graph has a cycle" };
+  if (hasCycle(nodes, (graph.edges || []).filter((e) => !isLooseEdge(e)))) {
+    return { ok: false, error: "graph has a cycle" };
+  }
 
   return { ok: true };
 }

@@ -23,6 +23,10 @@ type Updater = (g: Graph) => Graph;
 
 const EMPTY_SEL: ReadonlySet<string> = new Set();
 
+// The unassigned-wire sentinel (mirrors lib/graph/core LOOSE_PORT — the canvas only
+// needs it to style loose edges gray and to anchor them to the card body).
+const LOOSE_PORT = "__in";
+
 interface NodeCardProps {
   node: GraphNode;
   helpers: Omit<NodeHelpers, "onTitlePointerDown" | "selected">;
@@ -49,6 +53,8 @@ interface GraphCanvasProps {
   layoutKey?: string;
   onGraphChange?: (updater: Updater) => void;
   onConnect?: (srcId: string, srcPort: string, tgtId: string, tgtPort: string) => void;
+  // A wire released over a CARD (not a port): the editor auto-assigns or parks it loose.
+  onCardDrop?: (srcId: string, srcFlow: string, tgtId: string) => void;
   onEdgeDelete?: (edge: GraphEdge) => void;
   onDeleteSelection?: (ids: string[]) => void;
   // The active selection: node ids and/or a single edge id. Several nodes can be
@@ -64,6 +70,7 @@ export default function GraphCanvas({
   layoutKey,
   onGraphChange,
   onConnect,
+  onCardDrop,
   onEdgeDelete,
   onDeleteSelection,
   selected = EMPTY_SEL,
@@ -315,9 +322,17 @@ export default function GraphCanvas({
       if (w && w.target) {
         onConnect?.(w.source.nodeId, w.source.portId, w.target.nodeId, w.target.portId);
       } else if (w) {
-        // Dropped without a valid target. If it landed on an actual port, explain
-        // why it was refused; a drop onto empty space is just a cancel (no toast).
+        // Dropped without a valid port target. Landing anywhere on a CARD hands the
+        // wire to the editor (auto-assign or park it loose); a drop on a port that
+        // refused explains why; empty space is just a cancel (no toast).
         const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const cardDom = hit?.closest("[data-node-id]");
+        const tgtId = cardDom?.getAttribute("data-node-id");
+        if (tgtId && tgtId !== w.source.nodeId && onCardDrop) {
+          onCardDrop(w.source.nodeId, w.source.flow, tgtId);
+          setWire(null);
+          return;
+        }
         const portDom = hit?.closest("[data-port]");
         const meta = portDom
           ? portMeta.current.get(
@@ -338,7 +353,7 @@ export default function GraphCanvas({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [wire, onConnect, showHint]);
+  }, [wire, onConnect, onCardDrop, showHint]);
 
   // --- marquee (shift-drag the background to box-select cards) ---------------
   interface Marquee {
@@ -504,7 +519,14 @@ export default function GraphCanvas({
     >
       <svg className="gc-edges gc-edges-base" width="100%" height="100%">
         {edges.map((e) => (
-          <g key={e.id} className={"gc-edge" + (selected.has(e.id) ? " sel" : "")}>
+          <g
+            key={e.id}
+            className={
+              "gc-edge" +
+              (selected.has(e.id) ? " sel" : "") +
+              (e.edge.targetPort === LOOSE_PORT ? " unassigned" : "")
+            }
+          >
             <path
               className="gc-edge-hit"
               d={e.d}
@@ -544,9 +566,21 @@ export default function GraphCanvas({
           <div
             key={node.id}
             className="gc-node-pos"
+            data-node-id={node.id}
             ref={(el) => {
-              if (el) nodeEls.current.set(node.id, el);
-              else nodeEls.current.delete(node.id);
+              // The wrapper doubles as the LOOSE-edge anchor: a parked wire draws to
+              // the card body itself, so every card (compact or full) can receive one
+              // without declaring a port.
+              const key = portKey(node.id, LOOSE_PORT);
+              if (el) {
+                nodeEls.current.set(node.id, el);
+                portEls.current.set(key, el);
+                portMeta.current.set(key, { nodeId: node.id, portId: LOOSE_PORT, kind: "in", flow: "value" });
+              } else {
+                nodeEls.current.delete(node.id);
+                portEls.current.delete(key);
+                portMeta.current.delete(key);
+              }
             }}
             style={{
               position: "absolute",

@@ -1577,6 +1577,50 @@
   min-width: 0;
 }
 
+/* ---- settings-window wiring panel ---------------------------------------------- */
+.port-connections {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.port-connections-head {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.port-connections-loose {
+  color: var(--courant, var(--muted));
+  letter-spacing: 0;
+}
+.port-connections-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.port-connections-label {
+  font-size: 12px;
+  min-width: 72px;
+  color: var(--text);
+}
+.port-connections-row .anim-select {
+  flex: 1;
+}
+
+/* ---- loose (unassigned) edges ------------------------------------------------ */
+/* A wire parked on a card without a port yet: gray + dashed, so it reads as
+   "connected but not used" until the settings window assigns it. */
+.gc-edge.unassigned .gc-edge-line {
+  stroke: var(--muted);
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
 /* ---- imagegen slideshow strip ----------------------------------------------- */
 .anim-imagegen-strip {
   display: flex;

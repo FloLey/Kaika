@@ -598,7 +598,12 @@ export default function Docs({ section }: { section?: string }) {
         <ul>
           <li>
             <strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the
-            fluid's video output onto the output card).
+            fluid's video output onto the output card). You can also <strong>drop the wire
+            anywhere on a card</strong>: when the destination is obvious (an output's video input,
+            a combine's free slot, a fluid's positions, a card with a single free port) it wires
+            itself; otherwise the line parks on the card in <strong>gray</strong> — connected, but
+            not used yet. Open the card's settings window to assign it: each input has a dropdown
+            with the <em>not connected</em> wires on top — pick one and the gray line goes live.
           </li>
           <li>
             <strong>Compact cards keep their wires</strong> — all of a compact card's inbound wires

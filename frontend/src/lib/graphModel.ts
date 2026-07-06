@@ -9,7 +9,7 @@
 //   graph/validate   validate / outputRenderable (§3.7), contributing-subgraph walk
 //   graph/hash       outputHash — the per-output render-POST gate (§3.6)
 
-export { mkNodeId, mkEdgeId, VIDEO_SOURCES, VIDEO_PRODUCERS, videoSource } from "./graph/core";
+export { mkNodeId, mkEdgeId, LOOSE_PORT, isLooseEdge, VIDEO_SOURCES, VIDEO_PRODUCERS, videoSource } from "./graph/core";
 export {
   GRAPH_VERSION,
   COLOR_STOPS_DEFAULT,
@@ -53,6 +53,10 @@ export {
   connect,
   disconnect,
   removeNode,
+  resolveDropPort,
+  connectLoose,
+  assignEdge,
+  unassignEdge,
 } from "./graph/mutations";
 export { normalizeGraph } from "./graph/normalize";
 export { validate, videoInput, outputRenderable } from "./graph/validate";

@@ -2,7 +2,7 @@
 // binding<->edge invariant (01 §3.3): wiring a value source writes BOTH the port
 // binding and the edge; removing a node resets any binding that pointed at it.
 
-import { mkEdgeId, mkInputId, portsOf } from "./core";
+import { LOOSE_PORT, isLooseEdge, mkEdgeId, mkInputId, portsOf, videoSource } from "./core";
 import { combineSlot } from "./factories";
 import { nodeParam } from "../nodeParams";
 import type { Binding, CombineMedium, CombineNode, Graph, GraphNode } from "../types";
@@ -197,4 +197,95 @@ export function removeNode(graph: Graph, nodeId: string): Graph {
     out.minimized = graph.minimized.filter((id) => id !== nodeId);
   }
   return out;
+}
+
+// ---- loose edges (drop-anywhere wiring) ---------------------------------------
+// A wire dropped on a CARD (not a specific port) auto-assigns when the destination
+// is unambiguous; otherwise it lands as a LOOSE edge (targetPort "__in", no binding,
+// drawn gray, ignored by validate/hash) until the settings window assigns a port.
+
+// The port a dropped wire should land on, or null when ambiguous (-> loose):
+//   video flow  -> an output's `video` port, or a combine's first FREE slot
+//   points flow -> a fluid's `positions` input
+//   value flow  -> the target's ONLY unbound modulatable port (else ambiguous)
+//   color flow  -> the target's only unwired color input (lyrics fill/outline, fluid color)
+export function resolveDropPort(
+  graph: Graph,
+  targetId: string,
+  flow: string
+): string | null {
+  const node = graph.nodes.find((n) => n.id === targetId);
+  if (!node) return null;
+  if (flow === "video") {
+    if (node.type === "output") return videoSource(graph, targetId, "video") ? null : "video";
+    if (node.type === "combine") {
+      const free = node.data.inputs.find((s) => !videoSource(graph, targetId, s.id));
+      return free ? free.id : null;
+    }
+    return null;
+  }
+  if (flow === "points") {
+    return node.type === "fluid" && !videoSource(graph, targetId, "positions") ? "positions" : null;
+  }
+  if (flow === "color") {
+    const candidates =
+      node.type === "lyrics" ? ["fillColor", "outlineColor"] : node.type === "fluid" ? ["color"] : [];
+    const free = candidates.filter((p) => !videoSource(graph, targetId, p));
+    return free.length === 1 ? free[0] : null;
+  }
+  // value: the only modulatable port still holding a const binding.
+  const ports = portsOf(node);
+  if (!ports) return null;
+  const unbound = Object.entries(ports)
+    .filter(([, p]) => !p.binding || p.binding.kind === "const")
+    .map(([k]) => k);
+  return unbound.length === 1 ? unbound[0] : null;
+}
+
+// Park a wire on the card: a real edge with the LOOSE sentinel targetPort and no
+// binding — the documented exception to the binding<->edge invariant. One loose
+// edge per (source, target) pair (re-dropping the same wire is a no-op).
+export function connectLoose(graph: Graph, sourceId: string, targetId: string): Graph {
+  if (
+    (graph.edges || []).some(
+      (e) => e.source === sourceId && e.target === targetId && isLooseEdge(e)
+    )
+  ) {
+    return graph;
+  }
+  return {
+    ...graph,
+    edges: [
+      ...graph.edges,
+      { id: mkEdgeId(), source: sourceId, sourcePort: "out", target: targetId, targetPort: LOOSE_PORT },
+    ],
+  };
+}
+
+// Promote a loose edge onto a real port: for a modulatable param this IS `connect`
+// (binding + edge written together — the invariant holds again); for the special
+// inputs (video/positions/color) it's a plain retarget. The loose edge is dropped
+// either way (connect/connectVideo replace any existing edge into that port).
+export function assignEdge(graph: Graph, edgeId: string, portKey: string): Graph {
+  const edge = (graph.edges || []).find((e) => e.id === edgeId);
+  if (!edge || !isLooseEdge(edge)) return graph;
+  const without = { ...graph, edges: graph.edges.filter((e) => e.id !== edgeId) };
+  const target = graph.nodes.find((n) => n.id === edge.target);
+  if (target && nodeParam(target.type, portKey)) {
+    return connect(without, edge.source, edge.target, portKey);
+  }
+  return connectVideo(without, edge.source, edge.sourcePort, edge.target, portKey);
+}
+
+// Demote an assigned input back to loose: clear the binding (for a param port) and
+// re-park the wire on the card.
+export function unassignEdge(graph: Graph, targetId: string, portKey: string): Graph {
+  const edge = (graph.edges || []).find((e) => e.target === targetId && e.targetPort === portKey);
+  if (!edge) return graph;
+  const target = graph.nodes.find((n) => n.id === targetId);
+  const cleared =
+    target && nodeParam(target.type, portKey)
+      ? disconnect(graph, targetId, portKey)
+      : { ...graph, edges: graph.edges.filter((e) => e.id !== edge.id) };
+  return connectLoose(cleared, edge.source, targetId);
 }

@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from .graph_common import _nodes_of
+from .graph_common import LOOSE_PORT, _nodes_of
 
 # Bump when render SEMANTICS change so stale clips (cached under an old meaning of
 # the same graph) are invalidated. Folded into `output_hash`.
@@ -64,6 +64,8 @@ def _contributing_ids(graph: dict, output_id: str) -> set:
     and OTHER outputs' pipelines are excluded, so each output caches independently."""
     incoming: dict = {}
     for e in graph.get("edges", []):
+        if e.get("targetPort") == LOOSE_PORT:
+            continue  # an unassigned (loose) wire feeds nothing
         incoming.setdefault(e.get("target"), []).append(e.get("source"))
     seen = set()
     stack = [output_id]
@@ -101,7 +103,11 @@ def output_hash(
         "edges": [
             e
             for e in graph.get("edges", [])
-            if e.get("source") in contributing and e.get("target") in contributing
+            # Loose edges are parked UI state — assigning/parking one must not bust
+            # the cache of pipelines it merely dangles near.
+            if e.get("targetPort") != LOOSE_PORT
+            and e.get("source") in contributing
+            and e.get("target") in contributing
         ],
         "signals": _referenced_signal_defs(
             {"nodes": [n for n in sub_nodes if n.get("type") == "signal"]}, signals_by_id

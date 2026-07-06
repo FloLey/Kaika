@@ -34,6 +34,12 @@ import {
   addInputPort,
   removeInputPort,
   setCombineLayer,
+  LOOSE_PORT,
+  isLooseEdge,
+  resolveDropPort,
+  connectLoose,
+  assignEdge,
+  unassignEdge,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
@@ -767,6 +773,7 @@ describe("v13 migration: minimized -> expanded (compact by default)", () => {
     const { g, fluidId, outId, srcId } = wiredGraph();
     // emptyGraph() now seeds `expanded: []` — a REAL v12 save has no such field,
     // so strip it or the migration would (correctly) preserve it instead of inverting.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { expanded: _expanded, ...v12g } = g;
     return { g: { ...v12g, version: 12 } as Graph, fluidId, outId, srcId };
   };
@@ -797,5 +804,66 @@ describe("v13 migration: minimized -> expanded (compact by default)", () => {
     const { g, fluidId } = v12();
     const once = normalizeGraph({ ...g, minimized: [fluidId] });
     expect(normalizeGraph(once)).toBe(once);
+  });
+});
+
+describe("loose edges (v14): drop-anywhere wiring", () => {
+  it("connectLoose parks a gray edge with the sentinel port and no binding (deduped)", () => {
+    const { g, fluidId, srcId } = wiredGraph();
+    const g2 = connectLoose(g, srcId, fluidId);
+    const loose = g2.edges.find((e) => isLooseEdge(e))!;
+    expect(loose).toMatchObject({ source: srcId, target: fluidId, targetPort: LOOSE_PORT });
+    // no binding was written on any fluid port
+    const fluid = g2.nodes.find((n) => n.id === fluidId) as FluidNode;
+    for (const p of Object.values(fluid.data.ports)) expect(p.binding.kind).toBe("const");
+    // re-dropping the same wire is a no-op
+    expect(connectLoose(g2, srcId, fluidId)).toBe(g2);
+  });
+
+  it("resolveDropPort: output video / combine free slot / fluid positions / single value port", () => {
+    const { g, fluidId, outId } = wiredGraph();
+    expect(resolveDropPort(g, outId, "video")).toBe(null); // video port already wired
+    const cb = combineNode(0, 0);
+    const g2 = { ...g, nodes: [...g.nodes, cb] };
+    expect(resolveDropPort(g2, cb.id, "video")).toBe(cb.data.inputs[0].id); // first free slot
+    expect(resolveDropPort(g2, fluidId, "points")).toBe("positions");
+    // value into a fluid: MANY unbound params -> ambiguous -> loose
+    expect(resolveDropPort(g2, fluidId, "value")).toBe(null);
+    // value into a single-port card (backdrop: only opacity) -> that port
+    const bd = { id: "n-bd", type: "backdrop", x: 0, y: 0,
+      data: { color: "#101418", ports: { opacity: { binding: { kind: "const", value: 1 } } } } } as GraphNode;
+    const g3 = { ...g2, nodes: [...g2.nodes, bd] };
+    expect(resolveDropPort(g3, "n-bd", "value")).toBe("opacity");
+  });
+
+  it("assignEdge promotes loose -> real connect (binding restored); unassignEdge demotes", () => {
+    const { g, fluidId, srcId } = wiredGraph();
+    const g2 = connectLoose(g, srcId, fluidId);
+    const looseId = g2.edges.find((e) => isLooseEdge(e))!.id;
+    const g3 = assignEdge(g2, looseId, "force");
+    expect(g3.edges.some((e) => isLooseEdge(e))).toBe(false);
+    const fluid = g3.nodes.find((n) => n.id === fluidId) as FluidNode;
+    expect(fluid.data.ports.force.binding).toMatchObject({ kind: "node", nodeId: srcId });
+    // and back again
+    const g4 = unassignEdge(g3, fluidId, "force");
+    expect(g4.edges.some((e) => isLooseEdge(e))).toBe(true);
+    const fluid4 = g4.nodes.find((n) => n.id === fluidId) as FluidNode;
+    expect(fluid4.data.ports.force.binding.kind).toBe("const");
+  });
+
+  it("a loose edge never changes the output hash or renderability", () => {
+    const { g, fluidId, outId, srcId } = wiredGraph();
+    const before = outputHash(g, outId, "job", 0, 8, []);
+    const g2 = connectLoose(g, srcId, fluidId);
+    expect(outputHash(g2, outId, "job", 0, 8, [])).toBe(before);
+    expect(outputRenderable(g2, outId)).toBe(true);
+    expect(validate(g2).ok).toBe(true);
+  });
+
+  it("normalizeGraph keeps loose edges (incl. ones parked on a fluid)", () => {
+    const { g, fluidId, srcId } = wiredGraph();
+    const g2 = connectLoose(g, srcId, fluidId);
+    const norm = normalizeGraph({ ...g2, version: 13 });
+    expect(norm.edges.some((e) => isLooseEdge(e))).toBe(true);
   });
 });

@@ -275,7 +275,11 @@ So a UI slider's range can never drift from what the render maps.
   `make export-playground`).
 - **Binding↔edge invariant**: a wired port always has both a binding and an
   edge; use the `lib/graph/mutations.ts` helpers, never mutate edges/ports
-  independently.
+  independently. **One documented exception**: a *loose* edge
+  (`targetPort: "__in"`) is a wire parked on a card with NO binding — it draws
+  gray, and both hashes/validators (frontend `lib/graph/{hash,validate}.ts`,
+  backend `graph_hash`/`graph_validate`) filter it out, so it never affects a
+  render. `assignEdge` promotes it to a real connection.
 - **Version bumps**: `RENDER_VERSION` (`backend/graph_hash.py`) when render
   *semantics* change; `GRAPH_VERSION` (`lib/graph/factories.ts`) + a
   `normalizeGraph` migration when the persisted graph *shape* changes.

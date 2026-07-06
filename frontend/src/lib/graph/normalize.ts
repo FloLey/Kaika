@@ -257,7 +257,8 @@ export function normalizeGraph(graph: Graph): Graph {
   // Drop edges incident to a removed node, and edges that targeted a now-removed
   // fluid PARAM port (keeps the §3.3 invariant). `positions` (the points input, spec
   // 11) is a non-param fluid input, so it's allowed — don't drop it.
-  const valid = new Set([...FLUID_PARAM_KEYS, "positions", "color"]);
+  // "__in" = a loose (unassigned) wire parked on the card — legal on any node (v14).
+  const valid = new Set([...FLUID_PARAM_KEYS, "positions", "color", "__in"]);
   const fluidIds = new Set(nodes.filter((n) => n.type === "fluid").map((n) => n.id));
   const edges = (graph.edges || []).filter(
     (e) =>

@@ -47,7 +47,9 @@ Backend tests run as `.venv/bin/python -m pytest -q`; frontend as
   `FLUID_/COLOR_/SOURCE_PARAM_SPEC`); the frontend tables derive via codegen,
   guarded by `tests/test_fluid_params_codegen.py`.
 - **Binding↔edge invariant**: wire/unwire ports only through the
-  `frontend/src/lib/graph/mutations.ts` helpers.
+  `frontend/src/lib/graph/mutations.ts` helpers. Exception: *loose* edges
+  (`targetPort: "__in"`, no binding) are parked wires — every hash/validate on
+  both sides must keep filtering them out.
 - **Version bumps**: `RENDER_VERSION` (`backend/graph_hash.py`) when render
   semantics change; `GRAPH_VERSION` (`frontend/src/lib/graph/factories.ts`) + a
   `normalizeGraph` migration when the persisted graph shape changes.
