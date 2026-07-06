@@ -1,7 +1,7 @@
 import NodeFrame, { Port } from "./NodeFrame";
 import CurveView from "../../studio/CurveView";
 import PulsePad from "../../studio/PulsePad";
-import { videoSource } from "../../../lib/graphModel";
+import { upstreamKey, videoSource } from "../../../lib/graphModel";
 import { useResolvedCurve } from "./useResolvedCurve";
 import type { NodeProps } from "./nodeProps";
 
@@ -22,9 +22,9 @@ export default function ScopeNode({ node, selected, helpers, ctx, onDelete }: No
 
   // Resolve THIS node's passthrough curve from the backend (the same `/resolve` the
   // signal cards use) — shared with the generator cards via useResolvedCurve so the
-  // fetch/debounce/error logic lives in one place. The depKey serializes the whole
-  // contributing graph + window, since Scope monitors a value that depends on upstream.
-  const depKey = graph ? JSON.stringify([graph.nodes, graph.edges, segment?.signals]) : "";
+  // fetch/debounce/error logic lives in one place. upstreamKey covers exactly the
+  // contributing subgraph, so unrelated card edits don't refetch.
+  const depKey = graph ? upstreamKey(graph, node.id, segment?.signals) : "";
   const { curve, loading } = useResolvedCurve(ctx, node.id, depKey);
 
   const color = "var(--mod)";

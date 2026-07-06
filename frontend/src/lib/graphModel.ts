@@ -61,4 +61,4 @@ export {
 } from "./graph/mutations";
 export { normalizeGraph } from "./graph/normalize";
 export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/validate";
-export { outputHash } from "./graph/hash";
+export { outputHash, upstreamKey } from "./graph/hash";

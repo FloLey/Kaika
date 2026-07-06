@@ -1,5 +1,6 @@
 import CurveView from "../../studio/CurveView";
 import PulsePad from "../../studio/PulsePad";
+import { upstreamKey } from "../../../lib/graphModel";
 import { useResolvedCurve } from "./useResolvedCurve";
 import type { NodeCtx } from "./nodeProps";
 import type { GraphNode } from "../../../lib/types";
@@ -20,8 +21,8 @@ export default function ValuePreview({ node, ctx, color = "var(--mod)", compact 
   const segStart = segment?.start ?? 0;
   const segEnd = segment?.end ?? 0;
   const winLen = Math.max(0.001, segEnd - segStart);
-  // Serialize the contributing graph + window (value output depends on upstream).
-  const depKey = graph ? JSON.stringify([graph.nodes, graph.edges, segment?.signals]) : "";
+  // The contributing-subgraph signature (value output depends on upstream only).
+  const depKey = graph ? upstreamKey(graph, node.id, segment?.signals) : "";
   const { curve, loading } = useResolvedCurve(ctx, node.id, depKey);
 
   const pad = (

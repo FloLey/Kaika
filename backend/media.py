@@ -141,10 +141,15 @@ def _ytdlp_download(url: str, out_dir: Path, stem: str, fmt: str, extra: list, w
     matching output files (sorted; .txt/.lrc sidecars excluded). `extra` appends
     download-specific flags; `what` names the output in error messages. Raises
     RuntimeError with yt-dlp's output on failure/timeout."""
+    # The url is user input riding into a subprocess argv: require a real http(s)
+    # url and terminate option parsing with `--` so a value starting with `-`
+    # (e.g. `--exec …`) can never be read as a yt-dlp option.
+    if not url.lower().startswith(("http://", "https://")):
+        raise RuntimeError("provide an http(s) URL")
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "-f", fmt, "--no-playlist", *extra,
-        "-o", str(out_dir / f"{stem}.%(ext)s"), url,
+        "-o", str(out_dir / f"{stem}.%(ext)s"), "--", url,
     ]  # fmt: skip
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=YTDLP_TIMEOUT)

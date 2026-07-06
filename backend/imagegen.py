@@ -47,6 +47,10 @@ DRAFT_EDGE = int(os.environ.get("IMAGEGEN_DRAFT_EDGE", "512"))
 
 _lock = threading.Lock()
 _pipes: dict[str, object] = {}  # lazy per-model singletons — loading takes GBs + time
+# One inference at a time: diffusers pipes aren't thread-safe and there is ONE GPU —
+# without this, a draft ✨ on the single-worker jobs pool and an HD export regen on
+# the render pool can run two pipes at once on MPS (OOM with Z-Image's ~33 GB).
+_infer_lock = threading.Lock()
 
 
 def model_label(model: str) -> str:
@@ -135,13 +139,14 @@ def generate(
     out = []
     for i in range(max(1, int(count))):
         gen = torch.Generator(device="cpu").manual_seed(int(seed) + i)
-        result = pipe(
-            prompt=str(prompt),
-            num_inference_steps=spec["steps"],
-            guidance_scale=0.0,  # both models are distilled guidance-free
-            width=width,
-            height=height,
-            generator=gen,
-        )
+        with _infer_lock:  # serialize per image so a cancel between images can land
+            result = pipe(
+                prompt=str(prompt),
+                num_inference_steps=spec["steps"],
+                guidance_scale=0.0,  # both models are distilled guidance-free
+                width=width,
+                height=height,
+                generator=gen,
+            )
         out.append(result.images[0])
     return out

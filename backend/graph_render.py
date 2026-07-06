@@ -671,7 +671,8 @@ def _slideshow_paths(dag: "_Dag", node: dict) -> list:
         gen_urls = gen_data.get("assetUrls") or []
         cap = gen_data.get("activeCount")
         if isinstance(cap, (int, float)):
-            gen_urls = gen_urls[: int(cap)]
+            # floor at 0: a negative cap must mean "none", not a from-the-end slice
+            gen_urls = gen_urls[: max(0, int(cap))]
         urls += [u for u in gen_urls if u]
     out = []
     for url in urls:
@@ -962,8 +963,13 @@ def render_stream(
     scratch.mkdir(parents=True, exist_ok=True)
     preview = scratch / "preview.mp4"
     enc: "subprocess.Popen | None" = None
+    # A NAMED generator, closed explicitly in the finally: a cancel/error mid-stream
+    # returns out of the for-loop, and stream_blocks' own finally (branch pools,
+    # decoder closers, partial-cache discards) must run NOW, not whenever the GC
+    # finalizes the abandoned generator.
+    gen = dag.stream_blocks(output_id, block_frames)
     try:
-        for k, (_a, b, tot, block) in enumerate(dag.stream_blocks(output_id, block_frames)):
+        for k, (_a, b, tot, block) in enumerate(gen):
             if should_cancel and should_cancel():
                 return None
             data = fluid.flatten(block).tobytes()
@@ -987,6 +993,7 @@ def render_stream(
             on_progress(total, total, url)
         return url
     finally:
+        gen.close()  # run stream_blocks' cleanup (pools/decoders/partial caches)
         fluid.close_encoder(enc)  # no-op unless cancelled / errored mid-stream
         shutil.rmtree(scratch, ignore_errors=True)
 

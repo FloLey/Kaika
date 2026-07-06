@@ -11,7 +11,7 @@ import { useResolvedCurve } from "./useResolvedCurve";
 import { dp2, FITS } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { SLIDESHOW_PARAMS } from "../../../lib/nodeParams";
-import { videoSource } from "../../../lib/graphModel";
+import { upstreamKey, videoSource } from "../../../lib/graphModel";
 import AssetLibrary from "../../assets/AssetLibrary";
 import BoxPad from "./BoxPad";
 import type { NodeProps } from "./nodeProps";
@@ -60,13 +60,15 @@ export default function SlideshowNode({
 
   // How many times the slideshow will switch this segment: the trigger source's
   // REAL resolved curve (same /resolve the Scope uses) swept through this card's
-  // hysteresis thresholds — rising edges = switches.
+  // hysteresis thresholds — rising edges = switches. upstreamKey keys the refetch on
+  // the trigger source's whole contributing subgraph (editing the wired gate/signal
+  // used to leave a stale count — the old key only watched this card's own fields).
   const triggerBinding = d.ports?.trigger?.binding;
   const triggerSrc = triggerBinding?.kind === "node" ? triggerBinding.nodeId : null;
   const { curve } = useResolvedCurve(
     triggerSrc ? ctx : undefined,
     triggerSrc || "",
-    JSON.stringify([triggerSrc, d.threshold, d.hysteresis])
+    triggerSrc && ctx?.graph ? upstreamKey(ctx.graph, triggerSrc, ctx?.segment?.signals) : ""
   );
   const switches = useMemo(() => {
     if (!triggerSrc || !curve.length) return 0;

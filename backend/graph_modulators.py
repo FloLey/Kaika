@@ -98,12 +98,22 @@ def _signal_curve(
             job_id,
         )
         return np.zeros(nframes, np.float32)
+    # The band comes straight from the posted segment.signals — clamp it into a sane
+    # window (like /extract's validate_audio_params) so a malformed def (maxHz below
+    # minHz, negative, junk types) renders as a degenerate-but-valid band instead of
+    # surfacing a raw exception as an opaque render 500.
+    try:
+        min_hz = max(0.0, float(sig.get("minHz", 0.0)))
+        max_hz = max(min_hz + 1.0, float(sig.get("maxHz", min_hz + 1.0)))
+    except (TypeError, ValueError):
+        log.warning("signal '%s' has junk band values — using flat 0", sig.get("id"))
+        return np.zeros(nframes, np.float32)
     d = signals.extract(
         str(stem_path),
         start,
         end,
-        sig["minHz"],
-        sig["maxHz"],
+        min_hz,
+        max_hz,
         feature=sig.get("feature", "energy"),
         fps=FLUID_FPS,
         attack=sig.get("attack", 5.0),

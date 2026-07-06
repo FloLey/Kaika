@@ -213,13 +213,18 @@ const STEP_LABELS: Record<string, string> = {
 // Poll a background job until it finishes; resolve with its result, throw on
 // error. The result shape depends on the job (upload vs segment), so callers pick
 // the type: `pollJob<UploadResult>(...)`. `onStep(label)` fires as phases advance.
+// Pass a `signal` (AbortController) so an unmounting component can stop the loop —
+// otherwise a forgotten poll keeps hitting /jobs and calling setState forever.
 export async function pollJob<T = unknown>(
   jobId: string,
   onStep?: (label: string) => void,
-  intervalMs = 1000
+  intervalMs = 1000,
+  signal?: AbortSignal
 ): Promise<T> {
   for (;;) {
+    if (signal?.aborted) throw new DOMException("poll aborted", "AbortError");
     const j = await getJob(jobId);
+    if (signal?.aborted) throw new DOMException("poll aborted", "AbortError");
     if (onStep && j.step) onStep(STEP_LABELS[j.step] || j.step);
     if (j.state === "done") return j.result as T;
     if (j.state === "error") throw new Error(j.error || "job failed");

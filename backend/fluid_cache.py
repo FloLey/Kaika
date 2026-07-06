@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -59,7 +60,10 @@ def store(key: str, frames: np.ndarray) -> None:
         return
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     p = _path(key)
-    tmp = p.with_name(f"{key}.{os.getpid()}.tmp")
+    # pid + uuid: two THREADS resolving the same params key concurrently (a stack
+    # combine's branch pools, two streams of one graph) must not share a temp file —
+    # same collision class the render scratch dirs were uuid'd for.
+    tmp = p.with_name(f"{key}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
     try:
         # Write through a file handle so numpy keeps our name (a path arg would have
         # `.npy` appended); the on-disk format is standard .npy regardless of suffix.
@@ -87,7 +91,7 @@ def frame_writer(key: str, shape: tuple):
     if not ENABLED:
         return None, noop, noop
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = CACHE_DIR / f"{key}.{os.getpid()}.tmp.npy"
+    tmp = CACHE_DIR / f"{key}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp.npy"
     try:
         mm = np.lib.format.open_memmap(tmp, mode="w+", dtype=np.uint8, shape=shape)
     except (OSError, ValueError) as e:

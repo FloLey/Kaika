@@ -11,13 +11,20 @@ from .. import fluid
 from .. import graph as graphmod
 from .. import render_cache
 from .. import render_jobs
-from ..web import json_body, validate_audio_params, error_response
+from ..web import json_body, validate_audio_params, validate_job_id, error_response
 from ..media import stem_audio_path
 from ..paths import FLUID_DIR
 
 log = logging.getLogger("kaika")
 
 bp = Blueprint("animation", __name__)
+
+
+def _bad_job(job_id) -> bool:
+    """Body job_ids reach stem/asset path resolution (glob under UPLOAD_DIR/<id>),
+    so they need the same shape check the URL routes apply — a `../..` id must
+    never reach the filesystem."""
+    return not validate_job_id(job_id)
 
 
 @bp.route("/extract", methods=["POST"])
@@ -27,6 +34,8 @@ def extract_route(b):
     shaped by attack/release/invert/gamma/gain/offset/threshold -> {curve,times}.
     The frontend calls this (debounced) as bands/sliders move."""
     job_id = b.get("job_id")
+    if _bad_job(job_id):
+        return error_response("bad job id", 404)
     stem = b.get("stem", "original")
     src = stem_audio_path(job_id, stem) if job_id else None
     if src is None:
@@ -70,6 +79,8 @@ def resolve_route(b):
     node_id = b.get("node_id")
     if not job_id or segment is None or graph is None or not node_id:
         return error_response("missing job_id, segment, graph, or node_id", 400)
+    if _bad_job(job_id):
+        return error_response("bad job id", 404)
     try:
         out = graphmod.resolve_node_curve(job_id, segment, graph, node_id, stem_audio_path)
     except (ValueError, TypeError, KeyError) as e:
@@ -93,6 +104,8 @@ def resolve_points_route(b):
     node_id = b.get("node_id")
     if not job_id or segment is None or graph is None or not node_id:
         return error_response("missing job_id, segment, graph, or node_id", 400)
+    if _bad_job(job_id):
+        return error_response("bad job id", 404)
     try:
         out = graphmod.resolve_node_points(job_id, segment, graph, node_id, stem_audio_path)
     except (ValueError, TypeError, KeyError) as e:
@@ -144,6 +157,8 @@ def animate(body):
     output_id = body.get("output_id")  # which output's pipeline to render (N per graph)
     if not job_id or graph is None or segment is None:
         return error_response("missing job_id, segment, or graph", 400)
+    if _bad_job(job_id):
+        return error_response("bad job id", 404)
     try:
         url = graphmod.render(job_id, segment, graph, stem_audio_path, output, output_id)
     except ValueError as e:
@@ -171,6 +186,8 @@ def animate_stream(body):
     output_id = body.get("output_id")
     if not job_id or graph is None or segment is None:
         return error_response("missing job_id, segment, or graph", 400)
+    if _bad_job(job_id):
+        return error_response("bad job id", 404)
     try:  # fail fast on an invalid graph instead of surfacing it as an async error
         graphmod.validate(graph)
     except ValueError as e:

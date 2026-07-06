@@ -288,6 +288,16 @@ describe("connect / disconnect keep the binding<->edge invariant", () => {
     );
   });
 
+  it("connect/disconnect never mutate the PREVIOUS graph (undo/history depends on it)", () => {
+    const { g, fluidId, srcId } = wiredGraph();
+    const before = JSON.stringify(g);
+    const g2 = connect(g, srcId, fluidId, "force");
+    expect(JSON.stringify(g)).toBe(before); // the old snapshot is intact
+    const mid = JSON.stringify(g2);
+    disconnect(g2, fluidId, "force");
+    expect(JSON.stringify(g2)).toBe(mid);
+  });
+
   // (port lo/hi patching is covered by the fluidBindings setNodeRange test.)
 });
 

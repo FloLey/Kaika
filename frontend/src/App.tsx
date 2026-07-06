@@ -50,25 +50,33 @@ export default function App() {
   // while the drawer is open.
   useLogPoll(logsOpen ? 1500 : 8000);
 
-  // ---- autosave (debounced) -------------------------------------------------
+  // ---- autosave (debounced, serialized) --------------------------------------
+  // Every project PUT rides ONE promise chain: two overlapping saves could commit
+  // out of order server-side (the DB would keep the OLDER payload while the UI
+  // thinks everything saved). The chain serializes them, and a queued save that a
+  // newer edit superseded is skipped instead of writing stale state.
+  const saveSeq = useRef(0);
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     if (!job || (step !== "review" && step !== "studio" && step !== "export")) return;
     const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
     const jsonStr = JSON.stringify(payload);
     if (jsonStr === lastSaved.current) return;
     const t = setTimeout(() => {
-      api
-        .saveProject(job, payload)
-        .then(() => {
+      const seq = ++saveSeq.current;
+      saveChain.current = saveChain.current.then(async () => {
+        if (seq !== saveSeq.current) return; // superseded — a newer payload is queued
+        try {
+          await api.saveProject(job, payload);
           lastSaved.current = jsonStr;
           setSaveError(false);
-        })
-        .catch((e) => {
+        } catch (e) {
           // lastSaved stays stale, so the next edit retries automatically; we
           // just flag it so the user knows the latest change isn't persisted.
-          console.warn("autosave failed:", e?.message || e);
+          console.warn("autosave failed:", (e as Error)?.message || e);
           setSaveError(true);
-        });
+        }
+      });
     }, 800);
     return () => clearTimeout(t);
   }, [segments, step, job, output, exportSettings]);
@@ -78,14 +86,19 @@ export default function App() {
   // PUT must carry the full autosave payload — the backend writes segments
   // unconditionally — plus the optional lyric_lines the route persists to the
   // analysis cache. Local state updates on success so every consumer (lyrics
-  // card preview, render keys) picks the new words up immediately.
+  // card preview, render keys) picks the new words up immediately. Joins the same
+  // save chain so it can't interleave with an in-flight autosave.
   const saveLyricLines = useCallback(
     async (lines: unknown[]) => {
       if (!job) return;
       const base = { step, segments: serializeSegments(segments), output, export: exportSettings };
-      await api.saveProject(job, { ...base, lyric_lines: lines });
-      setLyricLines(lines);
-      lastSaved.current = JSON.stringify(base); // autosave needn't re-PUT this state
+      const run = saveChain.current.then(async () => {
+        await api.saveProject(job, { ...base, lyric_lines: lines });
+        setLyricLines(lines);
+        lastSaved.current = JSON.stringify(base); // autosave needn't re-PUT this state
+      });
+      saveChain.current = run.catch(() => {}); // keep the chain alive on failure
+      return run; // the editor still sees success/failure
     },
     [job, step, segments, output, exportSettings]
   );

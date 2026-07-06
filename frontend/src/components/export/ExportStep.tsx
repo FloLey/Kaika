@@ -39,7 +39,13 @@ export default function ExportStep({
   // export aspect would reframe everything. The user picks the resolution/fps; the
   // shape follows the canvas. Editing one side derives the other from this ratio.
   const canvasRatio = output.width / (output.height || 1);
+  // Snap AT MOST once per ratio value (ref-guarded): the effect writes state it is
+  // keyed near, so without the guard a rounding disagreement between fitToRatio and
+  // the manual size handlers could re-snap a size the user just typed.
+  const snappedFor = useRef<number | null>(null);
   useEffect(() => {
+    if (snappedFor.current === canvasRatio) return;
+    snappedFor.current = canvasRatio;
     // Snap the stored export size onto the canvas aspect on entry and whenever the
     // canvas orientation changes — keep the longer edge so the resolution survives.
     const fitted = fitToRatio(exportSettings, canvasRatio);

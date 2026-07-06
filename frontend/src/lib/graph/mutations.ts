@@ -131,16 +131,38 @@ export function setCombineLayer(graph: Graph, combineId: string, layer: number):
 
 // ---- wiring (keeps the §3.3 binding<->edge invariant) ------------------------
 
+// Clone-write one port's binding on the target node — connect/disconnect MUST NOT
+// mutate the previous graph in place (undo/history and memo comparisons depend on
+// the old snapshot staying intact; fluidBindings.patchBinding sets the precedent).
+function withBinding(graph: Graph, targetId: string, paramKey: string, binding: Binding): Graph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) => {
+      if (n.id !== targetId) return n;
+      const ports = portsOf(n);
+      if (!ports) return n;
+      return {
+        ...n,
+        data: { ...n.data, ports: { ...ports, [paramKey]: { binding } } },
+      } as GraphNode;
+    }),
+  };
+}
+
 // Wire a value-source node into a modulatable param (fluid or an FX card): writes
 // BOTH the binding and the edge. lo/hi default to the param range (maps source
 // 0..1 -> native units).
 export function connect(graph: Graph, sourceId: string, targetId: string, paramKey: string): Graph {
   const node = graph.nodes.find((n) => n.id === targetId);
   const p = node ? nodeParam(node.type, paramKey) : undefined;
-  const ports = node ? portsOf(node) : null;
-  if (!p || !ports) return graph;
-  ports[paramKey] = { binding: { kind: "node", nodeId: sourceId, lo: p.min, hi: p.max } };
-  const edges = graph.edges.filter((e) => !(e.target === targetId && e.targetPort === paramKey));
+  if (!p || !node || !portsOf(node)) return graph;
+  const g2 = withBinding(graph, targetId, paramKey, {
+    kind: "node",
+    nodeId: sourceId,
+    lo: p.min,
+    hi: p.max,
+  });
+  const edges = g2.edges.filter((e) => !(e.target === targetId && e.targetPort === paramKey));
   edges.push({
     id: mkEdgeId(),
     source: sourceId,
@@ -148,19 +170,18 @@ export function connect(graph: Graph, sourceId: string, targetId: string, paramK
     target: targetId,
     targetPort: paramKey,
   });
-  return { ...graph, edges };
+  return { ...g2, edges };
 }
 
 // Clear a wired param back to its default constant, dropping the edge.
 export function disconnect(graph: Graph, targetId: string, paramKey: string): Graph {
   const node = graph.nodes.find((n) => n.id === targetId);
   const p = node ? nodeParam(node.type, paramKey) : undefined;
-  const ports = node ? portsOf(node) : null;
-  if (!p || !ports) return graph;
-  ports[paramKey] = { binding: { kind: "const", value: p.def } };
+  if (!p || !node || !portsOf(node)) return graph;
+  const g2 = withBinding(graph, targetId, paramKey, { kind: "const", value: p.def });
   return {
-    ...graph,
-    edges: graph.edges.filter((e) => !(e.target === targetId && e.targetPort === paramKey)),
+    ...g2,
+    edges: g2.edges.filter((e) => !(e.target === targetId && e.targetPort === paramKey)),
   };
 }
 

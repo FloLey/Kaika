@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import ArgInfo from "./ArgInfo";
@@ -6,7 +6,7 @@ import { useNodeData } from "./useNodeData";
 import { useResolvedCurve } from "./useResolvedCurve";
 import { argHelp } from "../../../lib/paramHelp";
 import { generateImage, pollJob } from "../../../lib/api";
-import { videoSource } from "../../../lib/graphModel";
+import { upstreamKey, videoSource } from "../../../lib/graphModel";
 import { countRises, fitPrompts } from "../../../lib/imageCount";
 import { assetName } from "./useAssetUpload";
 import type { NodeProps } from "./nodeProps";
@@ -45,15 +45,12 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
   // Optional gate input: resolve the wired source's ACTUAL curve (the same /resolve
   // the Scope uses — so all of the gate's threshold/hysteresis/minGap/divide is already
   // applied) and count its rising edges. The slideshow shows `rises + 1` distinct
-  // images, so that's how many the card needs. depKey refetches on any UPSTREAM change
-  // (edges, other nodes, signals) but NOT on this card's own prompt/seed edits.
+  // images, so that's how many the card needs. upstreamKey covers exactly the wired
+  // source's contributing subgraph — refetch on any UPSTREAM change but NOT on this
+  // card's own prompt/seed edits (and no O(graph) stringify per render).
   const srcId = ctx?.graph ? videoSource(ctx.graph, node.id, "in") : null;
-  const depKey = JSON.stringify([
-    srcId,
-    ctx?.segment?.signals,
-    ctx?.graph?.edges,
-    (ctx?.graph?.nodes || []).filter((n) => n.id !== node.id).map((n) => [n.id, n.type, n.data]),
-  ]);
+  const depKey =
+    srcId && ctx?.graph ? upstreamKey(ctx.graph, srcId, ctx?.segment?.signals) : "";
   const { curve } = useResolvedCurve(srcId ? ctx : undefined, srcId ?? "", depKey);
   const needed = srcId && curve.length ? countRises(curve) + 1 : null;
 
@@ -91,6 +88,15 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
   const busy = busyRow !== null;
   const [err, setErr] = useState<string | null>(null);
 
+  // Abort in-flight job polls on unmount — the backend job keeps running (the
+  // images still land in the library), but this card stops polling + setState-ing.
+  const pollAbort = useRef(new AbortController());
+  useEffect(() => {
+    const ctl = pollAbort.current;
+    return () => ctl.abort();
+  }, []);
+  const isAbort = (ex: unknown) => ex instanceof DOMException && ex.name === "AbortError";
+
   const onGenerate = async () => {
     if (!jobId || !filled.length || busy) return;
     setBusyRow("all");
@@ -101,7 +107,7 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
       const trimmed = visiblePrompts.map((p) => p.trim());
       const toGen = trimmed.filter(Boolean);
       const { job_id } = await generateImage(jobId, toGen, d.seed, model);
-      const result = await pollJob<{ assets: Asset[] }>(job_id);
+      const result = await pollJob<{ assets: Asset[] }>(job_id, undefined, 1000, pollAbort.current.signal);
       const urls = (result.assets || []).map((a) => a.url);
       // Scatter the results back to their PROMPT INDICES so assetUrls[i] is prompt i's
       // image (empty rows get ""), then re-append the hidden rows' images so they stay.
@@ -110,7 +116,7 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
       const next = [...visibleUrls, ...generated.slice(visiblePrompts.length)];
       set({ assetUrls: next, seed: d.seed + toGen.length });
     } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : "generation failed");
+      if (!isAbort(ex)) setErr(ex instanceof Error ? ex.message : "generation failed");
     } finally {
       setBusyRow(null);
     }
@@ -126,7 +132,7 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
     try {
       const freshSeed = Math.floor(Math.random() * 9999) + 1;
       const { job_id } = await generateImage(jobId, [text], freshSeed, model);
-      const result = await pollJob<{ assets: Asset[] }>(job_id);
+      const result = await pollJob<{ assets: Asset[] }>(job_id, undefined, 1000, pollAbort.current.signal);
       const url = result.assets?.[0]?.url;
       if (url) {
         const next = [...generated];
@@ -135,7 +141,7 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
         set({ assetUrls: next });
       }
     } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : "generation failed");
+      if (!isAbort(ex)) setErr(ex instanceof Error ? ex.message : "generation failed");
     } finally {
       setBusyRow(null);
     }

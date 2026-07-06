@@ -93,3 +93,13 @@ export function outputHash(
   };
   return fnv1a(stableStringify(canon));
 }
+
+// The refetch key for a per-card /resolve preview: a signature of the CONTRIBUTING
+// subgraph upstream of `nodeId` (inclusive) + the referenced signal defs. An
+// upstream edit changes it; an unrelated card's edit doesn't — and only the
+// contributing set is serialized, so it's cheap on big graphs (the old pattern
+// stringified every node + edge on every render). Same walk as outputHash, which
+// resolves from ANY node id; the segment window rides the callers' effect deps.
+export function upstreamKey(graph: Graph, nodeId: string, signals: Signal[] | undefined): string {
+  return outputHash(graph, nodeId, null, null, null, signals);
+}
