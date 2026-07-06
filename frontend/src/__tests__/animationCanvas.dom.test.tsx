@@ -46,25 +46,34 @@ describe("AnimationCanvas + useGraphEditor (jsdom)", () => {
   });
 });
 
-// v13 compact-by-default: a node NOT in graph.expanded renders the CompactCard
-// (preview body + one in/out anchor); clicking its body opens the settings modal
-// with the FULL card; a node in graph.expanded renders its full card on canvas.
-describe("compact cards + settings modal (jsdom)", () => {
-  const gateGraph = (expanded: string[]) => ({
-    version: 13,
+// v16 view modes: the canvas is globally "detailed" (default — classic full cards)
+// or "compact" (name + preview + settings modal on body click); `viewOverrides`
+// lists cards displayed OPPOSITE to the mode; the toolbar switch flips the mode
+// and clears the overrides.
+describe("view modes: detailed | compact (jsdom)", () => {
+  const gateGraph = (viewMode?: "detailed" | "compact", viewOverrides: string[] = []) => ({
+    version: 16,
     nodes: [{ id: "n-g", type: "gate", x: 0, y: 0, data: { threshold: 0.5, hysteresis: 0.1, invert: false } }],
     edges: [],
-    expanded,
+    ...(viewMode ? { viewMode } : {}),
+    viewOverrides,
     view: { tx: 0, ty: 0, scale: 1 },
   });
 
-  it("a non-expanded node renders compact; clicking the body opens the settings modal", () => {
-    const seg = { ...baseSegment, graph: gateGraph([]) } as Segment;
+  it("DETAILED is the default: full cards on canvas, no compact bodies", () => {
+    const seg = { ...baseSegment, graph: gateGraph() } as Segment;
+    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    expect(container.querySelector(".anim-compact-body")).toBeNull();
+    expect(container.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0);
+  });
+
+  it("compact mode renders compact; clicking the body opens the settings modal", () => {
+    const seg = { ...baseSegment, graph: gateGraph("compact") } as Segment;
     const { container, getByRole } = render(
       <AnimationCanvas segment={seg} onGraphChange={() => {}} />
     );
     const body = container.querySelector(".anim-compact-body");
-    expect(body).toBeTruthy(); // compact view is the default
+    expect(body).toBeTruthy();
     expect(container.querySelector('input[type="range"]')).toBeNull(); // no full controls on canvas
     fireEvent.click(body!);
     const dialog = getByRole("dialog"); // the settings modal (portal to body)
@@ -72,10 +81,25 @@ describe("compact cards + settings modal (jsdom)", () => {
     expect(dialog.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0); // full card inside
   });
 
-  it("an expanded node renders its full card on canvas", () => {
-    const seg = { ...baseSegment, graph: gateGraph(["n-g"]) } as Segment;
+  it("overrides display a card OPPOSITE to the mode", () => {
+    // compact mode + override -> that card renders FULL
+    const seg = { ...baseSegment, graph: gateGraph("compact", ["n-g"]) } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
     expect(container.querySelector(".anim-compact-body")).toBeNull();
-    expect(container.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0);
+    // detailed mode + override -> that card renders COMPACT
+    const seg2 = { ...baseSegment, graph: gateGraph("detailed", ["n-g"]) } as Segment;
+    const { container: c2 } = render(<AnimationCanvas segment={seg2} onGraphChange={() => {}} />);
+    expect(c2.querySelector(".anim-compact-body")).toBeTruthy();
+  });
+
+  it("the toolbar switch commits the mode and clears overrides", () => {
+    const onGraphChange = vi.fn();
+    const seg = { ...baseSegment, graph: gateGraph("detailed", ["n-g"]) } as Segment;
+    const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
+    fireEvent.click(getByText("▤ compact"));
+    expect(onGraphChange).toHaveBeenCalledTimes(1);
+    const committed = onGraphChange.mock.calls[0][0];
+    expect(committed.viewMode).toBe("compact");
+    expect(committed.viewOverrides).toEqual([]); // a mode switch is a clean flip
   });
 });

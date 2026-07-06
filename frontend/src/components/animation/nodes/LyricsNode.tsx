@@ -164,7 +164,7 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
           <button
             className="btn sm no-drag"
             onClick={() => setEditorOpen(true)}
-            title="Rewrite the words of each line (timing stays locked to the vocal)"
+            title="Edit the words and start/end time of each line"
           >
             ✎ edit lines
           </button>

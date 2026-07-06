@@ -109,10 +109,12 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v15: the imagegen card split — pre-v15 `imagegen` (slideshow + generator in one)
 //       becomes `slideshow`; the new `imagegen` is a pure generator (prompts list)
 //       feeding a slideshow's `images` input.
-export const GRAPH_VERSION = 15;
+//  v16: canvas view MODES — `viewMode` ("detailed" default | "compact") + per-card
+//       `viewOverrides`; the v13 `expanded` set is stripped (old saves open detailed).
+export const GRAPH_VERSION = 16;
 
 export function emptyGraph(): Graph {
-  return { version: GRAPH_VERSION, nodes: [], edges: [], expanded: [], view: { tx: 0, ty: 0, scale: 1 } };
+  return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
 }
 
 // ---- combine node (spec 10) --------------------------------------------------

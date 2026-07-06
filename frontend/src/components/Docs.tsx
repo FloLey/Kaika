@@ -490,13 +490,15 @@ export default function Docs({ section }: { section?: string }) {
           <strong>Sources</strong>, <strong>Modulators</strong>, <strong>Generators</strong>,{" "}
           <strong>Compositing</strong>, <strong>Output</strong> (in data-flow order). Open a category
           and <strong>hover any item</strong> for a tip describing what it does and what it takes in
-          → puts out, then click to drop it. Cards land <strong>compact</strong>: just the name, a
-          small live preview, and one input + one output dot. <strong>Click a compact card's
-          body</strong> to open its settings window (all the controls, editing the graph live —{" "}
-          <kbd>Esc</kbd> or a click outside closes it), or hit the <strong>▢</strong> in its title
-          bar to expand the full card on the canvas (<strong>–</strong> collapses it back). Every
-          card has a <strong>✕</strong> in its top-right corner to delete it (which also removes
-          its wires). The <em>output</em> card is the one exception — its body is the live render
+          → puts out, then click to drop it. The canvas has <strong>two views</strong>, switched
+          from the toolbar: <strong>▦ detailed</strong> (the default — every card shows its full
+          controls) and <strong>▤ compact</strong> (just the name, a small live preview, and one
+          input + one output dot). In compact view, <strong>click a card's body</strong> to open
+          its settings window (all the controls, editing the graph live — <kbd>Esc</kbd> or a
+          click outside closes it). The <strong>▢/–</strong> button in a card's title bar
+          overrides the view for that one card (switching views clears the overrides). Every card
+          has a <strong>✕</strong> in its top-right corner to delete it (which also removes its
+          wires). The <em>output</em> card is the one exception — its body is the live render
           preview, so it always shows in full.
         </p>
         <table>
@@ -803,11 +805,12 @@ export default function Docs({ section }: { section?: string }) {
             recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
             keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.
             <br />
-            <strong>✎ edit lines</strong> (on the card) rewrites the <em>words</em> of each aligned
-            line while keeping its timing — for covers and rewritten lyrics: upload the{" "}
-            <em>original</em> lyrics so the alignment locks to the vocal, then swap in your new
-            words line by line. (Uploading different words directly won't align — timing comes from
-            matching what is actually sung.)
+            <strong>✎ edit lines</strong> (on the card) edits each line's <em>words</em> and its{" "}
+            <em>start/end time</em> (as <code>m:ss.cc</code>). For covers and rewritten lyrics,
+            upload the <em>original</em> lyrics first so the alignment locks to the vocal, then swap
+            in your new words line by line (uploading different words directly won't align — the
+            timing comes from matching what is actually sung). When the automatic timing is off — or
+            there were no lyrics to align to — nudge each line's times by hand.
           </li>
         </ul>
 

@@ -18,8 +18,8 @@ interface PaletteProps {
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onGraphChange: (updater: (g: Graph) => Graph) => void;
-  allMinimized?: boolean;
-  onToggleMinimizeAll?: (() => void) | null;
+  viewMode?: "detailed" | "compact";
+  onSetViewMode?: ((mode: "detailed" | "compact") => void) | null;
 }
 
 export default function Palette({
@@ -29,8 +29,8 @@ export default function Palette({
   isFullscreen,
   onToggleFullscreen,
   onGraphChange,
-  allMinimized,
-  onToggleMinimizeAll,
+  viewMode,
+  onSetViewMode,
 }: PaletteProps) {
   // Which category dropdown is open (one at a time), and whether the signal picker
   // (opened from the Sources menu's factory-less Signal entry) is showing.
@@ -148,18 +148,26 @@ export default function Palette({
 
       <span className="anim-toolbar-spacer" />
 
-      {onToggleMinimizeAll && (
-        <button
-          className="btn sm"
-          title={
-            allMinimized
-              ? "Expand every card to its full on-canvas view"
-              : "Collapse every card back to its compact view"
-          }
-          onClick={onToggleMinimizeAll}
-        >
-          {allMinimized ? "▢ expand all" : "– collapse all"}
-        </button>
+      {onSetViewMode && (
+        // The canvas view-mode switch: detailed (classic full cards) vs compact
+        // (name + preview). Flipping clears the per-card ▢/– overrides — a clean
+        // flip; you can still override individual cards inside either mode.
+        <div className="anim-viewmode" role="group" aria-label="card view mode">
+          <button
+            className={"btn sm" + (viewMode !== "compact" ? " on" : "")}
+            title="Detailed view — every card shows its full controls on the canvas"
+            onClick={() => onSetViewMode("detailed")}
+          >
+            ▦ detailed
+          </button>
+          <button
+            className={"btn sm" + (viewMode === "compact" ? " on" : "")}
+            title="Compact view — name + live preview; click a card's body for its settings"
+            onClick={() => onSetViewMode("compact")}
+          >
+            ▤ compact
+          </button>
+        </div>
       )}
       {onOpenOutput && (
         <button

@@ -127,9 +127,10 @@ export default function NodeFrame({
   compact = false,
   children,
 }: NodeFrameProps) {
-  const { minimized: minSet, toggle } = useContext(MinimizeContext) as {
+  const { minimized: minSet, toggle, mode } = useContext(MinimizeContext) as {
     minimized?: Set<string>;
     toggle?: (id: string) => void;
+    mode?: "detailed" | "compact";
   };
   // Collapse STATE vs body VISUALS: `stateMin` is whether the editor holds this card
   // compact (drives the toggle button's glyph/title); `isMin` is whether THIS frame
@@ -162,7 +163,15 @@ export default function NodeFrame({
           {toggle && node.type !== "output" && (
             <button
               className="anim-node-min no-drag"
-              title={stateMin ? "expand full card on canvas" : "collapse to compact card"}
+              title={
+                stateMin
+                  ? mode === "compact"
+                    ? "expand this card (override the compact view)"
+                    : "restore this card to the detailed view"
+                  : mode === "compact"
+                    ? "return this card to the compact view"
+                    : "compact this card (override the detailed view)"
+              }
               aria-label={stateMin ? "expand card" : "collapse card"}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {

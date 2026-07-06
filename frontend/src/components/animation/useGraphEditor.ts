@@ -65,30 +65,47 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [commitGraph]
   );
 
-  // Compact-by-default (v13): the graph persists which cards are EXPANDED
-  // (`graph.expanded` — ignored by outputHash so toggling never busts the render
-  // cache); every other card renders compact. Downstream consumers (ctx.minimized,
-  // MinimizeContext, renderAnimNode) keep receiving the derived COMPACT set so their
-  // contract is unchanged; `toggleMinimize` (kept name) now flips `expanded` membership.
-  const expanded = useMemo(() => new Set<string>(graph.expanded || []), [graph.expanded]);
+  // View modes (v16): the canvas is globally "detailed" (classic full cards — the
+  // default) or "compact" (name + preview), switched from the toolbar and persisted
+  // as `graph.viewMode`. `graph.viewOverrides` lists cards displayed OPPOSITE to the
+  // mode (▢/– per card); switching modes clears the overrides — a clean flip. Both
+  // are top-level graph fields, so outputHash never sees them (toggling can't bust
+  // the render cache). Downstream consumers (ctx.minimized, MinimizeContext,
+  // renderAnimNode) keep receiving the derived COMPACT set, so their contract is
+  // unchanged; `toggleMinimize` (kept name) flips override membership.
+  const viewMode = graph.viewMode || "detailed";
+  const overrides = useMemo(() => new Set<string>(graph.viewOverrides || []), [graph.viewOverrides]);
   // `output` never compacts — its body IS the live render preview — so it's excluded
   // here at the source (NodeFrame also hides its toggle) rather than special-cased
   // by every consumer of the compact set.
   const minimized = useMemo(
     () =>
       new Set(
-        graph.nodes.filter((n) => n.type !== "output" && !expanded.has(n.id)).map((n) => n.id)
+        graph.nodes
+          .filter(
+            (n) =>
+              n.type !== "output" &&
+              (viewMode === "compact" ? !overrides.has(n.id) : overrides.has(n.id))
+          )
+          .map((n) => n.id)
       ),
-    [graph.nodes, expanded]
+    [graph.nodes, viewMode, overrides]
   );
   const toggleMinimize = useCallback(
     (id: string) => {
       applyUpdater((g) => {
-        const cur = new Set(g.expanded || []);
+        const cur = new Set(g.viewOverrides || []);
         if (cur.has(id)) cur.delete(id);
         else cur.add(id);
-        return { ...g, expanded: [...cur] };
+        return { ...g, viewOverrides: [...cur] };
       });
+    },
+    [applyUpdater]
+  );
+  // The toolbar mode switch: flip the whole canvas and drop the per-card exceptions.
+  const setViewMode = useCallback(
+    (mode: "detailed" | "compact") => {
+      applyUpdater((g) => ({ ...g, viewMode: mode, viewOverrides: [] }));
     },
     [applyUpdater]
   );
@@ -168,16 +185,13 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater, clearSelected]
   );
 
-  const allMinimized = graph.nodes.length > 0 && expanded.size === 0;
-  const toggleMinimizeAll = useCallback(() => {
-    applyUpdater((g) => ({ ...g, expanded: allMinimized ? g.nodes.map((n) => n.id) : [] }));
-  }, [applyUpdater, allMinimized]);
+
 
   // Provided to every NodeFrame's minimize/restore button; a stable key feeds
   // GraphCanvas so edges re-anchor on toggle.
   const minimizeCtx = useMemo(
-    () => ({ minimized, toggle: toggleMinimize }),
-    [minimized, toggleMinimize]
+    () => ({ minimized, toggle: toggleMinimize, mode: viewMode }),
+    [minimized, toggleMinimize, viewMode]
   );
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 
@@ -249,8 +263,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     ctx,
     minimizeCtx,
     minimizedKey,
-    allMinimized,
-    toggleMinimizeAll,
+    viewMode,
+    setViewMode,
     onConnect,
     onCardDrop,
     onEdgeDelete,

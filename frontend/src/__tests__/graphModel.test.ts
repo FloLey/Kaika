@@ -105,8 +105,7 @@ describe("node factories", () => {
       version: GRAPH_VERSION,
       nodes: [],
       edges: [],
-      expanded: [], // compact-by-default: nothing expanded in a fresh graph
-      view: { tx: 0, ty: 0, scale: 1 },
+      view: { tx: 0, ty: 0, scale: 1 }, // no viewMode: absent = detailed (the default)
     });
   });
 });
@@ -768,43 +767,48 @@ describe("graph.expanded (persisted, non-rendering)", () => {
   });
 });
 
-describe("v13 migration: minimized -> expanded (compact by default)", () => {
-  // A pre-v13 save: version 12, no `expanded` field yet.
-  const v12 = () => {
+describe("v16 migration: view modes (legacy minimized/expanded stripped)", () => {
+  // A pre-v16 save carrying either legacy view-state field: both are stripped and
+  // NO viewMode is set — old saves open in the detailed view (the new default).
+  const preV16 = () => {
     const { g, fluidId, outId, srcId } = wiredGraph();
-    // emptyGraph() now seeds `expanded: []` — a REAL v12 save has no such field,
-    // so strip it or the migration would (correctly) preserve it instead of inverting.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { expanded: _expanded, ...v12g } = g;
-    return { g: { ...v12g, version: 12 } as Graph, fluidId, outId, srcId };
+    return { g: { ...g, version: 12 } as Graph, fluidId, outId, srcId };
   };
 
-  it("inverts a v12 minimized set into expanded and strips minimized", () => {
-    const { g, fluidId, outId, srcId } = v12();
+  it("strips a legacy minimized set (old saves open detailed)", () => {
+    const { g, fluidId } = preV16();
     const out = normalizeGraph({ ...g, minimized: [fluidId] });
-    // minimized:[fluid] of {fluid, out, src} -> expanded:[out, src]
-    expect(new Set(out.expanded)).toEqual(new Set([outId, srcId]));
     expect("minimized" in out).toBe(false);
+    expect("expanded" in out).toBe(false);
+    expect(out.viewMode).toBeUndefined(); // absent = detailed
     expect(out.version).toBe(GRAPH_VERSION);
   });
 
-  it("a v12 save without minimized expands ALL nodes (old saves showed full cards)", () => {
-    const { g } = v12();
-    const out = normalizeGraph(g);
-    expect(new Set(out.expanded)).toEqual(new Set(g.nodes.map((n) => n.id)));
-    expect("minimized" in out).toBe(false);
+  it("strips a v13-15 expanded set", () => {
+    const { g, srcId } = preV16();
+    const out = normalizeGraph({ ...g, version: 14, expanded: [srcId] });
+    expect("expanded" in out).toBe(false);
+    expect(out.viewMode).toBeUndefined();
   });
 
-  it("a v13 save keeps its expanded set, filtered to live node ids", () => {
+  it("prunes viewOverrides to live node ids and keeps viewMode", () => {
     const { g, srcId } = wiredGraph();
-    const out = normalizeGraph({ ...g, expanded: [srcId, "gone-node"] });
-    expect(out.expanded).toEqual([srcId]);
+    const out = normalizeGraph({ ...g, viewMode: "compact", viewOverrides: [srcId, "gone-node"] });
+    expect(out.viewMode).toBe("compact");
+    expect(out.viewOverrides).toEqual([srcId]);
   });
 
   it("is idempotent (normalizing twice returns the same object)", () => {
-    const { g, fluidId } = v12();
+    const { g, fluidId } = preV16();
     const once = normalizeGraph({ ...g, minimized: [fluidId] });
     expect(normalizeGraph(once)).toBe(once);
+  });
+
+  it("removeNode prunes the removed id from viewOverrides", () => {
+    const { g, srcId } = wiredGraph();
+    const withMode = { ...g, viewMode: "compact" as const, viewOverrides: [srcId] };
+    const out = removeNode(withMode, srcId);
+    expect(out.viewOverrides).toEqual([]);
   });
 });
 

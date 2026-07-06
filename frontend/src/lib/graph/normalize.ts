@@ -278,26 +278,24 @@ export function normalizeGraph(graph: Graph): Graph {
       !(fluidIds.has(e.target) && !valid.has(e.targetPort))
   );
   if (edges.length !== (graph.edges || []).length) changed = true;
-  // v13: compact-by-default. The persisted set inverted from `minimized` (collapsed
-  // cards) to `expanded` (full-body cards). A save without `expanded` gets it derived:
-  // the inverse of its `minimized` set — which, for an old save with NO minimized
-  // field, means ALL node ids (old saves showed full cards; preserve their look).
-  // A v13+ save keeps its `expanded`, filtered to live node ids. `minimized` is
-  // always stripped from the result.
-  let expanded: string[];
-  if (Array.isArray(graph.expanded)) {
-    expanded = graph.expanded.filter((id) => liveIds.has(id));
-    if (expanded.length === graph.expanded.length) expanded = graph.expanded;
-    else changed = true;
-  } else {
-    const min = new Set(graph.minimized ?? []);
-    expanded = nodes.filter((n) => !min.has(n.id)).map((n) => n.id);
-    changed = true;
+  // v16: canvas view MODES. `viewMode` ("detailed" when absent — the classic default)
+  // + `viewOverrides` (cards displayed opposite to the mode) replace both legacy sets:
+  // pre-v13 `minimized` and v13-15 `expanded` are STRIPPED — old saves open in the
+  // detailed view, matching the new default. Overrides are pruned to live node ids.
+  let viewOverrides = graph.viewOverrides;
+  if (Array.isArray(viewOverrides)) {
+    const pruned = viewOverrides.filter((id) => liveIds.has(id));
+    if (pruned.length !== viewOverrides.length) {
+      viewOverrides = pruned;
+      changed = true;
+    }
   }
-  if (graph.minimized !== undefined) changed = true; // legacy field present: strip it
+  if (graph.expanded !== undefined || graph.minimized !== undefined) changed = true; // strip legacy
   if (graph.version !== GRAPH_VERSION) changed = true; // re-stamp after migrating
   if (!changed) return graph;
-  const out: Graph = { ...graph, version: GRAPH_VERSION, nodes, edges, expanded };
+  const out: Graph = { ...graph, version: GRAPH_VERSION, nodes, edges };
+  if (viewOverrides !== undefined) out.viewOverrides = viewOverrides;
+  delete out.expanded;
   delete out.minimized;
   return out;
 }

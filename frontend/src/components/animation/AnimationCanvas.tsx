@@ -56,8 +56,8 @@ export default function AnimationCanvas({
     ctx,
     minimizeCtx,
     minimizedKey,
-    allMinimized,
-    toggleMinimizeAll,
+    viewMode,
+    setViewMode,
     onConnect,
     onCardDrop,
     onEdgeDelete,
@@ -110,8 +110,8 @@ export default function AnimationCanvas({
         isFullscreen={isFullscreen}
         onToggleFullscreen={onToggleFullscreen}
         onGraphChange={applyUpdater}
-        allMinimized={allMinimized}
-        onToggleMinimizeAll={graph.nodes.length ? toggleMinimizeAll : null}
+        viewMode={viewMode}
+        onSetViewMode={graph.nodes.length ? setViewMode : null}
       />
       <div className="anim-stage" ref={wrapRef}>
         <MinimizeContext.Provider value={minimizeCtx}>

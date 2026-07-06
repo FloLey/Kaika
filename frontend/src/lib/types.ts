@@ -426,11 +426,16 @@ export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   view?: { tx: number; ty: number; scale: number };
-  // Which cards show their FULL body on the canvas (v13+); everything else renders
-  // as a compact card. Ignored by outputHash so toggling never busts the render cache.
+  // The canvas view mode (v16): "detailed" (classic full cards — the default when
+  // absent) or "compact" (name + preview). Switched from the toolbar; ignored by
+  // outputHash, so flipping never busts the render cache.
+  viewMode?: "detailed" | "compact";
+  // Cards displayed OPPOSITE to the current mode (the per-card ▢/– override).
+  // Cleared when the mode switches — a clean flip.
+  viewOverrides?: string[];
+  // Legacy view-state fields (pre-v16 `expanded`, pre-v13 `minimized`). normalizeGraph
+  // strips both; typed here so the migration can read them.
   expanded?: string[];
-  // Legacy pre-v13 field (the inverse set: which cards were collapsed). normalizeGraph
-  // inverts it into `expanded` and strips it; typed here so the migration can read it.
   minimized?: string[];
 }
 
