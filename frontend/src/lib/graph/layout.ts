@@ -105,15 +105,18 @@ interface FlowEdge {
   target: string;
 }
 
-// ✨ arrange (v2): a layered flow layout — Sugiyama-lite. Columns follow the data
-// flow left→right (longest-path depth over the wires; unwired cards sit in column
-// 0), and the row order inside each column is chosen to reduce wire CROSSINGS:
-// a few alternating barycenter sweeps (place each card at the average row of its
-// wired neighbours — the classic greedy heuristic) plus a bounded adjacent-swap
-// pass that keeps a swap only when the counted crossings actually drop. Greedy and
-// deterministic, not optimal — per the spec, it just has to help as much as it can.
-// The result is re-centred on the OLD arrangement's bbox centre so the canvas
-// doesn't jump (the caller re-fits the view anyway).
+// ✨ arrange (v3): a layered flow layout — the standard Sugiyama recipe, greedy and
+// deterministic. Columns follow the data flow left→right (longest-path depth over
+// the wires; unwired cards sit in column 0). A wire spanning several columns is
+// split through zero-size DUMMY nodes (one per intermediate column) so it occupies
+// a slot everywhere it passes — real cards get ordered around it and every crossing
+// becomes an adjacent-column inversion the counter actually sees. Row orders come
+// from alternating barycenter sweeps (keeping the best-scoring ordering seen) plus
+// a bounded adjacent-swap pass that only keeps swaps that drop the true crossing
+// count. Y coordinates are then relaxed toward each card's wired neighbours (order
+// and gaps preserved) so connected cards line up and wires run flat instead of
+// slanting across each other. Re-centred on the OLD arrangement's bbox centre so
+// the canvas doesn't jump (the caller re-fits the view anyway).
 export function flowLayout(
   items: LayoutRect[],
   edges: FlowEdge[],
@@ -150,16 +153,43 @@ export function flowLayout(
     if (!changed) break;
   }
 
-  // Group ids per column; the initial row order follows the CURRENT y (keeps a
-  // whiff of the user's arrangement), id as the deterministic tiebreak.
+  // Split long wires through dummy nodes: `a --(span 3)--> d` becomes the chain
+  // a→~1→~2→d with a zero-size dummy in each intermediate column, seeded on the
+  // straight line between its endpoints (a sane initial row). After this EVERY
+  // segment spans exactly one column.
+  const meta = new Map<string, { w: number; h: number; y: number }>();
+  for (const it of items) meta.set(it.id, { w: it.w, h: it.h, y: it.y });
+  const segs: [string, string][] = [];
+  for (const [s, t] of links) {
+    const cs = col.get(s)!;
+    const ct = col.get(t)!;
+    if (ct - cs <= 1) {
+      segs.push([s, t]);
+      continue;
+    }
+    const sy = byId.get(s)!.y + byId.get(s)!.h / 2;
+    const ty = byId.get(t)!.y + byId.get(t)!.h / 2;
+    let prev = s;
+    for (let c = cs + 1; c < ct; c++) {
+      const id = `~${s}~${t}~${c}`;
+      meta.set(id, { w: 0, h: 0, y: sy + ((ty - sy) * (c - cs)) / (ct - cs) });
+      col.set(id, c);
+      segs.push([prev, id]);
+      prev = id;
+    }
+    segs.push([prev, t]);
+  }
+
+  // Group ids (cards + dummies) per column; the initial row order follows the
+  // CURRENT y (keeps a whiff of the user's arrangement), id as the tiebreak.
   const nCols = Math.max(0, ...col.values()) + 1;
   const cols: string[][] = Array.from({ length: nCols }, () => []);
-  for (const it of items) cols[col.get(it.id)!].push(it.id);
-  for (const c of cols) c.sort((a, b) => byId.get(a)!.y - byId.get(b)!.y || (a < b ? -1 : 1));
+  for (const id of meta.keys()) cols[col.get(id)!].push(id);
+  for (const c of cols) c.sort((a, b) => meta.get(a)!.y - meta.get(b)!.y || (a < b ? -1 : 1));
 
   const preds = new Map<string, string[]>();
   const succs = new Map<string, string[]>();
-  for (const [s, t] of links) {
+  for (const [s, t] of segs) {
     (preds.get(t) ?? preds.set(t, []).get(t)!).push(s);
     (succs.get(s) ?? succs.set(s, []).get(s)!).push(t);
   }
@@ -169,8 +199,29 @@ export function flowLayout(
     return row;
   };
 
+  // The TRUE crossing count: with unit-span segments, two wires cross iff they run
+  // between the same adjacent columns with inverted row orders. Summed over all
+  // column pairs this now sees every crossing (long wires included, via dummies).
+  const segsByCol: [string, string][][] = Array.from({ length: nCols }, () => []);
+  for (const seg of segs) segsByCol[col.get(seg[0])!].push(seg);
+  const countCrossings = () => {
+    const row = rowOf();
+    let n = 0;
+    for (const bucket of segsByCol) {
+      for (let i = 0; i < bucket.length; i++) {
+        for (let j = i + 1; j < bucket.length; j++) {
+          const [s1, t1] = bucket[i];
+          const [s2, t2] = bucket[j];
+          if ((row.get(s1)! - row.get(s2)!) * (row.get(t1)! - row.get(t2)!) < 0) n++;
+        }
+      }
+    }
+    return n;
+  };
+
   // Barycenter sweeps: L→R orders each column by its predecessors' rows, R→L by
-  // its successors'. A card with no wired neighbours keeps its slot.
+  // its successors'. A card with no wired neighbours keeps its slot. Orderings can
+  // oscillate, so snapshot the best-scoring one seen and restore it afterwards.
   const sweep = (usePreds: boolean) => {
     const row = rowOf();
     for (const c of usePreds ? cols : [...cols].reverse()) {
@@ -186,25 +237,21 @@ export function flowLayout(
       c.forEach((id, i) => row.set(id, i)); // later columns in this sweep see fresh rows
     }
   };
-  for (let i = 0; i < 4; i++) sweep(i % 2 === 0);
-
-  // Greedy polish: two wires between the same column pair cross iff their row
-  // orders invert. Try swapping adjacent cards; keep a swap only when the global
-  // count drops (links are few, the O(links²) count is cheap).
-  const countCrossings = () => {
-    const row = rowOf();
-    let n = 0;
-    for (let i = 0; i < links.length; i++) {
-      for (let j = i + 1; j < links.length; j++) {
-        const [s1, t1] = links[i];
-        const [s2, t2] = links[j];
-        if (col.get(s1) !== col.get(s2) || col.get(t1) !== col.get(t2)) continue;
-        if ((row.get(s1)! - row.get(s2)!) * (row.get(t1)! - row.get(t2)!) < 0) n++;
-      }
-    }
-    return n;
-  };
   let best = countCrossings();
+  let bestCols = cols.map((c) => [...c]);
+  for (let i = 0; i < 10 && best > 0; i++) {
+    sweep(i % 2 === 0);
+    const n = countCrossings();
+    if (n < best) {
+      best = n;
+      bestCols = cols.map((c) => [...c]);
+    }
+  }
+  cols.forEach((c, i) => c.splice(0, c.length, ...bestCols[i]));
+
+  // Greedy polish: try swapping adjacent slots (dummies included — moving a wire's
+  // corridor is as valid as moving a card); keep a swap only when the true count
+  // drops. Segments are few, so the O(segs²) recount per trial is cheap.
   for (let pass = 0; pass < 3 && best > 0; pass++) {
     let improved = false;
     for (const c of cols) {
@@ -222,21 +269,66 @@ export function flowLayout(
     if (!improved) break;
   }
 
-  // Coordinates: columns run left→right with gaps.x between their widest cards
-  // (cards centred within their column), each column's stack centred on a shared
-  // horizontal axis with gaps.y between rows.
+  // Initial y: stack each column centred on a shared axis, gaps.y between rows.
+  // Dummies are zero-height but still consume a gap — that's the corridor a long
+  // wire runs through.
+  const yPos = new Map<string, number>();
+  for (const c of cols) {
+    const totalH = c.reduce((sum, id) => sum + meta.get(id)!.h, 0) + gaps.y * (c.length - 1);
+    let y = -totalH / 2;
+    for (const id of c) {
+      yPos.set(id, y);
+      y += meta.get(id)!.h + gaps.y;
+    }
+  }
+
+  // Y relaxation: pull every node toward the average centre of its wired
+  // neighbours, then re-enforce the column's row order and gaps (down/up/down
+  // clamps — the final down pass guarantees a valid stack). Connected cards line
+  // up horizontally and long wires straighten through their dummy corridors.
+  const nbrs = new Map<string, string[]>();
+  for (const [s, t] of segs) {
+    (nbrs.get(s) ?? nbrs.set(s, []).get(s)!).push(t);
+    (nbrs.get(t) ?? nbrs.set(t, []).get(t)!).push(s);
+  }
+  const center = (id: string) => yPos.get(id)! + meta.get(id)!.h / 2;
+  for (let pass = 0; pass < 4; pass++) {
+    for (const c of cols) {
+      for (const id of c) {
+        const nb = nbrs.get(id);
+        if (!nb?.length) continue;
+        const want = nb.reduce((sum, n) => sum + center(n), 0) / nb.length;
+        yPos.set(id, want - meta.get(id)!.h / 2);
+      }
+      const down = () => {
+        for (let i = 1; i < c.length; i++) {
+          const lo = yPos.get(c[i - 1])! + meta.get(c[i - 1])!.h + gaps.y;
+          if (yPos.get(c[i])! < lo) yPos.set(c[i], lo);
+        }
+      };
+      const up = () => {
+        for (let i = c.length - 2; i >= 0; i--) {
+          const hi = yPos.get(c[i + 1])! - meta.get(c[i])!.h - gaps.y;
+          if (yPos.get(c[i])! > hi) yPos.set(c[i], hi);
+        }
+      };
+      down();
+      up();
+      down();
+    }
+  }
+
+  // X: columns run left→right with gaps.x between their widest cards, cards centred
+  // within their column. A dummy-only column is zero-wide — just a wire corridor.
   const pos = new Map<string, { x: number; y: number }>();
   let x = 0;
   for (const c of cols) {
     if (!c.length) continue;
-    const colW = Math.max(...c.map((id) => byId.get(id)!.w));
-    const totalH =
-      c.reduce((sum, id) => sum + byId.get(id)!.h, 0) + gaps.y * (c.length - 1);
-    let y = -totalH / 2;
+    const colW = Math.max(...c.map((id) => meta.get(id)!.w));
     for (const id of c) {
+      if (!byId.has(id)) continue; // dummies guided the layout; only cards ship
       const it = byId.get(id)!;
-      pos.set(id, { x: x + (colW - it.w) / 2, y });
-      y += it.h + gaps.y;
+      pos.set(id, { x: x + (colW - it.w) / 2, y: yPos.get(id)! });
     }
     x += colW + gaps.x;
   }

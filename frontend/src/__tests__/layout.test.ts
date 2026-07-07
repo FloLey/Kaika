@@ -166,6 +166,58 @@ describe("flowLayout (✨ arrange v2)", () => {
     expect(FLOW_GAPS.detailed.x).toBeGreaterThan(FLOW_GAPS.compact.x);
     expect(FLOW_GAPS.detailed.y).toBeGreaterThan(FLOW_GAPS.compact.y);
   });
+
+  it("routes a LONG wire clear of the columns it passes through (dummy nodes)", () => {
+    // b→d spans two columns and v2's counter was blind to it — it happily left the
+    // long wire slicing through a→m→c. With dummies it must come out untangled:
+    // no straight-line intersection between any two of the three wires.
+    const items = [
+      box("a", 0, 0),
+      box("b", 0, 200), // a above b in column 0
+      box("m", 300, 0),
+      box("c", 600, 200),
+      box("d", 600, 0), // d above c in column 2 — the X with b→d
+    ];
+    const edges = [e("a", "m"), e("m", "c"), e("b", "d")];
+    const pos = flowLayout(items, edges, GAP);
+    const cp = (id: string) => {
+      const r = items.find((i) => i.id === id)!;
+      return { x: pos.get(id)!.x + r.w / 2, y: pos.get(id)!.y + r.h / 2 };
+    };
+    type P = { x: number; y: number };
+    const orient = (p: P, q: P, r: P) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    const intersects = (p1: P, p2: P, p3: P, p4: P) =>
+      orient(p3, p4, p1) * orient(p3, p4, p2) < 0 && orient(p1, p2, p3) * orient(p1, p2, p4) < 0;
+    const wires: [P, P][] = [
+      [cp("a"), cp("m")],
+      [cp("m"), cp("c")],
+      [cp("b"), cp("d")],
+    ];
+    for (let i = 0; i < wires.length; i++) {
+      for (let j = i + 1; j < wires.length; j++) {
+        expect(intersects(wires[i][0], wires[i][1], wires[j][0], wires[j][1])).toBe(false);
+      }
+    }
+  });
+
+  it("lines wired cards up horizontally (y relaxation)", () => {
+    // Column 0 stacks a+z, so a starts off-centre; b (alone in column 1, wired to
+    // a) must leave its column's centre and align with a instead.
+    const items = [
+      box("a", 0, 0, 200, 100),
+      box("z", 0, 200, 200, 100),
+      box("b", 400, 100, 200, 100),
+    ];
+    const pos = flowLayout(items, [e("a", "b")], GAP);
+    const cy = (id: string) => pos.get(id)!.y + 50;
+    expect(Math.abs(cy("b") - cy("a"))).toBeLessThan(1);
+  });
+
+  it("returns exactly the input ids (dummies never leak)", () => {
+    const items = [box("a"), box("m", 300), box("c", 600)];
+    const pos = flowLayout(items, [e("a", "m"), e("m", "c"), e("a", "c")], GAP);
+    expect([...pos.keys()].sort()).toEqual(["a", "c", "m"]);
+  });
 });
 
 describe("estimateCardSize", () => {
