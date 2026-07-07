@@ -478,6 +478,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Inline rename box (double-click the title). Matches the title's mono type so the
+   swap doesn't jump, but stays legible (no uppercase/tracking while typing). */
+.anim-node-title-edit {
+  font: 600 11px/1 var(--mono);
+  color: var(--accent, var(--petale));
+  background: var(--panel, #1a1a1a);
+  border: 1px solid var(--accent, var(--petale));
+  border-radius: 3px;
+  padding: 2px 4px;
+  min-width: 0;
+  width: 100%;
+  outline: none;
+}
 .anim-node-body {
   padding: 9px 10px;
   position: relative;
@@ -671,6 +684,7 @@
 .dual-slider {
   position: relative;
   flex: 1;
+  min-width: 90px; /* a lo–hi range must always leave a draggable track */
   height: 18px;
   display: flex;
   align-items: center;
@@ -1767,7 +1781,14 @@
   color: var(--text);
 }
 .port-connections-row .anim-select {
-  flex: 1;
+  /* bounded: the source dropdown must never starve the lo–hi range slider that
+     shares the row (flex:1 here collapsed the dual-slider to a 0px track) */
+  flex: 0 1 200px;
+  min-width: 90px;
+}
+.port-connections-row .anim-param-row {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ---- loose (unassigned) edges ------------------------------------------------ */

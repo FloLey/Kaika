@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { signalNode } from "../../lib/graphModel";
 import type { GraphProblem } from "../../lib/graphModel";
 import { paletteMenu } from "./nodes/registry";
+import { defaultCardName } from "./nodeInputs";
 import { stemColor } from "../../lib/segments";
 import type { Graph, GraphNode } from "../../lib/types";
 import type { SignalDef } from "./nodes/nodeProps";
@@ -97,10 +98,13 @@ export default function Palette({
 
   const where = () => (centerGraph ? centerGraph() : { x: 80, y: 80 });
 
+  // Every added card gets a default "<type> N" name (defaultCardName). Signals keep
+  // their signal-derived name (already meaningful in dropdowns), so addSignal skips it.
   const add = (factory: (x: number, y: number) => GraphNode) =>
     onGraphChange((g) => {
       const { x, y } = where();
-      return { ...g, nodes: [...g.nodes, factory(x, y)] };
+      const node = factory(x, y);
+      return { ...g, nodes: [...g.nodes, { ...node, name: defaultCardName(g, node.type) }] };
     });
 
   const addSignal = (signal: SignalDef) => {

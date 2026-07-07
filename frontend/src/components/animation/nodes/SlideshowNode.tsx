@@ -11,11 +11,12 @@ import { useResolvedCurve } from "./useResolvedCurve";
 import { dp2, FITS } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { SLIDESHOW_PARAMS } from "../../../lib/nodeParams";
-import { upstreamKey, videoSource } from "../../../lib/graphModel";
+import { upstreamKey } from "../../../lib/graphModel";
+import { slideshowUrls } from "../../../lib/imageCount";
 import AssetLibrary from "../../assets/AssetLibrary";
 import BoxPad from "./BoxPad";
 import type { NodeProps } from "./nodeProps";
-import type { ImagegenData, SlideshowData, LayerFit } from "../../../lib/types";
+import type { SlideshowData, LayerFit } from "../../../lib/types";
 
 // The slideshow layer: an ordered set of stills that ADVANCES to the next image on
 // each rising edge of the `trigger` port past the built-in hysteresis threshold
@@ -36,20 +37,9 @@ export default function SlideshowNode({
   const set = useNodeData<SlideshowData>(node, onGraphChange);
   const own = d.assetUrls || [];
 
-  // Images wired in via the `images` input (an Image gen card's generated list).
-  const genId = ctx?.graph ? videoSource(ctx.graph, node.id, "images") : null;
-  const genNode = genId ? ctx?.graph?.nodes.find((n) => n.id === genId) : null;
-  // The imagegen's assetUrls align 1:1 with its prompts. When a gate caps it
-  // (`activeCount`), take only the first N rows; then drop empty ("") slots so only
-  // real images become slideshow slots.
-  const genData = genNode?.type === "imagegen" ? (genNode.data as ImagegenData) : null;
-  const wired = genData
-    ? (genData.activeCount != null
-        ? (genData.assetUrls || []).slice(0, genData.activeCount)
-        : genData.assetUrls || []
-      ).filter(Boolean)
-    : [];
-  const all = [...own, ...wired];
+  // Own picks + images wired in via the `images` input (a generator's list, gate-
+  // capped) — ONE shared definition with the compact preview (lib/imageCount).
+  const all = slideshowUrls(ctx?.graph, node);
 
   const { busy, err, onFile, jobId } = useAssetUpload(ctx, (url) =>
     set({ assetUrls: [...own, url] })
@@ -120,7 +110,7 @@ export default function SlideshowNode({
       {/* Live wiring summary: images available × how often the trigger will switch. */}
       <div className="anim-fx-hint anim-slideshow-count">
         {all.length} image{all.length === 1 ? "" : "s"}
-        {wired.length > 0 && ` (${wired.length} generated)`} · switches{" "}
+        {all.length > own.length && ` (${all.length - own.length} generated)`} · switches{" "}
         <strong>{switches}×</strong> this segment
       </div>
       {all.length > 0 && (

@@ -1,9 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { cardInputs, sourcesForFlow } from "../components/animation/nodeInputs";
+import {
+  cardInputs,
+  sourcesForFlow,
+  inputSource,
+  partitionSources,
+  defaultCardName,
+} from "../components/animation/nodeInputs";
+import { LOOSE_PORT } from "../lib/graphModel";
 import type { Graph, GraphNode } from "../lib/types";
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}): GraphNode =>
   ({ id, type, x: 0, y: 0, data }) as unknown as GraphNode;
+
+const named = (id: string, type: string, name: string): GraphNode =>
+  ({ id, type, x: 0, y: 0, name, data: {} }) as unknown as GraphNode;
 
 describe("cardInputs", () => {
   it("gives a single value edge input for gate/shaper/scope", () => {
@@ -77,5 +87,68 @@ describe("sourcesForFlow", () => {
     expect(value.sort()).toEqual(["lfo", "sig"]); // gate 'me' excluded
     expect(sourcesForFlow(graph, "points", "x").map((n) => n.id)).toEqual(["pts"]);
     expect(sourcesForFlow(graph, "video", "x").map((n) => n.id)).toEqual(["fl"]);
+  });
+});
+
+describe("defaultCardName", () => {
+  it("names by type with the max existing suffix + 1 (survives deletes)", () => {
+    const empty = { nodes: [], edges: [] } as unknown as Graph;
+    const first = defaultCardName(empty, "fluid"); // "<title> 1"
+    const title = first.replace(/ 1$/, "");
+    expect(first).toBe(`${title} 1`);
+
+    // "<title> 2" was deleted; next is max(1,3)+1 = 4, NOT count+1.
+    const g = {
+      nodes: [named("a", "fluid", `${title} 1`), named("b", "fluid", `${title} 3`), node("c", "lfo")],
+      edges: [],
+    } as unknown as Graph;
+    expect(defaultCardName(g, "fluid")).toBe(`${title} 4`);
+
+    // Ignores other types and unnamed nodes of the same type.
+    const g2 = {
+      nodes: [node("x", "lfo"), node("y", "fluid")],
+      edges: [],
+    } as unknown as Graph;
+    expect(defaultCardName(g2, "fluid")).toBe(`${title} 1`);
+  });
+});
+
+describe("inputSource / partitionSources (compact wiring)", () => {
+  // A fluid target with `force` bound to lfo "b"; a loose wire parked from lfo "a";
+  // lfo "c" is an unconnected candidate. All three are value-flow sources.
+  const mk = () => {
+    const f = node("f", "fluid", { ports: { force: { binding: { kind: "node", nodeId: "b" } } } });
+    const graph = {
+      nodes: [f, node("a", "lfo"), node("b", "lfo"), node("c", "lfo")],
+      edges: [
+        { id: "loose-a", source: "a", sourcePort: "out", target: "f", targetPort: LOOSE_PORT },
+        { id: "e-force", source: "b", sourcePort: "out", target: "f", targetPort: "force" },
+      ],
+    } as unknown as Graph;
+    return { graph, f };
+  };
+
+  it("inputSource reads a param binding and an edge target", () => {
+    const { graph, f } = mk();
+    expect(inputSource(f, graph, { portId: "force", flow: "value", label: "", kind: "param" })).toBe("b");
+    expect(inputSource(f, graph, { portId: "positions", flow: "points", label: "", kind: "edge" })).toBeNull();
+  });
+
+  it("splits sources into loose / assigned / other, each exactly once", () => {
+    const { graph, f } = mk();
+    const { loose, assigned, other } = partitionSources(graph, f, "value");
+    expect(loose.map((l) => l.srcId)).toEqual(["a"]);
+    expect(loose[0].edgeId).toBe("loose-a");
+    expect(assigned).toEqual(["b"]);
+    expect(other).toEqual(["c"]);
+  });
+
+  it("filters each section to the input's flow", () => {
+    const { graph, f } = mk();
+    // No points-flow sources exist here, so every section is empty for points.
+    const p = partitionSources(graph, f, "points");
+    expect(p.loose).toEqual([]);
+    expect(p.assigned).toEqual([]);
+    expect(p.other).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import NodeSettingsModal from "../NodeSettingsModal";
 import { chromeFor } from "./registry";
 import { nodeParam } from "../../../lib/nodeParams";
 import { stemColor } from "../../../lib/segments";
+import { isLooseEdge } from "../../../lib/graphModel";
 import type { NodeProps } from "./nodeProps";
 
 // renderAnimNode passes these; onGraphChange/onDetach feed the settings modal.
@@ -60,8 +61,15 @@ export default function CompactCard({
   }
 
   // Inbound wires -> their distinct target ports, all consolidated onto one anchor.
+  // Loose (parked, unassigned) wires are EXCLUDED: they anchor to the card-body wrapper
+  // and render gray until assigned in the settings window — folding "__in" in here would
+  // double-register that anchor and pull a not-yet-assigned wire onto the input dot.
   const edges = ctx.graph?.edges || [];
-  const inbound = [...new Set(edges.filter((e) => e.target === node.id).map((e) => e.targetPort))];
+  const inbound = [
+    ...new Set(
+      edges.filter((e) => e.target === node.id && !isLooseEdge(e)).map((e) => e.targetPort)
+    ),
+  ];
 
   // Re-anchor edges once this compact card has mounted its anchors.
   useEffect(() => {

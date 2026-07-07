@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { portalTarget } from "../../lib/portalTarget";
 import { NODE_TYPES, chromeFor } from "./nodes/registry";
+import { renameNode } from "../../lib/graphModel";
 import InputPicker from "./InputPicker";
 import { MinimizeContext } from "./nodes/minimizeContext";
-import type { MinimizeCtx } from "./nodes/minimizeContext";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 import type { Graph, GraphNode } from "../../lib/types";
 
@@ -25,11 +25,6 @@ const STUB_HELPERS: NodeHelpers = {
   onTitlePointerDown: () => {},
   onLayoutChange: () => {},
 };
-
-// The card in the modal must NOT consult the editor's compact set (it would hide its
-// own body — the node IS compact on canvas); an empty set renders it full. The no-op
-// toggle keeps the (CSS-hidden) header button inert.
-const MODAL_MIN_CTX: MinimizeCtx = { minimized: new Set<string>(), toggle: () => {} };
 
 interface NodeSettingsModalProps {
   node: GraphNode;
@@ -54,6 +49,19 @@ export default function NodeSettingsModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // The card in the modal must NOT consult the editor's compact set (it would hide its
+  // own body — the node IS compact on canvas); an empty set renders it full. The no-op
+  // toggle keeps the (CSS-hidden) header button inert. `rename` IS wired, so the card's
+  // header title stays double-click-editable inside the open window.
+  const modalCtx = useMemo(
+    () => ({
+      minimized: new Set<string>(),
+      toggle: () => {},
+      rename: (id: string, name: string) => onGraphChange((g) => renameNode(g, id, name)),
+    }),
+    [onGraphChange]
+  );
 
   const spec = NODE_TYPES[node.type];
   if (!spec) return null;
@@ -81,7 +89,7 @@ export default function NodeSettingsModal({
             onGraphChange={onGraphChange}
           />
         )}
-        <MinimizeContext.Provider value={MODAL_MIN_CTX}>
+        <MinimizeContext.Provider value={modalCtx}>
           <Card
             node={node}
             selected={false}

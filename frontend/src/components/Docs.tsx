@@ -497,7 +497,10 @@ export default function Docs({ section }: { section?: string }) {
           controls) and <strong>▤ compact</strong> (just the name, a small live preview, and one
           input + one output dot). In compact view, <strong>click a card's body</strong> to open
           its settings window (all the controls, editing the graph live — <kbd>Esc</kbd> or a
-          click outside closes it). The <strong>▢/–</strong> button in a card's title bar
+          click outside closes it). Every card gets a <strong>default name</strong> (its type plus
+          a counter — <em>fluid 1</em>, <em>fluid 2</em>…); <strong>double-click the title</strong>{" "}
+          to rename it (on the canvas or in its settings window), so you can find it again by name in
+          every input dropdown. The <strong>▢/–</strong> button in a card's title bar
           overrides the view for that one card (switching views clears the overrides). Every card
           has a <strong>✕</strong> in its top-right corner to delete it (which also removes its
           wires). The <em>output</em> card is the one exception — its body is the live render
@@ -623,19 +626,27 @@ export default function Docs({ section }: { section?: string }) {
         <h3>Wiring &amp; the [lo, hi] range</h3>
         <ul>
           <li>
-            <strong>Connect</strong> — drag from a card's output dot onto a fluid input port (or the
-            fluid's video output onto the output card). You can also <strong>drop the wire
-            anywhere on a card</strong>: when the destination is obvious (an output's video input,
-            a combine's free slot, a fluid's positions, a card with a single free port) it wires
-            itself; otherwise the line parks on the card in <strong>gray</strong> — connected, but
-            not used yet. Open the card's settings window to assign it: each input has a dropdown
-            with the <em>not connected</em> wires on top — pick one and the gray line goes live.
+            <strong>Connect (detailed view)</strong> — drag from a card's output dot onto a specific
+            input port (or a fluid's video output onto the output card). You can also <strong>drop
+            the wire anywhere on a card</strong>: when the destination is obvious (an output's video
+            input, a combine's free slot, a fluid's positions, a card with a single free port) it
+            wires itself; otherwise the line parks on the card in <strong>gray</strong> — connected,
+            but not assigned to a port yet.
           </li>
           <li>
-            <strong>Compact cards keep their wires</strong> — all of a compact card's inbound wires
-            converge on its single left dot and its output leaves from the single right dot; a wire
-            dropped on a compact card lands on that anchor. Expand the card (▢) to wire a specific
-            port.
+            <strong>Connect (compact view)</strong> — a compact card shows one input dot standing in
+            for <em>all</em> its inputs, so a wire dropped on it can't know which one you mean: it
+            <strong> always parks gray</strong>. Open the card (click its body) and use each input's
+            dropdown to assign it. The dropdown has <strong>three sections</strong>: the gray wires
+            waiting on this card (<em>connected — unassigned</em>) on top, then sources already wired
+            to one of this card's inputs (<em>connected</em>), then <em>other</em> candidates. Pick
+            one and the gray line goes live. Choosing <em>— none —</em> sends a wire back to gray so
+            you can re-route it without redrawing it.
+          </li>
+          <li>
+            <strong>Compact cards keep their wires</strong> — every assigned inbound wire converges
+            on the single left dot and the output leaves from the single right dot. Expand the card
+            (▢) to wire a specific port directly.
           </li>
           <li>
             <strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its

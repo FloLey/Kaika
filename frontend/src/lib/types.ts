@@ -301,6 +301,10 @@ interface NodeBase {
   id: string;
   x: number;
   y: number;
+  // A human-friendly card name (default "<type> N", editable). NODE-level on purpose:
+  // outputHash serializes only {id,type,data}, so renaming never busts the render
+  // cache. Optional + lazily defaulted, so it round-trips normalizeGraph untouched.
+  name?: string;
 }
 export interface SignalNode extends NodeBase {
   type: "signal";

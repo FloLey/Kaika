@@ -9,6 +9,10 @@ export interface MinimizeCtx {
   minimized: Set<string>;
   toggle: (id: string) => void;
   mode?: "detailed" | "compact";
+  // Rename a card (node-level `name`). NodeFrame's title is double-click-editable and
+  // saves through this, so no per-card threading. Optional — a no-op default keeps
+  // NodeFrame working without a provider (tests) and makes the title read-only there.
+  rename?: (id: string, name: string) => void;
 }
 
 export const MinimizeContext = createContext<MinimizeCtx>({

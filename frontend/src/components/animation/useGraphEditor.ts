@@ -8,6 +8,7 @@ import {
   resolveDropPort,
   disconnect,
   removeNode,
+  renameNode,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
 import { nodeParam } from "../../lib/nodeParams";
@@ -156,6 +157,10 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const onConnect = useCallback(
     (srcId: string, srcPort: string, tgtId: string, tgtPort: string) => {
       applyUpdater((g) => {
+        // A COMPACT card has one consolidated input dot standing in for every port,
+        // so a direct drop can't know WHICH input is meant — park it gray/loose and
+        // let the settings window assign it. Detailed cards keep direct-port wiring.
+        if (minimized.has(tgtId)) return connectLoose(g, srcId, tgtId);
         const tgt = g.nodes.find((n) => n.id === tgtId);
         if (tgt && nodeParam(tgt.type, tgtPort)) {
           return connect(g, srcId, tgtId, tgtPort);
@@ -163,7 +168,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
         return connectVideo(g, srcId, srcPort, tgtId, tgtPort); // last-wins per port
       });
     },
-    [applyUpdater]
+    [applyUpdater, minimized]
   );
 
   // A wire released over a CARD (not a specific port): auto-assign when the
@@ -173,6 +178,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const onCardDrop = useCallback(
     (srcId: string, srcFlow: string, tgtId: string) => {
       applyUpdater((g) => {
+        // Compact target → always park loose (see onConnect): the one input dot is
+        // ambiguous, so the settings window does the assignment.
+        if (minimized.has(tgtId)) return connectLoose(g, srcId, tgtId);
         const port = resolveDropPort(g, tgtId, srcFlow);
         if (!port) return connectLoose(g, srcId, tgtId);
         const tgt = g.nodes.find((n) => n.id === tgtId);
@@ -180,7 +188,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
         return connectVideo(g, srcId, "out", tgtId, port);
       });
     },
-    [applyUpdater]
+    [applyUpdater, minimized]
   );
 
   const onEdgeDelete = useCallback(
@@ -228,11 +236,18 @@ export function useGraphEditor(opts: GraphEditorOpts) {
 
 
 
-  // Provided to every NodeFrame's minimize/restore button; a stable key feeds
-  // GraphCanvas so edges re-anchor on toggle.
+  // Rename a card (node-level `name`); NodeFrame's title edit calls this. Node-level,
+  // so it never touches outputHash → no re-render.
+  const renameCard = useCallback(
+    (id: string, name: string) => applyUpdater((g) => renameNode(g, id, name)),
+    [applyUpdater]
+  );
+
+  // Provided to every NodeFrame's minimize/restore button + title rename; a stable
+  // key feeds GraphCanvas so edges re-anchor on toggle.
   const minimizeCtx = useMemo(
-    () => ({ minimized, toggle: toggleMinimize, mode: viewMode }),
-    [minimized, toggleMinimize, viewMode]
+    () => ({ minimized, toggle: toggleMinimize, mode: viewMode, rename: renameCard }),
+    [minimized, toggleMinimize, viewMode, renameCard]
   );
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 

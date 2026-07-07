@@ -4,6 +4,7 @@ import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
 import { useResolvedPoints } from "./useResolvedPoints";
 import { patternPoints } from "../../../lib/pointsGen";
+import { slideshowUrls } from "../../../lib/imageCount";
 import { aspectOf } from "../../../lib/output";
 import type { NodeCtx } from "./nodeProps";
 import type {
@@ -12,7 +13,6 @@ import type {
   GraphNode,
   ImageData,
   ImagegenData,
-  SlideshowData,
   LyricsData,
   PatternData,
   PointsData,
@@ -93,7 +93,10 @@ export default function CompactPreview({ node, ctx, accent, selected }: CompactP
       );
     }
     case "slideshow": {
-      const urls = (node.data as SlideshowData).assetUrls || [];
+      // Effective images = own picks + the wired Image gen card's list (shared
+      // helper) — reading only assetUrls said "no images" on a card fed by a
+      // generator that had six.
+      const urls = slideshowUrls(ctx?.graph, node);
       return urls.length ? (
         <span className="anim-compact-thumbwrap">
           <img className="anim-compact-thumb" src={urls[0]} alt="" draggable={false} />

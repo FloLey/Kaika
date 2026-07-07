@@ -4,7 +4,7 @@
 // a node drag. `Port` renders the little wiring circle and registers it with the
 // canvas via `portRef(nodeId, portId, kind, flow)`.
 
-import { useCallback, useContext } from "react";
+import { useCallback, useContext, useState } from "react";
 import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { MinimizeContext } from "./minimizeContext";
 import type { PortRef } from "./nodeProps";
@@ -97,7 +97,7 @@ export function MultiAnchor({
 }
 
 interface NodeFrameProps {
-  node: { id: string; type: string };
+  node: { id: string; type: string; name?: string };
   title: ReactNode;
   accent: string;
   selected?: boolean;
@@ -127,10 +127,25 @@ export default function NodeFrame({
   compact = false,
   children,
 }: NodeFrameProps) {
-  const { minimized: minSet, toggle, mode } = useContext(MinimizeContext) as {
+  const { minimized: minSet, toggle, mode, rename } = useContext(MinimizeContext) as {
     minimized?: Set<string>;
     toggle?: (id: string) => void;
     mode?: "detailed" | "compact";
+    rename?: (id: string, name: string) => void;
+  };
+  // Inline rename: double-click the title → an <input> seeded with the current name
+  // (or the type fallback), committed on Enter/blur, cancelled on Escape. Only when a
+  // `rename` handler is present (on-canvas + in the open card; read-only in tests).
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const startEdit = () => {
+    if (!rename) return;
+    setDraft(node.name ?? (typeof title === "string" ? title : ""));
+    setEditing(true);
+  };
+  const commitEdit = () => {
+    if (editing) rename?.(node.id, draft);
+    setEditing(false);
   };
   // Collapse STATE vs body VISUALS: `stateMin` is whether the editor holds this card
   // compact (drives the toggle button's glyph/title); `isMin` is whether THIS frame
@@ -155,7 +170,35 @@ export default function NodeFrame({
       <div className="anim-node-head" onPointerDown={onTitlePointerDown}>
         <span className="anim-node-head-left">
           {headLead}
-          <span className="anim-node-title">{title}</span>
+          {editing ? (
+            <input
+              className="anim-node-title-edit no-drag"
+              value={draft}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitEdit();
+                else if (e.key === "Escape") setEditing(false);
+              }}
+            />
+          ) : (
+            <span
+              className="anim-node-title"
+              title={rename ? "double-click to rename" : undefined}
+              onDoubleClick={
+                rename
+                  ? (e) => {
+                      e.stopPropagation();
+                      startEdit();
+                    }
+                  : undefined
+              }
+            >
+              {node.name ?? title}
+            </span>
+          )}
         </span>
         <span className="anim-node-head-right">
           {headExtra}

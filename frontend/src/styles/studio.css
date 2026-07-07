@@ -251,7 +251,9 @@
 }
 .ctl {
   display: grid;
-  grid-template-columns: 52px 1fr 42px auto;
+  /* label column grows to fit (THRESHOLD/HYSTERESIS clipped at a fixed 52px and
+     the track started on top of the cut label); the 1fr track absorbs the rest */
+  grid-template-columns: minmax(52px, max-content) 1fr 42px auto;
   align-items: center;
   gap: 10px;
   font-size: 11px;

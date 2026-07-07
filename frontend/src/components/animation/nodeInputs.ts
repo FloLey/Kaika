@@ -7,6 +7,7 @@
 import type { Graph, GraphNode, PortFlow } from "../../lib/types";
 import { chromeFor } from "./nodes/registry";
 import { nodeParams } from "../../lib/nodeParams";
+import { videoSource, isLooseEdge } from "../../lib/graphModel";
 import {
   addCombineInput,
   addInputPort,
@@ -129,10 +130,77 @@ export function cardInputs(node: GraphNode): CardInputs {
   }
 }
 
+// A fresh card's default name: its type label + the next free counter. Uses the MAX
+// existing "<title> k" suffix + 1 (not count+1), so it survives deletes without
+// colliding with a still-present higher number.
+export function defaultCardName(graph: Graph, type: string): string {
+  const title = chromeFor(type).title;
+  const re = new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (\\d+)$`);
+  let max = 0;
+  for (const n of graph.nodes || []) {
+    if (n.type !== type) continue;
+    const m = (n.name || "").match(re);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${title} ${max + 1}`;
+}
+
 // The candidate source nodes for an input of `flow`: every node whose single output is
 // that flow (excluding the target itself). Used to populate the picker dropdown.
 export function sourcesForFlow(graph: Graph, flow: PortFlow, excludeId: string): GraphNode[] {
   return (graph.nodes || []).filter(
     (n) => n.id !== excludeId && chromeFor(n.type).outFlow === flow
   );
+}
+
+// The source node currently feeding an input: a param reads its port binding; a plain
+// edge reads its wired source. null when nothing is assigned.
+export function inputSource(node: GraphNode, graph: Graph, input: InputDesc): string | null {
+  if (input.kind === "param") {
+    const ports =
+      (node.data as { ports?: Record<string, { binding?: { kind?: string; nodeId?: string } }> })
+        .ports || {};
+    const b = ports[input.portId]?.binding;
+    return b && b.kind === "node" && b.nodeId ? b.nodeId : null;
+  }
+  return videoSource(graph, node.id, input.portId);
+}
+
+export interface SourcePartition {
+  loose: { edgeId: string; srcId: string }[]; // parked gray wires into this card
+  assigned: string[]; // sources already wired to one of this card's inputs
+  other: string[]; // every other candidate of this flow
+}
+
+// Split the candidate sources for ONE input into the three dropdown sections the
+// compact-wiring UX shows: (1) loose wires parked on this card but not yet assigned,
+// (2) sources already assigned to any of THIS card's inputs, (3) everything else — all
+// filtered to the input's flow. Deduped so a source appears in exactly one section
+// (loose > assigned > other). A pure function of (graph, node, flow) → easy to test.
+export function partitionSources(graph: Graph, node: GraphNode, flow: PortFlow): SourcePartition {
+  const outIs = (id: string) => {
+    const n = graph.nodes.find((x) => x.id === id);
+    return !!n && chromeFor(n.type).outFlow === flow;
+  };
+  // §1 — loose wires into this card, flow-compatible, deduped by source.
+  const loose: { edgeId: string; srcId: string }[] = [];
+  const looseSeen = new Set<string>();
+  for (const e of graph.edges) {
+    if (e.target !== node.id || !isLooseEdge(e) || !outIs(e.source) || looseSeen.has(e.source))
+      continue;
+    looseSeen.add(e.source);
+    loose.push({ edgeId: e.id, srcId: e.source });
+  }
+  // §2 — sources already assigned to one of this card's (flow-compatible) inputs.
+  const assignedSet = new Set<string>();
+  for (const input of cardInputs(node).inputs) {
+    const src = inputSource(node, graph, input);
+    if (src && outIs(src) && !looseSeen.has(src)) assignedSet.add(src);
+  }
+  // §3 — every other candidate of this flow, minus §1/§2.
+  const excluded = new Set<string>([...looseSeen, ...assignedSet]);
+  const other = sourcesForFlow(graph, flow, node.id)
+    .map((n) => n.id)
+    .filter((id) => !excluded.has(id));
+  return { loose, assigned: [...assignedSet], other };
 }

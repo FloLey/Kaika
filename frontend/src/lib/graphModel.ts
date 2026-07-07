@@ -58,6 +58,7 @@ export {
   connectLoose,
   assignEdge,
   unassignEdge,
+  renameNode,
 } from "./graph/mutations";
 export { normalizeGraph } from "./graph/normalize";
 export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/validate";

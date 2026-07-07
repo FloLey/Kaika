@@ -40,6 +40,7 @@ import {
   connectLoose,
   assignEdge,
   unassignEdge,
+  renameNode,
   imagegenNode,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
@@ -252,6 +253,26 @@ describe("data mutation helpers", () => {
     g.nodes = [cb];
     const out = setCombineLayer(g, cb.id, 3);
     expect((out.nodes[0] as typeof cb).data.layer).toBe(3);
+  });
+
+  it("renameNode sets a node-level name (invisible to outputHash), blank clears it", () => {
+    const g = emptyGraph();
+    const fl = fluidNode(0, 0);
+    const out = outputNode(0, 0);
+    g.nodes = [fl, out];
+    g.edges = [
+      { id: "e", source: fl.id, sourcePort: "out", target: out.id, targetPort: "video" },
+    ];
+    const before = outputHash(g, out.id, "job", 0, 8, []);
+
+    const g2 = renameNode(g, fl.id, "  bass blob  ");
+    expect(g2.nodes.find((n) => n.id === fl.id)!.name).toBe("bass blob"); // trimmed
+    expect((g.nodes[0] as typeof fl).name).toBeUndefined(); // immutable
+    // Node-level name never feeds the render cache.
+    expect(outputHash(g2, out.id, "job", 0, 8, [])).toBe(before);
+
+    const g3 = renameNode(g2, fl.id, "   ");
+    expect(g3.nodes.find((n) => n.id === fl.id)!.name).toBeUndefined(); // blank clears
   });
 });
 

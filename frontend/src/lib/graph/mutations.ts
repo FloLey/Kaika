@@ -18,6 +18,18 @@ export function patchNodeData(graph: Graph, id: string, patch: Record<string, un
   };
 }
 
+// Rename a card (node-level `name`). A blank/whitespace name clears back to the
+// lazy "<type> N" fallback. Node-level, so it never touches outputHash → no re-render.
+export function renameNode(graph: Graph, id: string, name: string): Graph {
+  const trimmed = name.trim();
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) =>
+      n.id === id ? ({ ...n, name: trimmed || undefined } as GraphNode) : n
+    ),
+  };
+}
+
 // Add / remove an input port on a node carrying `data.inputs: string[]` (the Math
 // card). Removing also drops any edge wired into that port (keeps the graph clean).
 export function addInputPort(graph: Graph, id: string): Graph {

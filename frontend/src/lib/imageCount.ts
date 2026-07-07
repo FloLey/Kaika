@@ -5,6 +5,28 @@
 // images it shows over a segment is `rises + 1`. The Image gen card resolves the
 // wired gate's actual curve (via /resolve) and uses these to size its prompt list.
 
+import { videoSource } from "./graph/core";
+import type { Graph, GraphNode, ImagegenData, SlideshowData } from "./types";
+
+// A slideshow's EFFECTIVE image urls: the card's OWN picks plus whatever rides in
+// through its `images` input (a wired Image gen card's generated list, capped to
+// the gate-driven `activeCount`, empty rows dropped). ONE definition shared by the
+// full card, the compact preview, and anything else that shows the count — the
+// compact card used to read only the own picks and say "no images" while six
+// flowed in from the generator. Mirrors backend `_slideshow_paths`.
+export function slideshowUrls(graph: Graph | null | undefined, node: GraphNode): string[] {
+  const own = ((node.data as SlideshowData).assetUrls || []).filter(Boolean);
+  if (!graph) return own;
+  const genId = videoSource(graph, node.id, "images");
+  const gen = genId ? graph.nodes.find((n) => n.id === genId) : null;
+  if (!gen || gen.type !== "imagegen") return own;
+  const d = gen.data as ImagegenData;
+  const urls = d.activeCount != null
+    ? (d.assetUrls || []).slice(0, Math.max(0, d.activeCount))
+    : d.assetUrls || [];
+  return [...own, ...urls.filter(Boolean)];
+}
+
 // Count rising edges of a 0..1 `curve` — a 0→1 crossing of the threshold with a
 // small dead band, matching the slideshow's default hysteresis so the counts agree.
 // A curve that STARTS high isn't a switch (frame 0 already shows image 0), mirroring
