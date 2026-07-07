@@ -11,7 +11,7 @@ import {
   renameNode,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
-import { estimateCardSize, resolveOverlaps, tighten } from "../../lib/graph/layout";
+import { FLOW_GAPS, estimateCardSize, flowLayout, resolveOverlaps, tighten } from "../../lib/graph/layout";
 import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
 import type { Graph, GraphEdge, GraphNode, OutputSettings, Segment } from "../../lib/types";
@@ -250,10 +250,11 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater]
   );
 
-  // ✨ arrange: re-run the current view's layout pass with the cards' MEASURED
-  // wrapper sizes (exact, unlike the switch-time estimates) — detailed spreads
-  // overlapping cards apart, compact packs them closer. Runs in display space, so
-  // the translating wrapper lands the result on the right per-view fields.
+  // ✨ arrange: lay the CURRENT view out along the data flow (flowLayout — columns
+  // left→right, rows greedily untangled to reduce wire crossings) with the cards'
+  // MEASURED wrapper sizes (exact, unlike the switch-time estimates) and per-mode
+  // gaps — roomy in detailed, tighter in compact. Runs in display space, so the
+  // translating wrapper lands the result on the right per-view fields.
   const reorganize = useCallback(
     (measured: Map<string, { w: number; h: number }>) => {
       applyDisplayUpdater((g) => {
@@ -263,7 +264,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
           const s = measured.get(n.id) || estimateCardSize(n.type, mode);
           return { id: n.id, x: n.x, y: n.y, w: s.w, h: s.h };
         });
-        const pos = mode === "compact" ? tighten(rects) : resolveOverlaps(rects);
+        const pos = flowLayout(rects, g.edges, FLOW_GAPS[mode]);
         const nodes = g.nodes.map((n) => {
           const p = pos.get(n.id);
           return p && (p.x !== n.x || p.y !== n.y) ? { ...n, x: p.x, y: p.y } : n;

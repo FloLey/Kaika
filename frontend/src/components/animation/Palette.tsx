@@ -243,13 +243,13 @@ export default function Palette({
       )}
       {onReorganize && (
         // Per-view layout cleanup: each view keeps its OWN card positions, and this
-        // tidies the one you're looking at without scrambling the arrangement.
+        // lays out the one you're looking at along the data flow, untangling wires.
         <button
           className="btn sm"
           title={
             viewMode === "compact"
-              ? "Arrange — pack the cards closer together (keeps their arrangement)"
-              : "Arrange — spread overlapping cards apart (keeps their arrangement)"
+              ? "Arrange — lay the cards out along the data flow with the wires untangled (compact keeps them close)"
+              : "Arrange — lay the cards out along the data flow, roomy and with the wires untangled"
           }
           onClick={onReorganize}
         >

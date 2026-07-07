@@ -213,8 +213,10 @@ exceptions (GRAPH_VERSION 16; the earlier `expanded`/`minimized` sets are
 stripped on load); `output` never compacts. Each view keeps its **own card
 positions** (v20): `x/y` is the detailed position, optional `cx/cy` the compact
 one — `useGraphEditor` hands the canvas a display graph and translates commits
-back, `lib/graph/layout.ts` holds the de-overlap/tighten passes behind the mode
-switch and the ✨ arrange button (positions are node-level, never hashed).
+back. `lib/graph/layout.ts` holds the layout passes: minimal-movement
+de-overlap/tighten behind the mode switch, and `flowLayout` (layered columns
+along the data flow + greedy barycenter/swap wire-crossing reduction) behind
+the ✨ arrange button (positions are node-level, never hashed).
 Shared plumbing: `NodeFrame` (chrome + ports),
 `useNodeData` (the patch-`data` hook), `AssetLayerCard` (the image/video shell),
 `BoxPad` (normalized placement box), `useAssetUpload` (upload/YouTube flow).

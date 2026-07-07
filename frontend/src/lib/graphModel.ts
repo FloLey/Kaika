@@ -62,8 +62,8 @@ export {
   renameNode,
 } from "./graph/mutations";
 export { normalizeGraph } from "./graph/normalize";
-export { resolveOverlaps, tighten, estimateCardSize } from "./graph/layout";
-export type { LayoutRect, CardSize } from "./graph/layout";
+export { resolveOverlaps, tighten, flowLayout, estimateCardSize, FLOW_GAPS } from "./graph/layout";
+export type { LayoutRect, CardSize, FlowGaps } from "./graph/layout";
 export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/validate";
 export { outputHash, upstreamKey } from "./graph/hash";
 export { problemsFor } from "./graph/problems";

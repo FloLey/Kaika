@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { estimateCardSize, resolveOverlaps, tighten } from "../lib/graph/layout";
+import { FLOW_GAPS, estimateCardSize, flowLayout, resolveOverlaps, tighten } from "../lib/graph/layout";
 import type { LayoutRect } from "../lib/graph/layout";
 
 // The per-view layout passes (v20). The user-facing contract under test:
@@ -99,6 +99,72 @@ describe("tighten", () => {
   it("leaves a single card alone", () => {
     const rects: LayoutRect[] = [{ id: "solo", x: 42, y: 7, w: 200, h: 80 }];
     expect(tighten(rects).get("solo")).toEqual({ x: 42, y: 7 });
+  });
+});
+
+describe("flowLayout (✨ arrange v2)", () => {
+  const box = (id: string, x = 0, y = 0, w = 200, h = 100): LayoutRect => ({ id, x, y, w, h });
+  const e = (source: string, target: string) => ({ source, target });
+  const GAP = { x: 100, y: 60 };
+
+  it("orders columns along the data flow with at least the x gap between them", () => {
+    const items = [box("c", 0, 0), box("a", 500, 200), box("b", 250, 100)];
+    const pos = flowLayout(items, [e("a", "b"), e("b", "c")], GAP);
+    const a = pos.get("a")!;
+    const b = pos.get("b")!;
+    const c = pos.get("c")!;
+    expect(a.x + 200 + GAP.x).toBeLessThanOrEqual(b.x + 0.001); // source column left of its target
+    expect(b.x + 200 + GAP.x).toBeLessThanOrEqual(c.x + 0.001);
+  });
+
+  it("untangles a crossing (a→d, b→c with the orders inverted)", () => {
+    // a above b in column 0; c above d in column 1 — the wires form an X.
+    const items = [box("a", 0, 0), box("b", 0, 200), box("c", 300, 0), box("d", 300, 200)];
+    const edges = [e("a", "d"), e("b", "c")];
+    const pos = flowLayout(items, edges, GAP);
+    // After the greedy pass one side's order flips: each wire's endpoints keep the
+    // same relative order → 0 crossings.
+    const sign = (p: number, q: number) => Math.sign(p - q);
+    expect(sign(pos.get("a")!.y, pos.get("b")!.y)).toBe(sign(pos.get("d")!.y, pos.get("c")!.y));
+  });
+
+  it("keeps at least the gaps between cards (roomier than the de-overlap pass)", () => {
+    const items = [box("a"), box("b"), box("s", 0, 50), box("t", 0, 150)];
+    const edges = [e("s", "t")]; // a,b unwired -> column 0 alongside s
+    const pos = flowLayout(items, edges, GAP);
+    const placed = items.map((r) => ({ ...r, ...pos.get(r.id)! }));
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const A = placed[i];
+        const B = placed[j];
+        const sepX = Math.max(A.x, B.x) - Math.min(A.x + A.w, B.x + B.w);
+        const sepY = Math.max(A.y, B.y) - Math.min(A.y + A.h, B.y + B.h);
+        // Separated by the full gap on at least one axis.
+        expect(Math.max(sepX - GAP.x, sepY - GAP.y)).toBeGreaterThanOrEqual(-0.001);
+      }
+    }
+  });
+
+  it("is deterministic (same input twice gives identical output)", () => {
+    const items = [box("a", 3, 9), box("b", 3, 9), box("c", 7, 1), box("d", 2, 8)];
+    const edges = [e("a", "c"), e("b", "c"), e("b", "d")];
+    const p1 = flowLayout(items, edges, GAP);
+    const p2 = flowLayout(items, edges, GAP);
+    for (const it of items) expect(p1.get(it.id)).toEqual(p2.get(it.id));
+  });
+
+  it("re-centres the result on the old arrangement's bbox centre", () => {
+    const items = [box("a", 1000, 1000), box("b", 1400, 1000)];
+    const pos = flowLayout(items, [e("a", "b")], GAP);
+    const xs = items.map((r) => [pos.get(r.id)!.x, pos.get(r.id)!.x + r.w]).flat();
+    const ys = items.map((r) => [pos.get(r.id)!.y, pos.get(r.id)!.y + r.h]).flat();
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo((1000 + 1600) / 2, 5);
+    expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(1050, 5);
+  });
+
+  it("exposes per-mode gaps with detailed roomier than compact", () => {
+    expect(FLOW_GAPS.detailed.x).toBeGreaterThan(FLOW_GAPS.compact.x);
+    expect(FLOW_GAPS.detailed.y).toBeGreaterThan(FLOW_GAPS.compact.y);
   });
 });
 

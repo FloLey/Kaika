@@ -498,8 +498,9 @@ export default function Docs({ section }: { section?: string }) {
           input + one output dot). <strong>Each view remembers its own card positions</strong> —
           arrange them tight in compact and spread in detailed, and switching never scrambles
           either layout (cards only move if they would overlap, and then as little as possible).
-          The <strong>✨ arrange</strong> toolbar button tidies the view you're looking at:
-          in detailed it spreads overlapping cards apart, in compact it packs them closer.
+          The <strong>✨ arrange</strong> toolbar button lays the view you're looking at out
+          along the data flow — sources left, output right — giving the cards room and
+          untangling wire crossings where it can (compact uses the same layout, just tighter).
           In compact view, <strong>click a card's body</strong> to open
           its settings window (all the controls, editing the graph live — <kbd>Esc</kbd> or a
           click outside closes it). Every card gets a <strong>default name</strong> (its type plus
