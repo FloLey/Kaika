@@ -66,6 +66,9 @@ interface GraphCanvasProps {
   // toolbar's ⊙ fit button / ⚠ problems rows (owned by Palette, outside this
   // subtree) can call it — no ids = fit everything, ids = center those cards.
   fitRef?: MutableRefObject<((ids?: string[]) => void) | null>;
+  // Imperative measure handle (same pattern as fitRef): the cards' rendered wrapper
+  // sizes in graph-space px, for the editor's ✨ arrange layout pass.
+  measureRef?: MutableRefObject<(() => Map<string, { w: number; h: number }>) | null>;
   renderNode: (node: GraphNode, helpers: NodeHelpers) => ReactNode;
 }
 
@@ -81,6 +84,7 @@ export default function GraphCanvas({
   onSelectionChange,
   onViewChange,
   fitRef,
+  measureRef,
   renderNode,
 }: GraphCanvasProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -154,6 +158,24 @@ export default function GraphCanvas({
       fitRef.current = null;
     };
   }, [fitRef, fitToNodes]);
+
+  // Measured card sizes for the ✨ arrange pass — offsetWidth/offsetHeight are
+  // graph-space accurate (see the nodeEls comment above).
+  useEffect(() => {
+    if (!measureRef) return undefined;
+    measureRef.current = () => {
+      const sizes = new Map<string, { w: number; h: number }>();
+      for (const [id, el] of nodeEls.current) {
+        // A 0-width card isn't laid out (hidden panel / jsdom) — omit it so the
+        // caller falls back to its per-type estimate instead of a zero box.
+        if (el.offsetWidth) sizes.set(id, { w: el.offsetWidth, h: el.offsetHeight });
+      }
+      return sizes;
+    };
+    return () => {
+      measureRef.current = null;
+    };
+  }, [measureRef]);
   // Open FITTED: one shot per mount (the editor remounts per segment), after the
   // cards have laid out so their real heights are measurable. A saved graph.view
   // can strand every card off-screen — fitting on open means the pipeline is

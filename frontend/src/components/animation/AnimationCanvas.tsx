@@ -54,6 +54,7 @@ export default function AnimationCanvas({
     selected,
     setSelected,
     applyUpdater,
+    reorganize,
     ctx,
     minimizeCtx,
     minimizedKey,
@@ -79,6 +80,14 @@ export default function AnimationCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<View>(graph.view || { tx: 0, ty: 0, scale: 1 }); // session-only pan/zoom
   const fitRef = useRef<((ids?: string[]) => void) | null>(null); // GraphCanvas's ⊙ fit action
+  const measureRef = useRef<(() => Map<string, { w: number; h: number }>) | null>(null); // rendered card sizes
+
+  // ✨ arrange: layout the current view with the cards' measured sizes, then re-fit
+  // once the new positions have rendered (the timeout lets React flush the commit).
+  const onReorganize = useCallback(() => {
+    reorganize(measureRef.current?.() ?? new Map());
+    setTimeout(() => fitRef.current?.(), 0);
+  }, [reorganize]);
 
   // Dead-wiring warnings for the ⚠ toolbar chip; clicking a row selects + centers
   // the offending card (a stale ★final points at a gone card — fall back to fit-all).
@@ -126,6 +135,7 @@ export default function AnimationCanvas({
         onGraphChange={applyUpdater}
         viewMode={viewMode}
         onSetViewMode={graph.nodes.length ? setViewMode : null}
+        onReorganize={graph.nodes.length > 1 ? onReorganize : null}
         onFitView={graph.nodes.length ? () => fitRef.current?.() : null}
         problems={problems}
         onProblemClick={onProblemClick}
@@ -146,6 +156,7 @@ export default function AnimationCanvas({
               viewRef.current = v;
             }}
             fitRef={fitRef}
+            measureRef={measureRef}
             renderNode={renderNode}
           />
         </MinimizeContext.Provider>

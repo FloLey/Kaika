@@ -495,7 +495,12 @@ export default function Docs({ section }: { section?: string }) {
           → puts out, then click to drop it. The canvas has <strong>two views</strong>, switched
           from the toolbar: <strong>▦ detailed</strong> (the default — every card shows its full
           controls) and <strong>▤ compact</strong> (just the name, a small live preview, and one
-          input + one output dot). In compact view, <strong>click a card's body</strong> to open
+          input + one output dot). <strong>Each view remembers its own card positions</strong> —
+          arrange them tight in compact and spread in detailed, and switching never scrambles
+          either layout (cards only move if they would overlap, and then as little as possible).
+          The <strong>✨ arrange</strong> toolbar button tidies the view you're looking at:
+          in detailed it spreads overlapping cards apart, in compact it packs them closer.
+          In compact view, <strong>click a card's body</strong> to open
           its settings window (all the controls, editing the graph live — <kbd>Esc</kbd> or a
           click outside closes it). Every card gets a <strong>default name</strong> (its type plus
           a counter — <em>fluid 1</em>, <em>fluid 2</em>…); <strong>double-click the title</strong>{" "}

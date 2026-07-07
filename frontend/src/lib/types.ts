@@ -301,6 +301,13 @@ interface NodeBase {
   id: string;
   x: number;
   y: number;
+  // The card's position in the COMPACT view (v20). `x/y` stays the detailed
+  // (canonical) position, so each view keeps its own arrangement — compact stays
+  // tight, detailed stays spread. Absent = derived on the next compact entry.
+  // Node-level like `name`: invisible to outputHash, so moving cards in either
+  // view can never bust the render cache.
+  cx?: number;
+  cy?: number;
   // A human-friendly card name (default "<type> N", editable). NODE-level on purpose:
   // outputHash serializes only {id,type,data}, so renaming never busts the render
   // cache. Optional + lazily defaulted, so it round-trips normalizeGraph untouched.

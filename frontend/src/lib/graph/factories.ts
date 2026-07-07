@@ -115,7 +115,10 @@ export function fluidNode(x: number, y: number): FluidNode {
 //       defaults it to the draft model for pre-v17 saves.
 //  v19: imagegen gained an optional `activeCount` — set by a wired gate to cap how
 //       many images are shown + passed to the slideshow (extras hidden, not deleted).
-export const GRAPH_VERSION = 19;
+//  v20: per-VIEW card positions — nodes gain optional `cx/cy` (the compact-view
+//       position; `x/y` stays the detailed one), so each view keeps its own layout.
+//       Absent cx/cy = derived on the next compact entry; no migration step needed.
+export const GRAPH_VERSION = 20;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };

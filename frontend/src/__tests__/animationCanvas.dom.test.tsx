@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import AnimationCanvas from "../components/animation/AnimationCanvas";
 import type { Segment } from "../lib/types";
 
@@ -101,5 +101,100 @@ describe("view modes: detailed | compact (jsdom)", () => {
     const committed = onGraphChange.mock.calls[0][0];
     expect(committed.viewMode).toBe("compact");
     expect(committed.viewOverrides).toEqual([]); // a mode switch is a clean flip
+  });
+});
+
+// v20 per-view positions: x/y is the DETAILED position, cx/cy the COMPACT one. The
+// canvas renders whichever set matches the mode, and a compact drag lands on cx/cy —
+// the detailed layout never moves underneath it.
+describe("per-view card positions (v20, jsdom)", () => {
+  const gate = (id: string, pos: { x: number; y: number; cx?: number; cy?: number }) => ({
+    id,
+    type: "gate",
+    data: { threshold: 0.5, hysteresis: 0.1, invert: false },
+    ...pos,
+  });
+  const twoCards = (viewMode: "detailed" | "compact") => ({
+    version: 20,
+    nodes: [
+      gate("n-a", { x: 0, y: 0, cx: 100, cy: 50 }),
+      gate("n-b", { x: 400, y: 0, cx: 160, cy: 50 }),
+    ],
+    edges: [],
+    viewMode,
+    viewOverrides: [],
+    view: { tx: 0, ty: 0, scale: 1 },
+  });
+  const wrapperPos = (container: HTMLElement, id: string) => {
+    const el = container.querySelector(`.gc-node-pos[data-node-id="${id}"]`) as HTMLElement;
+    return { left: el.style.left, top: el.style.top };
+  };
+
+  it("renders cards at cx/cy in compact mode and x/y in detailed", () => {
+    const seg = { ...baseSegment, graph: twoCards("compact") } as Segment;
+    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    expect(wrapperPos(container, "n-a")).toEqual({ left: "100px", top: "50px" });
+
+    const seg2 = { ...baseSegment, graph: twoCards("detailed") } as Segment;
+    const { container: c2 } = render(<AnimationCanvas segment={seg2} onGraphChange={() => {}} />);
+    expect(wrapperPos(c2, "n-a")).toEqual({ left: "0px", top: "0px" });
+  });
+
+  it("a compact drag commits cx/cy and leaves the detailed x/y untouched", () => {
+    const onGraphChange = vi.fn();
+    const seg = { ...baseSegment, graph: twoCards("compact") } as Segment;
+    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
+    const head = container.querySelector('.gc-node-pos[data-node-id="n-a"] .anim-node-head')!;
+    // jsdom's fireEvent drops clientX on pointer events — dispatch natives (they
+    // bubble to React's delegated pointerdown; move/up hit the window listeners).
+    // act() flushes the drag effect so those window listeners are attached.
+    const ptr = (type: string, x: number, y: number) =>
+      Object.assign(new Event(type, { bubbles: true }), { clientX: x, clientY: y, button: 0 });
+    act(() => {
+      head.dispatchEvent(ptr("pointerdown", 10, 10));
+    });
+    act(() => {
+      window.dispatchEvent(ptr("pointermove", 60, 40)); // +50 / +30 at scale 1
+      window.dispatchEvent(ptr("pointerup", 60, 40));
+    });
+    expect(onGraphChange).toHaveBeenCalledTimes(1);
+    const moved = onGraphChange.mock.calls[0][0].nodes.find((n: { id: string }) => n.id === "n-a");
+    expect(moved).toMatchObject({ cx: 150, cy: 80, x: 0, y: 0 }); // compact moved, detailed didn't
+    const other = onGraphChange.mock.calls[0][0].nodes.find((n: { id: string }) => n.id === "n-b");
+    expect(other).toMatchObject({ cx: 160, cy: 50, x: 400, y: 0 }); // untouched card kept as-is
+  });
+
+  it("✨ arrange commits one layout update for the current view", () => {
+    const onGraphChange = vi.fn();
+    // Two compact cards stacked on the same spot — arrange must separate them.
+    const graph = twoCards("compact");
+    graph.nodes[1] = gate("n-b", { x: 400, y: 0, cx: 100, cy: 50 });
+    const seg = { ...baseSegment, graph } as Segment;
+    const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
+    fireEvent.click(getByText("✨ arrange"));
+    expect(onGraphChange).toHaveBeenCalledTimes(1);
+    const committed = onGraphChange.mock.calls[0][0];
+    const a = committed.nodes.find((n: { id: string }) => n.id === "n-a");
+    const b = committed.nodes.find((n: { id: string }) => n.id === "n-b");
+    expect(a.cx === b.cx && a.cy === b.cy).toBe(false); // no longer stacked
+    expect(a.x).toBe(0); // the OTHER view's layout is untouched
+    expect(b.x).toBe(400);
+  });
+
+  it("switching to detailed de-overlaps stacked x/y (the compact-built pipeline fix)", () => {
+    const onGraphChange = vi.fn();
+    const graph = twoCards("compact");
+    // Both cards share the same DETAILED spot (built while compact, seeded alike).
+    graph.nodes = [gate("n-a", { x: 0, y: 0, cx: 0, cy: 0 }), gate("n-b", { x: 0, y: 0, cx: 300, cy: 0 })];
+    const seg = { ...baseSegment, graph } as Segment;
+    const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
+    fireEvent.click(getByText("▦ detailed"));
+    const committed = onGraphChange.mock.calls[0][0];
+    expect(committed.viewMode).toBe("detailed");
+    const a = committed.nodes.find((n: { id: string }) => n.id === "n-a");
+    const b = committed.nodes.find((n: { id: string }) => n.id === "n-b");
+    expect(a.x === b.x && a.y === b.y).toBe(false); // pulled apart
+    expect(a.cx).toBe(0); // compact layout untouched
+    expect(b.cx).toBe(300);
   });
 });

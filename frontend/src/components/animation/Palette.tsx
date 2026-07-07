@@ -22,6 +22,9 @@ interface PaletteProps {
   onGraphChange: (updater: (g: Graph) => Graph) => void;
   viewMode?: "detailed" | "compact";
   onSetViewMode?: ((mode: "detailed" | "compact") => void) | null;
+  // ✨ arrange the current view's cards (null with fewer than two cards): detailed
+  // spreads overlapping cards apart, compact packs them closer.
+  onReorganize?: (() => void) | null;
   // Fit the view to every card (null while the graph is empty).
   onFitView?: (() => void) | null;
   // Dead-wiring warnings (lib/graph/problems) + the click-through that selects and
@@ -59,6 +62,7 @@ export default function Palette({
   onGraphChange,
   viewMode,
   onSetViewMode,
+  onReorganize,
   onFitView,
   problems = [],
   onProblemClick,
@@ -235,6 +239,21 @@ export default function Palette({
           onClick={onFitView}
         >
           ⊙ fit
+        </button>
+      )}
+      {onReorganize && (
+        // Per-view layout cleanup: each view keeps its OWN card positions, and this
+        // tidies the one you're looking at without scrambling the arrangement.
+        <button
+          className="btn sm"
+          title={
+            viewMode === "compact"
+              ? "Arrange — pack the cards closer together (keeps their arrangement)"
+              : "Arrange — spread overlapping cards apart (keeps their arrangement)"
+          }
+          onClick={onReorganize}
+        >
+          ✨ arrange
         </button>
       )}
       {onSetViewMode && (

@@ -843,6 +843,33 @@ describe("v16 migration: view modes (legacy minimized/expanded stripped)", () =>
   });
 });
 
+describe("per-view card positions (v20): node cx/cy", () => {
+  it("cx/cy survive normalizeGraph (node-level, like `name`)", () => {
+    const { g, fluidId } = wiredGraph();
+    const saved = {
+      ...g,
+      version: 19,
+      nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, cx: 12.5, cy: -7 } : n)),
+    };
+    const out = normalizeGraph(saved);
+    const kept = out.nodes.find((n) => n.id === fluidId)!;
+    expect(kept.cx).toBe(12.5);
+    expect(kept.cy).toBe(-7);
+    expect(out.version).toBe(GRAPH_VERSION);
+    expect(normalizeGraph(out)).toBe(out); // idempotent after the restamp
+  });
+
+  it("does NOT change the render hash (moving cards in either view is cache-free)", () => {
+    const { g, outId, fluidId } = wiredGraph();
+    const h1 = outputHash(g, outId, "job", 0, 8, []);
+    const moved = {
+      ...g,
+      nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, x: 999, y: 999, cx: 1, cy: 2 } : n)),
+    };
+    expect(outputHash(moved, outId, "job", 0, 8, [])).toBe(h1);
+  });
+});
+
 describe("loose edges (v14): drop-anywhere wiring", () => {
   it("connectLoose parks a gray edge with the sentinel port and no binding (deduped)", () => {
     const { g, fluidId, srcId } = wiredGraph();

@@ -11,8 +11,10 @@ import {
   renameNode,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
+import { estimateCardSize, resolveOverlaps, tighten } from "../../lib/graph/layout";
+import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
-import type { Graph, GraphEdge, OutputSettings, Segment } from "../../lib/types";
+import type { Graph, GraphEdge, GraphNode, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
 
 // The animation editor "brain": graph state (normalized from segment.graph), the
@@ -20,6 +22,58 @@ import type { NodeCtx } from "./nodes/nodeProps";
 // `ctx` handed to every node card. AnimationCanvas is then just the view (refs,
 // fullscreen, layout). This is the seam to grow — new editor features (undo, node
 // templates, …) add here without threading props through the component tree.
+
+// ---- per-view positions (v20) --------------------------------------------------
+// `x/y` is the DETAILED position (canonical), `cx/cy` the COMPACT one. In compact
+// mode the canvas is handed a DISPLAY graph whose x/y are the compact coords, and
+// commits are translated back (x/y writes land on cx/cy) — GraphCanvas stays
+// position-agnostic. The WeakMap keeps display-node identity stable per real node,
+// so React.memo'd cards skip re-renders exactly as they do in detailed mode.
+const displayCache = new WeakMap<GraphNode, GraphNode>();
+function displayNode(n: GraphNode): GraphNode {
+  const dx = n.cx ?? n.x;
+  const dy = n.cy ?? n.y;
+  if (dx === n.x && dy === n.y) return n;
+  let d = displayCache.get(n);
+  if (!d) {
+    d = { ...n, x: dx, y: dy };
+    displayCache.set(n, d);
+  }
+  return d;
+}
+function toDisplay(g: Graph): Graph {
+  const nodes = g.nodes.map(displayNode);
+  return nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
+}
+
+// The mode-switch derivation: give every card a position in the TARGET view without
+// scrambling what the user arranged. Sizes are per-type ESTIMATES (the target mode
+// isn't rendered yet); ✨ arrange re-runs the same passes with measured sizes.
+//  → compact, first ever entry (no card has cx): tighten — scale the detailed
+//    arrangement toward its center + de-overlap, the auto "keep them close".
+//  → compact, later: seed missing cx/cy from x/y and de-overlap; an existing
+//    compact layout only moves where cards would collide.
+//  → detailed: de-overlap x/y — exactly the compact-built-pipeline fix; a clean
+//    detailed layout is untouched (resolveOverlaps is a no-op without collisions).
+function layoutForMode(nodes: GraphNode[], mode: "detailed" | "compact"): GraphNode[] {
+  if (nodes.length < 2) return nodes;
+  const rects: LayoutRect[] = nodes.map((n) => {
+    const s = estimateCardSize(n.type, mode);
+    const x = mode === "compact" ? n.cx ?? n.x : n.x;
+    const y = mode === "compact" ? n.cy ?? n.y : n.y;
+    return { id: n.id, x, y, w: s.w, h: s.h };
+  });
+  const firstCompactEntry = mode === "compact" && nodes.every((n) => n.cx == null);
+  const pos = firstCompactEntry ? tighten(rects) : resolveOverlaps(rects);
+  return nodes.map((n) => {
+    const p = pos.get(n.id);
+    if (!p) return n;
+    if (mode === "compact") {
+      return n.cx === p.x && n.cy === p.y ? n : { ...n, cx: p.x, cy: p.y };
+    }
+    return n.x === p.x && n.y === p.y ? n : { ...n, x: p.x, y: p.y };
+  });
+}
 
 interface GraphEditorOpts {
   segment: Segment;
@@ -116,6 +170,43 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   // renderAnimNode) keep receiving the derived COMPACT set, so their contract is
   // unchanged; `toggleMinimize` (kept name) flips override membership.
   const viewMode = graph.viewMode || "detailed";
+
+  // What GraphCanvas renders: in compact mode, positions come from cx/cy (per-view
+  // positions, v20). Everything the canvas does (drag, marquee, fit) just works in
+  // display space; `applyDisplayUpdater` below translates its commits back.
+  const displayGraph = useMemo(
+    () => (viewMode === "compact" ? toDisplay(graph) : graph),
+    [graph, viewMode]
+  );
+
+  // The updater handed to position-bearing callers (GraphCanvas, Palette adds, node
+  // ctx): run the updater in DISPLAY space, then land position writes on the active
+  // view's fields — in compact mode x/y edits become cx/cy and the detailed x/y is
+  // restored from the pre-edit graph, so a compact drag never disturbs the detailed
+  // layout. Nodes the updater didn't touch round-trip to the IDENTICAL real node
+  // object (memo'd cards keep skipping). New nodes seed both views at the drop point;
+  // the mode-switch pass de-overlaps the other view later.
+  const applyDisplayUpdater = useCallback(
+    (updater: (g: Graph) => Graph) => {
+      applyUpdater((g) => {
+        if ((g.viewMode || "detailed") !== "compact") return updater(g);
+        const disp = toDisplay(g);
+        const next = updater(disp);
+        if (next === disp) return g;
+        const prev = new Map(g.nodes.map((n) => [n.id, n]));
+        return {
+          ...next,
+          nodes: next.nodes.map((dn) => {
+            const p = prev.get(dn.id);
+            if (p && dn === displayNode(p)) return p; // untouched — keep the real node
+            return { ...dn, cx: dn.x, cy: dn.y, x: p ? p.x : dn.x, y: p ? p.y : dn.y };
+          }),
+        };
+      });
+    },
+    [applyUpdater]
+  );
+
   const overrides = useMemo(() => new Set<string>(graph.viewOverrides || []), [graph.viewOverrides]);
   // `output` never compacts — its body IS the live render preview — so it's excluded
   // here at the source (NodeFrame also hides its toggle) rather than special-cased
@@ -145,11 +236,42 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater]
   );
   // The toolbar mode switch: flip the whole canvas and drop the per-card exceptions.
+  // `layoutForMode` derives the target view's positions (see its comment) — one
+  // commit, one undo step, and only cards that would overlap actually move.
   const setViewMode = useCallback(
     (mode: "detailed" | "compact") => {
-      applyUpdater((g) => ({ ...g, viewMode: mode, viewOverrides: [] }));
+      applyUpdater((g) => ({
+        ...g,
+        nodes: layoutForMode(g.nodes, mode),
+        viewMode: mode,
+        viewOverrides: [],
+      }));
     },
     [applyUpdater]
+  );
+
+  // ✨ arrange: re-run the current view's layout pass with the cards' MEASURED
+  // wrapper sizes (exact, unlike the switch-time estimates) — detailed spreads
+  // overlapping cards apart, compact packs them closer. Runs in display space, so
+  // the translating wrapper lands the result on the right per-view fields.
+  const reorganize = useCallback(
+    (measured: Map<string, { w: number; h: number }>) => {
+      applyDisplayUpdater((g) => {
+        if (g.nodes.length < 2) return g;
+        const mode = g.viewMode || "detailed";
+        const rects: LayoutRect[] = g.nodes.map((n) => {
+          const s = measured.get(n.id) || estimateCardSize(n.type, mode);
+          return { id: n.id, x: n.x, y: n.y, w: s.w, h: s.h };
+        });
+        const pos = mode === "compact" ? tighten(rects) : resolveOverlaps(rects);
+        const nodes = g.nodes.map((n) => {
+          const p = pos.get(n.id);
+          return p && (p.x !== n.x || p.y !== n.y) ? { ...n, x: p.x, y: p.y } : n;
+        });
+        return nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
+      });
+    },
+    [applyDisplayUpdater]
   );
 
   // Accept a wire: a value source into a fluid param via connect(); anything else
@@ -287,7 +409,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       minimized, // the compact set -> renderAnimNode swaps in CompactCard
       finalOutputId: segment.finalOutputId, // which output the OutputNode shows as "final"
       setFinalOutput, // OutputNode marks itself final for this segment
-      onGraphChange: applyUpdater,
+      onGraphChange: applyDisplayUpdater,
       onDetach,
       onDeleteNode,
     }),
@@ -304,18 +426,21 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       groupPlaying,
       minimized,
       setFinalOutput,
-      applyUpdater,
+      applyDisplayUpdater,
       onDetach,
       onDeleteNode,
     ]
   );
 
   return {
-    graph,
+    // The DISPLAY graph (compact mode swaps in cx/cy) — what the canvas renders.
+    // Commits flow back through `applyUpdater` (the translating wrapper below).
+    graph: displayGraph,
     selected,
     setSelected,
     clearSelected,
-    applyUpdater,
+    applyUpdater: applyDisplayUpdater,
+    reorganize,
     ctx,
     minimizeCtx,
     minimizedKey,
