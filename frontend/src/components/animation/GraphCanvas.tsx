@@ -144,6 +144,7 @@ export default function GraphCanvas({
       maxY = Math.max(maxY, n.y + h);
     }
     const rect = root.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 40) return; // unlaid-out root (hidden/jsdom): nothing to fit into
     applyView(fitView({ minX, minY, maxX, maxY }, { width: rect.width, height: rect.height }));
   }, [applyView]);
   useEffect(() => {
@@ -153,6 +154,14 @@ export default function GraphCanvas({
       fitRef.current = null;
     };
   }, [fitRef, fitToNodes]);
+  // Open FITTED: one shot per mount (the editor remounts per segment), after the
+  // cards have laid out so their real heights are measurable. A saved graph.view
+  // can strand every card off-screen — fitting on open means the pipeline is
+  // always in front of you; pan/zoom from there is session-local anyway.
+  useEffect(() => {
+    if ((graphRef.current.nodes || []).length) fitToNodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- port registry: portKey -> DOM element ---------------------------------
   const portEls = useRef(new Map<string, Element>());
