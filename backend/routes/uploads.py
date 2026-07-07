@@ -300,7 +300,14 @@ def _process_upload(job_id, input_path, youtube_url, job_upload_dir, has_lyrics,
     job_out = SEPARATED_DIR / job_id
     job_out.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, PYTORCH_ENABLE_MPS_FALLBACK="1")
-    cmd = [sys.executable, "-m", "demucs", "-d", DEVICE, "-o", str(job_out), str(input_path)]
+    # DEMUCS_MODEL opts into a better separation (e.g. htdemucs_ft — the fine-tuned
+    # model, ~4× slower to separate). Worth it when the instrumental matters: the
+    # default model misclassifies more instrument content INTO the vocals stem,
+    # which the karaoke mix then removes along with the voice.
+    model = os.environ.get("DEMUCS_MODEL", "").strip()
+    cmd = [sys.executable, "-m", "demucs", "-d", DEVICE,
+           *(["-n", model] if model else []),
+           "-o", str(job_out), str(input_path)]  # fmt: skip
     try:
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=DEMUCS_TIMEOUT)
     except subprocess.TimeoutExpired:

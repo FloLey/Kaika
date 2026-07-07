@@ -4,6 +4,7 @@ Extracted verbatim from app.py (spec 03) so the blueprints can import them witho
 a cycle back through the Flask app object. Signatures are unchanged.
 """
 
+import logging
 import re
 import subprocess
 import sys
@@ -28,6 +29,8 @@ from .paths import (
     BG_COLOR,
     YTDLP_TIMEOUT,
 )
+
+log = logging.getLogger("kaika.media")
 
 # Apple Silicon GPU (M5) via PyTorch MPS, with CPU fallback.
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -86,21 +89,57 @@ def find_stem_dir(job_out: Path) -> Path:
     return songs[0]
 
 
-def _ensure_instrumental(stem_dir: Path) -> Path | None:
-    """The vocals-removed mix (drums+bass+other), built lazily next to the stems
-    and cached as ``instrumental.wav``. The karaoke track for covers/rewritten
-    lyrics: everything demucs separated except the vocal. `normalize=0` keeps
-    amix from level-shifting the result (the stems already sum to the mix).
-    Returns None if a source stem is missing or ffmpeg fails."""
-    out = stem_dir / "instrumental.wav"
+def _original_path(job_id: str) -> Path | None:
+    """The uploaded source audio for a job (`original.*` — the lyrics file also
+    lives in the uploads dir, so glob the audio stem specifically)."""
+    job_uploads = UPLOAD_DIR / job_id
+    if not job_uploads.is_dir():
+        return None
+    hits = sorted(job_uploads.glob("original.*"))
+    return hits[0] if hits else None
+
+
+def _ensure_instrumental(stem_dir: Path, original: Path | None = None) -> Path | None:
+    """The vocals-removed mix, built lazily next to the stems and cached as
+    ``instrumental-v2.wav`` (the internal name is invisible — everything resolves
+    through `stem_audio_path`). The karaoke track for covers/rewritten lyrics.
+
+    v2 is a PHASE SUBTRACTION: ``original − vocals`` keeps everything demucs did
+    NOT classify as vocal — reverb tails, FX glue, and any content the four stems
+    fail to reassemble. The old ``drums+bass+other`` sum silently dropped that
+    residual (and it remains the FALLBACK when the original is missing or won't
+    decode). Note the ceiling either way: whatever demucs put INTO the vocals stem
+    (backing vocals, vocal chops) is removed with it — a better separation model
+    (DEMUCS_MODEL=htdemucs_ft at upload) is the lever for that.
+    Returns None when nothing can be built."""
+    out = stem_dir / "instrumental-v2.wav"
     if out.exists():
         return out
+    (stem_dir / "instrumental.wav").unlink(missing_ok=True)  # retire the v1 sum cache
+    vocals = stem_dir / "vocals.wav"
+    if original is not None and original.exists() and vocals.exists():
+        # amerge stops at the shortest input; both sides are forced to the stems'
+        # 44.1k stereo float so the per-channel subtraction is sample-aligned
+        # (demucs resampled the original the same way when it separated).
+        flt = (
+            "[0:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a];"
+            "[1:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[b];"
+            "[a][b]amerge=inputs=2,pan=stereo|c0=c0-c2|c1=c1-c3[out]"
+        )
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(original), "-i", str(vocals),
+               "-filter_complex", flt, "-map", "[out]", str(out)]  # fmt: skip
+        proc = subprocess.run(cmd, capture_output=True)
+        if proc.returncode == 0 and out.exists():
+            return out
+        log.warning("instrumental: subtraction failed, falling back to the stem sum")
+        out.unlink(missing_ok=True)
     parts = [stem_dir / f"{s}.wav" for s in ("drums", "bass", "other")]
     if not all(p.exists() for p in parts):
         return None
     cmd = ["ffmpeg", "-y", "-v", "error"]
     for p in parts:
         cmd += ["-i", str(p)]
+    # normalize=0: sum, don't average — the stems already sum to the mix level.
     cmd += ["-filter_complex", "amix=inputs=3:normalize=0", str(out)]
     proc = subprocess.run(cmd, capture_output=True)
     if proc.returncode != 0 or not out.exists():
@@ -113,16 +152,11 @@ def stem_audio_path(job_id: str, stem: str) -> Path | None:
     """Resolve the on-disk audio file for a given job/stem, or None.
 
     Besides the demucs stems and the uploaded ``original``, accepts the pseudo-stem
-    ``instrumental`` — the lazily-mixed vocals-removed track (see
+    ``instrumental`` — the lazily-built vocals-removed track (see
     `_ensure_instrumental`). One resolver serves both the export mux and the
     ``/audio/<job>/<stem>`` transport route."""
     if stem == "original":
-        job_uploads = UPLOAD_DIR / job_id
-        if not job_uploads.is_dir():
-            return None
-        # Only the uploaded audio (the lyrics file also lives in this dir).
-        hits = sorted(job_uploads.glob("original.*"))
-        return hits[0] if hits else None
+        return _original_path(job_id)
 
     if stem != "instrumental" and stem not in STEMS:
         return None
@@ -131,7 +165,7 @@ def stem_audio_path(job_id: str, stem: str) -> Path | None:
     except FileNotFoundError:
         return None
     if stem == "instrumental":
-        return _ensure_instrumental(stem_dir)
+        return _ensure_instrumental(stem_dir, _original_path(job_id))
     wav = stem_dir / f"{stem}.wav"
     return wav if wav.exists() else None
 
