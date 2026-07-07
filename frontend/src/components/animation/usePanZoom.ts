@@ -14,12 +14,17 @@ export interface View {
 
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.0;
+// Hard floor against degenerate math only — the REAL lower bound is dynamic
+// (see getMinScale below): a sprawling graph may legitimately need far less
+// than the static 0.15 to fit.
+const FLOOR_SCALE = 0.01;
 const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
 
 // The view that FITS a graph-space bounding box into the viewport with a margin
-// (5% each side), centered, at a clamped zoom capped at 1:1 (fitting two cards
-// must not zoom IN past natural size). Pure — the ⊙ fit button and the empty-
-// canvas double-click feed it the measured node bbox; unit-tested directly.
+// (5% each side), centered, at a zoom capped at 1:1 (fitting two cards must not
+// zoom IN past natural size) but UNCLAMPED below — fit must always fit, however
+// big the graph. Pure — the ⊙ fit button and the empty-canvas double-click feed
+// it the measured node bbox; unit-tested directly.
 export function fitView(
   bbox: { minX: number; minY: number; maxX: number; maxY: number },
   viewport: { width: number; height: number },
@@ -29,7 +34,7 @@ export function fitView(
   const h = Math.max(1, bbox.maxY - bbox.minY);
   const usableW = Math.max(1, viewport.width * (1 - margin * 2));
   const usableH = Math.max(1, viewport.height * (1 - margin * 2));
-  const scale = clampScale(Math.min(usableW / w, usableH / h, 1));
+  const scale = Math.max(FLOOR_SCALE, Math.min(usableW / w, usableH / h, 1));
   return {
     scale,
     tx: (viewport.width - w * scale) / 2 - bbox.minX * scale,
@@ -37,11 +42,22 @@ export function fitView(
   };
 }
 
+// `getMinScale` (optional) supplies the DYNAMIC zoom-out limit: the canvas passes
+// one that allows dezooming until the whole graph fits ×1.5 in both directions,
+// so a big pipeline never jams against the static floor mid-overview.
 export default function usePanZoom(
   graph: { view?: View } | null | undefined,
   onViewChange: ((v: View) => void) | undefined,
-  rootRef: RefObject<HTMLElement | null>
+  rootRef: RefObject<HTMLElement | null>,
+  getMinScale?: () => number
 ) {
+  const clamp = useCallback(
+    (s: number) => {
+      const lo = Math.max(FLOOR_SCALE, Math.min(MIN_SCALE, getMinScale ? getMinScale() : MIN_SCALE));
+      return Math.max(lo, Math.min(MAX_SCALE, s));
+    },
+    [getMinScale]
+  );
   const seed = (graph && graph.view) || { tx: 0, ty: 0, scale: 1 };
   const [view, setView] = useState<View>({
     tx: seed.tx ?? 0,
@@ -76,7 +92,7 @@ export default function usePanZoom(
       const cy = e.clientY - rect.top;
       setView((v) => {
         const factor = Math.exp(-e.deltaY * 0.0015);
-        const next = clampScale(v.scale * factor);
+        const next = clamp(v.scale * factor);
         const k = next / v.scale;
         return {
           scale: next,
@@ -85,7 +101,7 @@ export default function usePanZoom(
         };
       });
     },
-    [rootRef]
+    [rootRef, clamp]
   );
 
   // Background drag = pan. Returns true if it started a pan (so the caller can
@@ -125,9 +141,12 @@ export default function usePanZoom(
   );
 
   // Imperative jump (the ⊙ fit-view action) — bypasses the gesture handlers.
-  const applyView = useCallback((v: View) => {
-    setView({ tx: v.tx, ty: v.ty, scale: clampScale(v.scale) });
-  }, []);
+  const applyView = useCallback(
+    (v: View) => {
+      setView({ tx: v.tx, ty: v.ty, scale: clamp(v.scale) });
+    },
+    [clamp]
+  );
 
   return {
     view,

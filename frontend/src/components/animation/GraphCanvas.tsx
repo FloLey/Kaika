@@ -89,6 +89,55 @@ export default function GraphCanvas({
 }: GraphCanvasProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+
+  // Latest selection / graph in refs so the pointer handlers (memoized, attached as
+  // window listeners) read current values without re-subscribing on every edit.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+
+  // Live map of node id -> positioned wrapper element, for marquee hit-testing and
+  // bbox measurement. offsetWidth/offsetHeight are layout px (unaffected by the
+  // stage's CSS scale), so they line up with node.x/node.y (same graph-space units).
+  const nodeEls = useRef(new Map<string, HTMLElement>());
+
+  // The measured graph-space bbox of `nodes` (real card sizes, with footprint
+  // fallbacks for unmounted ones). Shared by ⊙ fit and the dynamic zoom-out limit.
+  const measureBBox = useCallback((nodes: GraphNode[]) => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      const el = nodeEls.current.get(n.id);
+      const w = el?.offsetWidth || 230; // fallbacks ≈ default card footprint
+      const h = el?.offsetHeight || 160;
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + w);
+      maxY = Math.max(maxY, n.y + h);
+    }
+    return { minX, minY, maxX, maxY };
+  }, []);
+
+  // The dynamic zoom-out limit: dezoom is allowed until the WHOLE graph fits ×1.5
+  // in both directions — a sprawling pipeline never jams against the static 0.15
+  // floor mid-overview. Evaluated per wheel tick, so it tracks drags/adds live.
+  const getMinScale = useCallback(() => {
+    const root = rootRef.current;
+    const nodes = graphRef.current.nodes || [];
+    if (!root || !nodes.length) return 0.15;
+    const rect = root.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 40) return 0.15;
+    const b = measureBBox(nodes);
+    const fitScale = Math.min(
+      rect.width / Math.max(1, b.maxX - b.minX),
+      rect.height / Math.max(1, b.maxY - b.minY)
+    );
+    return Math.min(0.15, fitScale / 1.5);
+  }, [measureBBox]);
+
   const {
     view,
     onWheel,
@@ -97,14 +146,7 @@ export default function GraphCanvas({
     onBackgroundPointerUp,
     screenToGraph,
     applyView,
-  } = usePanZoom(graph, onViewChange, rootRef);
-
-  // Latest selection / graph in refs so the pointer handlers (memoized, attached as
-  // window listeners) read current values without re-subscribing on every edit.
-  const selectedRef = useRef(selected);
-  selectedRef.current = selected;
-  const graphRef = useRef(graph);
-  graphRef.current = graph;
+  } = usePanZoom(graph, onViewChange, rootRef, getMinScale);
 
 
   const replaceSel = useCallback(
@@ -121,36 +163,22 @@ export default function GraphCanvas({
     [onSelectionChange]
   );
 
-  // Live map of node id -> positioned wrapper element, for marquee hit-testing.
-  // offsetWidth/offsetHeight are layout px (unaffected by the stage's CSS scale),
-  // so they line up with node.x/node.y which live in the same graph-space units.
-  const nodeEls = useRef(new Map<string, HTMLElement>());
-
   // ⊙ fit view: bbox over the MEASURED cards (exact heights, compact or full) ->
-  // a centered, zoom-clamped view. Recovers any card dragged off-screen. Reached
-  // via the toolbar button (fitRef) and by double-clicking empty canvas.
-  const fitToNodes = useCallback((ids?: string[]) => {
-    const root = rootRef.current;
-    const all = graphRef.current.nodes || [];
-    const nodes = ids?.length ? all.filter((n) => ids.includes(n.id)) : all;
-    if (!root || !nodes.length) return;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const n of nodes) {
-      const el = nodeEls.current.get(n.id);
-      const w = el?.offsetWidth || 230; // fallbacks ≈ default card footprint
-      const h = el?.offsetHeight || 160;
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + w);
-      maxY = Math.max(maxY, n.y + h);
-    }
-    const rect = root.getBoundingClientRect();
-    if (rect.width < 40 || rect.height < 40) return; // unlaid-out root (hidden/jsdom): nothing to fit into
-    applyView(fitView({ minX, minY, maxX, maxY }, { width: rect.width, height: rect.height }));
-  }, [applyView]);
+  // a centered view. fitView is unclamped below 1:1, so however big the graph is,
+  // fit always fits. Recovers any card dragged off-screen. Reached via the toolbar
+  // button (fitRef) and by double-clicking empty canvas.
+  const fitToNodes = useCallback(
+    (ids?: string[]) => {
+      const root = rootRef.current;
+      const all = graphRef.current.nodes || [];
+      const nodes = ids?.length ? all.filter((n) => ids.includes(n.id)) : all;
+      if (!root || !nodes.length) return;
+      const rect = root.getBoundingClientRect();
+      if (rect.width < 40 || rect.height < 40) return; // unlaid-out root (hidden/jsdom): nothing to fit into
+      applyView(fitView(measureBBox(nodes), { width: rect.width, height: rect.height }));
+    },
+    [applyView, measureBBox]
+  );
   useEffect(() => {
     if (!fitRef) return undefined;
     fitRef.current = fitToNodes;

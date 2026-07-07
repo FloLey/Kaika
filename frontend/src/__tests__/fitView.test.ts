@@ -19,9 +19,17 @@ describe("fitView", () => {
     expect(1000 * v.scale + v.tx).toBeCloseTo(500, 3);
   });
 
-  it("clamps at the minimum zoom for a huge sprawl", () => {
-    const v = fitView({ minX: -50000, minY: -50000, maxX: 50000, maxY: 50000 }, vp);
-    expect(v.scale).toBe(0.15); // MIN_SCALE — never zooms out to nothing
+  it("fits a huge sprawl — no static floor (fit must ALWAYS fit)", () => {
+    const v = fitView({ minX: 0, minY: 0, maxX: 20000, maxY: 4000 }, vp);
+    expect(v.scale).toBeCloseTo((1000 * 0.9) / 20000, 5); // well below the old 0.15 floor
+    // everything is inside the viewport
+    expect(0 * v.scale + v.tx).toBeGreaterThanOrEqual(0);
+    expect(20000 * v.scale + v.tx).toBeLessThanOrEqual(1000);
+  });
+
+  it("floors only against degenerate math (absurd extents)", () => {
+    const v = fitView({ minX: -5e6, minY: -5e6, maxX: 5e6, maxY: 5e6 }, vp);
+    expect(v.scale).toBe(0.01); // FLOOR_SCALE — never collapses to zero
   });
 
   it("recovers an off-screen bbox (negative coordinates)", () => {
