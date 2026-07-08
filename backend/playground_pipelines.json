@@ -34,19 +34,12 @@
           "target": "out",
           "sourcePort": "out",
           "targetPort": "video"
-        },
-        {
-          "id": "e-mon-sig",
-          "source": "sig",
-          "target": "mon-sig",
-          "sourcePort": "out",
-          "targetPort": "in"
         }
       ],
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "sig",
           "data": {
             "signalId": "sig-drums"
@@ -54,7 +47,7 @@
           "type": "signal"
         },
         {
-          "x": 360,
+          "x": 390,
           "y": 60,
           "id": "fl",
           "data": {
@@ -167,23 +160,16 @@
           "type": "fluid"
         },
         {
-          "x": 810.8118762458513,
-          "y": 67.73765263304053,
+          "x": 810,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
           },
           "type": "output"
-        },
-        {
-          "x": 60,
-          "y": 300,
-          "id": "mon-sig",
-          "data": {},
-          "type": "scope"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -205,19 +191,12 @@
           "target": "out",
           "sourcePort": "out",
           "targetPort": "video"
-        },
-        {
-          "id": "e-mon-lfo",
-          "source": "lfo",
-          "target": "mon-lfo",
-          "sourcePort": "out",
-          "targetPort": "in"
         }
       ],
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -229,7 +208,7 @@
           "type": "lfo"
         },
         {
-          "x": 360,
+          "x": 390,
           "y": 60,
           "id": "fl",
           "data": {
@@ -342,23 +321,16 @@
           "type": "fluid"
         },
         {
-          "x": 754.54296875,
-          "y": 62.47265625,
+          "x": 810,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
           },
           "type": "output"
-        },
-        {
-          "x": 60,
-          "y": 300,
-          "id": "mon-lfo",
-          "data": {},
-          "type": "scope"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -380,19 +352,12 @@
           "target": "out",
           "sourcePort": "out",
           "targetPort": "video"
-        },
-        {
-          "id": "e-mon-nz",
-          "source": "nz",
-          "target": "mon-nz",
-          "sourcePort": "out",
-          "targetPort": "in"
         }
       ],
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "nz",
           "data": {
             "rate": 2,
@@ -402,7 +367,7 @@
           "type": "noise"
         },
         {
-          "x": 360,
+          "x": 390,
           "y": 60,
           "id": "fl",
           "data": {
@@ -515,23 +480,16 @@
           "type": "fluid"
         },
         {
-          "x": 801.8125,
-          "y": 75.0703125,
+          "x": 810,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
           },
           "type": "output"
-        },
-        {
-          "x": 60,
-          "y": 300,
-          "id": "mon-nz",
-          "data": {},
-          "type": "scope"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -567,19 +525,12 @@
           "target": "out",
           "sourcePort": "out",
           "targetPort": "video"
-        },
-        {
-          "id": "e-mon-ma",
-          "source": "ma",
-          "target": "mon-ma",
-          "sourcePort": "out",
-          "targetPort": "in"
         }
       ],
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 208,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -592,7 +543,7 @@
         },
         {
           "x": 60,
-          "y": 300,
+          "y": 488,
           "id": "nz",
           "data": {
             "rate": 2,
@@ -602,8 +553,8 @@
           "type": "noise"
         },
         {
-          "x": 60,
-          "y": 540,
+          "x": 390,
+          "y": 279,
           "id": "ma",
           "data": {
             "op": "multiply",
@@ -616,7 +567,7 @@
           "type": "math"
         },
         {
-          "x": 360,
+          "x": 720,
           "y": 60,
           "id": "fl",
           "data": {
@@ -729,23 +680,16 @@
           "type": "fluid"
         },
         {
-          "x": 754.515625,
-          "y": 60.38671875,
+          "x": 1140,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
           },
           "type": "output"
-        },
-        {
-          "x": 60,
-          "y": 780,
-          "id": "mon-ma",
-          "data": {},
-          "type": "scope"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -774,19 +718,12 @@
           "target": "out",
           "sourcePort": "out",
           "targetPort": "video"
-        },
-        {
-          "id": "e-mon-sh",
-          "source": "sh",
-          "target": "mon-sh",
-          "sourcePort": "out",
-          "targetPort": "in"
         }
       ],
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -798,8 +735,8 @@
           "type": "lfo"
         },
         {
-          "x": 43.06640625,
-          "y": 312.33984375,
+          "x": 390,
+          "y": 210,
           "id": "sh",
           "data": {
             "hi": 1,
@@ -815,8 +752,8 @@
           "type": "shaper"
         },
         {
-          "x": 507.11328125,
-          "y": 25.5859375,
+          "x": 720,
+          "y": 60,
           "id": "fl",
           "data": {
             "ports": {
@@ -928,23 +865,16 @@
           "type": "fluid"
         },
         {
-          "x": 920.98828125,
-          "y": 39.51953125,
+          "x": 1140,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
           },
           "type": "output"
-        },
-        {
-          "x": 349.95703125,
-          "y": 544.44140625,
-          "id": "mon-sh",
-          "data": {},
-          "type": "scope"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -978,7 +908,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -990,14 +920,14 @@
           "type": "lfo"
         },
         {
-          "x": 60,
-          "y": 300,
+          "x": 390,
+          "y": 220,
           "id": "sc",
           "data": {},
           "type": "scope"
         },
         {
-          "x": 360,
+          "x": 720,
           "y": 60,
           "id": "fl",
           "data": {
@@ -1110,8 +1040,8 @@
           "type": "fluid"
         },
         {
-          "x": 779.87890625,
-          "y": 72.94921875,
+          "x": 1140,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -1119,7 +1049,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -1146,7 +1076,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 180,
           "id": "pt",
           "data": {
             "points": [
@@ -1167,7 +1097,7 @@
           "type": "points"
         },
         {
-          "x": 360,
+          "x": 390,
           "y": 60,
           "id": "fl",
           "data": {
@@ -1278,8 +1208,8 @@
           "type": "fluid"
         },
         {
-          "x": 760.23828125,
-          "y": 106.92578125,
+          "x": 810,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -1287,7 +1217,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -1314,7 +1244,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "pat",
           "data": {
             "seed": 1,
@@ -1326,7 +1256,7 @@
           "type": "pattern"
         },
         {
-          "x": 360,
+          "x": 390,
           "y": 60,
           "id": "fl",
           "data": {
@@ -1437,8 +1367,8 @@
           "type": "fluid"
         },
         {
-          "x": 723.63671875,
-          "y": 85.97265625,
+          "x": 810,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -1446,7 +1376,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -1480,7 +1410,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "pat",
           "data": {
             "seed": 1,
@@ -1492,8 +1422,8 @@
           "type": "pattern"
         },
         {
-          "x": 301.2890625,
-          "y": 563.8046875,
+          "x": 390,
+          "y": 210,
           "id": "an",
           "data": {
             "mode": "orbit",
@@ -1504,7 +1434,7 @@
           "type": "animate-points"
         },
         {
-          "x": 360,
+          "x": 720,
           "y": 60,
           "id": "fl",
           "data": {
@@ -1615,8 +1545,8 @@
           "type": "fluid"
         },
         {
-          "x": 814.8671875,
-          "y": 61.0625,
+          "x": 1140,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -1624,7 +1554,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -1664,8 +1594,8 @@
       ],
       "nodes": [
         {
-          "x": -81.87485333601308,
-          "y": -78.7649268011101,
+          "x": 60,
+          "y": 208,
           "id": "pat1",
           "data": {
             "seed": 1,
@@ -1679,8 +1609,8 @@
           "type": "pattern"
         },
         {
-          "x": -83.71390414327018,
-          "y": 508.0928615416876,
+          "x": 60,
+          "y": 488,
           "id": "pat2",
           "data": {
             "seed": 1,
@@ -1694,8 +1624,8 @@
           "type": "pattern"
         },
         {
-          "x": 320,
-          "y": 160,
+          "x": 390,
+          "y": 279,
           "id": "mrg",
           "data": {
             "inputs": [
@@ -1706,7 +1636,7 @@
           "type": "merge-points"
         },
         {
-          "x": 560,
+          "x": 720,
           "y": 60,
           "id": "fl",
           "data": {
@@ -1787,8 +1717,8 @@
           "type": "fluid"
         },
         {
-          "x": 927.9267781525863,
-          "y": 33.2690840806322,
+          "x": 1140,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -1796,7 +1726,7 @@
           "type": "output"
         }
       ],
-      "version": 8
+      "version": 21
     }
   },
   {
@@ -1926,8 +1856,8 @@
           "type": "fluid"
         },
         {
-          "x": 478.9609375,
-          "y": 56.015625,
+          "x": 480,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -1935,7 +1865,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -1961,7 +1891,7 @@
       ],
       "nodes": [
         {
-          "x": 360,
+          "x": 390,
           "y": 60,
           "id": "fl",
           "data": {
@@ -2072,8 +2002,8 @@
           "type": "fluid"
         },
         {
-          "x": 760,
-          "y": 60,
+          "x": 810,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
@@ -2082,7 +2012,7 @@
         },
         {
           "x": 60,
-          "y": 60,
+          "y": 190,
           "id": "n-colordye",
           "data": {
             "mode": "swatch",
@@ -2132,7 +2062,7 @@
           "type": "color"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -2165,7 +2095,7 @@
       ],
       "nodes": [
         {
-          "x": 60,
+          "x": 105,
           "y": 60,
           "id": "ly",
           "data": {
@@ -2179,7 +2109,7 @@
         },
         {
           "x": 60,
-          "y": 300,
+          "y": 500,
           "id": "fl",
           "data": {
             "ports": {
@@ -2217,8 +2147,8 @@
           "type": "fluid"
         },
         {
-          "x": 360,
-          "y": 60,
+          "x": 480,
+          "y": 290,
           "id": "cb",
           "data": {
             "mode": "stack",
@@ -2242,8 +2172,8 @@
           "type": "combine"
         },
         {
-          "x": 660,
-          "y": 60,
+          "x": 810,
+          "y": 270,
           "id": "out",
           "data": {
             "title": "preview"
@@ -2251,7 +2181,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -2284,8 +2214,8 @@
       ],
       "nodes": [
         {
-          "x": 40,
-          "y": 300,
+          "x": 105,
+          "y": 640,
           "id": "bd",
           "data": {
             "color": "#2a1a4a",
@@ -2301,8 +2231,8 @@
           "type": "backdrop"
         },
         {
-          "x": 340,
-          "y": 40,
+          "x": 60,
+          "y": 60,
           "id": "fl",
           "data": {
             "ports": {
@@ -2412,8 +2342,8 @@
           "type": "fluid"
         },
         {
-          "x": 640,
-          "y": 60,
+          "x": 480,
+          "y": 327,
           "id": "cb",
           "data": {
             "mode": "stack",
@@ -2437,8 +2367,8 @@
           "type": "combine"
         },
         {
-          "x": 900,
-          "y": 70,
+          "x": 810,
+          "y": 307,
           "id": "out",
           "data": {
             "title": "preview"
@@ -2446,7 +2376,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -2525,7 +2455,7 @@
         },
         {
           "x": 60,
-          "y": 300,
+          "y": 640,
           "id": "flB",
           "data": {
             "ports": {
@@ -2581,8 +2511,8 @@
           "type": "fluid"
         },
         {
-          "x": 360,
-          "y": 60,
+          "x": 480,
+          "y": 383,
           "id": "cb",
           "data": {
             "mode": "stack",
@@ -2606,8 +2536,8 @@
           "type": "combine"
         },
         {
-          "x": 660,
-          "y": 60,
+          "x": 810,
+          "y": 363,
           "id": "out",
           "data": {
             "title": "preview"
@@ -2615,7 +2545,210 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
+    }
+  },
+  {
+    "key": "transform",
+    "label": "Transform",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "tf",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "tf",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e2",
+          "source": "lfo",
+          "target": "tf",
+          "sourcePort": "out",
+          "targetPort": "rotate"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 105,
+          "y": 640,
+          "id": "lfo",
+          "data": {
+            "duty": 0.5,
+            "rate": 1,
+            "phase": 0,
+            "shape": "saw",
+            "rateMode": "cycles"
+          },
+          "type": "lfo"
+        },
+        {
+          "x": 60,
+          "y": 60,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "b": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "g": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.69
+                }
+              },
+              "r": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.27
+                }
+              },
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.55
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 30
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.07
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "intensity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.72,
+                  0.56
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 480,
+          "y": 313,
+          "id": "tf",
+          "data": {
+            "mode": "kaleidoscope",
+            "wrap": false,
+            "ports": {
+              "zoom": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.15
+                }
+              },
+              "pan_x": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "pan_y": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "rotate": {
+                "binding": {
+                  "hi": 360,
+                  "lo": 0,
+                  "kind": "node",
+                  "nodeId": "lfo"
+                }
+              }
+            },
+            "segments": 6
+          },
+          "type": "transform"
+        },
+        {
+          "x": 810,
+          "y": 313,
+          "id": "out",
+          "data": {},
+          "type": "output"
+        }
+      ],
+      "version": 21
     }
   },
   {
@@ -2752,8 +2885,8 @@
           "type": "fluid"
         },
         {
-          "x": 431.08984375,
-          "y": 60.4921875,
+          "x": 480,
+          "y": 170,
           "id": "o1",
           "data": {
             "title": "passthrough"
@@ -2761,8 +2894,8 @@
           "type": "output"
         },
         {
-          "x": 741.030549035397,
-          "y": 61.75468311961801,
+          "x": 810,
+          "y": 170,
           "id": "o2",
           "data": {
             "title": "preview"
@@ -2770,7 +2903,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -2804,7 +2937,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 300,
+          "y": 440,
           "id": "fl",
           "data": {
             "ports": {
@@ -2842,7 +2975,7 @@
           "type": "fluid"
         },
         {
-          "x": 60,
+          "x": 105,
           "y": 60,
           "id": "lay",
           "data": {
@@ -2864,8 +2997,8 @@
           "type": "image"
         },
         {
-          "x": 360,
-          "y": 60,
+          "x": 480,
+          "y": 250,
           "id": "cb",
           "data": {
             "mode": "stack",
@@ -2889,8 +3022,8 @@
           "type": "combine"
         },
         {
-          "x": 660,
-          "y": 60,
+          "x": 810,
+          "y": 230,
           "id": "out",
           "data": {
             "title": "preview"
@@ -2898,7 +3031,7 @@
           "type": "output"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -2939,7 +3072,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 300,
+          "y": 60,
           "id": "fl",
           "data": {
             "ports": {
@@ -2977,8 +3110,8 @@
           "type": "fluid"
         },
         {
-          "x": 60,
-          "y": 60,
+          "x": 480,
+          "y": 426,
           "id": "lay",
           "data": {
             "fit": "cover",
@@ -3010,8 +3143,8 @@
           "type": "video"
         },
         {
-          "x": 360,
-          "y": 60,
+          "x": 810,
+          "y": 328,
           "id": "cb",
           "data": {
             "mode": "stack",
@@ -3035,8 +3168,8 @@
           "type": "combine"
         },
         {
-          "x": 660,
-          "y": 60,
+          "x": 1140,
+          "y": 308,
           "id": "out",
           "data": {
             "title": "preview"
@@ -3044,8 +3177,8 @@
           "type": "output"
         },
         {
-          "x": 60,
-          "y": 360,
+          "x": 105,
+          "y": 640,
           "id": "vspd",
           "data": {
             "duty": 0.5,
@@ -3057,7 +3190,7 @@
           "type": "lfo"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -3086,19 +3219,12 @@
           "target": "out",
           "sourcePort": "out",
           "targetPort": "video"
-        },
-        {
-          "id": "e-mon-sh",
-          "source": "gate",
-          "target": "mon-sh",
-          "sourcePort": "out",
-          "targetPort": "in"
         }
       ],
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 210,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -3110,8 +3236,8 @@
           "type": "lfo"
         },
         {
-          "x": 43.06640625,
-          "y": 312.33984375,
+          "x": 390,
+          "y": 210,
           "id": "gate",
           "data": {
             "invert": false,
@@ -3121,8 +3247,8 @@
           "type": "gate"
         },
         {
-          "x": 507.11328125,
-          "y": 25.5859375,
+          "x": 720,
+          "y": 60,
           "id": "fl",
           "data": {
             "ports": {
@@ -3234,23 +3360,16 @@
           "type": "fluid"
         },
         {
-          "x": 920.98828125,
-          "y": 39.51953125,
+          "x": 1140,
+          "y": 170,
           "id": "out",
           "data": {
             "title": "preview"
           },
           "type": "output"
-        },
-        {
-          "x": 349.95703125,
-          "y": 544.44140625,
-          "id": "mon-sh",
-          "data": {},
-          "type": "scope"
         }
       ],
-      "version": 6
+      "version": 21
     }
   },
   {
@@ -3277,7 +3396,7 @@
       "nodes": [
         {
           "x": 60,
-          "y": 60,
+          "y": 120,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -3289,26 +3408,26 @@
           "type": "lfo"
         },
         {
-          "x": 320,
-          "y": 40,
+          "x": 390,
+          "y": 60,
           "id": "ig",
           "data": {
             "fit": "cover",
-            "box_h": 1.0,
-            "box_w": 1.0,
-            "box_x": 0.0,
-            "box_y": 0.0,
+            "box_h": 1,
+            "box_w": 1,
+            "box_x": 0,
+            "box_y": 0,
             "ports": {
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "trigger": {
                 "binding": {
-                  "hi": 1.0,
-                  "lo": 0.0,
+                  "hi": 1,
+                  "lo": 0,
                   "kind": "node",
                   "nodeId": "lfo"
                 }
@@ -3325,7 +3444,7 @@
           "type": "slideshow"
         },
         {
-          "x": 640,
+          "x": 720,
           "y": 80,
           "id": "out",
           "data": {
@@ -3334,7 +3453,7 @@
           "type": "output"
         }
       ],
-      "version": 1
+      "version": 21
     }
   },
   {
@@ -3367,8 +3486,8 @@
       ],
       "nodes": [
         {
-          "x": 40,
-          "y": 40,
+          "x": 60,
+          "y": 60,
           "id": "gen",
           "data": {
             "seed": 1,
@@ -3386,8 +3505,8 @@
           "type": "imagegen"
         },
         {
-          "x": 40,
-          "y": 260,
+          "x": 60,
+          "y": 480,
           "id": "lfo",
           "data": {
             "duty": 0.5,
@@ -3399,26 +3518,26 @@
           "type": "lfo"
         },
         {
-          "x": 340,
-          "y": 40,
+          "x": 390,
+          "y": 187,
           "id": "sl",
           "data": {
             "fit": "cover",
-            "box_h": 1.0,
-            "box_w": 1.0,
-            "box_x": 0.0,
-            "box_y": 0.0,
+            "box_h": 1,
+            "box_w": 1,
+            "box_x": 0,
+            "box_y": 0,
             "ports": {
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "trigger": {
                 "binding": {
-                  "hi": 1.0,
-                  "lo": 0.0,
+                  "hi": 1,
+                  "lo": 0,
                   "kind": "node",
                   "nodeId": "lfo"
                 }
@@ -3431,8 +3550,8 @@
           "type": "slideshow"
         },
         {
-          "x": 660,
-          "y": 80,
+          "x": 720,
+          "y": 207,
           "id": "out",
           "data": {
             "title": "preview"
@@ -3440,7 +3559,7 @@
           "type": "output"
         }
       ],
-      "version": 15
+      "version": 21
     }
   }
 ]

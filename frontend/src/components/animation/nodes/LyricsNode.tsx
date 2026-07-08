@@ -13,6 +13,7 @@ import { aspectOf } from "../../../lib/output";
 import { useLyricsFont } from "../../../lib/lyricsFont";
 import { listFonts, type FontOption } from "../../../lib/api";
 import BoxPad, { type BoxPreview } from "./BoxPad";
+import StreamPreview from "./StreamPreview";
 import LyricsEditor from "../LyricsEditor";
 import type { NodeProps } from "./nodeProps";
 import type { LyricsData, LyricsAlign, LyricsCase, LyricsReveal } from "../../../lib/types";
@@ -156,6 +157,9 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
         />
       }
     >
+      {/* The live rendered output — the lyrics revealing on the vocal exactly as they
+          export. Suppressed in the settings window (its right column shows it). */}
+      <StreamPreview node={node} ctx={ctx} aspect={aspect} />
       <div className="anim-fx-hint anim-lyrics-lines">
         <span>
           {lineCount > 0 ? `${lineCount} aligned line${lineCount === 1 ? "" : "s"} for this track` : "no aligned lyrics for this track"}

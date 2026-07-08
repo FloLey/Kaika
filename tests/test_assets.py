@@ -115,6 +115,45 @@ def test_upload_asset_rejects_unknown_extension(live_db, client, tmp_path, monke
 
 
 # --------------------------------------------------------------------------- #
+# HD-export assets are named `hd-<sha16>` — the hyphen must survive serve + delete
+# (both gates used to require a pure-alnum stem, so HD thumbnails 404'd and their
+# delete 400'd; see backend/web.py validate_asset_id).
+# --------------------------------------------------------------------------- #
+def test_hyphenated_hd_asset_serves_and_deletes(live_db, client, tmp_path, monkeypatch):
+    from backend.routes import serving, uploads
+
+    assets_dir = tmp_path / "assets"
+    monkeypatch.setattr(serving, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+
+    job, asset_id = "d0010101", "hd-a1b2c3d4e5f60718"
+    _mk_project(job)
+    (assets_dir / job).mkdir(parents=True)
+    f = assets_dir / job / f"{asset_id}.png"
+    Image.new("RGB", (4, 4), (9, 9, 9)).save(f, "PNG")
+    db.add_asset(job, {"id": asset_id, "url": f"/assets/{job}/{f.name}", "kind": "image",
+                       "name": f.name, "addedAt": 1})
+    try:
+        assert client.get(f"/assets/{job}/{f.name}").status_code == 200
+        assert client.delete(f"/assets/{job}/{asset_id}").status_code == 200
+        assert not f.exists()
+        assert db.list_assets(job) == []
+    finally:
+        db.delete_project(job)
+
+
+def test_asset_routes_still_reject_unsafe_names(client, tmp_path, monkeypatch):
+    from backend.routes import serving
+
+    monkeypatch.setattr(serving, "ASSETS_DIR", tmp_path)
+    job = "d0020202"
+    # a leading hyphen, an underscore, and a dotted stem are all outside the id shape
+    for name in ("-evil.png", "a_b.png", "a.b.png"):
+        assert client.get(f"/assets/{job}/{name}").status_code == 404
+    assert client.delete(f"/assets/{job}/-evil").status_code == 400
+
+
+# --------------------------------------------------------------------------- #
 # YouTube -> video asset (async worker, downloader monkeypatched)
 # --------------------------------------------------------------------------- #
 def test_asset_from_youtube_adds_video(live_db, tmp_path, monkeypatch):

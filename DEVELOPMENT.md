@@ -37,7 +37,7 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
   │              │
   │        animation NODE GRAPH (signal · modulators · fluid · color · points/
   │              │               pattern/animate · lyrics/image/video/backdrop ·
-  │              │               combine · output)
+  │              │               combine · transform · output)
   │              │
   └──> /animate/stream ──> graph executor ──> fluid.simulate (block-streamed,
         cached) ──> growing mp4 ──> <video>;  /export/stream ──> whole-song HD
@@ -76,7 +76,7 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
   - `lib/fluidParams.js` — **generated** from the backend specs (do not hand-edit);
     `lib/nodeParams.ts` is the registry every card reads.
   - `components/animation/` — the node-graph editor (`GraphCanvas`, `nodes/*` —
-    21 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
+    22 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
   - `components/studio/` — the studio shell, signal cards, transport.
   - `components/assets/`, `components/export/` — asset library, final export.
 

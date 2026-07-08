@@ -8,7 +8,7 @@ from flask import Blueprint, abort, jsonify, send_file
 
 from .. import fonts
 from ..media import serve_range, stem_audio_path
-from ..web import validate_job_id
+from ..web import validate_asset_id, validate_job_id
 from ..paths import ASSETS_DIR, ASSET_MIME, FLUID_DIR, SPECTRO_DIR, STEMS
 
 bp = Blueprint("media", __name__)
@@ -85,7 +85,7 @@ def asset_file(job_id: str, name: str):
     """A user-uploaded image/video layer asset (data/assets/<job_id>/<sha>.<ext>).
     Video is range-served so `<video>` can seek; images are sent whole."""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-    if not validate_job_id(job_id) or ext not in _ASSET_MIME or not name.split(".")[0].isalnum():
+    if not validate_job_id(job_id) or ext not in _ASSET_MIME or not validate_asset_id(name.split(".")[0]):
         abort(404)
     p = ASSETS_DIR / job_id / name
     if not p.exists():

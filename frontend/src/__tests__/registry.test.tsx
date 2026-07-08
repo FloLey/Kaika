@@ -9,6 +9,7 @@ import {
   paletteSpecs,
   chromeFor,
 } from "../components/animation/nodes/registry";
+import { VIDEO_TYPES } from "../components/animation/nodes/CompactPreview";
 import { signalNode, VIDEO_PRODUCERS, normalizeGraph, emptyGraph } from "../lib/graphModel";
 import type { GraphNode } from "../lib/types";
 import type { NodeCtx } from "../components/animation/nodes/nodeProps";
@@ -112,6 +113,18 @@ describe("node-type registry", () => {
         .map((s) => s.type)
     );
     expect(new Set(VIDEO_PRODUCERS)).toEqual(fromRegistry);
+  });
+
+  it("every video card has a compact preview (CompactPreview.VIDEO_TYPES)", () => {
+    // A video card missing from VIDEO_TYPES compacts to a BLANK body — no error, no test
+    // failure, just an empty card (this is exactly what shipped with `transform`).
+    // `output` never compacts; `backdrop`'s preview is deliberately a flat swatch.
+    const EXEMPT = new Set(["output", "backdrop"]);
+    const needPreview = Object.values(NODE_TYPES)
+      .filter((s) => s.chrome.outFlow === "video" && !EXEMPT.has(s.type))
+      .map((s) => s.type);
+    const missing = needPreview.filter((t) => !VIDEO_TYPES.has(t));
+    expect(missing, `add these to CompactPreview VIDEO_TYPES: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("chromeFor falls back gracefully for an unknown type", () => {

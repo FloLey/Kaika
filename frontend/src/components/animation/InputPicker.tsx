@@ -66,10 +66,18 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
       if (!v) return unassignEdge(g, node.id, input.portId);
       // A parked loose wire → promote it onto this exact port (restores the invariant).
       if (v.startsWith("l:")) return assignEdge(g, v.slice(2), input.portId);
-      // A source node id → wire it, tidying any parked wire from that same source.
+      // A source node id → wire it, tidying any parked wire from that same source. For a
+      // card with numbered dynamic inputs (math/merge/combine) this is a MOVE: strip the
+      // source from any SIBLING numbered input too, so it never feeds two slots — lets you
+      // swap operands / reorder layers by re-picking, without duplicating or rewiring.
       const g2 = {
         ...g,
-        edges: g.edges.filter((ed) => !(ed.source === v && ed.target === node.id && isLooseEdge(ed))),
+        edges: g.edges.filter((ed) => {
+          if (ed.source !== v || ed.target !== node.id) return true;
+          if (isLooseEdge(ed)) return false; // consume the parked wire from this source
+          if (dynamic && ed.targetPort !== input.portId) return false; // move off siblings
+          return true;
+        }),
       };
       return input.kind === "param"
         ? connect(g2, v, node.id, input.portId)

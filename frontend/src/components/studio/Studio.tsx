@@ -7,6 +7,7 @@ import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
 import AssetLibrary from "../assets/AssetLibrary";
 import VolumeControl from "./VolumeControl";
+import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
 import { STEM_META, seedSignal, copyLayout } from "../../lib/segments";
@@ -190,20 +191,25 @@ export default function Studio({
   const prevSeg = segIdx > 0 ? segments[segIdx - 1] : null;
   const nextSeg = segIdx >= 0 && segIdx + 1 < segments.length ? segments[segIdx + 1] : null;
   const hasCards = !!activeSeg?.graph?.nodes?.length;
-  const copyLayoutTo = useCallback(
-    (target: Segment | null) => {
-      if (!target || !activeSeg?.graph?.nodes?.length) return;
-      if (
-        target.graph?.nodes?.length &&
-        !window.confirm(`Replace “${target.label}”'s animation with this segment's layout?`)
-      ) {
-        return;
-      }
+  const runCopyLayout = useCallback(
+    (target: Segment) => {
+      if (!activeSeg) return;
       const updated = copyLayout(activeSeg, target);
       setSegments((prev) => prev.map((s) => (s.id === target.id ? updated : s)));
       selectSegment(target.id); // follow the copy onto the target segment
     },
     [activeSeg, setSegments, selectSegment]
+  );
+  // Overwriting a segment that already has cards asks first (the target's graph is
+  // replaced wholesale); an empty target copies straight through.
+  const [copyTarget, setCopyTarget] = useState<Segment | null>(null);
+  const copyLayoutTo = useCallback(
+    (target: Segment | null) => {
+      if (!target || !activeSeg?.graph?.nodes?.length) return;
+      if (target.graph?.nodes?.length) setCopyTarget(target);
+      else runCopyLayout(target);
+    },
+    [activeSeg, runCopyLayout]
   );
 
   return (
@@ -410,6 +416,18 @@ export default function Studio({
           </button>
         </nav>
       </div>
+
+      <ConfirmDialog
+        open={!!copyTarget}
+        message={`Replace “${copyTarget?.label}”'s animation with this segment's layout?`}
+        confirmLabel="Replace"
+        danger
+        onConfirm={() => {
+          if (copyTarget) runCopyLayout(copyTarget);
+          setCopyTarget(null);
+        }}
+        onCancel={() => setCopyTarget(null)}
+      />
     </div>
   );
 }

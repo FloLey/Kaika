@@ -1,33 +1,45 @@
-import type { CSSProperties } from "react";
 import ValuePreview from "./ValuePreview";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
 import { useResolvedPoints } from "./useResolvedPoints";
 import { patternPoints } from "../../../lib/pointsGen";
-import { slideshowUrls } from "../../../lib/imageCount";
 import { aspectOf } from "../../../lib/output";
 import type { NodeCtx } from "./nodeProps";
 import type {
   BackdropData,
   ColorData,
   GraphNode,
-  ImageData,
   ImagegenData,
-  LyricsData,
   PatternData,
   PointsData,
-  VideoData,
 } from "../../../lib/types";
 
 // The live preview inside a CompactCard's body — one glance at what the card produces,
-// switched on node.type: value cards pulse, points cards scatter, fluid/combine stream
-// their sim, layer cards show their content. Output never compacts (its body IS the
-// render). All heavy previews are viewport-gated inside their components.
+// switched on node.type: value cards pulse, points cards scatter, and every VIDEO producer
+// (fluid, combine, transform, image, video, slideshow, lyrics) streams its REAL rendered
+// output — the same block-render the Output card uses — so the card shows exactly what it
+// puts out. Output never compacts (its body IS the render). Heavy previews are
+// viewport-gated inside.
 
 // Value cards preview their REAL resolved 0..1 output (same `/resolve` the Scope and
 // full cards use) as a pulsing pad — so a compact signal reads as "alive" and can't
 // drift from what renders.
 const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math", "scope"]);
+
+// Cards whose output is VIDEO — their preview is a live block-stream of the actual render
+// (not a client-side approximation), so a slideshow advances / lyrics reveal / a layer is
+// placed exactly as it will export. Backdrop stays a swatch (its output IS a flat colour);
+// output never compacts. Exported so `registry.test.tsx` can assert a new video card was
+// added here too — a missing entry renders a BLANK compact body, which is easy to miss.
+export const VIDEO_TYPES = new Set([
+  "fluid",
+  "combine",
+  "transform",
+  "image",
+  "video",
+  "slideshow",
+  "lyrics",
+]);
 
 // animate/merge points depend on upstream + transforms, so their scatter is resolved
 // from the backend (hooks can't be conditional — split into its own component).
@@ -60,14 +72,15 @@ interface CompactPreviewProps {
   node: GraphNode;
   ctx: NodeCtx;
   accent: string;
-  // The card's selection state — stream previews (fluid/combine) only go live while
-  // selected, matching the full-size cards.
-  selected?: boolean;
 }
 
-export default function CompactPreview({ node, ctx, accent, selected }: CompactPreviewProps) {
+export default function CompactPreview({ node, ctx, accent }: CompactPreviewProps) {
   if (VALUE_TYPES.has(node.type)) {
     return <ValuePreview node={node} ctx={ctx} color={accent} compact />;
+  }
+  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  if (VIDEO_TYPES.has(node.type)) {
+    return <StreamPreview node={node} ctx={ctx} aspect={aspect} compact />;
   }
   switch (node.type) {
     case "color":
@@ -84,28 +97,6 @@ export default function CompactPreview({ node, ctx, accent, selected }: CompactP
           style={{ background: (node.data as BackdropData).color }}
         />
       );
-    case "image": {
-      const d = node.data as ImageData;
-      return d.assetUrl ? (
-        <img className="anim-compact-thumb" src={d.assetUrl} alt="" draggable={false} />
-      ) : (
-        <span className="anim-compact-hint">no image</span>
-      );
-    }
-    case "slideshow": {
-      // Effective images = own picks + the wired Image gen card's list (shared
-      // helper) — reading only assetUrls said "no images" on a card fed by a
-      // generator that had six.
-      const urls = slideshowUrls(ctx?.graph, node);
-      return urls.length ? (
-        <span className="anim-compact-thumbwrap">
-          <img className="anim-compact-thumb" src={urls[0]} alt="" draggable={false} />
-          <span className="anim-compact-count">×{urls.length}</span>
-        </span>
-      ) : (
-        <span className="anim-compact-hint">no images</span>
-      );
-    }
     case "imagegen": {
       const d = node.data as ImagegenData;
       const n = (d.prompts || []).filter((p) => p.trim()).length;
@@ -119,67 +110,13 @@ export default function CompactPreview({ node, ctx, accent, selected }: CompactP
         <span className="anim-compact-hint">{n ? `${n} prompt${n === 1 ? "" : "s"}` : "no prompts"}</span>
       );
     }
-    case "video": {
-      const d = node.data as VideoData;
-      return d.assetUrl ? (
-        <div
-          className="anim-output-well anim-output-well-sm"
-          style={{ "--out-aspect": ctx?.output ? aspectOf(ctx.output) : "1 / 1" } as CSSProperties}
-        >
-          <video
-            className="anim-output-video"
-            src={d.assetUrl}
-            muted
-            loop
-            autoPlay
-            playsInline
-            preload="metadata"
-          />
-        </div>
-      ) : (
-        <span className="anim-compact-hint">🎞 no video</span>
-      );
-    }
-    case "lyrics": {
-      // The longest aligned line as a one-line snippet (what the card burns in).
-      const lines = (ctx.lyricLines || []) as { text?: string }[];
-      let snippet = "";
-      for (const l of lines) if (l?.text && l.text.length > snippet.length) snippet = l.text;
-      const d = node.data as LyricsData;
-      const cased =
-        d.case === "upper" ? snippet.toUpperCase() : d.case === "lower" ? snippet.toLowerCase() : snippet;
-      return <span className="anim-compact-lyric">{cased || "no lyrics"}</span>;
-    }
     case "points":
-      return (
-        <PointsPad
-          points={(node.data as PointsData).points || []}
-          aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
-          compact
-        />
-      );
+      return <PointsPad points={(node.data as PointsData).points || []} aspect={aspect} compact />;
     case "pattern":
-      return (
-        <PointsPad
-          points={patternPoints(node.data as PatternData)}
-          aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
-          compact
-        />
-      );
+      return <PointsPad points={patternPoints(node.data as PatternData)} aspect={aspect} compact />;
     case "animate-points":
     case "merge-points":
       return <ResolvedPointsPreview node={node} ctx={ctx} />;
-    case "fluid":
-    case "combine":
-      return (
-        <StreamPreview
-          node={node}
-          ctx={ctx}
-          aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
-          compact
-          active={selected}
-        />
-      );
     default:
       return null; // output never compacts (its body IS the render)
   }

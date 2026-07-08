@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { resolveCurve } from "../../../lib/api";
+import { jobIdOf } from "./nodeProps";
 import type { NodeCtx } from "./nodeProps";
 
 // Resolve a value node's ACTUAL 0..1 curve from the backend (the same `/resolve` the
@@ -18,8 +19,7 @@ export function useResolvedCurve(
   const seg = ctx?.segment;
   const segStart = seg?.start ?? 0;
   const segEnd = seg?.end ?? 0;
-  const job = ctx?.job;
-  const jobId = typeof job === "string" ? job : (job as { job_id?: string } | undefined)?.job_id;
+  const jobId = jobIdOf(ctx?.job);
   const graph = ctx?.graph;
   // Refs so the debounced call posts the LATEST graph/signals even though the effect
   // is keyed on depKey — a closure over `graph` would freeze the render where depKey

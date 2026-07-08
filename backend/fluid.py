@@ -611,6 +611,43 @@ def close_encoder(enc: "subprocess.Popen | None") -> None:
         enc.kill()
 
 
+class StreamEncoder:
+    """The write/finalize/close protocol around `open_stream_encoder`, shared by the two
+    block-streaming renderers (`graph_render.render_stream`, `song_render.render_song`).
+
+    Lazy: ffmpeg only starts on the first `write`, so a render cancelled before its first
+    block never spawns a process. `close()` is the `finally`-safe teardown — a no-op once
+    `finalize()` has succeeded."""
+
+    def __init__(self, path: Path, fps: int, gw: int, gh: int, out_w: int | None = None, out_h: int | None = None):
+        self._args = (path, fps, gw, gh, out_w, out_h)
+        self._enc: "subprocess.Popen | None" = None
+
+    def write(self, data: "bytes | np.ndarray") -> None:
+        """Feed one block. A dead ffmpeg surfaces as its stderr, not a bare BrokenPipe."""
+        if self._enc is None:
+            self._enc = open_stream_encoder(*self._args)
+        try:
+            self._enc.stdin.write(data if isinstance(data, bytes) else data.tobytes())
+        except BrokenPipeError as exc:
+            raise RuntimeError(encoder_error(self._enc)) from exc
+
+    def finalize(self) -> None:
+        """Flush and wait for a clean exit. No-op when nothing was ever written."""
+        if self._enc is None:
+            return
+        self._enc.stdin.close()
+        self._enc.wait()
+        if self._enc.returncode != 0:
+            raise RuntimeError(encoder_error(self._enc))
+        self._enc = None
+
+    def close(self) -> None:
+        """Tear down a still-running encoder (cancelled / errored mid-stream)."""
+        close_encoder(self._enc)
+        self._enc = None
+
+
 def params_hash(params: dict) -> str:
     return hashlib.sha1(json.dumps(params, sort_keys=True).encode()).hexdigest()[:16]
 

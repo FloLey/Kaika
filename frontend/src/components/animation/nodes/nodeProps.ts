@@ -42,12 +42,22 @@ export interface NodeCtx {
   groupPlaying?: boolean;
   segStart?: number;
   minimized?: Set<string>;
+  // Set by the settings window on the ctx it hands the CARD (not CompactPreview): the
+  // card's own inline live preview (StreamPreview/ValuePreview) then renders nothing, so
+  // the modal's single right-column CompactPreview owns the visual (no double image, and
+  // no duplicate fluid/combine render stream).
+  previewInPanel?: boolean;
   finalOutputId?: string; // the segment's output marked "final" (for the export stage)
   setFinalOutput?: (nodeId: string) => void; // mark/clear this segment's final output ("" clears)
   onGraphChange?: (updater: (g: Graph) => Graph) => void;
   onDetach?: (fluidId: string, key: string) => void;
   onDeleteNode?: (id: string) => void;
 }
+
+// `ctx.job` is either the bare job id or the loaded project object, depending on the
+// caller — every consumer needs the id, so normalize in one place.
+export const jobIdOf = (job: unknown): string | undefined =>
+  typeof job === "string" ? job : (job as { job_id?: string } | undefined)?.job_id;
 
 // The props every node card receives.
 export interface NodeProps {

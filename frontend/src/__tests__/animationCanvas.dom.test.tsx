@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import AnimationCanvas from "../components/animation/AnimationCanvas";
-import type { Segment } from "../lib/types";
+import type { Graph, Segment } from "../lib/types";
 
 afterEach(cleanup);
 
@@ -43,6 +44,53 @@ describe("AnimationCanvas + useGraphEditor (jsdom)", () => {
     // each item carries hover help: a what/how line + an input → output flow line
     expect(getByText(/Composes several video streams/)).toBeTruthy();
     expect(getByText("2+ video → video")).toBeTruthy();
+  });
+});
+
+// Undo/redo is also bound to ⌘Z, but the toolbar buttons are the discoverable path —
+// and their disabled state is the only signal that a step exists.
+describe("undo/redo toolbar (jsdom)", () => {
+  const undoBtn = (c: HTMLElement) => c.querySelector('button[aria-label="Undo"]') as HTMLButtonElement;
+  const redoBtn = (c: HTMLElement) => c.querySelector('button[aria-label="Redo"]') as HTMLButtonElement;
+
+  it("both buttons start disabled on a fresh graph", () => {
+    const { container } = render(<AnimationCanvas segment={baseSegment} onGraphChange={() => {}} />);
+    expect(undoBtn(container).disabled).toBe(true);
+    expect(redoBtn(container).disabled).toBe(true);
+  });
+
+  // The graph is CONTROLLED (commits are lifted to segment.graph), so drive it the way
+  // App does — a parent that feeds each commit straight back down.
+  function Harness({ onCommit }: { onCommit: (g: Graph) => void }) {
+    const [graph, setGraph] = useState<Graph | undefined>(undefined);
+    return (
+      <AnimationCanvas
+        segment={{ ...baseSegment, graph } as Segment}
+        onGraphChange={(g: Graph) => {
+          onCommit(g);
+          setGraph(g);
+        }}
+      />
+    );
+  }
+
+  it("an edit enables undo; clicking it restores the previous graph and enables redo", () => {
+    const onCommit = vi.fn();
+    const { container, getByText } = render(<Harness onCommit={onCommit} />);
+    fireEvent.click(getByText("Generators"));
+    fireEvent.click(getByText("Fluid"));
+    expect(onCommit.mock.calls[0][0].nodes).toHaveLength(1);
+    expect(undoBtn(container).disabled).toBe(false);
+    expect(redoBtn(container).disabled).toBe(true);
+
+    fireEvent.click(undoBtn(container));
+    expect(onCommit.mock.calls[1][0].nodes).toHaveLength(0); // back to the empty graph
+    expect(undoBtn(container).disabled).toBe(true);
+    expect(redoBtn(container).disabled).toBe(false);
+
+    fireEvent.click(redoBtn(container));
+    expect(onCommit.mock.calls[2][0].nodes).toHaveLength(1); // the fluid is back
+    expect(undoBtn(container).disabled).toBe(false);
   });
 });
 

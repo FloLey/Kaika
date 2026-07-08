@@ -15,7 +15,9 @@ from .graph_common import LOOSE_PORT, _nodes_of
 #   v3: combine nodes + video DAG + background applied at the terminal (was per-sim).
 #   v4: lyrics rendered at a resolution-independent text size then downscaled to the
 #       grid (was rasterised at the coarse sim grid → overflowed small boxes at low qual).
-RENDER_VERSION = 4
+#   v5: transform mirror/kaleidoscope fold fills out-of-frame samples by MIRRORING the
+#       edge (was black) → no gaps on a non-square canvas / under rotation.
+RENDER_VERSION = 5
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.

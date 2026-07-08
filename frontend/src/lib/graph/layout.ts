@@ -36,6 +36,8 @@ const DETAILED_SIZES: Record<string, CardSize> = {
   imagegen: { w: 230, h: 360 },
   backdrop: { w: 230, h: 180 },
   combine: { w: 230, h: 260 },
+  // combine's body plus a mode select, a hint, two statics and four param rows
+  transform: { w: 230, h: 300 },
   output: { w: 230, h: 300 },
   points: { w: 230, h: 280 },
   color: { w: 230, h: 260 },

@@ -97,13 +97,13 @@ export default function FluidNode({
         />
       }
     >
-      {/* Live sim preview — streams only while this card is SELECTED, so a dense
-          graph doesn't starve the Output previews (the frame holds otherwise). */}
+      {/* Live sim preview — every on-screen sim streams (no selection needed); the
+          global 2-slot queue in useStreamRender staggers renders so the pool never
+          floods, and each holds its looping frame once rendered. */}
       <StreamPreview
         node={node}
         ctx={ctx}
         aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
-        active={selected}
       />
       {/* Source positions: a labelled `points` input. Wire a points card here to put
           a source at each drawn point (otherwise a single source at the centre). */}

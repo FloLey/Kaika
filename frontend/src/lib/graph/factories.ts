@@ -6,6 +6,7 @@ import { FLUID_PARAMS, coercePorts, mkInputId, mkNodeId, mkSlotId } from "./core
 import type {
   AnimatePointsNode,
   BackdropNode,
+  TransformNode,
   Binding,
   ColorData,
   ColorNode,
@@ -118,7 +119,11 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v20: per-VIEW card positions — nodes gain optional `cx/cy` (the compact-view
 //       position; `x/y` stays the detailed one), so each view keeps its own layout.
 //       Absent cx/cy = derived on the next compact entry; no migration step needed.
-export const GRAPH_VERSION = 20;
+//  v21: RE-ADDED the transform video-FX card (removed at v10) with a new data shape
+//       (mode/segments/wrap + zoom/rotate/pan ports). Pre-v10 `transform`/`grade`
+//       nodes carry the OLD shape, so normalizeGraph drops them explicitly rather
+//       than letting the now-known type resurrect them.
+export const GRAPH_VERSION = 21;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -361,5 +366,23 @@ export function backdropNode(x: number, y: number): BackdropNode {
     x,
     y,
     data: { color: "#101418", ports: coercePorts("backdrop", undefined) },
+  };
+}
+
+// The transform FX card sits between any video producer and its consumer: the ports
+// (zoom/rotate/pan) default to an identity warp, so a freshly dropped card is a no-op
+// until you wire or nudge something.
+export function transformNode(x: number, y: number): TransformNode {
+  return {
+    id: mkNodeId(),
+    type: "transform",
+    x,
+    y,
+    data: {
+      mode: "transform",
+      segments: 6,
+      wrap: false,
+      ports: coercePorts("transform", undefined),
+    },
   };
 }

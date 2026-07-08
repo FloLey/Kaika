@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { listProjects, deleteProject } from "../lib/api";
 import { fmtTime } from "../lib/mel";
+import ConfirmDialog from "../ui/ConfirmDialog";
 
 // Start screen: resume a saved project or begin a new one.
 interface Project {
@@ -22,6 +23,7 @@ interface ProjectListProps {
 export default function ProjectList({ onNew, onOpen, onPlayground }: ProjectListProps) {
   const [projects, setProjects] = useState<Project[] | null>(null); // null = loading
   const [error, setError] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
 
   async function refresh() {
     try {
@@ -36,10 +38,18 @@ export default function ProjectList({ onNew, onOpen, onPlayground }: ProjectList
     refresh();
   }, []);
 
-  async function remove(e: MouseEvent, id: string) {
+  // Deleting is irreversible (audio + stems + spectrograms go with it), so it goes
+  // through the app's own confirm rather than the blocking native one.
+  function askRemove(e: MouseEvent, p: Project) {
     e.stopPropagation();
-    if (!confirm("Delete this project and its audio/stems?")) return;
-    await deleteProject(id).catch(() => {});
+    setPendingDelete(p);
+  }
+
+  async function confirmRemove() {
+    const p = pendingDelete;
+    setPendingDelete(null);
+    if (!p) return;
+    await deleteProject(p.job_id).catch(() => {});
     refresh();
   }
 
@@ -91,13 +101,22 @@ export default function ProjectList({ onNew, onOpen, onPlayground }: ProjectList
               className="project-del"
               title="Delete"
               role="button"
-              onClick={(e) => remove(e, p.job_id)}
+              onClick={(e) => askRemove(e, p)}
             >
               ✕
             </span>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        message={`Delete “${pendingDelete?.title || pendingDelete?.job_id}” and its audio, stems and spectrograms? This can't be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmRemove}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

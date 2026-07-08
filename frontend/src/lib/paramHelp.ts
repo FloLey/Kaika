@@ -79,6 +79,15 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     color: "The fill colour. Wire this into the BOTTOM input of a stack combine for a non-black background.",
     opacity: "Backdrop opacity over the layers beneath it.",
   },
+  transform: {
+    mode: "transform pans/zooms/rotates the video; mirror reflects one half across the centre; kaleidoscope folds it into mirrored wedges.",
+    segments: "How many mirrored wedges the kaleidoscope folds the frame into.",
+    wrap: "How the frame's outside is filled. Mirror/kaleidoscope already mirror the edge so there are no black gaps on any aspect; On tiles the frame instead. A plain transform is black outside unless On.",
+    zoom: "Scale the video about its centre — above 1 zooms in, below 1 zooms out (revealing black edges unless wrapped).",
+    rotate: "Spin the whole frame, in degrees. Wire this to a signal for beat-locked rotation.",
+    pan_x: "Slide the video horizontally, as a fraction of the frame width.",
+    pan_y: "Slide the video vertically, as a fraction of the frame height.",
+  },
   pattern: {
     layout: "Arrangement of the points: circle, ring, grid, line, spiral or scatter.",
     count: "How many source points to generate.",
@@ -132,12 +141,14 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     invert: "Flip the output: 1 while the input is BELOW the threshold.",
   },
   math: {
-    input: "A 0..1 value to fold in — wire a signal / LFO / noise / gate here.",
+    input:
+      "A 0..1 value to fold in — wire a signal / LFO / noise / gate here. Slot order matters for subtract/mix; assign a source to a slot in the settings window to move it there (it leaves any other slot) — swap operands without rewiring.",
     op: "How to fold the inputs: multiply, add, subtract, max, min, or mix (crossfade).",
     mix: "Crossfade between the first two inputs (0 = first, 1 = second).",
   },
   combine: {
-    layer: "A video source to composite — wire a fluid / another combine / a layer card.",
+    layer:
+      "A video source to composite — wire a fluid / another combine / a layer card. Slot order is stack order (in 1 = top); assign a source to a slot to move it there (it leaves any other), so you can reorder layers without rewiring.",
     mode: "merge = inputs share one simulation (they interact); layered = stack with transparency.",
     dissipation: "Shared medium: how fast dye fades in the merged simulation.",
     velocity_dissipation: "Shared medium: how fast motion settles in the merged simulation.",
@@ -148,7 +159,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     in: "The value to monitor — it passes straight through, unchanged.",
   },
   "merge-points": {
-    input: "A points set to merge in — wire a Points / Pattern / Animate card.",
+    input:
+      "A points set to merge in — wire a Points / Pattern / Animate card. Slot order sets concatenation order; assign a source to a slot to move it there (it leaves any other), so you can reorder without rewiring.",
   },
   output: {
     video: "The video to render — wire a fluid or a combine into this output.",
@@ -176,6 +188,7 @@ export const ARG_SECTION: Record<string, string> = {
   "merge-points": "animation-points",
   output: "animation-output",
   combine: "animation-combine",
+  transform: "animation-transform",
 };
 
 function sectionFor(type: string, group?: string): string | undefined {

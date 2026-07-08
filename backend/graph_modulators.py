@@ -15,7 +15,7 @@ import numpy as np
 
 from . import fluid, signals
 from .animation_params import COLOR_PARAMS, SOURCE_STATIC_KEYS
-from .graph_common import _POINT_CAP, FLUID_FPS, _video_source
+from .graph_common import _POINT_CAP, FLUID_FPS, _video_source, resolve_port
 
 log = logging.getLogger("kaika.graph")
 
@@ -54,10 +54,7 @@ def _resolve_node_color(graph: dict, node: dict, port: str, nodes: dict, resolve
     def port_val(key):
         pmin, pmax, pdef = COLOR_PARAMS[key]
         b = (ports.get(key) or {}).get("binding")
-        if not b or b.get("kind") == "const":
-            return float(b["value"]) if b else pdef
-        lo, hi = float(b.get("lo", pmin)), float(b.get("hi", pmax))
-        return lo + (hi - lo) * resolve_source(b["nodeId"])  # 0..1 curve -> native array
+        return resolve_port(b, pmin, pmax, pdef, resolve_source)
 
     out = {"intensity": port_val("intensity"), "opacity": port_val("opacity")}
     if data.get("mode") == "gradient":

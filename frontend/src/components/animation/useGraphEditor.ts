@@ -11,6 +11,7 @@ import {
   renameNode,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
+import type { GraphHistory } from "../../lib/graph/history";
 import { FLOW_GAPS, estimateCardSize, flowLayout, resolveOverlaps, tighten } from "../../lib/graph/layout";
 import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
@@ -122,29 +123,42 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   // (a slider drag = one Cmd+Z). Safe by reference — the mutation helpers are
   // strictly immutable, so old snapshots can never be edited under us.
   const historyRef = useRef(emptyHistory());
+  // The stacks live in a ref (they must be readable synchronously inside a commit),
+  // but their DEPTH is state: the toolbar's undo/redo buttons enable off it, and the
+  // graph is controlled by the parent — a commit the parent ignores would otherwise
+  // leave the buttons showing a stale history.
+  const [histDepth, setHistDepth] = useState({ past: 0, future: 0 });
+  const setHistory = useCallback((h: GraphHistory) => {
+    historyRef.current = h;
+    setHistDepth((d) =>
+      d.past === h.past.length && d.future === h.future.length
+        ? d
+        : { past: h.past.length, future: h.future.length }
+    );
+  }, []);
   const applyUpdater = useCallback(
     (updater: (g: Graph) => Graph) => {
       const before = graphRef.current;
       const next = updater(before);
       if (next !== before) {
-        historyRef.current = recordEdit(historyRef.current, before, Date.now());
+        setHistory(recordEdit(historyRef.current, before, Date.now()));
       }
       commitGraph(next);
     },
-    [commitGraph]
+    [commitGraph, setHistory]
   );
   const undo = useCallback(() => {
     const r = undoStep(historyRef.current, graphRef.current);
     if (!r) return;
-    historyRef.current = r.history;
+    setHistory(r.history);
     commitGraph(r.graph);
-  }, [commitGraph]);
+  }, [commitGraph, setHistory]);
   const redo = useCallback(() => {
     const r = redoStep(historyRef.current, graphRef.current);
     if (!r) return;
-    historyRef.current = r.history;
+    setHistory(r.history);
     commitGraph(r.graph);
-  }, [commitGraph]);
+  }, [commitGraph, setHistory]);
 
   // Cmd/Ctrl+Z / Shift+Cmd+Z — skipped while typing in a field so text-editing
   // undo keeps working inside inputs, prompts, and the lyrics editor.
@@ -451,5 +465,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     onCardDrop,
     onEdgeDelete,
     onDeleteSelection,
+    undo,
+    redo,
+    canUndo: histDepth.past > 0,
+    canRedo: histDepth.future > 0,
   };
 }

@@ -3,6 +3,7 @@ import {
   extractSignal,
   getProject,
   getLogs,
+  pollJob,
   startStreamRender,
   getStreamStatus,
   cancelStreamRender,
@@ -50,6 +51,33 @@ describe("getLogs", () => {
   it("rejects on a non-ok status without going through jsonOrThrow", async () => {
     mockFetchOnce(new Response("", { status: 500 }));
     await expect(getLogs(0)).rejects.toThrow(/\/logs 500/);
+  });
+});
+
+describe("pollJob", () => {
+  it("resolves with the finished job's result", async () => {
+    mockFetchOnce(json({ state: "done", result: { job_id: "j1" } }));
+    await expect(pollJob("j1")).resolves.toEqual({ job_id: "j1" });
+  });
+
+  it("stops the loop and throws AbortError once its signal aborts", async () => {
+    // A still-running job: without the signal this loop would poll (and setState) forever.
+    const fetchMock = vi.fn().mockResolvedValue(json({ state: "running", step: "separating" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const ac = new AbortController();
+    const p = pollJob("j1", undefined, 1, ac.signal);
+    ac.abort();
+    await expect(p).rejects.toThrow(/aborted/);
+    const callsAtAbort = fetchMock.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).toHaveBeenCalledTimes(callsAtAbort); // no further polling
+  });
+
+  it("never starts fetching when the signal is already aborted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ state: "running" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(pollJob("j1", undefined, 1, AbortSignal.abort())).rejects.toThrow(/aborted/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

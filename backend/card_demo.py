@@ -32,7 +32,7 @@ CARD_LABELS = {
     "fluid": "Fluid", "lyrics": "Lyrics", "image": "Image", "slideshow": "Slideshow", "imagegen": "Image gen",
     "video": "Video",
     "color": "Color", "backdrop": "Backdrop",
-    "combine": "Combine", "output": "Output",
+    "combine": "Combine", "transform": "Transform", "output": "Output",
 }
 ALL_CARDS = set(CARD_LABELS)
 

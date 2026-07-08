@@ -37,6 +37,7 @@ export {
   slideshowNode,
   videoNode,
   backdropNode,
+  transformNode,
 } from "./graph/factories";
 export {
   patchNodeData,

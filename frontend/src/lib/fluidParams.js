@@ -54,4 +54,10 @@ export const SOURCE_PARAMS = {
   "backdrop": [
     { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
   ],
+  "transform": [
+    { key: "zoom", label: "zoom", min: 0.5, max: 2, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+    { key: "rotate", label: "rotate", min: 0, max: 360, step: 1, def: 0, group: "src", fmt: fmtDeg },
+    { key: "pan_x", label: "pan x", min: -0.5, max: 0.5, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
+    { key: "pan_y", label: "pan y", min: -0.5, max: 0.5, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
+  ],
 };

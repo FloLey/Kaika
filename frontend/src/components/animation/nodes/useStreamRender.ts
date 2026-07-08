@@ -51,12 +51,18 @@ function releaseSlot() {
 // `active` gates the whole thing (pass false for off-screen cards to keep a big graph
 // light — the last frame stays on screen). `renderKey` is the serialized subgraph hash
 // (from outputHash) — the debounced stream (re)starts only when it changes.
+//
+// `opts.slot` (default true) takes one of the MAX_PREVIEW_STREAMS slots above. Output
+// cards pass `false`: an output is what the user is actually waiting on, so it must
+// never queue behind the card previews.
 export function useStreamRender(
   ctx: NodeCtx | undefined,
   nodeId: string,
   renderKey: string,
-  active: boolean
+  active: boolean,
+  opts: { slot?: boolean } = {}
 ): { videoUrl: string; busy: boolean; error: string; progress: { done: number; total: number } | null } {
+  const useSlot = opts.slot ?? true;
   const { graph, segment, job, output, lyricLines } = ctx || {};
   const [videoUrl, setVideoUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,6 +75,7 @@ export function useStreamRender(
     if (!active || !graph || !job) {
       setBusy(false);
       setProgress(null);
+      setError("");
       return undefined;
     }
     const id = ++reqId.current;
@@ -80,13 +87,17 @@ export function useStreamRender(
     let slot: ReturnType<typeof acquireSlot> | null = null;
     const t = setTimeout(async () => {
       // Wait for a preview slot so at most MAX_PREVIEW_STREAMS render at once.
-      slot = acquireSlot();
-      await slot.promise;
-      if (stopped || id !== reqId.current) {
-        releaseSlot();
+      if (useSlot) {
+        slot = acquireSlot();
+        await slot.promise;
+        if (stopped || id !== reqId.current) {
+          releaseSlot();
+          return;
+        }
+        slotHeld = true;
+      } else if (stopped || id !== reqId.current) {
         return;
       }
-      slotHeld = true;
       if (activeRender.current) api.cancelStreamRender(activeRender.current);
       try {
         const { render_id } = await api.startStreamRender({

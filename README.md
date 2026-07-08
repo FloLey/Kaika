@@ -49,7 +49,9 @@ Frontend: React + Vite (Web Audio API).
      (uploads, a per-project **📚 asset library**, or YouTube import) and
      *backdrop* cards synthesise non-fluid layers; a *combine* card composes it
      all — **merge** (sources share one simulation and interact) or **layered**
-     (stacked with per-input transparency). It **auto-renders** in streaming
+     (stacked with per-input transparency); a *transform* card warps the result
+     (pan/zoom/rotate, mirror, kaleidoscope — wire *rotate* to a signal and the
+     frame spins on the beat). It **auto-renders** in streaming
      blocks (a long segment previews in ~5s chunks, cancelled on every edit) at
      the project's output size / quality / fps.
 4. **Export** — mark one output per segment as **★ final**, then render the whole

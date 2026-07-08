@@ -30,7 +30,7 @@ simulation.
         │  stem+band+feature  ──► node graph: signal/lfo/noise/     │
         │  +shaping → 0..1        shaper/math → fluid/color/points  │
         │  (signals.py)           /lyrics/image/video/backdrop      │
-        │                         → combine → output                │
+        │                         → combine → transform → output    │
         │                              │                            │
         │                    /animate/stream (render_jobs.py)       │
         │                    block-streamed, cached, cancel-on-edit │
@@ -90,9 +90,12 @@ the implementation lives in five modules:
 
 - **`graph_common.py`** — shared constants + edge/node lookups + `composite`
   (the alpha-over stack). The leaf module; everything imports from here.
-- **`graph_validate.py`** — `validate(graph)`: raises `ValueError` → HTTP 400 on
-  an unrenderable graph (missing output, malformed bindings, cycles, a stacked
-  combine feeding a merge).
+- **`graph_validate.py`** — `validate(graph, output_id=None)`: raises `ValueError`
+  → HTTP 400 on an unrenderable graph (missing output, malformed bindings, cycles,
+  a stacked combine feeding a merge). `output_id` names the render **target**: when
+  it's a producer previewed directly (not an output node), the output-node rules are
+  skipped — a graph mid-build has no output yet, and an unrelated half-wired output
+  must not 400 a card's preview.
 - **`graph_hash.py`** — `output_hash(...)`: the per-output render-cache key (see
   Caching below) + `RENDER_VERSION`.
 - **`graph_modulators.py`** — every node that produces a 0..1 **value curve**
@@ -104,9 +107,10 @@ the implementation lives in five modules:
   handler registries (`_VIDEO_HANDLERS` whole-clip, `_BLOCK_HANDLERS` streaming,
   `_EMITTER_HANDLERS` merge), and the entry points `render` / `render_stream`.
   Their `output_id` may be an **output node** (render the video wired into it) or
-  **any video producer directly** (fluid/combine — the per-card live previews);
-  `_render_target` is the one shared resolver of that contract, so the sync and
-  streaming paths can't drift. The frontend mirror is `nodeRenderable`
+  **any video producer directly** (fluid/combine/transform — the per-card live
+  previews); `_render_target` is the one shared resolver of that contract, so the
+  sync and streaming paths can't drift, and it's what `validate` keys its
+  output-node rules off. The frontend mirror is `nodeRenderable`
   (`lib/graph/validate.ts`) — cards only stream what the backend would accept.
 
 A node graph has three edge flows: **value** (0..1 curves into modulatable
@@ -279,8 +283,25 @@ So a UI slider's range can never drift from what the render maps.
   `card_demo.py`) with **one demo segment per card**, loaded from the committed
   `playground_pipelines.json` (exported from the live UI via
   `make export-playground` — never hand-edit). It doubles as the coverage
-  harness: `tests/test_card_impact.py` renders every pipeline and fails if a
-  card has no working demo.
+  harness, guarded from **both** sides:
+  - `tests/test_card_impact.py` (backend) renders every pipeline and fails if a
+    card has no working demo, if the clip is visually black, or if any node is
+    **unreachable walking backwards from an output** (a demo carries no decorative
+    cards — every node must contribute to the frame);
+  - `__tests__/playgroundFixture.test.ts` (frontend) runs every pipeline through
+    `normalizeGraph` and fails if it loses its card, and pins the layout (no two
+    cards overlap under `layout.estimateCardSize`, positive whole-pixel coords).
+    The backend never normalizes, so a **stale `version` stamp** on a fixture graph
+    is invisible to pytest and silently drops a card the moment the UI loads it (a
+    pre-v8 stamp renames the dye `color` card to `grade`; pre-v10 drops
+    `transform`). **Keep each fixture graph stamped at the current
+    `GRAPH_VERSION`.**
+
+  Positions are safe to rewrite (`graph_hash._node_for_hash` strips `x/y`), so the
+  fixture can be re-arranged with the app's own `lib/graph/layout.ts` `flowLayout`
+  — it is pure and runs under bare `node` — then written to the Playground DB row
+  and re-emitted with `make export-playground`. **Close the Playground browser tab
+  first**: an open tab autosaves and will clobber the DB write.
 
 ## Invariants & gotchas
 

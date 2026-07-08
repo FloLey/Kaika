@@ -34,6 +34,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   imagegen: 2, // seed + model (prompts use plain title tooltips)
   video: 7, // fit + sync + start + speed + loop + box + opacity port
   backdrop: 2, // colour swatch + opacity port
+  transform: 6, // mode + wrap + zoom/rotate/pan_x/pan_y ports (segments hidden unless kaleidoscope)
 };
 
 const HELPERS = {

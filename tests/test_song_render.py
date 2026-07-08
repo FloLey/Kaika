@@ -8,10 +8,13 @@ plus layer-number continuity, per-segment styling, and the frame/grid bookkeepin
 
 from __future__ import annotations
 
+import shutil
+
 import numpy as np
 import pytest
 
 from backend import graph as G
+from backend import paths
 from backend import song_render as SR
 
 NOAUDIO = lambda j, s: None  # noqa: E731
@@ -98,6 +101,25 @@ def test_per_segment_styling_is_applied():
     assert plain.shape == styled.shape
     assert not np.array_equal(plain, styled)  # the segment's own composite was applied
     assert styled.mean() < plain.mean()  # opacity 0.3 dimmed it
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_progress_preview_url_is_servable(tmp_path, monkeypatch):
+    # The scratch id lands in the progress preview URL, and /fluid/stream/<id>/… only
+    # serves alnum ids — so `song_<hash>` (underscore) made every export preview 404.
+    monkeypatch.setattr(paths, "ANIM_DIR", tmp_path / "fluid")
+    monkeypatch.setattr(paths, "STREAM_DIR", tmp_path / "fluid" / "stream")
+    (tmp_path / "fluid").mkdir()
+
+    urls: list[str] = []
+    SR.render_song("job", [_seg("s1", 0.0, 0.4, _fluid_out(0.6))], [], EXPORT, NOAUDIO,
+                   on_progress=lambda done, total, url: urls.append(url))
+
+    previews = [u for u in urls if u.startswith("/fluid/stream/")]
+    assert previews, "the export reported no in-progress preview URL"
+    for u in previews:
+        render_id = u.split("/")[3]
+        assert render_id.isalnum(), f"unservable stream id: {render_id!r}"
 
 
 def test_build_plan_rejects_unmarked_segment():

@@ -22,6 +22,18 @@ def validate_job_id(job_id) -> bool:
     return bool(job_id and isinstance(job_id, str) and (_JOB_ID_RE.match(job_id) or job_id == "playground"))
 
 
+# Asset ids / filename stems: content-addressed sha16 (alnum), plus the HD-export
+# assets the whole-song render generates as `hd-<sha16>`. Interior hyphens are the
+# only extra character allowed — a hyphen can't express a path traversal, and dots
+# and slashes stay excluded, so this is as tight as the alnum check it replaced.
+_ASSET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
+
+
+def validate_asset_id(s) -> bool:
+    """True if ``s`` is a safe asset id / file stem (alnum + interior hyphens)."""
+    return bool(s and isinstance(s, str) and _ASSET_ID_RE.match(s))
+
+
 def error_response(message: str, code: int = 400):
     """The one route-level error shape: ``{"error": message}`` with a status."""
     return jsonify({"error": message}), code

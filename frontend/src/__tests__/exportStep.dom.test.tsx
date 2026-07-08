@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent } from "@testing-library/react";
 import ExportStep from "../components/export/ExportStep";
 import { EXPORT_DEFAULTS } from "../lib/export";
-import type { OutputSettings } from "../lib/types";
+import type { OutputSettings, Segment } from "../lib/types";
 
 // No stored render in sessionStorage → no api call fires on mount; still stub the
 // module so an accidental call can't hit the network.
@@ -53,5 +53,48 @@ describe("ExportStep — export aspect locked to the canvas", () => {
       />
     );
     expect(setExportSettings).not.toHaveBeenCalled();
+  });
+});
+
+// The readiness checklist names the segments blocking Generate; an unmarked row is the
+// click-through to go fix it (a marked row stays inert).
+describe("ExportStep — checklist click-through", () => {
+  const seg = (id: string, finalOutputId?: string): Segment => ({
+    id,
+    label: id,
+    start: 0,
+    end: 4,
+    signals: [],
+    ...(finalOutputId ? { finalOutputId } : {}),
+  });
+
+  const renderList = (onOpenSegment?: (id: string) => void) =>
+    render(
+      <ExportStep
+        job="j3"
+        segments={[seg("intro", "o1"), seg("verse")]}
+        exportSettings={EXPORT_DEFAULTS}
+        setExportSettings={() => {}}
+        output={canvas(EXPORT_DEFAULTS.width, EXPORT_DEFAULTS.height)}
+        onBack={() => {}}
+        onOpenSegment={onOpenSegment}
+      />
+    );
+
+  it("clicking the ⚠ row opens that segment; the ✓ row is not a button", () => {
+    const onOpenSegment = vi.fn();
+    const { container } = renderList(onOpenSegment);
+    const rows = container.querySelectorAll(".export-seg");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].tagName).toBe("DIV"); // marked -> inert
+    expect(rows[1].tagName).toBe("BUTTON"); // unmarked -> jumpable
+
+    fireEvent.click(rows[1]);
+    expect(onOpenSegment).toHaveBeenCalledWith("verse");
+  });
+
+  it("without the callback every row stays inert", () => {
+    const { container } = renderList(undefined);
+    expect(container.querySelector("button.export-seg")).toBeNull();
   });
 });

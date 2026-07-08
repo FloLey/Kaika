@@ -51,7 +51,14 @@ def _frames(demo, stem):
 def test_pipeline_renders(demo, stem_path):
     frames = _frames(demo, stem_path)
     assert frames.ndim == 4 and frames.shape[0] >= 1, demo["key"]
-    assert int(frames.max()) > 0, f"{demo['key']} pipeline rendered an empty (all-black) frame"
+    # `max > 0` was too lax: a kaleidoscope sampling empty space rendered max=2 (visually
+    # black) and still "passed". Every real demo clears max>=216 and lights >=6.7% of its
+    # pixels, so these floors are far below any legitimate pipeline yet catch a dark one.
+    rgb = graph.fluid.flatten(frames)
+    peak = int(rgb.max())
+    lit = float((rgb.max(axis=3) > 8).mean())
+    assert peak >= 32, f"{demo['key']} pipeline is visually black (peak brightness {peak})"
+    assert lit >= 0.005, f"{demo['key']} pipeline lights only {lit:.3%} of its pixels"
 
 
 @pytest.mark.parametrize("demo", card_demo.DEMOS, ids=[d["key"] for d in card_demo.DEMOS])
@@ -64,6 +71,36 @@ def test_pipeline_actually_uses_its_card(demo):
     assert demo["key"] in types, (
         f"playground pipeline '{demo['key']}' has no node of type '{demo['key']}' — it "
         f"must include the card it exercises (graph has: {sorted(types)})"
+    )
+
+
+@pytest.mark.parametrize("demo", card_demo.DEMOS, ids=[d["key"] for d in card_demo.DEMOS])
+def test_pipeline_has_no_dead_cards(demo):
+    """Every node must contribute: walk the edges BACKWARDS from every `output` node and
+    require that the closure covers the whole graph.
+
+    Catches orphans, decorative `scope` monitors wired off a modulator (they render
+    nothing), and any card left on the canvas that no output consumes. Outputs are all
+    walk roots, so the `output` demo's pass-through chain (`fluid -> o1 -> o2`) is
+    covered: o2 is a root, o1 and the fluid are reachable from it."""
+    g = demo["graph"]
+    incoming: dict[str, list[str]] = {}
+    for e in g["edges"]:
+        incoming.setdefault(e["target"], []).append(e["source"])
+
+    seen: set[str] = set()
+    stack = [n["id"] for n in g["nodes"] if n["type"] == "output"]
+    while stack:
+        nid = stack.pop()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        stack.extend(incoming.get(nid, []))
+
+    dead = [f"{n['id']}({n['type']})" for n in g["nodes"] if n["id"] not in seen]
+    assert not dead, (
+        f"playground pipeline '{demo['key']}' has node(s) no output consumes: {dead} — "
+        f"every card in a demo must contribute to the rendered frame"
     )
 
 

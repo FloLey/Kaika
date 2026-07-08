@@ -21,9 +21,19 @@ export default function ValuePreview({ node, ctx, color = "var(--mod)", compact 
   const segStart = segment?.start ?? 0;
   const segEnd = segment?.end ?? 0;
   const winLen = Math.max(0.001, segEnd - segStart);
+  // The settings window shows the preview in its own right column and flags the ctx it
+  // hands the card, so this inline copy renders nothing — and skips its /resolve fetch
+  // (undefined ctx disables the hook, same as an unwired card).
+  const suppressed = !!ctx?.previewInPanel;
   // The contributing-subgraph signature (value output depends on upstream only).
   const depKey = graph ? upstreamKey(graph, node.id, segment?.signals) : "";
-  const { curve, loading } = useResolvedCurve(ctx, node.id, depKey);
+  const { curve, loading } = useResolvedCurve(
+    suppressed ? undefined : ctx,
+    node.id,
+    suppressed ? "" : depKey
+  );
+
+  if (suppressed) return null; // the settings window shows the preview in its own column
 
   const pad = (
     <PulsePad

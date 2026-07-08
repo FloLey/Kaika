@@ -12,13 +12,13 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import subprocess
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
 import numpy as np
+from scipy.ndimage import map_coordinates
 
 from . import fluid, fluid_cache, paths, render_cache, sources
 from .animation_params import PARAMS
@@ -33,6 +33,7 @@ from .graph_common import (
     _output_params,
     _video_source,
     composite,
+    resolve_port,
 )
 from .graph_hash import output_hash
 from .graph_modulators import (
@@ -106,13 +107,8 @@ def build_params(
     for key, (group, pmin, pmax, pdef) in PARAMS.items():
         target = src_params if group == "source" else fluid_params
         binding = (ports.get(key) or {}).get("binding")
-        if not binding or binding.get("kind") == "const":
-            target[key] = float(binding["value"]) if binding else pdef
-        else:  # kind == "node"
-            lo = float(binding.get("lo", pmin))
-            hi = float(binding.get("hi", pmax))
-            curve = resolve_source(binding["nodeId"])  # 0..1, len nframes
-            target[key] = (lo + (hi - lo) * curve).tolist()  # native-unit array
+        v = resolve_port(binding, pmin, pmax, pdef, resolve_source)
+        target[key] = v.tolist() if hasattr(v, "tolist") else v  # native-unit array/scalar
 
     # Dye colour comes from a `color` card wired into the fluid's `color` input (or the
     # static fallback when unwired). Overrides the static `color` vector under source.
@@ -287,11 +283,9 @@ class Dag:
         out = {}
         for key, (pmin, pmax, pdef) in _PORT_SPECS[node["type"]].items():
             b = (node.get("data", {}).get("ports", {}).get(key) or {}).get("binding")
-            if not b or b.get("kind") == "const":
-                out[key] = np.full(nframes, float(b["value"]) if b else pdef, np.float32)
-            else:
-                lo, hi = float(b.get("lo", pmin)), float(b.get("hi", pmax))
-                out[key] = (lo + (hi - lo) * resolve(b["nodeId"])).astype(np.float32)
+            v = resolve_port(b, pmin, pmax, pdef, resolve)
+            # FX/source handlers index per frame, so a const becomes a flat array too.
+            out[key] = np.full(nframes, v, np.float32) if np.isscalar(v) else v.astype(np.float32)
         return out
 
     def _lyrics_params(self, node) -> dict:
@@ -720,6 +714,79 @@ def _backdrop_video(dag: "_Dag", node: dict) -> np.ndarray:
     return sources.backdrop(nframes, gh, gw, **dag._backdrop_params(node))
 
 
+def _transform_static(d: dict) -> tuple:
+    """The transform card's non-modulatable fields: fold mode, wedge count, edge rule."""
+    mode = d.get("mode", "transform")
+    if mode not in ("transform", "mirror", "kaleidoscope"):
+        mode = "transform"
+    raw = d.get("segments")
+    # `or 6` would swallow a literal 0 — clamp it to the 2-wedge minimum instead.
+    segments = int(np.clip(int(6 if raw is None else raw), 2, 12))
+    return mode, segments, bool(d.get("wrap", False))
+
+
+def _transform_frames(frames: np.ndarray, mode: str, segments: int, wrap: bool, *,
+                      zoom, rotate, pan_x, pan_y) -> np.ndarray:
+    """Warp `frames` (T, H, W, C) uint8, C in {3, 4} — an RGBA layer's alpha warps with
+    its colour, so lyrics stay correctly cut out. Params are per-frame float arrays.
+
+    The mapping is built BACKWARDS (dest pixel -> source pixel), the same backtrace
+    `fluid._advect` does: undo the pan, unrotate, then un-zoom. Sampling outside the
+    frame yields 0 (`cval=0`), so the dye-on-black floor survives every mode and
+    downstream `composite`/`flatten` alpha still works. `wrap` tiles instead."""
+    t, h, w, c = frames.shape
+    cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
+    # Pixel-space centered coords: the grid cells are square, so rotating here is
+    # aspect-correct on a portrait/landscape canvas alike.
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    dy0, dx0 = yy - cy, xx - cx
+    # Fold modes (mirror/kaleidoscope) fill the out-of-frame wedge by MIRRORING the frame
+    # at its edge, so a non-square canvas / rotation never leaves black gaps — reflection is
+    # the fold's own aesthetic, and every sample lands on a real, full-res pixel (no crop, no
+    # zoom). `wrap` still tiles for that look; a plain transform stays black-outside (cval=0),
+    # the conventional pan/zoom/rotate behaviour, unless wrapped.
+    if wrap:
+        edge = "grid-wrap"
+    elif mode in ("mirror", "kaleidoscope"):
+        edge = "mirror"
+    else:
+        edge = "constant"
+    out = np.empty_like(frames)
+    wedge = 2.0 * np.pi / max(2, segments)
+
+    for i in range(t):
+        z = max(1e-3, float(zoom[i]))
+        th = np.deg2rad(float(rotate[i]))
+        # Undo the pan (normalized to the frame's own size), then the rotation, then
+        # the zoom — the inverse of "zoom, rotate, pan" as the user reads the card.
+        dx = dx0 - float(pan_x[i]) * w
+        dy = dy0 - float(pan_y[i]) * h
+        cos, sin = np.cos(th), np.sin(th)
+        sx = (cos * dx + sin * dy) / z
+        sy = (-sin * dx + cos * dy) / z
+        if mode == "mirror":
+            sx = -np.abs(sx)  # both halves sample the left half
+        elif mode == "kaleidoscope":
+            r = np.hypot(sx, sy)
+            a = np.mod(np.arctan2(sy, sx), wedge)
+            a = np.where(a > wedge / 2.0, wedge - a, a)  # mirror inside the wedge
+            sx, sy = r * np.cos(a), r * np.sin(a)
+        coords = np.stack([sy + cy, sx + cx])
+        for ch in range(c):
+            warped = map_coordinates(frames[i, :, :, ch].astype(np.float32), coords,
+                                     order=1, mode=edge, cval=0.0)
+            out[i, :, :, ch] = np.clip(warped, 0, 255).astype(np.uint8)
+    return out
+
+
+def _transform_video(dag: "_Dag", node: dict) -> np.ndarray:
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"transform '{node['id']}' has no video input")
+    mode, segments, wrap = _transform_static(node.get("data", {}))
+    return _transform_frames(dag.video(src), mode, segments, wrap, **dag._fx_params(node))
+
+
 _VIDEO_HANDLERS = {
     "fluid": _fluid_video,
     "output": _output_video,
@@ -729,6 +796,7 @@ _VIDEO_HANDLERS = {
     "slideshow": _slideshow_video,
     "video": _video_video,
     "backdrop": _backdrop_video,
+    "transform": _transform_video,
 }
 _EMITTER_HANDLERS = {
     "fluid": _fluid_emitters_h,
@@ -861,6 +929,21 @@ def _backdrop_block(dag: "_Dag", node: dict):
     return produce
 
 
+def _transform_block(dag: "_Dag", node: dict):
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"transform '{node['id']}' has no video input")
+    mode, segments, wrap = _transform_static(node.get("data", {}))
+    params = dag._fx_params(node)  # {zoom, rotate, pan_x, pan_y} sliced per block
+    producer = dag._block_producer(src)
+
+    def produce(a, b):
+        return _transform_frames(producer(a, b), mode, segments, wrap,
+                                 **{k: v[a:b] for k, v in params.items()})
+
+    return produce
+
+
 _BLOCK_HANDLERS = {
     "fluid": _fluid_block,
     "output": _output_block,
@@ -870,6 +953,7 @@ _BLOCK_HANDLERS = {
     "slideshow": _slideshow_block,
     "video": _video_block,
     "backdrop": _backdrop_block,
+    "transform": _transform_block,
 }
 # Node types that produce a video stream (used by validate to check output wiring).
 _VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)
@@ -893,7 +977,9 @@ def render(
     graph (HTTP 400). `stem_audio_path(job_id, stem)` is injected from app.py.
     """
     output = output or {}
-    validate(graph)
+    # The target gates which rules apply: a producer previewed directly needs no output
+    # node in the graph (see graph_validate.validate / the _render_target contract).
+    validate(graph, output_id)
     if output_id is None:
         output_id = _nodes_of(graph, "output")[0]["id"]
     out_path = paths.ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
@@ -939,7 +1025,9 @@ def render_stream(
     killed, the scratch dir dropped, and None returned.
     """
     output = output or {}
-    validate(graph)
+    # The target gates which rules apply: a producer previewed directly needs no output
+    # node in the graph (see graph_validate.validate / the _render_target contract).
+    validate(graph, output_id)
     if output_id is None:
         output_id = _nodes_of(graph, "output")[0]["id"]
     out_path = paths.ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
@@ -962,7 +1050,8 @@ def render_stream(
     scratch = paths.STREAM_DIR / render_id
     scratch.mkdir(parents=True, exist_ok=True)
     preview = scratch / "preview.mp4"
-    enc: "subprocess.Popen | None" = None
+    enc = fluid.StreamEncoder(preview, dag.fps, gw, gh, out_w, out_h)  # opens on first write
+    wrote = False
     # A NAMED generator, closed explicitly in the finally: a cancel/error mid-stream
     # returns out of the for-loop, and stream_blocks' own finally (branch pools,
     # decoder closers, partial-cache discards) must run NOW, not whenever the GC
@@ -972,21 +1061,12 @@ def render_stream(
         for k, (_a, b, tot, block) in enumerate(gen):
             if should_cancel and should_cancel():
                 return None
-            data = fluid.flatten(block).tobytes()
-            if enc is None:  # open the encoder lazily on the first block
-                enc = fluid.open_stream_encoder(preview, dag.fps, gw, gh, out_w, out_h)
-            try:
-                enc.stdin.write(data)
-            except BrokenPipeError as exc:
-                raise RuntimeError(fluid.encoder_error(enc)) from exc
+            enc.write(fluid.flatten(block))
+            wrote = True
             if on_progress:
                 on_progress(b, tot, f"/fluid/stream/{render_id}/preview.mp4?n={k}")
-        if enc is not None:  # finalize: flush the encoder, promote to the cache path
-            enc.stdin.close()
-            enc.wait()
-            if enc.returncode != 0:
-                raise RuntimeError(fluid.encoder_error(enc))
-            enc = None
+        enc.finalize()
+        if wrote:  # promote the finished preview to the cache path
             shutil.move(str(preview), str(out_path))
             render_cache.evict(paths.ANIM_DIR)
         if on_progress:
@@ -994,7 +1074,7 @@ def render_stream(
         return url
     finally:
         gen.close()  # run stream_blocks' cleanup (pools/decoders/partial caches)
-        fluid.close_encoder(enc)  # no-op unless cancelled / errored mid-stream
+        enc.close()  # no-op unless cancelled / errored mid-stream
         shutil.rmtree(scratch, ignore_errors=True)
 
 

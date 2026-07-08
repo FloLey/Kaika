@@ -45,6 +45,7 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "slideshow",
   "video",
   "backdrop",
+  "transform",
 ]);
 
 // ---- field coercers (the schema-table vocabulary) ------------------------------
@@ -58,6 +59,8 @@ const oneOf = (values: string[], def: string): Coerce => (v) =>
   values.includes(v as string) ? v : def;
 const hexColor = (def: string): Coerce => (v) =>
   /^#[0-9a-fA-F]{6}$/.test((v as string) || "") ? v : def;
+const intClamp = (lo: number, hi: number, def: number): Coerce => (v) =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : def;
 const idList: Coerce = (v) =>
   Array.isArray(v) && v.length ? v : [mkInputId(), mkInputId()];
 const strList: Coerce = (v) =>
@@ -163,6 +166,12 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     activeCount: (v) => (typeof v === "number" && v >= 0 ? v : undefined),
   },
   backdrop: { color: hexColor("#101418"), ports: portsFor("backdrop") },
+  transform: {
+    mode: oneOf(["transform", "mirror", "kaleidoscope"], "transform"),
+    segments: intClamp(2, 12, 6),
+    wrap: bool,
+    ports: portsFor("transform"),
+  },
 };
 
 const coerceBySchema = (schema: Record<string, Coerce>, d: Record<string, unknown>) =>
@@ -188,11 +197,19 @@ export function normalizeGraph(graph: Graph): Graph {
   // half moved to the NEW imagegen type); prompt/seed are dropped — any generated
   // images are already in assetUrls, so nothing user-visible is lost.
   const preSplit = (graph.version ?? 0) < 15;
+  // v21: `transform` is a KNOWN type again (re-added with a new data shape), so the
+  // unknown-type filter no longer removes the pre-v10 FX cards. Rename them to a
+  // retired sentinel and let the filter drop them — a v5 transform's data would
+  // otherwise be mis-coerced into the new card.
+  const preFxRemoval = (graph.version ?? 0) < 10;
   const mapped = graph.nodes.map((node): GraphNode => {
     let n =
       legacy && node.type === "color" ? ({ ...node, type: "grade" } as unknown as GraphNode) : node;
     if (preSplit && n.type === "imagegen") {
       n = { ...n, type: "slideshow" } as unknown as GraphNode;
+    }
+    if (preFxRemoval && n.type === "transform") {
+      n = { ...n, type: "transform-legacy" } as unknown as GraphNode;
     }
     if (n !== node) changed = true;
     const d = (n.data || {}) as Record<string, unknown>;

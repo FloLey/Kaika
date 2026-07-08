@@ -4,6 +4,7 @@ import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import Ctl from "../../../ui/Ctl";
+import StreamPreview from "./StreamPreview";
 import { aspectOf } from "../../../lib/output";
 import { useAssetUpload, assetName } from "./useAssetUpload";
 import { useNodeData } from "./useNodeData";
@@ -107,6 +108,9 @@ export default function SlideshowNode({
         />
       }
     >
+      {/* The live rendered output — the slides advancing on the trigger exactly as they
+          export. Suppressed in the settings window (its right column shows it). */}
+      <StreamPreview node={node} ctx={ctx} aspect={aspect} />
       {/* Live wiring summary: images available × how often the trigger will switch. */}
       <div className="anim-fx-hint anim-slideshow-count">
         {all.length} image{all.length === 1 ? "" : "s"}

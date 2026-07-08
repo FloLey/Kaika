@@ -67,3 +67,42 @@ def test_rejects_combine_slot_without_id():
     }
     with pytest.raises(ValueError, match="slot with no id"):
         graph.validate(_g(extra_nodes=[combine]))
+
+
+# --------------------------------------------------------------------------- #
+# Direct producer previews (the `_render_target` contract): `output_id` may name any
+# video producer, not just an output node. A card previewing itself must not require an
+# output node to exist — a graph mid-build (first card dropped, nothing wired yet) has
+# none — nor be blocked by an unrelated, still-unwired output.
+# --------------------------------------------------------------------------- #
+def _producer_only():
+    return {"version": 21, "nodes": [_fluid()], "edges": []}
+
+
+def test_previewing_a_producer_needs_no_output_node():
+    graph.validate(_producer_only(), "n-f")  # no raise
+
+
+def test_previewing_a_producer_ignores_a_half_wired_output():
+    g = _producer_only()
+    g["nodes"].append({"id": "n-o", "type": "output", "x": 0, "y": 0, "data": {}})
+    graph.validate(g, "n-f")  # the unwired output belongs to another pipeline
+
+
+def test_no_target_still_requires_an_output_node():
+    with pytest.raises(ValueError, match="at least one output node"):
+        graph.validate(_producer_only())
+
+
+def test_targeting_an_output_still_enforces_the_output_rules():
+    g = _g()
+    g["nodes"].append({"id": "n-o2", "type": "output", "x": 0, "y": 0, "data": {}})
+    with pytest.raises(ValueError, match="exactly one source"):
+        graph.validate(g, "n-o")
+
+
+def test_previewing_a_non_producer_is_rejected():
+    g = _producer_only()
+    g["nodes"].append({"id": "n-l", "type": "lfo", "x": 0, "y": 0, "data": {}})
+    with pytest.raises(ValueError, match="not a video producer"):
+        graph.validate(g, "n-l")

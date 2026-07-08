@@ -43,6 +43,14 @@ export interface BoxVideoPreview {
   playing?: boolean;
 }
 
+// Optional still-image preview drawn inside the box (image + slideshow cards): the real
+// image placed + scaled per `fit`, exactly where it will render. Static (no clock) — the
+// slideshow just swaps `src` on a timer to preview its advance.
+export interface BoxImagePreview {
+  src: string;
+  fit: "cover" | "contain" | "stretch";
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const MIN = 0.05; // smallest box side (fraction of the frame)
 const CORNERS = ["nw", "ne", "sw", "se"] as const;
@@ -58,12 +66,14 @@ export default function BoxPad({
   onChange,
   preview,
   videoPreview,
+  imagePreview,
 }: {
   box: Box;
   aspect: string;
   onChange: (box: Box) => void;
   preview?: BoxPreview;
   videoPreview?: BoxVideoPreview;
+  imagePreview?: BoxImagePreview;
 }) {
   const padRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -311,6 +321,21 @@ export default function BoxPad({
         style={{ "--out-aspect": aspect } as CSSProperties}
       >
         <canvas ref={canvasRef} className="anim-box-canvas" />
+        {imagePreview?.src && (
+          <img
+            className="anim-box-image"
+            src={imagePreview.src}
+            alt=""
+            draggable={false}
+            style={{
+              left: pct(view.x),
+              top: pct(view.y),
+              width: pct(view.w),
+              height: pct(view.h),
+              objectFit: imagePreview.fit === "stretch" ? "fill" : imagePreview.fit,
+            }}
+          />
+        )}
         {videoPreview?.src && (
           <video
             ref={videoRef}

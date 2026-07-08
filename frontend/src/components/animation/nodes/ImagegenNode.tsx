@@ -9,6 +9,7 @@ import { generateImage, pollJob } from "../../../lib/api";
 import { upstreamKey, videoSource } from "../../../lib/graphModel";
 import { countRises, fitPrompts } from "../../../lib/imageCount";
 import { assetName } from "./useAssetUpload";
+import { jobIdOf } from "./nodeProps";
 import type { NodeProps } from "./nodeProps";
 import type { Asset, ImagegenData } from "../../../lib/types";
 
@@ -39,8 +40,7 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
   const removePrompt = (i: number) =>
     set({ prompts: prompts.length > 1 ? prompts.filter((_, k) => k !== i) : [""] });
 
-  const job = ctx?.job;
-  const jobId = typeof job === "string" ? job : (job as { job_id?: string } | undefined)?.job_id;
+  const jobId = jobIdOf(ctx?.job);
 
   // Optional gate input: resolve the wired source's ACTUAL curve (the same /resolve
   // the Scope uses — so all of the gate's threshold/hysteresis/minGap/divide is already
@@ -270,17 +270,20 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
         </button>
       </div>
       {err && <div className="anim-asset-err">{err}</div>}
-      {(needed != null ? generated.slice(0, needed) : generated).some(Boolean) && (
-        <div className="anim-imagegen-strip no-drag">
-          {(needed != null ? generated.slice(0, needed) : generated).map((u, i) =>
-            u ? (
-              <span className="anim-imagegen-slot gen" key={`${u}-${i}`} title={assetName(u)}>
-                <img src={u} alt="" draggable={false} />
-              </span>
-            ) : null
-          )}
-        </div>
-      )}
+      {/* The generated-image STRIP moves to the settings window's gallery (right column);
+          hide it there so it isn't shown twice. */}
+      {!ctx?.previewInPanel &&
+        (needed != null ? generated.slice(0, needed) : generated).some(Boolean) && (
+          <div className="anim-imagegen-strip no-drag">
+            {(needed != null ? generated.slice(0, needed) : generated).map((u, i) =>
+              u ? (
+                <span className="anim-imagegen-slot gen" key={`${u}-${i}`} title={assetName(u)}>
+                  <img src={u} alt="" draggable={false} />
+                </span>
+              ) : null
+            )}
+          </div>
+        )}
     </NodeFrame>
   );
 }

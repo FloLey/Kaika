@@ -6,7 +6,7 @@ import ArgInfo from "./ArgInfo";
 import { argHelp } from "../../../lib/paramHelp";
 import { VIDEO_PARAMS } from "../../../lib/nodeParams";
 import { useNodeData } from "./useNodeData";
-import type { BoxVideoPreview } from "./BoxPad";
+import { buildVideoPreview } from "./boxPreview";
 import type { NodeProps } from "./nodeProps";
 import type { VideoData } from "../../../lib/types";
 
@@ -58,21 +58,16 @@ export default function VideoNode(props: NodeProps) {
   const d = node.data as VideoData;
   const set = useNodeData<VideoData>(node, onGraphChange);
 
-  // A const speed previews at that rate; a wired (modulated) speed previews at 1× (its
-  // per-frame curve isn't resolved in the card — the render is authoritative).
+  // The live clip preview inside the BoxPad (shared builder — identical in the settings
+  // window). Memo keys on the fields it reads.
   const speedBinding = d.ports?.speed?.binding;
   const previewSpeed = speedBinding?.kind === "const" ? Number(speedBinding.value) : 1;
   const clock = ctx?.groupClock;
   const playing = !!ctx?.groupPlaying;
   const segStart = ctx?.segStart ?? 0;
-  const videoPreview = useMemo<BoxVideoPreview | undefined>(
-    () =>
-      d.assetUrl
-        ? {
-            src: d.assetUrl, fit: d.fit, sync: d.sync, start: d.start,
-            speed: previewSpeed, loop: d.loop, segStart, clock, playing,
-          }
-        : undefined,
+  const videoPreview = useMemo(
+    () => buildVideoPreview(d, ctx),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [d.assetUrl, d.fit, d.sync, d.start, previewSpeed, d.loop, segStart, clock, playing]
   );
 

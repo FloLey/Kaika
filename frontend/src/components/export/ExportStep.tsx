@@ -3,6 +3,7 @@ import type { ChangeEvent, CSSProperties } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
 import { aspectOf, fitToRatio, ratioLabel } from "../../lib/output";
+import { usePreservePlayback } from "../animation/nodes/usePreservePlayback";
 import type { ExportSettings } from "../../lib/export";
 import type { OutputSettings, Segment } from "../../lib/types";
 
@@ -15,6 +16,9 @@ interface ExportStepProps {
   // so the whole-track render keeps the exact shape the flow was composed for.
   output: OutputSettings;
   onBack: () => void;
+  // Jump to a segment in the studio — the readiness checklist's ⚠ rows use it so a
+  // missing ★ final output is one click from being fixed.
+  onOpenSegment?: (segId: string) => void;
 }
 
 // The final-export stage: render the WHOLE track in HD by stitching each segment's
@@ -30,6 +34,7 @@ export default function ExportStep({
   setExportSettings,
   output,
   onBack,
+  onOpenSegment,
 }: ExportStepProps) {
   const set = (patch: Partial<ExportSettings>) => setExportSettings({ ...exportSettings, ...patch });
   const clampDim = (v: number) => Math.max(16, Math.min(4096, Math.round(v || 0)));
@@ -62,8 +67,11 @@ export default function ExportStep({
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const activeRender = useRef<string | null>(null); // render_id we're polling
-  const lastTime = useRef(0); // playback position, preserved as the growing preview swaps src
   const mounted = useRef(true); // false after unmount → the poll stops touching state (never cancels)
+  // Keep the playhead as the growing preview swaps <video> src (same hook the card
+  // previews use). The poll loop itself stays local: this stage resumes across
+  // remounts via sessionStorage and never cancels its render, unlike useStreamRender.
+  const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl);
 
   const fps = exportSettings.fps || 30;
   // Persist the in-flight render id so leaving and returning to this stage re-attaches to
@@ -135,26 +143,6 @@ export default function ExportStep({
     };
   }, [storeKey, pollRender]);
 
-  // Preserve the playback position as the growing preview (or the final clip) swaps
-  // the <video> src — otherwise every new block would restart from 0 (mirrors the
-  // OutputNode growing-preview approach).
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !videoUrl) return undefined;
-    const save = () => {
-      if (v.currentTime) lastTime.current = v.currentTime;
-    };
-    const restore = () => {
-      if (lastTime.current > 0 && lastTime.current < v.duration) v.currentTime = lastTime.current;
-    };
-    v.addEventListener("timeupdate", save);
-    v.addEventListener("loadedmetadata", restore);
-    return () => {
-      v.removeEventListener("timeupdate", save);
-      v.removeEventListener("loadedmetadata", restore);
-    };
-  }, [videoUrl]);
-
   // Kick off the full-track export, persist its id (so it survives leaving the stage),
   // then poll it via pollRender. The preview updates as each block lands.
   async function generate() {
@@ -164,7 +152,7 @@ export default function ExportStep({
     setVideoUrl("");
     setFinalUrl("");
     setProgress(null);
-    lastTime.current = 0;
+    resetPlayback(); // a fresh export plays from the top
     let started;
     try {
       started = await api.startExport(job);
@@ -322,24 +310,37 @@ export default function ExportStep({
             )}
             {segments.map((s) => {
               const marked = !!s.finalOutputId;
-              return (
-                <div
-                  key={s.id}
-                  className={"export-seg" + (marked ? " ok" : " warn")}
-                  title={
-                    marked
-                      ? "a final output is marked for this segment"
-                      : "no final output — mark one in the editor (★ on an output card)"
-                  }
-                >
+              // An unmarked row is the ONLY thing standing between you and Generate, so
+              // it doubles as the click-through to the segment that needs fixing
+              // (mirrors the animation palette's ⚠ problems list).
+              const jumpable = !marked && !!onOpenSegment;
+              const inner = (
+                <>
                   <span className="export-seg-icon">{marked ? "✓" : "⚠"}</span>
                   <span className="export-seg-label">{s.label}</span>
                   <span className="export-seg-time">
                     {fmtTime(s.start)} – {fmtTime(s.end)}
                   </span>
                   {!marked && (
-                    <span className="export-seg-note">no final output — mark one in the editor</span>
+                    <span className="export-seg-note">
+                      no final output — {jumpable ? "click to fix" : "mark one in the editor"}
+                    </span>
                   )}
+                </>
+              );
+              const cls = "export-seg" + (marked ? " ok" : " warn") + (jumpable ? " jump" : "");
+              const title = marked
+                ? "a final output is marked for this segment"
+                : jumpable
+                  ? "Open this segment in the studio and mark a final output (★ on an output card)"
+                  : "no final output — mark one in the editor (★ on an output card)";
+              return jumpable ? (
+                <button key={s.id} type="button" className={cls} title={title} onClick={() => onOpenSegment(s.id)}>
+                  {inner}
+                </button>
+              ) : (
+                <div key={s.id} className={cls} title={title}>
+                  {inner}
                 </div>
               );
             })}

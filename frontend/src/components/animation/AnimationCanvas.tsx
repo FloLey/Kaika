@@ -64,6 +64,10 @@ export default function AnimationCanvas({
     onCardDrop,
     onEdgeDelete,
     onDeleteSelection,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useGraphEditor({
     segment,
     stems,
@@ -139,6 +143,10 @@ export default function AnimationCanvas({
         onFitView={graph.nodes.length ? () => fitRef.current?.() : null}
         problems={problems}
         onProblemClick={onProblemClick}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
       <div className="anim-stage" ref={wrapRef}>
         <MinimizeContext.Provider value={minimizeCtx}>

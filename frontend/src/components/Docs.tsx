@@ -19,6 +19,7 @@ export const DOC_SECTION_IDS = [
   "assets",
   "animation-fx",
   "animation-combine",
+  "animation-transform",
   "animation-output",
   "export",
   "fluid-lab",
@@ -502,8 +503,14 @@ export default function Docs({ section }: { section?: string }) {
           along the data flow — sources left, output right — giving the cards room and
           untangling wire crossings where it can (compact uses the same layout, just tighter).
           In compact view, <strong>click a card's body</strong> to open
-          its settings window (all the controls, editing the graph live — <kbd>Esc</kbd> or a
-          click outside closes it). Every card gets a <strong>default name</strong> (its type plus
+          its settings window: <strong>inputs &amp; controls on the left, a big live preview on the
+          right</strong> (editing the graph live — <kbd>Esc</kbd>, the ✕, or a click outside
+          closes it). The right-hand preview is tailored per card — the sim/composite,
+          a value's pulse, an image/video in its placement box, a colour swatch, a gallery
+          of generated images (click one for a lightbox with ‹ › arrows), or a slideshow
+          cycling its slides. The <em>lyrics</em> window adds a second <strong>lyrics</strong>{" "}
+          tab to edit the line words &amp; timings; clicking the <em>output</em> card's render
+          opens it big with a ★ mark-final toggle. Every card gets a <strong>default name</strong> (its type plus
           a counter — <em>fluid 1</em>, <em>fluid 2</em>…); <strong>double-click the title</strong>{" "}
           to rename it (on the canvas or in its settings window), so you can find it again by name in
           every input dropdown. The <strong>▢/–</strong> button in a card's title bar
@@ -515,11 +522,12 @@ export default function Docs({ section }: { section?: string }) {
         <p>
           Three more canvas tools: the canvas <strong>opens fitted</strong> (every card framed in
           view), and <strong>⊙ fit</strong> (toolbar, or <strong>double-click empty canvas</strong>)
-          re-fits it any time — the rescue move when a card was dragged off-screen.{" "}
-          <kbd>Cmd</kbd>+<kbd>Z</kbd> /{" "}
-          <kbd>Shift</kbd>+<kbd>Cmd</kbd>+<kbd>Z</kbd> <strong>undo/redo</strong> graph edits
+          re-fits it any time — the rescue move when a card was dragged off-screen. The{" "}
+          <strong>↶ / ↷</strong> toolbar buttons (or <kbd>Cmd</kbd>+<kbd>Z</kbd> /{" "}
+          <kbd>Shift</kbd>+<kbd>Cmd</kbd>+<kbd>Z</kbd>) <strong>undo/redo</strong> graph edits
           (wires, cards, knob drags — a whole slider drag reverts as one step; typing in a text
-          field keeps its own undo). And when the graph contains <strong>dead wiring</strong> that
+          field keeps its own undo). They grey out when there's nothing to step through, and the
+          history is per segment and resets when you reload. And when the graph contains <strong>dead wiring</strong> that
           would render silently wrong — a gate with no input (a flat 0), a wired port whose lo–hi
           range collapsed to zero width (the signal is flattened, so e.g. a slideshow trigger never
           fires), an output with no input, a stale ★ final mark — a{" "}
@@ -933,6 +941,30 @@ export default function Docs({ section }: { section?: string }) {
           card will tell you.)
         </p>
 
+        <h3 id="animation-transform">Transform — warping the video</h3>
+        <p>
+          The <strong>transform</strong> card (Compositing) takes a video stream and warps it: drop
+          it between any producer (a fluid, a combine) and whatever consumes it. Its{" "}
+          <strong>zoom</strong>, <strong>rotate</strong>, <strong>pan x</strong> and{" "}
+          <strong>pan y</strong> are modulatable ports — wire <em>rotate</em> to a signal and the
+          whole frame spins on the beat, or wire <em>zoom</em> to a kick for a pulsing punch-in.
+        </p>
+        <p>
+          Three <strong>modes</strong>: <em>transform</em> just pans/zooms/rotates;{" "}
+          <em>mirror</em> reflects one half across the centre; <em>kaleidoscope</em> folds the frame
+          into 2–12 mirrored wedges (a classic music-video look — try it with a slow rotate).
+          The two fold modes <strong>mirror the frame at its edges</strong>, so there are no black
+          gaps at any rotation even on a tall or wide canvas. A plain <em>transform</em> is{" "}
+          <strong>black</strong> outside the frame by default (which keeps the dye-on-black
+          transparency intact for compositing); turn on <strong>wrap edges</strong> to tile the
+          frame so it loops around seamlessly instead.
+        </p>
+        <p>
+          A transform produces <em>frames</em>, not emitters, so it can feed an <strong>output</strong>{" "}
+          or a <strong>layered</strong> combine — but not a <em>merge</em> (which needs the raw fluid
+          sources to interact). Chain two transforms if you want, say, a kaleidoscope of a rotation.
+        </p>
+
         <h3>Rendering — it's automatic</h3>
         <p>
           There's no render button: the clip <strong>re-renders on its own</strong>
@@ -1006,7 +1038,8 @@ export default function Docs({ section }: { section?: string }) {
             <strong>Mark each segment's final output.</strong> On the animation tab, every output
             card carries a <strong>☆ mark final</strong> button — click it (it turns{" "}
             <strong>★ final</strong>) on the output you want exported for that segment. One per
-            segment; the export screen shows a checklist of any segment still unmarked.
+            segment; the export screen shows a checklist of any segment still unmarked —{" "}
+            <strong>click a ⚠ row</strong> to jump straight to that segment in the Studio.
           </li>
           <li>
             <strong>Render.</strong> The <strong>Final export ▸</strong> button (top of the Studio)
@@ -1015,10 +1048,15 @@ export default function Docs({ section }: { section?: string }) {
             and the export keeps the exact shape you built for; editing one side scales the other.
             Also set <em>fps</em>, <em>detail / grid</em> (simulation cells — higher is sharper and slower),
             and the <em>audio</em>: the <strong>original</strong> full mix, or{" "}
-            <strong>instrumental</strong> — the separated stems minus the vocal, for covers and
-            karaoke (the studio transport follows the same choice, so you build against the track
-            you'll ship). Then generate: the render streams progressively — a growing preview plays
-            while it works — and finishes with a <strong>download</strong> link.
+            <strong>instrumental</strong> — the original with the separated vocal subtracted, for
+            covers and karaoke (the studio transport follows the same choice, so you build against
+            the track you'll ship). Note the instrumental removes everything the separation model
+            classifies as vocal — lead <em>and</em> backing vocals, harmonies, vocal chops. If it
+            takes out too much of your track's character, re-upload with{" "}
+            <code>DEMUCS_MODEL=htdemucs_ft</code> set (a finer separation model, ~4× slower to
+            separate) — it keeps more instrument content out of the vocal stem. Then generate: the
+            render streams progressively — a growing preview plays while it works — and finishes
+            with a <strong>download</strong> link.
           </li>
         </ul>
         <div className="note">

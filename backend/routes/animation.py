@@ -67,12 +67,10 @@ def extract_route(b):
     return jsonify(out)
 
 
-@bp.route("/resolve", methods=["POST"])
-@json_body
-def resolve_route(b):
-    """Resolve one value node's 0..1 curve for the segment+graph (the Scope card's live
-    view) -> {curve, times, fps}. No render, no DB — just runs the value resolver, so a
-    dangling `lfo -> scope` works with no output wired."""
+def _resolve_endpoint(b, resolver, label: str):
+    """The shared body of /resolve and /resolve-points: same required fields, same job
+    check, same error mapping — only the resolver differs. Keeping one copy means the
+    two endpoints' error contracts can't drift apart."""
     job_id = b.get("job_id")
     segment = b.get("segment")
     graph = b.get("graph")
@@ -82,14 +80,23 @@ def resolve_route(b):
     if _bad_job(job_id):
         return error_response("bad job id", 404)
     try:
-        out = graphmod.resolve_node_curve(job_id, segment, graph, node_id, stem_audio_path)
+        out = resolver(job_id, segment, graph, node_id, stem_audio_path)
     except (ValueError, TypeError, KeyError) as e:
-        log.warning("resolve bad input (%s/%s): %s", job_id, node_id, e)
+        log.warning("%s bad input (%s/%s): %s", label, job_id, node_id, e)
         return error_response(str(e), 400)
     except Exception as e:  # noqa: BLE001
-        log.error("resolve failed (%s/%s)", job_id, node_id, exc_info=e)
+        log.error("%s failed (%s/%s)", label, job_id, node_id, exc_info=e)
         return error_response(f"{type(e).__name__}: {e}", 500)
     return jsonify(out)
+
+
+@bp.route("/resolve", methods=["POST"])
+@json_body
+def resolve_route(b):
+    """Resolve one value node's 0..1 curve for the segment+graph (the Scope card's live
+    view) -> {curve, times, fps}. No render, no DB — just runs the value resolver, so a
+    dangling `lfo -> scope` works with no output wired."""
+    return _resolve_endpoint(b, graphmod.resolve_node_curve, "resolve")
 
 
 @bp.route("/resolve-points", methods=["POST"])
@@ -98,23 +105,7 @@ def resolve_points_route(b):
     """Resolve one points node's positions for the card preview -> {points:[[x,y],…]}.
     No render, no DB — the points equivalent of /resolve, so points/pattern/animate/
     merge show a live scatter."""
-    job_id = b.get("job_id")
-    segment = b.get("segment")
-    graph = b.get("graph")
-    node_id = b.get("node_id")
-    if not job_id or segment is None or graph is None or not node_id:
-        return error_response("missing job_id, segment, graph, or node_id", 400)
-    if _bad_job(job_id):
-        return error_response("bad job id", 404)
-    try:
-        out = graphmod.resolve_node_points(job_id, segment, graph, node_id, stem_audio_path)
-    except (ValueError, TypeError, KeyError) as e:
-        log.warning("resolve-points bad input (%s/%s): %s", job_id, node_id, e)
-        return error_response(str(e), 400)
-    except Exception as e:  # noqa: BLE001
-        log.error("resolve-points failed (%s/%s)", job_id, node_id, exc_info=e)
-        return error_response(f"{type(e).__name__}: {e}", 500)
-    return jsonify(out)
+    return _resolve_endpoint(b, graphmod.resolve_node_points, "resolve-points")
 
 
 @bp.route("/fluid", methods=["POST"])
@@ -189,7 +180,7 @@ def animate_stream(body):
     if _bad_job(job_id):
         return error_response("bad job id", 404)
     try:  # fail fast on an invalid graph instead of surfacing it as an async error
-        graphmod.validate(graph)
+        graphmod.validate(graph, output_id)
     except ValueError as e:
         log.warning("animate/stream rejected graph (%s): %s", job_id, e)
         return error_response(str(e), 400)

@@ -29,6 +29,8 @@ export const IMAGE_PARAMS: FluidParam[] = SOURCE_PARAMS.image;
 export const SLIDESHOW_PARAMS: FluidParam[] = SOURCE_PARAMS.slideshow;
 export const VIDEO_PARAMS: FluidParam[] = SOURCE_PARAMS.video;
 export const BACKDROP_PARAMS: FluidParam[] = SOURCE_PARAMS.backdrop;
+// The transform FX card (video -> video): zoom/rotate/pan warp the incoming frames.
+export const TRANSFORM_PARAMS: FluidParam[] = SOURCE_PARAMS.transform;
 
 // node type -> its modulatable param specs. Cards with no entry have no ports.
 export const NODE_PARAMS: Record<string, FluidParam[]> = {
@@ -39,6 +41,7 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   slideshow: SLIDESHOW_PARAMS,
   video: VIDEO_PARAMS,
   backdrop: BACKDROP_PARAMS,
+  transform: TRANSFORM_PARAMS,
 };
 
 export const nodeParams = (type: string): FluidParam[] => NODE_PARAMS[type] || [];

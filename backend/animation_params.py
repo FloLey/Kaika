@@ -179,6 +179,19 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
          "default": 1.0, "fmt": "dp2"},
     ],
     "backdrop": [_opacity_spec()],
+    # The `transform` video-FX card (video -> video): an affine warp of the incoming
+    # frames, plus mirror / kaleidoscope folds. Not a source (it has a video input),
+    # but its ports resolve exactly like one, so it shares this table.
+    "transform": [
+        {"key": "zoom", "label": "zoom", "min": 0.5, "max": 2.0, "step": 0.01,
+         "default": 1.0, "fmt": "dp2"},
+        {"key": "rotate", "label": "rotate", "min": 0.0, "max": 360.0, "step": 1.0,
+         "default": 0.0, "fmt": "deg"},
+        {"key": "pan_x", "label": "pan x", "min": -0.5, "max": 0.5, "step": 0.01,
+         "default": 0.0, "fmt": "dp2"},
+        {"key": "pan_y", "label": "pan y", "min": -0.5, "max": 0.5, "step": 0.01,
+         "default": 0.0, "fmt": "dp2"},
+    ],
 }
 
 # Static params (not ports in v1; set on the fluid card) and where they nest.

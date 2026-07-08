@@ -27,6 +27,24 @@ LEGACY_GRID = 96
 _POINT_CAP = 64  # max emitters a points pipeline can produce (bounds the merge)
 
 
+def resolve_port(binding, pmin: float, pmax: float, pdef: float, resolve):
+    """One modulatable port -> native units.
+
+    The single definition of the port contract every ported card shares: an absent or
+    `const` binding is a plain scalar; a `node` binding maps the upstream 0..1 curve
+    through the port's own `[lo, hi]` window. Callers own the shape they need — a
+    scalar or a numpy curve comes back, and `build_params` / `_fx_params` / the colour
+    resolver each coerce it (`.tolist()`, `np.full`, …) as their consumer requires.
+
+    An unbound port yields `pdef` UNCOERCED: `params_hash` json-dumps these values, so
+    floating an int default (`40` -> `40.0`) would rewrite every raw-frame cache key."""
+    if not binding or binding.get("kind") == "const":
+        return float(binding["value"]) if binding else pdef
+    lo = float(binding.get("lo", pmin))
+    hi = float(binding.get("hi", pmax))
+    return lo + (hi - lo) * resolve(binding["nodeId"])  # 0..1 curve -> native array
+
+
 def _output_params(output: dict, fps: int) -> dict:
     """The simulate() top-level `output` block from project render settings.
 

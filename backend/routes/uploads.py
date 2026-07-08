@@ -21,7 +21,7 @@ from .. import segment as seg
 from .. import jobs
 from .. import db
 from .. import logbus
-from ..web import json_body, validate_job_id, error_response
+from ..web import json_body, validate_asset_id, validate_job_id, error_response
 from ..config import FMIN
 from ..media import (
     stem_audio_path,
@@ -112,7 +112,7 @@ def list_assets_route(job_id: str):
 @bp.delete("/assets/<job_id>/<asset_id>")
 def delete_asset_route(job_id: str, asset_id: str):
     """Remove a library asset by id: unlink its file(s) and drop it from `data.assets`."""
-    if not validate_job_id(job_id) or not asset_id.isalnum():
+    if not validate_job_id(job_id) or not validate_asset_id(asset_id):
         return error_response("bad request", 400)
     for p in (ASSETS_DIR / job_id).glob(f"{asset_id}.*"):
         try:

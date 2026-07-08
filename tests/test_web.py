@@ -5,7 +5,18 @@ import pytest
 
 pytest.importorskip("flask")
 
-from backend.web import validate_audio_params
+from backend.web import validate_asset_id, validate_audio_params
+
+
+def test_validate_asset_id_accepts_sha_and_hd_export_stems():
+    # Uploaded assets are content-addressed sha16; the whole-song export writes `hd-<sha16>`.
+    assert validate_asset_id("a1b2c3d4e5f60718")
+    assert validate_asset_id("hd-a1b2c3d4e5f60718")
+
+
+def test_validate_asset_id_rejects_traversal_and_empties():
+    for bad in ("", None, 0, "-lead", "a.b", "a/b", "../x", "a b", "a_b"):
+        assert not validate_asset_id(bad)
 
 
 def test_validate_audio_params_coerces_and_returns():

@@ -49,11 +49,20 @@ export const mkInputId = (): string => rid("in");
 export const mkSlotId = (): string => rid("slot");
 
 // Non-fluid video sources (no video input; synthesise frames). Producers, not emitters.
-// (The video-FX pass-through cards — transform / grade — were removed in v10; a future
-// FX card re-adds its type here AND a wired-`video`-input check in outputRenderable.)
 export const VIDEO_SOURCES = new Set<string>(["lyrics", "image", "slideshow", "video", "backdrop"]);
 
-export const VIDEO_PRODUCERS = new Set<string>(["fluid", "combine", "output", ...VIDEO_SOURCES]);
+// Video-FX cards: video in -> video out. They pass a stream through a per-frame op, so
+// (like `output`) they're renderable only with their `video` input wired — see
+// `nodeRenderable`. Never emitter sources: a merge combine needs raw fluid emitters.
+export const VIDEO_FX = new Set<string>(["transform"]);
+
+export const VIDEO_PRODUCERS = new Set<string>([
+  "fluid",
+  "combine",
+  "output",
+  ...VIDEO_SOURCES,
+  ...VIDEO_FX,
+]);
 
 // The node wired into (targetId, targetPort) via a video edge, or null.
 export function videoSource(graph: Graph, targetId: string, targetPort: string): string | null {

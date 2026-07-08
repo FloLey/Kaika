@@ -57,6 +57,22 @@
   font-size: 12px;
   padding: 3px 0;
 }
+/* an unmarked row is a <button> that jumps to the segment — strip the native chrome */
+.export-seg.jump {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 3px 4px;
+  margin: 0 -4px;
+}
+.export-seg.jump:hover,
+.export-seg.jump:focus-visible {
+  background: var(--panel-2, rgba(255, 255, 255, 0.05));
+}
 .export-seg-icon {
   flex: none;
   width: 14px;

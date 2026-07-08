@@ -42,6 +42,9 @@ import {
   unassignEdge,
   renameNode,
   imagegenNode,
+  transformNode,
+  VIDEO_PRODUCERS,
+  VIDEO_SOURCES,
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
@@ -54,6 +57,7 @@ import type {
   Point,
   PointsData,
   SignalData,
+  TransformNode,
   VideoNode as VideoNodeT,
 } from "../lib/types";
 
@@ -178,6 +182,46 @@ describe("normalizeGraph migrates older saves", () => {
     expect(norm.nodes.find((n) => n.id === "n-legacy")).toBeUndefined();
     expect(norm.edges.length).toBe(0);
     expect(norm.version).toBe(GRAPH_VERSION);
+  });
+
+  it("drops a pre-v10 `transform` node even though v21 re-added the type", () => {
+    // The v5 transform FX card had a different data shape. Re-adding `transform` to the
+    // known types must NOT resurrect it — normalizeGraph drops it explicitly.
+    const g = emptyGraph();
+    const out = outputNode(0, 0);
+    const legacyFx = {
+      id: "n-oldfx",
+      type: "transform",
+      x: 0,
+      y: 0,
+      data: { kaleido: 4, ports: { warp: { binding: { kind: "const", value: 1 } } } },
+    } as unknown as GraphNode;
+    g.version = 9;
+    g.nodes = [legacyFx, out];
+    g.edges = [
+      { id: "e1", source: "n-oldfx", sourcePort: "out", target: out.id, targetPort: "video" },
+    ];
+    const norm = normalizeGraph(g);
+    expect(norm.nodes.find((n) => n.id === "n-oldfx")).toBeUndefined();
+    expect(norm.edges.length).toBe(0);
+  });
+
+  it("keeps a modern transform node and coerces its data", () => {
+    const g = emptyGraph(); // already GRAPH_VERSION (>= 21)
+    const t = transformNode(0, 0);
+    // junk mode falls back; segments clamp into 2..12; ports are seeded from the spec
+    g.nodes = [{ ...t, data: { ...t.data, mode: "nope", segments: 99 } } as unknown as GraphNode];
+    const kept = normalizeGraph(g).nodes[0] as TransformNode;
+    expect(kept.type).toBe("transform");
+    expect(kept.data.mode).toBe("transform");
+    expect(kept.data.segments).toBe(12);
+    expect(kept.data.wrap).toBe(false);
+    expect(Object.keys(kept.data.ports).sort()).toEqual(["pan_x", "pan_y", "rotate", "zoom"]);
+  });
+
+  it("transform is a video producer, not a video source", () => {
+    expect(VIDEO_PRODUCERS.has("transform")).toBe(true);
+    expect(VIDEO_SOURCES.has("transform")).toBe(false);
   });
 
   it("keeps a v8+ `color` node as the dye card (no legacy rename)", () => {

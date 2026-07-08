@@ -254,6 +254,15 @@ export interface BackdropData {
   color: string; // hex fill colour
   ports: Record<string, FluidPort>;
 }
+// The transform video-FX card (video -> video): an affine warp of the incoming frames
+// (zoom/rotate/pan are modulatable ports), optionally folded into a mirror or a
+// kaleidoscope. `wrap` tiles the edges instead of leaving them black.
+export interface TransformData {
+  mode: "transform" | "mirror" | "kaleidoscope";
+  segments: number; // kaleidoscope wedge count, 2..12
+  wrap: boolean;
+  ports: Record<string, FluidPort>;
+}
 // A video layer adds playback timing on top of the image placement fields. `speed` is a
 // modulatable port (in `ports`), not a static field — a wired signal time-warps the clip.
 export interface VideoData extends ImageData {
@@ -398,6 +407,11 @@ export interface BackdropNode extends NodeBase {
   data: BackdropData;
 }
 
+export interface TransformNode extends NodeBase {
+  type: "transform";
+  data: TransformData;
+}
+
 export type GraphNode =
   | SignalNode
   | FluidNode
@@ -419,7 +433,8 @@ export type GraphNode =
   | VideoNode
   | SlideshowNode
   | ImagegenNode
-  | BackdropNode;
+  | BackdropNode
+  | TransformNode;
 
 export type NodeType = GraphNode["type"];
 

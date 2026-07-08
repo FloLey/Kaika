@@ -31,6 +31,12 @@ interface PaletteProps {
   // centers the offending card.
   problems?: GraphProblem[];
   onProblemClick?: (nodeId: string) => void;
+  // Graph undo/redo (also bound to ⌘Z / ⇧⌘Z) — the buttons make it discoverable and
+  // show whether there's anything to step through.
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 // One open category's item list. Measures itself on mount: when the right-anchored
@@ -66,6 +72,10 @@ export default function Palette({
   onFitView,
   problems = [],
   onProblemClick,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: PaletteProps) {
   // Which category dropdown is open (one at a time), and whether the signal picker
   // (opened from the Sources menu's factory-less Signal entry) is showing.
@@ -230,6 +240,31 @@ export default function Palette({
               ))}
             </div>
           )}
+        </div>
+      )}
+      {(onUndo || onRedo) && (
+        // Undo/redo was keyboard-only (⌘Z) and undiscoverable; the disabled state also
+        // tells you when a step is available. Session-only, per segment.
+        <div className="anim-history-btns">
+          <button
+            className="btn sm anim-history-btn"
+            title="Undo (⌘Z)"
+            aria-label="Undo"
+            disabled={!canUndo}
+            onClick={onUndo}
+          >
+            {/* U+FE0E forces TEXT presentation — macOS renders a bare ↩ as a blue emoji */}
+            {"↩︎"}
+          </button>
+          <button
+            className="btn sm anim-history-btn"
+            title="Redo (⇧⌘Z)"
+            aria-label="Redo"
+            disabled={!canRedo}
+            onClick={onRedo}
+          >
+            {"↪︎"}
+          </button>
         </div>
       )}
       {onFitView && (

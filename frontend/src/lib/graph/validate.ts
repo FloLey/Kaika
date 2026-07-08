@@ -2,7 +2,7 @@
 // contributing-subgraph walks (backend/graph_validate.py, graph_hash.py) — the
 // backend stays authoritative; this gates obviously-broken graphs client-side.
 
-import { VIDEO_PRODUCERS, isLooseEdge, portsOf, videoSource } from "./core";
+import { VIDEO_FX, VIDEO_PRODUCERS, isLooseEdge, portsOf, videoSource } from "./core";
 import type { CombineNode, Graph, GraphEdge, GraphNode, ValidationResult } from "../types";
 
 // Whether `nodeId` resolves to fluid emitter(s) for a merge (no stack upstream).
@@ -90,6 +90,10 @@ function contributingComplete(graph: Graph, rootId: string): boolean {
         }
       }
     } else if (n.type === "output" && nid !== rootId) {
+      if (videoSource(graph, nid, "video") == null) return false;
+    } else if (VIDEO_FX.has(n.type)) {
+      // An FX card warps a stream it doesn't have yet — unrenderable even as the
+      // preview root (the backend raises on an unwired transform either way).
       if (videoSource(graph, nid, "video") == null) return false;
     }
   }

@@ -35,40 +35,53 @@ def _validate_binding(key: str, binding: dict, nodes: dict) -> None:
         raise ValueError(f"port '{key}' has an unknown binding kind '{kind}'")
 
 
-def validate(graph: dict) -> None:
+def validate(graph: dict, output_id: str | None = None) -> None:
     """Raise ValueError (surfaced as HTTP 400) if the graph is not renderable.
 
     Rules: at least one output, each output wired to exactly one fluid, every fluid
     port binding well-formed (const numeric / node resolves to an existing node),
     combine slots carry ids, and the binding graph is acyclic. N independent
     fluid->output pipelines are allowed.
+
+    `output_id` names the render TARGET. Per the `_render_target` contract it may be an
+    output node **or any video producer directly** — that's how a fluid / combine /
+    transform card renders its own live preview. When it names a producer, the
+    output-node rules don't apply: a graph mid-build (a fluid card dropped, no output
+    wired yet) previews fine, and an unrelated half-wired output can't 400 it. The
+    frontend mirror is `nodeRenderable` (lib/graph/validate.ts).
     """
     if not isinstance(graph, dict):
         raise ValueError("graph must be an object")
     nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
 
-    outputs = _nodes_of(graph, "output")
-    if len(outputs) < 1:
-        raise ValueError("graph must have at least one output node")
-    # Each output must be wired to exactly one video producer (fluid / combine /
-    # output-passthrough) via its single `video` in-port.
-    for out in outputs:
-        incoming = [
-            e
-            for e in graph.get("edges", [])
-            if e.get("target") == out["id"] and e.get("targetPort") == "video"
-        ]
-        if len(incoming) != 1:
-            raise ValueError(
-                f"output '{out['id']}' must be wired to exactly one source "
-                f"(found {len(incoming)})"
-            )
-        src = nodes.get(incoming[0].get("source"))
-        if src is None or src.get("type") not in _video_producers():
-            raise ValueError(
-                f"output '{out['id']}' must be wired to a video producer "
-                f"(fluid / combine / an FX or source card)"
-            )
+    target = nodes.get(output_id) if output_id else None
+    previewing_producer = target is not None and target.get("type") != "output"
+
+    if not previewing_producer:
+        outputs = _nodes_of(graph, "output")
+        if len(outputs) < 1:
+            raise ValueError("graph must have at least one output node")
+        # Each output must be wired to exactly one video producer (fluid / combine /
+        # output-passthrough) via its single `video` in-port.
+        for out in outputs:
+            incoming = [
+                e
+                for e in graph.get("edges", [])
+                if e.get("target") == out["id"] and e.get("targetPort") == "video"
+            ]
+            if len(incoming) != 1:
+                raise ValueError(
+                    f"output '{out['id']}' must be wired to exactly one source "
+                    f"(found {len(incoming)})"
+                )
+            src = nodes.get(incoming[0].get("source"))
+            if src is None or src.get("type") not in _video_producers():
+                raise ValueError(
+                    f"output '{out['id']}' must be wired to a video producer "
+                    f"(fluid / combine / an FX or source card)"
+                )
+    elif target.get("type") not in _video_producers():
+        raise ValueError(f"node '{output_id}' is not a video producer")
 
     # Every modulatable port binding must be well-formed (fluid + FX + source cards).
     for node in graph.get("nodes", []):

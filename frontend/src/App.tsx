@@ -41,6 +41,15 @@ export default function App() {
   // Final-export settings (HD size/fps/detail/background) — used by the export stage.
   const [exportSettings, setExportSettings] = useState(EXPORT_DEFAULTS);
   const lastSaved = useRef("");
+  // Background-job polls outlive the call that started them. Without a signal an
+  // abandoned poll (unmount, or a second upload) keeps hitting /jobs and calling
+  // setState forever, so every pollJob rides this controller.
+  const pollAbort = useRef<AbortController | null>(null);
+  const abortPoll = useCallback(() => {
+    pollAbort.current?.abort();
+    pollAbort.current = null;
+  }, []);
+  useEffect(() => abortPoll, [abortPoll]);
 
   // ---- logs: panel toggle, error badge, backend polling --------------------
   const [logsOpen, setLogsOpen] = useState(false);
@@ -117,6 +126,8 @@ export default function App() {
   }) {
     setStep("processing");
     setError("");
+    abortPoll();
+    const ac = (pollAbort.current = new AbortController());
     try {
       setStatus(file ? "separating stems with demucs…" : "downloading audio from YouTube…");
       const fd = new FormData();
@@ -128,7 +139,7 @@ export default function App() {
       // Both stages run in the background now; kick them off and poll for the
       // result, feeding each phase's label into the Processing screen.
       const { job_id } = await api.uploadSong(fd);
-      const data = await api.pollJob<UploadResult>(job_id, setStatus);
+      const data = await api.pollJob<UploadResult>(job_id, setStatus, 1000, ac.signal);
 
       setJob(data.job_id);
       setTitle(data.title || "");
@@ -137,7 +148,7 @@ export default function App() {
       setOriginalSpec(data.stems.original?.spectrogram || "");
 
       await api.segmentJob(job_id);
-      const segData = await api.pollJob<SegmentProposal>(job_id, setStatus);
+      const segData = await api.pollJob<SegmentProposal>(job_id, setStatus, 1000, ac.signal);
       setVocalEnvelope(segData.vocal_envelope || []);
       setEnvelopeTimes(segData.envelope_times || []);
       setLyricLines(segData.lyric_lines || []);
@@ -146,6 +157,7 @@ export default function App() {
       setSegments(hydrateSegments(segData.segments, data.stems));
       setStep("review");
     } catch (e) {
+      if ((e as DOMException)?.name === "AbortError") return; // we walked away; not an error
       setError((e as Error).message);
       setStep("error");
     }
@@ -217,6 +229,7 @@ export default function App() {
   }
 
   function toProjects() {
+    abortPoll(); // leaving the flow stops any upload/segment poll still running
     setSegments([]);
     setActiveSegId(null);
     setJob(null);
@@ -235,7 +248,7 @@ export default function App() {
           <span className="sub">{title || "segment · isolate · extract signals"}</span>
         </div>
         <div className="header-actions">
-          {saveError && (step === "review" || step === "studio") && (
+          {saveError && (step === "review" || step === "studio" || step === "export") && (
             <span
               className="save-warn"
               title="The latest change hasn't been saved — it will retry on your next edit."
@@ -331,6 +344,10 @@ export default function App() {
           setExportSettings={setExportSettings}
           output={output}
           onBack={() => setStep("studio")}
+          onOpenSegment={(id) => {
+            setActiveSegId(id);
+            setStep("studio");
+          }}
         />
       )}
 

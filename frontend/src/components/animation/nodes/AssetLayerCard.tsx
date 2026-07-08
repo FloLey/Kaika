@@ -3,12 +3,13 @@ import type { ChangeEvent, ReactNode } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
+import StreamPreview from "./StreamPreview";
 import { aspectOf } from "../../../lib/output";
 import { useAssetUpload, assetName } from "./useAssetUpload";
 import { useNodeData } from "./useNodeData";
 import { FITS } from "./nodeConstants";
 import AssetLibrary from "../../assets/AssetLibrary";
-import BoxPad, { type BoxVideoPreview } from "./BoxPad";
+import BoxPad, { type BoxImagePreview, type BoxVideoPreview } from "./BoxPad";
 import type { NodeProps } from "./nodeProps";
 import type { FluidParam, ImageData, LayerFit } from "../../../lib/types";
 
@@ -30,6 +31,7 @@ interface AssetLayerCardProps extends NodeProps {
   extraSources?: (u: { busy: boolean; fromYoutube: (url: string) => void }) => ReactNode;
   extraStatic?: ReactNode; // extra static rows between `fit` and the box (video timing)
   videoPreview?: BoxVideoPreview; // video: live clip preview inside the BoxPad
+  imagePreview?: BoxImagePreview; // image: the still, shown inside the BoxPad
 }
 
 export default function AssetLayerCard({
@@ -50,6 +52,7 @@ export default function AssetLayerCard({
   extraSources,
   extraStatic,
   videoPreview,
+  imagePreview,
 }: AssetLayerCardProps) {
   const d = node.data as ImageData; // VideoData extends ImageData — the shared fields
   const set = useNodeData<ImageData>(node, onGraphChange);
@@ -78,6 +81,9 @@ export default function AssetLayerCard({
         />
       }
     >
+      {/* The live rendered output (image/video placed in its box) — the same block-render
+          that exports. Suppressed in the settings window (its right column shows it). */}
+      <StreamPreview node={node} ctx={ctx} aspect={aspect} />
       <label
         className={
           "anim-asset-drop" +
@@ -138,6 +144,7 @@ export default function AssetLayerCard({
             aspect={aspect}
             onChange={(b) => set({ box_x: b.x, box_y: b.y, box_w: b.w, box_h: b.h })}
             videoPreview={videoPreview}
+            imagePreview={imagePreview}
           />
         </div>
       </div>

@@ -30,7 +30,6 @@ import uuid
 import numpy as np
 
 from . import fluid, paths, render_cache
-from .fluid import close_encoder, encoder_error
 from .graph_hash import RENDER_VERSION
 from .graph_render import Dag
 
@@ -176,30 +175,22 @@ def render_song(
             on_progress(ctx["total"], ctx["total"], url)
         return url
 
-    render_id = out_path.stem + uuid.uuid4().hex[:8]
+    # Strip the "song_" underscore: the id names the scratch dir AND lands in the
+    # progress preview URL, and /fluid/stream/<render_id>/… only serves alnum ids.
+    render_id = out_path.stem.replace("_", "") + uuid.uuid4().hex[:8]
     scratch = paths.STREAM_DIR / render_id
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir(parents=True, exist_ok=True)
     silent = scratch / "video.mp4"
-    enc = None
+    enc = fluid.StreamEncoder(silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"])
     try:
         for _a, b, styled in iter_song_windows(ctx, should_cancel):
-            if enc is None:  # open the encoder lazily on the first window
-                enc = fluid.open_stream_encoder(silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"])
-            try:
-                enc.stdin.write(styled.tobytes())
-            except BrokenPipeError as exc:
-                raise RuntimeError(encoder_error(enc)) from exc
+            enc.write(styled)  # opens ffmpeg on the first window
             if on_progress:
                 on_progress(b, ctx["total"], f"/fluid/stream/{render_id}/video.mp4?n={b}")
         if should_cancel and should_cancel():  # iter stopped early -> cancelled
             return None
-        if enc is not None:
-            enc.stdin.close()
-            enc.wait()
-            if enc.returncode != 0:
-                raise RuntimeError(encoder_error(enc))
-            enc = None
+        enc.finalize()
         # audioMode "instrumental" muxes the vocals-removed mix (karaoke covers);
         # fall back to the original if the instrumental can't be built.
         want = export.get("audioMode", "original")
@@ -215,5 +206,5 @@ def render_song(
             on_progress(ctx["total"], ctx["total"], url)
         return url
     finally:
-        close_encoder(enc)  # no-op unless cancelled / errored mid-stream
+        enc.close()  # no-op unless cancelled / errored mid-stream
         shutil.rmtree(scratch, ignore_errors=True)

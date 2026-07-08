@@ -30,6 +30,7 @@ import LyricsNode from "./LyricsNode";
 import ImageNode from "./ImageNode";
 import VideoNode from "./VideoNode";
 import BackdropNode from "./BackdropNode";
+import TransformNode from "./TransformNode";
 import {
   fluidNode,
   outputNode,
@@ -51,6 +52,7 @@ import {
   slideshowNode,
   videoNode,
   backdropNode,
+  transformNode,
 } from "../../../lib/graphModel";
 import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
 import type { NodeProps } from "./nodeProps";
@@ -158,6 +160,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "compositing",
       help: "Composes several video streams: merge = their sources share one sim and interact; layered = stacked with per-input opacity.",
       io: { in: "2+ video", out: "video" },
+    },
+  },
+  transform: {
+    type: "transform",
+    Component: TransformNode,
+    chrome: { title: "transform", accent: "var(--fx)", outFlow: "video" },
+    factory: transformNode,
+    palette: {
+      label: "Transform",
+      title: "Warp the video — pan/zoom/rotate, mirror, kaleidoscope",
+      order: 3.5,
+      category: "compositing",
+      help: "Pans, zooms, rotates, mirrors or kaleidoscopes a video stream — wire rotate to a signal for beat-locked motion. Feeds an output or a layered combine (never a merge).",
+      io: { in: "video", out: "video" },
     },
   },
   output: {
