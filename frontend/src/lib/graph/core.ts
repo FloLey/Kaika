@@ -54,7 +54,7 @@ export const VIDEO_SOURCES = new Set<string>(["lyrics", "image", "slideshow", "v
 // Video-FX cards: video in -> video out. They pass a stream through a per-frame op, so
 // (like `output`) they're renderable only with their `video` input wired — see
 // `nodeRenderable`. Never emitter sources: a merge combine needs raw fluid emitters.
-export const VIDEO_FX = new Set<string>(["transform"]);
+export const VIDEO_FX = new Set<string>(["transform", "stylize", "extract"]);
 
 export const VIDEO_PRODUCERS = new Set<string>([
   "fluid",

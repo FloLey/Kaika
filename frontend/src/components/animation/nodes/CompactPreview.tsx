@@ -35,6 +35,8 @@ export const VIDEO_TYPES = new Set([
   "fluid",
   "combine",
   "transform",
+  "stylize",
+  "extract",
   "image",
   "video",
   "slideshow",

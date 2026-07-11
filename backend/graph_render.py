@@ -462,6 +462,29 @@ def resolve_node_points(job_id, segment, graph, node_id, stem_audio_path) -> dic
     return {"points": pts}
 
 
+def stylize_source(job_id, segment, graph, node_id, stem_audio_path, output=None) -> tuple:
+    """Render the clips feeding a `stylize` node → (frames, strength, fps, control).
+    `frames` = the `video` input (the img2img base), `control` = the `control` input's frames
+    (an Extract card's edges/depth) or None. Reuses the whole render DAG — no duplicate pipeline."""
+    dag = Dag(job_id, segment, graph, stem_audio_path, output or {})
+    src = _video_source(graph, node_id, "video")
+    if src is None:
+        raise ValueError("stylize node has no video input wired")
+
+    def _clip(sid):
+        c = dag.video(sid)
+        if c.shape[-1] == 4:  # a layer -> flatten onto black to a 3-channel clip
+            c = fluid.flatten(c)
+        return np.ascontiguousarray(c)
+
+    frames = _clip(src)
+    ctrl_src = _video_source(graph, node_id, "control")
+    control = _clip(ctrl_src) if ctrl_src is not None else None
+    node = dag.nodes[node_id]
+    strength = float(np.mean(dag._fx_params(node)["strength"]))
+    return frames, strength, dag.fps, control
+
+
 # --------------------------------------------------------------------------- #
 # Node-type handler registry (spec 10)
 # --------------------------------------------------------------------------- #
@@ -649,12 +672,42 @@ def _image_video(dag: "_Dag", node: dict) -> np.ndarray:
                          **_box_static(node.get("data", {})), **dag._fx_params(node))
 
 
-def _slideshow_paths(dag: "_Dag", node: dict) -> list:
-    """The slideshow's ordered images -> on-disk paths: the card's OWN picks plus
-    anything wired into its `images` input (an Image gen card's generated list).
-    Missing files become "" so the slot count — and thus the trigger cycling —
-    stays stable even if an asset vanished."""
-    urls = list((node.get("data") or {}).get("assetUrls") or [])
+def _slideshow_kind(url: str) -> str:
+    """Infer an item's kind from its URL extension (mirrors the frontend `slideshowKind`
+    and `paths.ASSET_EXTS`). Only a fallback — the card sets `kind` at add-time; legacy
+    `assetUrls` data has none."""
+    ext = (url or "").rsplit(".", 1)[-1].lower()
+    return "video" if ext in paths.ASSET_EXTS["video"] else "image"
+
+
+def _slideshow_url_path(url: str) -> str:
+    """`/assets/...` url -> on-disk path, or "" if unset/missing (a blank slot keeps the
+    item count — and thus the trigger cycling — stable even if an asset vanished)."""
+    p = paths.asset_file_for_url(url, paths.ASSETS_DIR)
+    return str(p) if p is not None and p.exists() else ""
+
+
+def _slideshow_items(dag: "_Dag", node: dict) -> list:
+    """The slideshow's ordered items -> `[{path, kind, start}]`: the card's OWN picks
+    (images + videos, each with its in-point) plus the IMAGE items wired into its
+    `images` input (an Image gen card's generated list). A video item's `start` is its
+    in-point seconds; images use 0."""
+    d = node.get("data") or {}
+    raw = list(d.get("items") or [])
+    # Legacy fallback: a pre-v23 save/export may still carry `assetUrls: [str]` — treat
+    # each as an image item (kind inferred from the ext for robustness).
+    if not raw and d.get("assetUrls"):
+        raw = [{"url": u} for u in d.get("assetUrls") or []]
+    out = []
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        url = it.get("url") or ""
+        kind = it.get("kind")
+        if kind not in ("image", "video"):
+            kind = _slideshow_kind(url)
+        out.append({"path": _slideshow_url_path(url), "kind": kind,
+                    "start": float(it.get("start", 0.0) or 0.0)})
     gen_id = _video_source(dag.graph, node["id"], "images")
     gen = dag.nodes.get(gen_id) if gen_id else None
     if gen is not None and gen.get("type") == "imagegen":
@@ -667,11 +720,8 @@ def _slideshow_paths(dag: "_Dag", node: dict) -> list:
         if isinstance(cap, (int, float)):
             # floor at 0: a negative cap must mean "none", not a from-the-end slice
             gen_urls = gen_urls[: max(0, int(cap))]
-        urls += [u for u in gen_urls if u]
-    out = []
-    for url in urls:
-        p = paths.asset_file_for_url(url, paths.ASSETS_DIR)
-        out.append(str(p) if p is not None and p.exists() else "")
+        out += [{"path": _slideshow_url_path(u), "kind": "image", "start": 0.0}
+                for u in gen_urls if u]
     return out
 
 
@@ -692,10 +742,13 @@ def _slideshow_video(dag: "_Dag", node: dict) -> np.ndarray:
     nframes = max(1, round(dag.duration * dag.fps))
     d = node.get("data", {})
     params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
-    aps = _slideshow_paths(dag, node)
-    index = _slideshow_index(params["trigger"], len(aps), d)
-    return sources.imagegen(nframes, gh, gw, asset_paths=aps, index=index,
-                            **_box_static(d), opacity=params["opacity"])
+    items = _slideshow_items(dag, node)
+    index = _slideshow_index(params["trigger"], len(items), d)
+    clip = sources.SlideshowClip(gh, gw, dag.fps, items=items, index=index, **_box_static(d))
+    try:
+        return clip.frames(0, nframes, params["opacity"])
+    finally:
+        clip.close()
 
 
 def _video_video(dag: "_Dag", node: dict) -> np.ndarray:
@@ -787,6 +840,71 @@ def _transform_video(dag: "_Dag", node: dict) -> np.ndarray:
     return _transform_frames(dag.video(src), mode, segments, wrap, **dag._fx_params(node))
 
 
+def _stylize_video(dag: "_Dag", node: dict) -> np.ndarray:
+    """AI Stylize (video→video): if a stylized clip was generated (`data.assetUrl`), decode
+    it; otherwise pass the upstream fluid through (the 'not generated yet' preview)."""
+    ap = _asset_path(dag, node)
+    if ap:
+        gh, gw = _grid_dims(dag)
+        nframes = max(1, round(dag.duration * dag.fps))
+        dec = sources.video(nframes, gh, gw, dag.fps, asset_path=ap, src0=0.0, speed=1.0,
+                            opacity=np.ones(nframes, np.float32))
+        return np.ascontiguousarray(dec[..., :3])  # dye-on-black convention (drop coverage alpha)
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"stylize '{node['id']}' has no video input")
+    return dag.video(src)
+
+
+def _extract_static(d: dict) -> str:
+    """The Extract card's control kind: canny / soft / density (OpenCV) or depth (a model)."""
+    kind = d.get("kind", "canny")
+    return kind if kind in ("canny", "soft", "density", "depth") else "canny"
+
+
+def _extract_apply(frames: np.ndarray, kind: str) -> np.ndarray:
+    """A video clip [T,h,w,3] → a control-image clip (white structure on black), for feeding
+    a ControlNet. `canny`/`soft`/`density` are pure OpenCV (real-time); `depth` runs a small
+    depth model per frame (downloads on first use). `density` = the input's own luminance —
+    the right 'volume' control for a fluid (a real depth model only fits real 3D scenes)."""
+    if kind == "depth":
+        from . import imagegen  # lazy: keep torch off the render path unless depth is used
+
+        return imagegen.depth_frames(frames)
+    try:
+        import cv2
+    except ImportError as e:  # pragma: no cover
+        raise RuntimeError(
+            "the Extract card needs opencv — `pip install -r requirements.txt`"
+        ) from e
+    out = np.empty_like(frames)
+    for i in range(len(frames)):
+        f = np.ascontiguousarray(frames[i])
+        if kind == "density":
+            e = f.max(axis=2)  # value = the dye's density (bright where there's matter)
+        else:
+            g = cv2.cvtColor(f, cv2.COLOR_RGB2GRAY)
+            if kind == "soft":
+                gx = cv2.Sobel(g.astype(np.float32), cv2.CV_32F, 1, 0, ksize=5)
+                gy = cv2.Sobel(g.astype(np.float32), cv2.CV_32F, 0, 1, ksize=5)
+                e = np.clip(cv2.GaussianBlur(np.sqrt(gx * gx + gy * gy), (0, 0), 1.5) / 2, 0, 255)
+                e = e.astype(np.uint8)
+            else:
+                e = cv2.Canny(g, 80, 160)
+        out[i] = cv2.cvtColor(e, cv2.COLOR_GRAY2RGB)
+    return out
+
+
+def _extract_video(dag: "_Dag", node: dict) -> np.ndarray:
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"extract '{node['id']}' has no video input")
+    frames = dag.video(src)
+    if frames.shape[-1] == 4:
+        frames = fluid.flatten(frames)
+    return _extract_apply(frames, _extract_static(node.get("data", {})))
+
+
 _VIDEO_HANDLERS = {
     "fluid": _fluid_video,
     "output": _output_video,
@@ -797,6 +915,8 @@ _VIDEO_HANDLERS = {
     "video": _video_video,
     "backdrop": _backdrop_video,
     "transform": _transform_video,
+    "stylize": _stylize_video,
+    "extract": _extract_video,
 }
 _EMITTER_HANDLERS = {
     "fluid": _fluid_emitters_h,
@@ -884,15 +1004,17 @@ def _slideshow_block(dag: "_Dag", node: dict):
     gh, gw = _grid_dims(dag)
     d = node.get("data", {})
     params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
-    aps = _slideshow_paths(dag, node)
-    # The per-frame index is computed over the WHOLE segment once, so slicing it by
-    # block keeps the slideshow continuous across block seams (video-card pattern).
-    index = _slideshow_index(params["trigger"], len(aps), d)
-    static = _box_static(d)
+    items = _slideshow_items(dag, node)
+    # The per-frame index (and the SlideshowClip's run-relative timing) is computed over
+    # the WHOLE segment once, so slicing it by block keeps the slideshow continuous across
+    # block seams — and one persistent VideoClip per video item is held across blocks
+    # (video-card pattern), reopening only on the backward jump of a run restart.
+    index = _slideshow_index(params["trigger"], len(items), d)
+    clip = sources.SlideshowClip(gh, gw, dag.fps, items=items, index=index, **_box_static(d))
+    dag._closers.append(clip.close)
 
     def produce(a, b):
-        return sources.imagegen(b - a, gh, gw, asset_paths=aps, index=index,
-                                frame_offset=a, **static, opacity=params["opacity"][a:b])
+        return clip.frames(a, b, params["opacity"][a:b])
 
     return produce
 
@@ -944,6 +1066,43 @@ def _transform_block(dag: "_Dag", node: dict):
     return produce
 
 
+def _stylize_block(dag: "_Dag", node: dict):
+    """Block mirror of `_stylize_video`: decode the generated clip (persistent VideoClip)
+    or pass the upstream producer through when nothing is generated yet."""
+    ap = _asset_path(dag, node)
+    if ap:
+        gh, gw = _grid_dims(dag)
+        nframes = max(1, round(dag.duration * dag.fps))
+        src_t = np.arange(nframes, dtype=np.float64) / float(dag.fps)
+        clip = sources.VideoClip(gh, gw, dag.fps, asset_path=ap, loop=True)
+        dag._closers.append(clip.close)
+
+        def produce(a, b):
+            return np.ascontiguousarray(clip.frames(src_t[a:b])[..., :3])
+
+        return produce
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"stylize '{node['id']}' has no video input")
+    return dag._block_producer(src)
+
+
+def _extract_block(dag: "_Dag", node: dict):
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"extract '{node['id']}' has no video input")
+    kind = _extract_static(node.get("data", {}))
+    producer = dag._block_producer(src)
+
+    def produce(a, b):
+        f = producer(a, b)
+        if f.shape[-1] == 4:
+            f = fluid.flatten(f)
+        return _extract_apply(f, kind)
+
+    return produce
+
+
 _BLOCK_HANDLERS = {
     "fluid": _fluid_block,
     "output": _output_block,
@@ -954,6 +1113,8 @@ _BLOCK_HANDLERS = {
     "video": _video_block,
     "backdrop": _backdrop_block,
     "transform": _transform_block,
+    "stylize": _stylize_block,
+    "extract": _extract_block,
 }
 # Node types that produce a video stream (used by validate to check output wiring).
 _VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)

@@ -17,7 +17,10 @@ from .graph_common import LOOSE_PORT, _nodes_of
 #       grid (was rasterised at the coarse sim grid → overflowed small boxes at low qual).
 #   v5: transform mirror/kaleidoscope fold fills out-of-frame samples by MIRRORING the
 #       edge (was black) → no gaps on a non-square canvas / under rotation.
-RENDER_VERSION = 5
+#   v6: slideshow accepts VIDEO items (was images only) — a video slide now PLAYS from
+#       its per-item in-point while active (SlideshowClip), so the same graph renders
+#       differently. (The per-item start/kind/order already ride in node.data.)
+RENDER_VERSION = 6
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.

@@ -121,9 +121,16 @@ def _assets_from(row: dict) -> set:
             f = _asset_file(d.get("assetUrl"))
             if f:
                 files.add(f)
-            # The imagegen card carries a LIST of slideshow assets.
+            # The imagegen card carries a LIST of generated image urls (assetUrls).
             for url in d.get("assetUrls") or []:
                 f = _asset_file(url)
+                if f:
+                    files.add(f)
+            # The slideshow card's own picks live in `items: [{url, kind, start}]`
+            # (v23) — keep each item's file alive too, else a slideshow video/image gets
+            # swept while still referenced. (Legacy assetUrls handled by the loop above.)
+            for it in d.get("items") or []:
+                f = _asset_file((it or {}).get("url")) if isinstance(it, dict) else None
                 if f:
                     files.add(f)
     return files

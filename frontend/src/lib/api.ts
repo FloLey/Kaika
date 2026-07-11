@@ -196,6 +196,15 @@ export async function segmentJob(jobId: string): Promise<JobAck> {
   return postJson<JobAck>("/segment", { job_id: jobId });
 }
 
+// AI Stylize card: diffuse the upstream fluid clip (img2img / inpaint) into an mp4
+// asset. Async — returns a job id; poll it for `{assets: Asset[]}` (the generated clip).
+export async function stylizeClip(
+  jobId: string,
+  body: { graph: unknown; segment: unknown; output: unknown; node_id: string }
+): Promise<JobAck> {
+  return postJson<JobAck>(`/stylize/${jobId}`, body);
+}
+
 export async function getJob(jobId: string): Promise<JobStatus> {
   return getJson<JobStatus>(`/jobs/${jobId}`);
 }
@@ -207,6 +216,8 @@ const STEP_LABELS: Record<string, string> = {
   separating: "separating stems with demucs…",
   rendering: "rendering spectrograms…",
   analysing: "analysing structure (lyrics + vocal activity)…",
+  generating: "generating images…",
+  stylizing: "stylizing frames with diffusion…",
   done: "finishing up…",
 };
 

@@ -6,16 +6,24 @@
 // wired gate's actual curve (via /resolve) and uses these to size its prompt list.
 
 import { videoSource } from "./graph/core";
-import type { Graph, GraphNode, ImagegenData, SlideshowData } from "./types";
+import type { Graph, GraphNode, ImagegenData, SlideshowData, SlideshowItem } from "./types";
 
-// A slideshow's EFFECTIVE image urls: the card's OWN picks plus whatever rides in
-// through its `images` input (a wired Image gen card's generated list, capped to
-// the gate-driven `activeCount`, empty rows dropped). ONE definition shared by the
-// full card, the compact preview, and anything else that shows the count — the
-// compact card used to read only the own picks and say "no images" while six
-// flowed in from the generator. Mirrors backend `_slideshow_paths`.
-export function slideshowUrls(graph: Graph | null | undefined, node: GraphNode): string[] {
-  const own = ((node.data as SlideshowData).assetUrls || []).filter(Boolean);
+// Video file extensions (mirrors backend `paths.ASSET_EXTS["video"]`). Anything not in
+// this set is treated as an image. Used to infer a slideshow item's `kind` from its URL
+// when the server didn't hand one back (legacy `assetUrls`, older library entries).
+const VIDEO_EXTS = new Set(["mp4", "mov", "webm", "m4v"]);
+export function slideshowKind(url: string): SlideshowItem["kind"] {
+  const ext = url.split(".").pop()?.toLowerCase() || "";
+  return VIDEO_EXTS.has(ext) ? "video" : "image";
+}
+
+// A slideshow's EFFECTIVE items: the card's OWN picks (images + videos, ordered) plus
+// the IMAGE items that ride in through its `images` input (a wired Image gen card's
+// generated list, capped to the gate-driven `activeCount`, empty rows dropped). ONE
+// definition shared by the full card, the compact preview, and anything else that shows
+// the count. Mirrors backend `_slideshow_items`.
+export function slideshowItems(graph: Graph | null | undefined, node: GraphNode): SlideshowItem[] {
+  const own = ((node.data as SlideshowData).items || []).filter((it) => it && it.url);
   if (!graph) return own;
   const genId = videoSource(graph, node.id, "images");
   const gen = genId ? graph.nodes.find((n) => n.id === genId) : null;
@@ -24,7 +32,14 @@ export function slideshowUrls(graph: Graph | null | undefined, node: GraphNode):
   const urls = d.activeCount != null
     ? (d.assetUrls || []).slice(0, Math.max(0, d.activeCount))
     : d.assetUrls || [];
-  return [...own, ...urls.filter(Boolean)];
+  const gens: SlideshowItem[] = urls.filter(Boolean).map((url) => ({ url, kind: "image" }));
+  return [...own, ...gens];
+}
+
+// URL-only view of the effective items — kept for the switch-count / compact preview,
+// which only need the count and the urls.
+export function slideshowUrls(graph: Graph | null | undefined, node: GraphNode): string[] {
+  return slideshowItems(graph, node).map((it) => it.url);
 }
 
 // Count rising edges of a 0..1 `curve` — a 0→1 crossing of the threshold with a

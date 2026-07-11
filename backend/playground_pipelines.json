@@ -2752,6 +2752,292 @@
     }
   },
   {
+    "key": "extract",
+    "label": "Extract",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "ex",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "ex",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 60,
+          "y": 60,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.55
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 30
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.07
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.72,
+                  0.56
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 810,
+          "y": 313,
+          "id": "out",
+          "data": {},
+          "type": "output"
+        },
+        {
+          "x": 480,
+          "y": 313,
+          "id": "ex",
+          "data": {
+            "kind": "soft",
+            "ports": {}
+          },
+          "type": "extract"
+        }
+      ],
+      "version": 22
+    }
+  },
+  {
+    "key": "stylize",
+    "label": "AI Stylize",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "st",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "fl",
+          "target": "ex",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e2",
+          "source": "ex",
+          "target": "st",
+          "sourcePort": "out",
+          "targetPort": "control"
+        },
+        {
+          "id": "e3",
+          "source": "st",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 60,
+          "y": 60,
+          "cx": 481.8838165709376,
+          "cy": -162.67474516719955,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.55
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 33
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.07
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.72,
+                  0.56
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 200,
+          "y": 620,
+          "id": "ex",
+          "type": "extract",
+          "data": {
+            "kind": "density",
+            "ports": {}
+          }
+        },
+        {
+          "x": 480,
+          "y": 160,
+          "id": "st",
+          "type": "stylize",
+          "data": {
+            "model": "draft",
+            "inpaint": false,
+            "assetUrl": "",
+            "prompt": "flowers, blooming roses and peonies, lush colorful petals, dark background",
+            "ports": {
+              "strength": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "x": 840,
+          "y": 160,
+          "id": "out",
+          "data": {},
+          "type": "output"
+        }
+      ],
+      "version": 22,
+      "viewMode": "detailed",
+      "viewOverrides": []
+    }
+  },
+  {
     "key": "output",
     "label": "Output",
     "signals": [],

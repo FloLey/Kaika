@@ -2148,11 +2148,31 @@
   overflow: hidden;
   border: 1px solid var(--line);
 }
-.anim-imagegen-slot img {
+.anim-imagegen-slot img,
+.anim-imagegen-slot video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+/* Own slots are draggable (reorder) — the grab cursor + a highlight on the one lifted. */
+.anim-imagegen-slot.draggable {
+  cursor: grab;
+}
+.anim-imagegen-slot.dragging {
+  opacity: 0.4;
+}
+/* 🎞 badge marking a video item apart from a still. */
+.anim-imagegen-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 2px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 0 4px 0 0;
+  pointer-events: none;
 }
 .anim-imagegen-remove {
   position: absolute;
@@ -2196,6 +2216,64 @@
 }
 .anim-slideshow-count strong {
   color: var(--text);
+}
+/* The video in-point mini-editor (SlideshowItemEditor): a small popover anchored over
+   the card with a scrubbable <video> + range slider. */
+.anim-slide-editor-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: inherit;
+}
+.anim-slide-editor {
+  width: 90%;
+  max-width: 240px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.anim-slide-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.anim-slide-editor-close {
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.anim-slide-editor video {
+  width: 100%;
+  border-radius: 4px;
+  background: #000;
+  display: block;
+}
+.anim-slide-editor input[type="range"] {
+  width: 100%;
+}
+.anim-slide-editor-time {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text);
+}
+.anim-slide-editor-dur {
+  color: var(--muted);
 }
 /* the images flow gets its own port hue so slideshow/imagegen wiring reads at a glance */
 .gc-port-images {

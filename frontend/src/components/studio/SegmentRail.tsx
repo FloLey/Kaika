@@ -32,7 +32,11 @@ export default function SegmentRail({
   onCollapse,
   grouped,
 }: SegmentRailProps) {
-  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => new Set());
+  // Every category starts collapsed: the playground carries one card per type, so an
+  // all-open rail is a long scroll of names. Folded, it reads as a table of contents.
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(
+    () => new Set(PALETTE_CATEGORIES.map((c) => c.key))
+  );
   const toggleCat = (key: string) =>
     setCollapsedCats((prev) => {
       const next = new Set(prev);

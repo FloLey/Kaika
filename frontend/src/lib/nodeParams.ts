@@ -31,6 +31,8 @@ export const VIDEO_PARAMS: FluidParam[] = SOURCE_PARAMS.video;
 export const BACKDROP_PARAMS: FluidParam[] = SOURCE_PARAMS.backdrop;
 // The transform FX card (video -> video): zoom/rotate/pan warp the incoming frames.
 export const TRANSFORM_PARAMS: FluidParam[] = SOURCE_PARAMS.transform;
+// The AI Stylize FX card: `strength` = the img2img denoise curseur.
+export const STYLIZE_PARAMS: FluidParam[] = SOURCE_PARAMS.stylize;
 
 // node type -> its modulatable param specs. Cards with no entry have no ports.
 export const NODE_PARAMS: Record<string, FluidParam[]> = {
@@ -42,6 +44,7 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   video: VIDEO_PARAMS,
   backdrop: BACKDROP_PARAMS,
   transform: TRANSFORM_PARAMS,
+  stylize: STYLIZE_PARAMS,
 };
 
 export const nodeParams = (type: string): FluidParam[] => NODE_PARAMS[type] || [];

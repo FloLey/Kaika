@@ -20,6 +20,7 @@ export const DOC_SECTION_IDS = [
   "animation-fx",
   "animation-combine",
   "animation-transform",
+  "animation-stylize",
   "animation-output",
   "export",
   "fluid-lab",
@@ -585,8 +586,9 @@ export default function Docs({ section }: { section?: string }) {
             <tr>
               <td>slideshow · image gen</td>
               <td>
-                A <strong>slideshow</strong> switches between several images on a trigger signal
-                (<a href="#animation-sources">see below</a>); an <strong>image gen</strong> card
+                A <strong>slideshow</strong> switches between several images and video clips on a
+                trigger signal (<a href="#animation-sources">see below</a>); an{" "}
+                <strong>image gen</strong> card
                 generates images locally — one per prompt — and feeds them into a slideshow via
                 its <em>images</em> wire.
               </td>
@@ -809,13 +811,18 @@ export default function Docs({ section }: { section?: string }) {
             Opacity is modulatable — wire a signal to fade it with the music.
           </li>
           <li>
-            <strong>Slideshow</strong> — a set of stills that <strong>switches</strong> to the
-            next image every time its <em>trigger</em> signal rises past the <em>threshold</em>{" "}
-            (wrapping back to the first). Images come from drops/uploads, the{" "}
-            <a href="#assets">📚 library</a>, <em>and</em> anything wired into its{" "}
-            <em>images</em> input (an Image gen card). The card shows a live counter — how many
-            images it holds and how many times it will switch this segment. The{" "}
-            <em>hysteresis</em> band stops a hovering signal from machine-gunning; you control
+            <strong>Slideshow</strong> — an ordered set of <strong>images and video clips</strong>{" "}
+            that <strong>switches</strong> to the next item every time its <em>trigger</em> signal
+            rises past the <em>threshold</em> (wrapping back to the first). Items come from
+            drops/uploads (images <em>or</em> videos), the <a href="#assets">📚 library</a>,{" "}
+            <em>and</em> any images wired into its <em>images</em> input (an Image gen card).{" "}
+            <strong>Drag the thumbnails</strong> to reorder your own picks. A <strong>video item
+            plays</strong> from its <strong>in-point</strong> for as long as the trigger keeps it
+            visible (looping past the clip end); <strong>click a video thumbnail</strong> to open a
+            small scrubbable preview and set where its extract starts — since the display duration
+            is driven by the signal, the start-cut is the only per-video choice. The card shows a
+            live counter — how many items it holds and how many times it will switch this segment.
+            The <em>hysteresis</em> band stops a hovering signal from machine-gunning; you control
             exactly <em>when</em> it switches by shaping the trigger (e.g. through a{" "}
             <a href="#animation-modulators">gate</a>). Same box/fit placement as the image card;{" "}
             <em>opacity</em> is modulatable too.
@@ -963,6 +970,48 @@ export default function Docs({ section }: { section?: string }) {
           A transform produces <em>frames</em>, not emitters, so it can feed an <strong>output</strong>{" "}
           or a <strong>layered</strong> combine — but not a <em>merge</em> (which needs the raw fluid
           sources to interact). Chain two transforms if you want, say, a kaleidoscope of a rotation.
+        </p>
+
+        <h3 id="animation-stylize">AI Stylize — restyle the fluid with diffusion</h3>
+        <p>
+          The <strong>AI Stylize</strong> card (Compositing) repaints the incoming fluid toward a
+          text <strong>prompt</strong> using a local diffusion model — the fluid's motion drives the
+          result, but its <em>look</em> becomes flowers, molten lava, storm clouds, whatever you
+          type. <strong>strength</strong> is the img2img curseur (a modulatable port): near 0 keeps
+          the fluid almost untouched, near 1 fully reinvents it; around 0.6–0.9 keeps the motion
+          while changing the material. Turn on <strong>inpaint</strong> to confine the repaint to the
+          fluid's shape (the black background stays untouched) instead of repainting the whole frame.
+        </p>
+        <p>
+          Generation is expensive, so it doesn't run on every render: pick a <strong>model</strong>{" "}
+          (SD-Turbo for fast drafts, Z-Image for slow HD) and hit <strong>✨ generate</strong>. The
+          stylized clip is stored and played back; until you generate, the card simply passes the
+          fluid through. Re-generate after changing the prompt, strength or inpaint to see the new
+          take. HD is genuinely slow (~30&nbsp;s per frame): it has to generate at a higher
+          resolution than the draft — below its floor the model paints blobs instead of subjects —
+          so a whole clip takes tens of minutes. Iterate in draft, switch to HD when the look is
+          right (the export regenerates in HD sharper still). You can safely close or reload the
+          tab while it runs: the finished clip is saved onto the card server-side, so it's there
+          when you come back.
+        </p>
+        <p>
+          It works on <strong>any video</strong>, not just fluids — wire a Video card (an uploaded
+          clip) in too. By default the output <strong>follows the input's shapes</strong> (a canny
+          ControlNet is applied automatically on the draft model). To override that with a different
+          control, drop an <strong>Extract</strong> card (Compositing) between the video and Stylize
+          — <strong>canny</strong>, <strong>soft-edge</strong>, <strong>density</strong> (the input's
+          brightness, best for fluids) or <strong>depth</strong> (a model, for real 3D footage) —
+          and wire it into Stylize's <em>control</em> input. Wired control works on{" "}
+          <strong>both models</strong>, and on both the <strong>strength</strong> slider still rules how
+          far the result travels from the input.
+        </p>
+        <p>
+          Worth knowing: a ControlNet <strong>guides</strong> the shapes but never{" "}
+          <strong>confines</strong> the generation. On a wispy fluid — a control that's mostly black —
+          guidance alone isn't enough, and the model happily fills the whole frame. What keeps the
+          fluid's black background black is starting the generation <em>from the fluid</em>: that's
+          exactly what <strong>strength</strong> does (lower = closer to the input). Turn on{" "}
+          <strong>inpaint</strong> to pin it harder — only the fluid's own shape is repainted.
         </p>
 
         <h3>Rendering — it's automatic</h3>

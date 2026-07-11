@@ -160,6 +160,20 @@ def test_reachable_assets_collects_imagegen_slideshow(monkeypatch):
     assert {p.name for p in cache_gc.reachable_assets()} == {"s1.png", "s2.png"}
 
 
+def test_reachable_assets_collects_slideshow_items(monkeypatch):
+    """The slideshow card's OWN picks live in `items: [{url, kind, start}]` (v23) — their
+    image/video files must stay reachable, else a slideshow clip gets swept mid-use."""
+    from backend import cache_gc
+    proj = {"job_id": "proj1", "data": {"segments": [{"graph": {"nodes": [
+        {"type": "slideshow", "data": {"items": [
+            {"url": "/assets/proj1/pic.png", "kind": "image"},
+            {"url": "/assets/proj1/clip.mp4", "kind": "video", "start": 1.5},
+        ]}},
+    ]}}]}}
+    monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
+    assert {p.name for p in cache_gc.reachable_assets()} == {"pic.png", "clip.mp4"}
+
+
 @_needs_ffmpeg
 def test_video_layer_through_dag(assets):
     job, _ip, _iu, vid_url, _vp = assets

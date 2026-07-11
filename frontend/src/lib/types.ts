@@ -263,6 +263,22 @@ export interface TransformData {
   wrap: boolean;
   ports: Record<string, FluidPort>;
 }
+// The AI Stylize card (video → video): img2img of the upstream fluid toward `prompt`.
+// `strength` is a modulatable port (in `ports`). `inpaint` confines the repaint to the
+// fluid's shape. `assetUrl` is the generated clip (empty → passes the fluid through).
+export interface StylizeData {
+  model: "draft" | "hd";
+  inpaint: boolean;
+  prompt: string;
+  assetUrl: string; // "" until Generate; a served /assets/... mp4 once generated
+  ports: Record<string, FluidPort>;
+}
+// The Extract card (video → video): turns any video into a control image (canny edges /
+// soft-edge) for feeding a ControlNet — wire its output into AI Stylize's `control` input.
+export interface ExtractData {
+  kind: "canny" | "soft" | "density" | "depth";
+  ports: Record<string, FluidPort>;
+}
 // A video layer adds playback timing on top of the image placement fields. `speed` is a
 // modulatable port (in `ports`), not a static field — a wired signal time-warps the clip.
 export interface VideoData extends ImageData {
@@ -270,12 +286,25 @@ export interface VideoData extends ImageData {
   start: number; // start offset into the source, seconds
   loop: boolean; // loop the clip if it's shorter than the window
 }
-// The slideshow layer: N stills, advanced by the `trigger` port — each rising edge
-// past the built-in hysteresis threshold shows the NEXT image (wrapping). Images come
-// from the card's own picks (uploads / the library) PLUS anything wired into its
-// `images` input (an Image gen card's generated list).
+// One own pick of the slideshow: an image OR a video clip, in display order. `kind` is
+// set at add-time (upload/library returns it), inferred from the URL extension as a
+// fallback. `start` is the video in-point in seconds (where the extract begins) — the
+// display DURATION is driven by the trigger signal, so only the start is user-chosen;
+// omitted / ignored for images.
+export interface SlideshowItem {
+  url: string; // served /assets/... URL
+  kind: "image" | "video";
+  start?: number; // videos only: in-point seconds (default 0)
+}
+// The slideshow layer: N ordered items (images and/or video clips), advanced by the
+// `trigger` port — each rising edge past the built-in hysteresis threshold shows the
+// NEXT item (wrapping). Items come from the card's own picks (uploads / the library),
+// draggable to reorder, PLUS image items wired into its `images` input (an Image gen
+// card's generated list, appended after the own picks). A video item plays from its
+// in-point for as long as the trigger keeps it visible (looping past the clip end);
+// revisiting it later restarts from the in-point.
 export interface SlideshowData {
-  assetUrls: string[]; // the card's OWN ordered picks (served /assets/... URLs)
+  items: SlideshowItem[]; // the card's OWN ordered picks (was assetUrls: string[])
   box_x: number; // placement box, fractions 0..1 (same semantics as ImageData)
   box_y: number;
   box_w: number;
@@ -412,6 +441,16 @@ export interface TransformNode extends NodeBase {
   data: TransformData;
 }
 
+export interface StylizeNode extends NodeBase {
+  type: "stylize";
+  data: StylizeData;
+}
+
+export interface ExtractNode extends NodeBase {
+  type: "extract";
+  data: ExtractData;
+}
+
 export type GraphNode =
   | SignalNode
   | FluidNode
@@ -434,7 +473,9 @@ export type GraphNode =
   | SlideshowNode
   | ImagegenNode
   | BackdropNode
-  | TransformNode;
+  | TransformNode
+  | StylizeNode
+  | ExtractNode;
 
 export type NodeType = GraphNode["type"];
 

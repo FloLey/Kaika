@@ -124,6 +124,12 @@ export function cardInputs(node: GraphNode): CardInputs {
       };
     case "output":
       return { inputs: [{ portId: "video", flow: "video", label: "video", kind: "edge" }] };
+    case "stylize":
+      // The `video` input is the img2img base (rendered as the card's main in-port); the
+      // optional `control` input takes an Extract card's edges/depth for ControlNet.
+      return {
+        inputs: [...params, { portId: "control", flow: "video", label: "control", kind: "edge" }],
+      };
     default:
       // image / video / backdrop → params only; signal/lfo/noise/points/pattern have none.
       return { inputs: params };

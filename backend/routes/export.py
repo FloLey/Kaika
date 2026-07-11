@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import time
+from pathlib import Path
 
 from flask import Blueprint, jsonify
 
@@ -66,6 +67,9 @@ def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cance
     HD (swapping their draft assetUrls in the in-memory graph), THEN render the song.
     Regeneration is slow (Z-Image is minutes/image), so it honours cancellation."""
     _regenerate_hd_images(job_id, segments, export, should_cancel)
+    if should_cancel and should_cancel():
+        return None
+    _regenerate_hd_stylize(job_id, segments, export, should_cancel)
     if should_cancel and should_cancel():
         return None
     url = song_render.render_song(
@@ -153,6 +157,73 @@ def _regenerate_hd_images(job_id, segments, export, should_cancel):
                 )
             urls.append(url)
         n["data"] = {**d, "assetUrls": urls}
+
+
+def _regenerate_hd_stylize(job_id, segments, export, should_cancel):
+    """For every `stylize` node, regenerate its clip in HD (Z-Image at a large short side)
+    from the export-grid sim frames, and swap its `assetUrl` in place — so the export renders
+    the HD version while the card keeps its fast draft. The expensive diffusion is content-
+    keyed on the actual rendered input + settings, so an unchanged re-export reuses the clip."""
+    from .. import imagegen, fluid, graph as graphmod
+    import tempfile
+    import os
+
+    short = int(export.get("stylizeSize") or 768)  # HD generation short side
+    stylize_nodes = [
+        (seg, n)
+        for seg in segments
+        for n in ((seg.get("graph") or {}).get("nodes") or [])
+        if n.get("type") == "stylize"
+    ]
+    if not stylize_nodes:
+        return
+    log.info("export: regenerating %d stylize clip(s) in HD", len(stylize_nodes))
+    for seg, n in stylize_nodes:
+        if should_cancel and should_cancel():
+            return
+        graph = seg.get("graph") or {}
+        d = n.get("data") or {}
+        prompt = str(d.get("prompt") or "flowers")
+        inpaint = bool(d.get("inpaint", False))
+        try:
+            frames, strength, fps, control = graphmod.stylize_source(
+                job_id, seg, graph, n["id"], stem_audio_path, export
+            )
+        except ValueError as e:  # not wired to a video — leave it passing through
+            log.warning("export: stylize %s skipped (%s)", n.get("id"), e)
+            continue
+        # content key from the actual rendered input + settings (the sim is cheap; the
+        # diffusion is what we cache). Version marker: bump whenever generation semantics
+        # change so stale clips regenerate (v2 = img2img anchor, v3 = control_scale 0.65).
+        sample = frames[:: max(1, len(frames) // 8)].tobytes()
+        key = hashlib.sha256(
+            f"v3|{imagegen.HD_MODEL}|{short}|{prompt}|{inpaint}|{round(strength, 3)}|"
+            f"{control is not None}".encode() + sample
+        ).hexdigest()[:16]
+        name = f"hd-stylize-{key}.mp4"
+        dest = ASSETS_DIR / job_id / name
+        url = f"/assets/{job_id}/{name}"
+        if not dest.exists():
+            log.info("export: HD stylize — %s", prompt[:48])
+            styled = imagegen.stylize_frames(
+                frames, prompt, strength=strength, inpaint=inpaint, model=imagegen.HD_MODEL,
+                control=control, short=short,
+            )
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = Path(tempfile.mkdtemp(prefix="hdstylize-")) / "c.mp4"
+            fluid.render_mp4(styled, int(fps), tmp, out_w=styled.shape[2], out_h=styled.shape[1])
+            dest.write_bytes(tmp.read_bytes())
+            try:
+                os.unlink(tmp)
+                os.rmdir(tmp.parent)
+            except OSError:
+                pass
+            db.add_asset(
+                job_id,
+                {"id": f"hd-stylize-{key}", "url": url, "kind": "video", "name": name,
+                 "addedAt": int(time.time())},
+            )
+        n["data"] = {**d, "assetUrl": url}
 
 
 @bp.get("/export/stream/<render_id>")

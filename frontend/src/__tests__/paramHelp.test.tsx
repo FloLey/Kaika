@@ -35,6 +35,8 @@ const EXPECTED_BADGES: Record<string, number> = {
   video: 7, // fit + sync + start + speed + loop + box + opacity port
   backdrop: 2, // colour swatch + opacity port
   transform: 6, // mode + wrap + zoom/rotate/pan_x/pan_y ports (segments hidden unless kaleidoscope)
+  extract: 1, // kind (video/out ports use plain title tooltips)
+  stylize: 3, // model + inpaint + strength port (prompt + video/control ports use title tooltips)
 };
 
 const HELPERS = {

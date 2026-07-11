@@ -88,6 +88,15 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     pan_x: "Slide the video horizontally, as a fraction of the frame width.",
     pan_y: "Slide the video vertically, as a fraction of the frame height.",
   },
+  stylize: {
+    model: "Which local diffusion model to use: SD-Turbo is a fast draft (a few seconds per frame) — iterate with it. Z-Image is HD and slow (~30s per frame, so a clip takes tens of minutes): it must generate at a higher resolution — any lower and it paints blobs instead of subjects. Switch to it once the draft looks right.",
+    inpaint: "Off = repaint the whole frame (img2img). On = confine the repaint to the input's shape (leaves the black background untouched).",
+    prompt: "The look to paint the video into — e.g. flowers, molten lava, storm clouds.",
+    strength: "How far the AI reinvents the input — the generation always STARTS from the input, so it keeps its layout (a fluid's black background stays black). With SD-Turbo the strength is near-binary: 1.0 fully restyles to the prompt (real flowers/lava, prompt colours) — this is the default; below ~0.9 it keeps the input's own colours (a subtle blend). Z-Image (HD) blends gradually: 1.0 restyles hardest, ~0.85 keeps more of the fluid's form. Modulatable — wire a signal to drive it.",
+  },
+  extract: {
+    kind: "What structure to pull from the video: canny = hard edges (real-time); soft = a softened edge map; density = the input's own brightness — the best 'volume' control for a fluid; depth = a depth map from a model (for real 3D footage, not fluids — downloads on first use). Feed the result into AI Stylize's control input.",
+  },
   pattern: {
     layout: "Arrangement of the points: circle, ring, grid, line, spiral or scatter.",
     count: "How many source points to generate.",
@@ -189,6 +198,8 @@ export const ARG_SECTION: Record<string, string> = {
   output: "animation-output",
   combine: "animation-combine",
   transform: "animation-transform",
+  stylize: "animation-stylize",
+  extract: "animation-stylize",
 };
 
 function sectionFor(type: string, group?: string): string | undefined {

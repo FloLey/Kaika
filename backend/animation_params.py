@@ -192,6 +192,15 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
         {"key": "pan_y", "label": "pan y", "min": -0.5, "max": 0.5, "step": 0.01,
          "default": 0.0, "fmt": "dp2"},
     ],
+    # The AI Stylize card (video -> video): img2img of the upstream fluid toward a prompt.
+    # `strength` is the img2img denoise curseur (0 = keep the fluid, 1 = fully reinvent);
+    # modulatable so a signal can drive it. mode/model/prompt are static `data` fields.
+    "stylize": [
+        # default 1.0: SD-Turbo's strength is near-binary — below ~0.9 keeps the input's
+        # colours (subtle blend), 1.0 fully restyles to the prompt (real flowers/lava).
+        {"key": "strength", "label": "strength", "min": 0.0, "max": 1.0, "step": 0.01,
+         "default": 1.0, "fmt": "dp2"},
+    ],
 }
 
 # Static params (not ports in v1; set on the fluid card) and where they nest.

@@ -31,6 +31,8 @@ import ImageNode from "./ImageNode";
 import VideoNode from "./VideoNode";
 import BackdropNode from "./BackdropNode";
 import TransformNode from "./TransformNode";
+import StylizeNode from "./StylizeNode";
+import ExtractNode from "./ExtractNode";
 import {
   fluidNode,
   outputNode,
@@ -53,6 +55,8 @@ import {
   videoNode,
   backdropNode,
   transformNode,
+  stylizeNode,
+  extractNode,
 } from "../../../lib/graphModel";
 import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
 import type { NodeProps } from "./nodeProps";
@@ -173,6 +177,34 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       order: 3.5,
       category: "compositing",
       help: "Pans, zooms, rotates, mirrors or kaleidoscopes a video stream — wire rotate to a signal for beat-locked motion. Feeds an output or a layered combine (never a merge).",
+      io: { in: "video", out: "video" },
+    },
+  },
+  extract: {
+    type: "extract",
+    Component: ExtractNode,
+    chrome: { title: "extract", accent: "var(--fx)", outFlow: "video" },
+    factory: extractNode,
+    palette: {
+      label: "Extract",
+      title: "Extract a control image (canny / soft edges) from any video for ControlNet",
+      order: 3.55,
+      category: "compositing",
+      help: "Turns any video into a structure map (canny edges or soft-edge). Wire its output into AI Stylize's control input to guide the generation by the video's shapes.",
+      io: { in: "video", out: "video" },
+    },
+  },
+  stylize: {
+    type: "stylize",
+    Component: StylizeNode,
+    chrome: { title: "ai stylize", accent: "var(--fx)", outFlow: "video" },
+    factory: stylizeNode,
+    palette: {
+      label: "AI Stylize",
+      title: "Restyle any video with AI — img2img toward a prompt, optional inpaint",
+      order: 3.6,
+      category: "compositing",
+      help: "Repaints the incoming video toward a text prompt (img2img); strength is a modulatable port and inpaint confines it to the shape. Wire an Extract card into control to guide it. Generates on demand into a clip; passes the video through until then.",
       io: { in: "video", out: "video" },
     },
   },

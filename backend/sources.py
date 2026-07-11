@@ -276,36 +276,6 @@ def image(nframes, h, w, *, asset_path, box_x=0.0, box_y=0.0, box_w=1.0, box_h=1
     return _apply_opacity(base, nframes, opacity)
 
 
-def imagegen(nframes, h, w, *, asset_paths, index, box_x=0.0, box_y=0.0, box_w=1.0,
-             box_h=1.0, fit="cover", opacity, frame_offset=0) -> np.ndarray:
-    """A slideshow of stills as an RGBA layer `(nframes, h, w, 4)`: frame i shows
-    `asset_paths[index[frame_offset + i]]`. `index` is the WHOLE-SEGMENT per-frame
-    image index (computed once by the handler from the trigger curve), so block
-    K+1 stays consistent with block K — same continuity pattern as the video card.
-    Each distinct still is fitted into the box ONCE; unloadable assets render as a
-    transparent slot rather than failing the render."""
-    out = np.zeros((nframes, h, w, 4), np.uint8)
-    if not asset_paths:
-        return _apply_opacity(out[0] if nframes else np.zeros((h, w, 4), np.uint8), max(nframes, 1), opacity)[:nframes]
-    x0, y0, bw, bh = _place_box(w, h, box_x, box_y, box_w, box_h)
-    fitted: list = []
-    for ap in asset_paths:
-        tile = np.zeros((bh, bw, 4), np.uint8)  # transparent fallback per slot
-        if ap:
-            try:
-                src = np.asarray(Image.open(ap).convert("RGBA"), np.uint8)
-                tile = _fit_rgba(src, bw, bh, fit)
-            except (OSError, ValueError, Image.DecompressionBombError):
-                pass
-        fitted.append(tile)
-    idx = np.asarray(index, np.int64)[frame_offset:frame_offset + nframes] % len(fitted)
-    for i in range(nframes):
-        out[i, y0:y0 + bh, x0:x0 + bw] = fitted[int(idx[i])]
-    op = np.asarray(opacity, np.float32).reshape(-1)[:nframes, None, None]
-    out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
-    return out
-
-
 @lru_cache(maxsize=128)
 def _video_meta(path: str):
     """(duration_sec, width, height) for a video, via ffprobe (cached)."""
@@ -426,6 +396,102 @@ class VideoClip:
             if f is not None:
                 out[i, self.y0:self.y0 + self.bh, self.x0:self.x0 + self.bw] = f
         return out
+
+
+class SlideshowClip:
+    """A slideshow of MIXED image/video items as an RGBA layer, driven by a whole-
+    segment per-frame `index` (item shown at each frame; computed once from the trigger).
+
+    Built once, streamed per block — the same "build once, read forward" shape as
+    `VideoClip` — so the whole-clip and block handlers share ONE core and stay
+    byte-identical (the render lockstep invariant). Image items are pre-fitted into the
+    box ONCE (like `imagegen`); each video item owns its own resumable `VideoClip`
+    (loop=True). A video item plays from its in-point (`start`) for as long as the
+    trigger keeps it visible; each fresh RUN (a return to that item after the sequence
+    moved on) restarts at the in-point — a backward jump `VideoClip.frames` absorbs by
+    reopening its decoder.
+
+    The playhead of a video item at a given frame is `start + age/fps`, where `age` is
+    the number of frames since the CURRENT contiguous run of that item began. `age` and
+    `run_id` are precomputed over the WHOLE segment (never per block), so a run that
+    straddles a block seam keeps counting forward and streamed output equals the
+    whole-clip render frame-for-frame.
+    """
+
+    def __init__(self, h, w, fps, *, items, index, box_x=0.0, box_y=0.0, box_w=1.0,
+                 box_h=1.0, fit="cover"):
+        self.h, self.w, self.fps = int(h), int(w), int(fps)
+        self.x0, self.y0, self.bw, self.bh = _place_box(self.w, self.h, box_x, box_y, box_w, box_h)
+        self.index = np.asarray(index, np.int64)
+        self.n_items = len(items)
+        # Run-relative timing over the whole segment (see class docstring).
+        n = len(self.index)
+        new_run = np.ones(n, bool)
+        if n > 1:
+            new_run[1:] = self.index[1:] != self.index[:-1]
+        pos = np.arange(n)
+        run_start = np.maximum.accumulate(np.where(new_run, pos, 0)) if n else pos
+        self.age = pos - run_start          # frames since the current slide appeared
+        self.run_id = np.cumsum(new_run) - 1 if n else pos  # unique id per contiguous run
+        # Build each item: image -> fitted tile (video slot None); video -> its own
+        # VideoClip (tile slot None). Slots stay index-aligned with `items`.
+        self.tiles: list = []
+        self.clips: list = []
+        self.starts: list = []
+        for it in items:
+            path, kind = it.get("path", ""), it.get("kind", "image")
+            if kind == "video" and path:
+                clip = VideoClip(self.h, self.w, self.fps, asset_path=path, box_x=box_x,
+                                 box_y=box_y, box_w=box_w, box_h=box_h, fit=fit, loop=True)
+                self.tiles.append(None)
+                self.clips.append(clip)
+                self.starts.append(float(it.get("start", 0.0) or 0.0))
+            else:
+                tile = np.zeros((self.bh, self.bw, 4), np.uint8)  # transparent fallback
+                if path:
+                    try:
+                        src = np.asarray(Image.open(path).convert("RGBA"), np.uint8)
+                        tile = _fit_rgba(src, self.bw, self.bh, fit)
+                    except (OSError, ValueError, Image.DecompressionBombError):
+                        pass
+                self.tiles.append(tile)
+                self.clips.append(None)
+                self.starts.append(0.0)
+
+    def frames(self, a, b, opacity) -> np.ndarray:
+        """RGBA frames `[a, b)` as `(b-a, h, w, 4)`, alpha scaled by the block-sliced
+        `opacity` (len b-a). Exactly one item is active per frame (the `index`), so each
+        item paints its frames independently and they never overlap."""
+        a, b = int(a), int(b)
+        count = b - a
+        out = np.zeros((max(count, 0), self.h, self.w, 4), np.uint8)
+        if count <= 0 or not self.n_items:
+            return out
+        idx_block = self.index[a:b] % self.n_items
+        for item in np.unique(idx_block):
+            local = np.nonzero(idx_block == item)[0]  # positions within this block
+            clip = self.clips[int(item)]
+            if clip is None:  # image item: paste its tile on every active frame
+                out[local, self.y0:self.y0 + self.bh, self.x0:self.x0 + self.bw] = self.tiles[int(item)]
+                continue
+            # Video item: split the active frames into contiguous RUNS (a single block can
+            # hold two separate runs of the same item, e.g. index v,w,v). VideoClip.frames
+            # only checks for a backward jump at its FIRST element, so a mid-array reset
+            # would corrupt — call it once per run, in forward order.
+            glob = local + a
+            splits = np.where(np.diff(self.run_id[glob]) != 0)[0] + 1
+            for grp in np.split(np.arange(len(local)), splits):
+                lpos = local[grp]
+                src_t = self.starts[int(item)] + self.age[glob[grp]] / float(self.fps)
+                out[lpos] = clip.frames(src_t)  # already placed into the box
+        op = np.asarray(opacity, np.float32).reshape(-1)[:count, None, None]
+        out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
+        return out
+
+    def close(self) -> None:
+        for c in self.clips:
+            if c is not None:
+                c.close()
 
 
 def video_src_times(count, fps, src0, speed) -> np.ndarray:

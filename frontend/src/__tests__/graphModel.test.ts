@@ -997,7 +997,9 @@ describe("v15 migration: the imagegen split", () => {
     const norm = normalizeGraph(g);
     const n = norm.nodes[0] as unknown as { type: string; data: Record<string, unknown> };
     expect(n.type).toBe("slideshow");
-    expect(n.data.assetUrls).toEqual(["/assets/j/a.png"]); // images survive
+    // v23: the pre-v15 assetUrls migrate on into the new `items` shape (kind by ext).
+    expect(n.data.items).toEqual([{ url: "/assets/j/a.png", kind: "image" }]); // images survive
+    expect("assetUrls" in n.data).toBe(false); // legacy field replaced
     expect("prompt" in n.data).toBe(false); // generator fields dropped
     expect("seed" in n.data).toBe(false);
   });

@@ -10,5 +10,6 @@ from .projects import bp as projects_bp
 from .animation import bp as animation_bp
 from .export import bp as export_bp
 from .serving import bp as serving_bp
+from .stylize import bp as stylize_bp
 
-all_blueprints = (uploads_bp, projects_bp, animation_bp, export_bp, serving_bp)
+all_blueprints = (uploads_bp, projects_bp, animation_bp, export_bp, serving_bp, stylize_bp)

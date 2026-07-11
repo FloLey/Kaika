@@ -4,6 +4,8 @@
 
 import { FLUID_PARAMS, coercePorts, mkInputId, mkNodeId, mkSlotId } from "./core";
 import type {
+  StylizeNode,
+  ExtractNode,
   AnimatePointsNode,
   BackdropNode,
   TransformNode,
@@ -123,7 +125,12 @@ export function fluidNode(x: number, y: number): FluidNode {
 //       (mode/segments/wrap + zoom/rotate/pan ports). Pre-v10 `transform`/`grade`
 //       nodes carry the OLD shape, so normalizeGraph drops them explicitly rather
 //       than letting the now-known type resurrect them.
-export const GRAPH_VERSION = 21;
+//  v22: ADDED the AI Stylize video-FX card (model/inpaint/prompt/assetUrl + strength
+//       port) and the Extract card (kind = canny/soft). Pure additions — no migration.
+//  v23: the slideshow card now accepts VIDEO items, not just images: its own picks move
+//       from `assetUrls: string[]` to `items: SlideshowItem[]` ({url, kind, start?}).
+//       normalizeGraph maps legacy assetUrls -> image items (kind inferred by ext).
+export const GRAPH_VERSION = 23;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -338,7 +345,7 @@ export function slideshowNode(x: number, y: number): SlideshowNode {
     x,
     y,
     data: {
-      assetUrls: [],
+      items: [],
       box_x: 0,
       box_y: 0,
       box_w: 1,
@@ -383,6 +390,39 @@ export function transformNode(x: number, y: number): TransformNode {
       segments: 6,
       wrap: false,
       ports: coercePorts("transform", undefined),
+    },
+  };
+}
+
+// The AI Stylize FX card: img2img of the upstream fluid toward a prompt. Defaults to the
+// flowers example + fast draft model; passes the fluid through until you hit Generate.
+export function stylizeNode(x: number, y: number): StylizeNode {
+  return {
+    id: mkNodeId(),
+    type: "stylize",
+    x,
+    y,
+    data: {
+      model: "draft",
+      inpaint: false,
+      prompt: "flowers, blooming roses and peonies, lush colorful petals, dark background",
+      assetUrl: "",
+      ports: coercePorts("stylize", undefined),
+    },
+  };
+}
+
+// The Extract FX card: turns any video into a control image (canny by default) for a
+// ControlNet. Wire its output into AI Stylize's `control` input.
+export function extractNode(x: number, y: number): ExtractNode {
+  return {
+    id: mkNodeId(),
+    type: "extract",
+    x,
+    y,
+    data: {
+      kind: "canny",
+      ports: coercePorts("extract", undefined),
     },
   };
 }

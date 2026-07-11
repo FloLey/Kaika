@@ -60,4 +60,7 @@ export const SOURCE_PARAMS = {
     { key: "pan_x", label: "pan x", min: -0.5, max: 0.5, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
     { key: "pan_y", label: "pan y", min: -0.5, max: 0.5, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
   ],
+  "stylize": [
+    { key: "strength", label: "strength", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+  ],
 };

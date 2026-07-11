@@ -15,8 +15,12 @@ mlx-whisper==0.4.3; platform_system == "Darwin" and platform_machine == "arm64"
 faster-whisper==1.2.1
 yt-dlp==2026.6.9
 psycopg[binary]==3.3.4
-# Local image generation (the Image gen card's ✨ generate). Imported lazily —
+# Local image generation (the Image gen / AI Stylize cards). Imported lazily —
 # the app runs fine without them; generation just reports it's unavailable.
 diffusers==0.39.0
 transformers==5.13.0
 safetensors==0.8.0
+accelerate==1.14.0
+# Control-image extraction (canny/soft-edge) for the Extract card, and the img2img
+# preprocessing in AI Stylize. Headless build — no GUI/Qt deps.
+opencv-python-headless==5.0.0

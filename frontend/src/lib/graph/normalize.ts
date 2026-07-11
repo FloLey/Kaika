@@ -5,6 +5,7 @@
 // explicit branches. Idempotent + returns the same object when nothing changed.
 
 import { FLUID_PARAM_KEYS } from "../fluidParams.js";
+import { slideshowKind } from "../imageCount";
 import { FLUID_PARAMS, coercePorts, mkInputId, mkSlotId } from "./core";
 import { COLOR_STOPS_DEFAULT, COMBINE_MEDIUM, GRAPH_VERSION, combineSlot } from "./factories";
 import type {
@@ -15,6 +16,8 @@ import type {
   FluidPort,
   Graph,
   GraphNode,
+  SlideshowData,
+  SlideshowItem,
   VideoData,
 } from "../types";
 
@@ -46,6 +49,8 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "video",
   "backdrop",
   "transform",
+  "stylize",
+  "extract",
 ]);
 
 // ---- field coercers (the schema-table vocabulary) ------------------------------
@@ -65,6 +70,24 @@ const idList: Coerce = (v) =>
   Array.isArray(v) && v.length ? v : [mkInputId(), mkInputId()];
 const strList: Coerce = (v) =>
   Array.isArray(v) ? v.filter((u): u is string => typeof u === "string") : [];
+// A slideshow's own items: [{url, kind, start?}]. Drops malformed rows; re-infers a
+// missing/invalid `kind` from the URL extension; keeps `start` only when a finite
+// number. (Legacy `assetUrls: string[]` is migrated into this shape in the slideshow
+// branch below.)
+const slideItems: Coerce = (v) =>
+  Array.isArray(v)
+    ? v
+        .filter((it): it is { url: string } => !!it && typeof (it as { url?: unknown }).url === "string")
+        .map((it) => {
+          const r = it as { url: string; kind?: unknown; start?: unknown };
+          const kind = r.kind === "image" || r.kind === "video" ? r.kind : slideshowKind(r.url);
+          const item: SlideshowItem = { url: r.url, kind };
+          if (kind === "video" && typeof r.start === "number" && Number.isFinite(r.start)) {
+            item.start = r.start;
+          }
+          return item;
+        })
+    : [];
 const portsFor = (type: string): Coerce => (v) =>
   coercePorts(type, v as Record<string, FluidPort> | undefined);
 
@@ -148,7 +171,7 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     ports: portsFor("video"),
   },
   slideshow: {
-    assetUrls: strList,
+    items: slideItems,
     box_x: num(0),
     box_y: num(0),
     box_w: num(1),
@@ -171,6 +194,17 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     segments: intClamp(2, 12, 6),
     wrap: bool,
     ports: portsFor("transform"),
+  },
+  stylize: {
+    model: oneOf(["draft", "hd"], "draft"),
+    inpaint: bool,
+    prompt: str("flowers, blooming roses and peonies, lush colorful petals, dark background"),
+    assetUrl: str(""),
+    ports: portsFor("stylize"),
+  },
+  extract: {
+    kind: oneOf(["canny", "soft", "density", "depth"], "canny"),
+    ports: portsFor("extract"),
   },
 };
 
@@ -258,6 +292,19 @@ export function normalizeGraph(graph: Graph): Graph {
       const savedPorts = d.ports as Record<string, FluidPort> | undefined;
       if (typeof d.speed === "number" && !savedPorts?.speed) {
         data.ports.speed = { binding: { kind: "const", value: d.speed } };
+      }
+      if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
+      return { ...n, data };
+    }
+    if (n.type === "slideshow") {
+      const data = coerceBySchema(DATA_SCHEMAS.slideshow, d) as unknown as SlideshowData;
+      // v23 migration: the card's own picks moved from `assetUrls: string[]` to
+      // `items: SlideshowItem[]`. If a legacy save has assetUrls and no items yet, map
+      // each url to an image/video item (kind inferred from the extension).
+      if (!data.items.length && Array.isArray(d.assetUrls)) {
+        data.items = (d.assetUrls as unknown[])
+          .filter((u): u is string => typeof u === "string" && !!u)
+          .map((url): SlideshowItem => ({ url, kind: slideshowKind(url) }));
       }
       if (JSON.stringify(data) !== JSON.stringify(d)) changed = true;
       return { ...n, data };
