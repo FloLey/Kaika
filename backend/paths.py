@@ -22,6 +22,12 @@ ASSETS_DIR = DATA_DIR / "assets"  # user-uploaded image/video layer assets, per 
 # late-bound (`paths.ANIM_DIR`) so tests patch ONE place.
 ANIM_DIR = FLUID_DIR
 STREAM_DIR = FLUID_DIR / "stream"
+# App-level settings (remote inference, …) — one JSON file, read late-bound
+# (`paths.SETTINGS_FILE`) so tests patch it like the directories above.
+SETTINGS_FILE = DATA_DIR / "settings.json"
+# Job-state snapshot (backend/jobs.py): lets /jobs/<id> answer across the dev
+# reloader's restarts instead of 404ing every in-flight generation.
+JOBS_STATE_FILE = DATA_DIR / "jobs_state.json"
 for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ANALYSIS_DIR, FLUID_DIR, ASSETS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 

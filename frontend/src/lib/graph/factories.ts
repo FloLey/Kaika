@@ -6,8 +6,16 @@ import { FLUID_PARAMS, coercePorts, mkInputId, mkNodeId, mkSlotId } from "./core
 import type {
   StylizeNode,
   ExtractNode,
+  EchoNode,
+  ColorGradeNode,
   AnimatePointsNode,
   BackdropNode,
+  WavesNode,
+  LightningNode,
+  FireNode,
+  AuroraNode,
+  RainNode,
+  CloudsNode,
   TransformNode,
   Binding,
   ColorData,
@@ -130,7 +138,18 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v23: the slideshow card now accepts VIDEO items, not just images: its own picks move
 //       from `assetUrls: string[]` to `items: SlideshowItem[]` ({url, kind, start?}).
 //       normalizeGraph maps legacy assetUrls -> image items (kind inferred by ext).
-export const GRAPH_VERSION = 23;
+//  v24: ADDED the look-FX wave (specs/look-fx/) — echo (motion trails), then colorgrade
+//       (thermal/duotone/neon + tint colour input). Pure additions — no migration.
+//  v25: the video card gains a SOURCE CROP (`crop_x/y/w/h`, fractions of the source
+//       frame, default full-frame) — pick which part of a clip gets fitted into the
+//       box. The schema table stamps the defaults on old saves; no migration step.
+//  v26: the generative cards became physical SIMULATIONS (specs/generative-cards):
+//       new port sets (renames — coercePorts re-defaults them), aurora/rain/clouds
+//       join DATA_SCHEMAS (previously uncoerced), and normalize prunes edges into
+//       renamed gen-card ports (was fluid-only) so no dangling param edges survive.
+//       waves/rain gain an optional `video` input; fire/lightning/rain a `positions`
+//       input — both additive (edges, not data).
+export const GRAPH_VERSION = 26;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -334,6 +353,10 @@ export function videoNode(x: number, y: number): VideoNode {
       sync: "song",
       start: 0,
       loop: true,
+      crop_x: 0,
+      crop_y: 0,
+      crop_w: 1,
+      crop_h: 1,
       ports: coercePorts("video", undefined),
     },
   };
@@ -373,6 +396,63 @@ export function backdropNode(x: number, y: number): BackdropNode {
     x,
     y,
     data: { color: "#101418", ports: coercePorts("backdrop", undefined) },
+  };
+}
+
+// Generative source cards: a `palette` preset + `seed` + behavioural ports. Colour is
+// overridable by wiring a `color` card into the "color" input.
+export function wavesNode(x: number, y: number): WavesNode {
+  return {
+    id: mkNodeId(),
+    type: "waves",
+    x,
+    y,
+    data: { palette: "ocean", seed: 1, ports: coercePorts("waves", undefined) },
+  };
+}
+export function lightningNode(x: number, y: number): LightningNode {
+  return {
+    id: mkNodeId(),
+    type: "lightning",
+    x,
+    y,
+    data: { palette: "electric", seed: 1, ports: coercePorts("lightning", undefined) },
+  };
+}
+export function fireNode(x: number, y: number): FireNode {
+  return {
+    id: mkNodeId(),
+    type: "fire",
+    x,
+    y,
+    data: { palette: "flame", seed: 1, ports: coercePorts("fire", undefined) },
+  };
+}
+export function auroraNode(x: number, y: number): AuroraNode {
+  return {
+    id: mkNodeId(),
+    type: "aurora",
+    x,
+    y,
+    data: { palette: "aurora", seed: 1, ports: coercePorts("aurora", undefined) },
+  };
+}
+export function rainNode(x: number, y: number): RainNode {
+  return {
+    id: mkNodeId(),
+    type: "rain",
+    x,
+    y,
+    data: { palette: "downpour", seed: 1, ports: coercePorts("rain", undefined) },
+  };
+}
+export function cloudsNode(x: number, y: number): CloudsNode {
+  return {
+    id: mkNodeId(),
+    type: "clouds",
+    x,
+    y,
+    data: { palette: "sky", seed: 1, ports: coercePorts("clouds", undefined) },
   };
 }
 
@@ -423,6 +503,42 @@ export function extractNode(x: number, y: number): ExtractNode {
     data: {
       kind: "canny",
       ports: coercePorts("extract", undefined),
+    },
+  };
+}
+
+// The Echo look-FX card: motion trails. Defaults to `ghost` (afterimages of every
+// change — what "echo" means on real footage; `bright` is the comet-tail mode for
+// dye-on-black). The default length (0.4 s) shows the effect immediately on a freshly
+// dropped card; length 0 is a passthrough.
+export function echoNode(x: number, y: number): EchoNode {
+  return {
+    id: mkNodeId(),
+    type: "echo",
+    x,
+    y,
+    data: {
+      mode: "ghost",
+      ports: coercePorts("echo", undefined),
+    },
+  };
+}
+
+// The Color Grade look-FX card: thermal (heat-camera LUT) by default — visibly graded
+// the moment it's dropped. Duotone/neon read their colours from the swatches until a
+// `color` card is wired into `tint`.
+export function colorgradeNode(x: number, y: number): ColorGradeNode {
+  return {
+    id: mkNodeId(),
+    type: "colorgrade",
+    x,
+    y,
+    data: {
+      mode: "thermal",
+      map: "turbo",
+      colorA: "#0b1030",
+      colorB: "#ff5ac8",
+      ports: coercePorts("colorgrade", undefined),
     },
   };
 }

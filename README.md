@@ -121,6 +121,24 @@ Env vars (see `.env.example`): `DATABASE_URL` (default
 `postgresql://demucs:demucs@localhost:5432/demucs`), `HOST`, `PORT`,
 `FLASK_DEBUG`.
 
+### Remote inference (optional — rent a GPU for the AI cards)
+
+The diffusion work (AI Stylize, Image gen, Extract depth) can run on a remote
+CUDA box (RunPod & co) instead of the local MPS GPU. On the rented machine, from
+a checkout of this repo:
+
+```sh
+pip install -r requirements.txt
+KAIKA_REMOTE_TOKEN=<secret> python -m backend.remote_app   # port 5100 (PORT env)
+```
+
+Models download from Hugging Face on first use — put `HF_HOME` on the persistent
+volume so they survive pod restarts. Then open the app's **⚙ settings**, enable
+remote inference, paste the box's URL + token, pick which operations go remote,
+and hit *test connection*. Everything else (Demucs, fluid sim, rendering) always
+runs locally; if the box is unreachable a generation fails with a clear error
+rather than silently running locally.
+
 ## API
 
 The slow stages run in the **background** (`backend/jobs.py`): `/upload` and `/segment`

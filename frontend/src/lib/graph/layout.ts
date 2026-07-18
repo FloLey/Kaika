@@ -38,6 +38,10 @@ const DETAILED_SIZES: Record<string, CardSize> = {
   combine: { w: 230, h: 260 },
   // combine's body plus a mode select, a hint, two statics and four param rows
   transform: { w: 230, h: 300 },
+  // preview + mode select + hint + two param rows
+  echo: { w: 230, h: 290 },
+  // preview + mode select + hint + tint row + mode statics + two param rows
+  colorgrade: { w: 230, h: 330 },
   output: { w: 230, h: 300 },
   points: { w: 230, h: 280 },
   color: { w: 230, h: 260 },

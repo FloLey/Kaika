@@ -20,6 +20,7 @@ export function buildVideoPreview(d: VideoData, ctx?: NodeCtx): BoxVideoPreview 
     speed,
     loop: d.loop,
     segStart: ctx?.segStart ?? 0,
+    crop: { x: d.crop_x ?? 0, y: d.crop_y ?? 0, w: d.crop_w ?? 1, h: d.crop_h ?? 1 },
     clock: ctx?.groupClock,
     playing: !!ctx?.groupPlaying,
   };

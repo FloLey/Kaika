@@ -4,9 +4,12 @@ visibly exercises that card. It's an always-present, app-managed project (job id
 the Playground, and hidden from the user's projects list.
 
 `ensure_playground()` is idempotent: it writes SYNTHETIC stems (no upload needed) +
-analysis + the segments from ``backend.card_demo.DEMOS``, and is a near no-op once
-present. The CLI ``python -m backend.seed_card_demo`` (or ``make seed-playground``)
-force-rebuilds and additionally pre-renders each segment as a smoke check.
+analysis + the segments from ``backend.card_demo.DEMOS``. Once present it additively
+SYNCS instead: fixture demos whose card has no segment yet are APPENDED to the rail
+(existing segments — the user's rework included — are never touched), so a new card's
+demo appears on the next Playground open. The CLI ``python -m backend.seed_card_demo``
+(or ``make seed-playground``) force-rebuilds from the fixture (wiping live rework) and
+additionally pre-renders each segment as a smoke check.
 
 Only the ``signal`` card needs audio; a synthetic drum stem gives it a kick to react to.
 ``lyrics`` reads lyric lines from the analysis cache. Everything else is synthetic.
@@ -15,7 +18,9 @@ Only the ``signal`` card needs audio; a synthetic drum stem gives it a kick to r
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
+import uuid
 
 import numpy as np
 import soundfile as sf
@@ -63,10 +68,25 @@ def write_sample_assets() -> None:
     mp4 = d / "sample.mp4"
     if not mp4.exists():
         subprocess.run(
-            ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
-             "-i", "gradients=s=640x360:d=4:speed=0.08:c0=0xB84A74:c1=0x34808A:c2=0xF2C14E",
-             "-r", "24", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(mp4)],
-            check=False)
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "gradients=s=640x360:d=4:speed=0.08:c0=0xB84A74:c1=0x34808A:c2=0xF2C14E",
+                "-r",
+                "24",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(mp4),
+            ],
+            check=False,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -87,7 +107,9 @@ def _drums(t: np.ndarray) -> np.ndarray:
     hat_env = np.exp(-np.arange(n_hat) / (0.01 * SR))
     for k in range(int(t[-1] / 0.25) + 1):  # hat every 0.25 s
         i0 = int(k * 0.25 * SR)
-        sig[i0 : i0 + n_hat] += (rng.standard_normal(n_hat) * hat_env * 0.3)[: max(0, len(sig) - i0)]
+        sig[i0 : i0 + n_hat] += (rng.standard_normal(n_hat) * hat_env * 0.3)[
+            : max(0, len(sig) - i0)
+        ]
     return sig
 
 
@@ -112,7 +134,9 @@ def write_synthetic_stems(job_id: str, duration: float) -> dict:
         "other": _tone(t, 440, 2.0) * 0.5,
     }
     parts = {k: _norm(v) for k, v in parts.items()}
-    original = _norm(parts["drums"] * 0.8 + parts["bass"] * 0.6 + parts["vocals"] * 0.4 + parts["other"] * 0.3)
+    original = _norm(
+        parts["drums"] * 0.8 + parts["bass"] * 0.6 + parts["vocals"] * 0.4 + parts["other"] * 0.3
+    )
 
     # separated stems: <SEPARATED_DIR>/<job>/<model>/<song>/<stem>.wav (find_stem_dir
     # picks the first model + song dir, so any names work).
@@ -172,7 +196,14 @@ def _lyric_lines(segments: list[dict]) -> list[dict]:
     words = ["lyrics", "card", "on", "the", "beat"]
     n = len(words)
     step = (e - s) / n
-    return [{"t0": round(s + k * step, 3), "t1": round(s + (k + 1) * step, 3), "text": " ".join(words[: k + 1])} for k in range(n)]
+    return [
+        {
+            "t0": round(s + k * step, 3),
+            "t1": round(s + (k + 1) * step, 3),
+            "text": " ".join(words[: k + 1]),
+        }
+        for k in range(n)
+    ]
 
 
 def write_analysis(job_id: str, segments: list[dict], duration: float) -> list[dict]:
@@ -181,7 +212,9 @@ def write_analysis(job_id: str, segments: list[dict], duration: float) -> list[d
     lines = _lyric_lines(segments)
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     (ANALYSIS_DIR / f"{job_id}.json").write_text(
-        json.dumps({"vocal_envelope": env, "envelope_times": times.round(3).tolist(), "lyric_lines": lines})
+        json.dumps(
+            {"vocal_envelope": env, "envelope_times": times.round(3).tolist(), "lyric_lines": lines}
+        )
     )
     return lines
 
@@ -226,45 +259,125 @@ def _build(db, *, render: bool, log=lambda _m="": None) -> str:
     return JOB_ID
 
 
+def _append_missing_demos(db) -> list[str]:
+    """Additive demo sync: append a segment for every fixture demo whose card has no
+    segment in the LIVE playground yet (matched by label), after the existing timeline.
+    Existing segments — including the user's rework/experiments — are never touched, so
+    a new card's demo appears on the next Playground open without a destructive reseed.
+    The synthetic stems/analysis are regenerated to cover the extended duration (same
+    deterministic content, longer). Returns the appended labels."""
+    row = db.get_project(JOB_ID)
+    segments = row["data"]["segments"]
+    have = {s.get("label") for s in segments}
+    missing = [d for d in card_demo.DEMOS if d["label"] not in have]
+    if not missing:
+        return []
+    end0 = max((float(s.get("end", 0.0)) for s in segments), default=0.0)
+    for k, d in enumerate(missing):
+        s0 = end0 + k * SEG_LEN
+        segments.append(
+            {
+                "id": f"seg-{uuid.uuid4().hex[:8]}",
+                "label": d["label"],
+                "start": round(s0, 3),
+                "end": round(s0 + SEG_LEN, 3),
+                "signals": d["signals"],
+                "graph": d["graph"],
+            }
+        )
+    duration = end0 + len(missing) * SEG_LEN
+    write_synthetic_stems(JOB_ID, duration)
+    write_analysis(JOB_ID, segments, duration)
+    db.save_segments(JOB_ID, segments, step="studio")
+    db.set_duration(JOB_ID, duration)
+    return [d["label"] for d in missing]
+
+
 def ensure_playground() -> str:
     """Idempotent: build the always-present Playground project if it's missing (its DB
-    row AND its synthetic stems). A near no-op once present. No pre-render — the Studio
-    renders on open. Called by `POST /playground` when the user opens the Playground."""
+    row AND its synthetic stems), and additively SYNC it when it exists — any fixture
+    demo whose card has no segment yet is appended to the rail (existing segments,
+    including the user's rework, are never touched), so a new card's demo shows up on
+    the next Playground open without a destructive reseed. No pre-render — the Studio
+    renders on open. Called by `POST /playground`."""
     from . import db
 
     write_sample_assets()  # idempotent — ensure the dummy assets exist even for an old playground
     if db.get_project(JOB_ID) is not None and stem_audio_path(JOB_ID, "drums") is not None:
+        appended = _append_missing_demos(db)
+        if appended:
+            logging.getLogger("kaika").info(
+                "playground: appended demo segment(s): %s", ", ".join(appended)
+            )
         return JOB_ID
     return _build(db, render=False)
 
 
-def export_playground() -> int:
+def export_playground() -> dict:
     """Capture the CURRENT live Playground (your reworked pipelines) into the committed
     fixture `card_demo.PIPELINES_PATH`, which the seed then loads as the defaults. Each
     segment's signals are trimmed to only those its graph references (drops the studio
-    hydration noise), and its graph is stored verbatim."""
+    hydration noise), and its graph is stored verbatim.
+
+    ADDITIVE, like the demo sync: a fixture entry whose card has NO segment in the live
+    rail is KEPT, never silently dropped — a stale or partial rail (e.g. a tab that
+    autosaved an older segment list) can't erase other cards' demos from the fixture.
+    Removing a demo on purpose means deleting the card itself (or hand-pruning in a
+    commit, deliberately).
+
+    Returns a summary the callers surface — the CLI prints it, the Playground's
+    💾 save-fixture route returns it as JSON:
+    `{"exported": n, "kept": [cards preserved from the prior fixture],
+    "skipped": [unknown labels], "missing": [cards with no demo anywhere]}`.
+    Raises LookupError when the playground project doesn't exist yet."""
     from . import card_demo, db
 
     row = db.get_project(JOB_ID)
     if row is None:
-        raise SystemExit(f"no '{JOB_ID}' project in the DB — open the Playground once first")
+        raise LookupError(f"no '{JOB_ID}' project in the DB — open the Playground once first")
     label_to_key = {label: key for key, label in card_demo.CARD_LABELS.items()}
     out = []
+    skipped = []
     for s in row["data"]["segments"]:
         key = label_to_key.get(s["label"])
         if key is None:
-            print(f"  ! skipping segment with unknown card label: {s['label']!r}")
+            skipped.append(s["label"])
             continue
         graph = s["graph"]
-        referenced = {n.get("data", {}).get("signalId") for n in graph["nodes"] if n.get("type") == "signal"}
+        referenced = {
+            n.get("data", {}).get("signalId") for n in graph["nodes"] if n.get("type") == "signal"
+        }
         signals = [sig for sig in s.get("signals", []) if sig.get("id") in referenced]
         out.append({"key": key, "label": s["label"], "signals": signals, "graph": graph})
-    card_demo.PIPELINES_PATH.write_text(json.dumps(out, indent=2))
-    missing = card_demo.ALL_CARDS - {e["key"] for e in out}
-    print(f"[playground] exported {len(out)} pipelines -> {card_demo.PIPELINES_PATH.name}")
-    if missing:
-        print(f"  ! WARNING: no pipeline exported for cards: {sorted(missing)}")
-    return len(out)
+    exported = {e["key"] for e in out}
+    prior = (
+        json.loads(card_demo.PIPELINES_PATH.read_text())
+        if card_demo.PIPELINES_PATH.exists()
+        else []
+    )
+    kept = [e for e in prior if e["key"] not in exported and e["key"] in card_demo.ALL_CARDS]
+    card_demo.PIPELINES_PATH.write_text(json.dumps(out + kept, indent=2))
+    missing = sorted(card_demo.ALL_CARDS - exported - {e["key"] for e in kept})
+    return {
+        "exported": len(out),
+        "kept": sorted(e["key"] for e in kept),
+        "skipped": skipped,
+        "missing": missing,
+    }
+
+
+def _print_export_summary(summary: dict) -> None:
+    from . import card_demo
+
+    for label in summary["skipped"]:
+        print(f"  ! skipping segment with unknown card label: {label!r}")
+    print(
+        f"[playground] exported {summary['exported']} pipelines -> {card_demo.PIPELINES_PATH.name}"
+    )
+    if summary.get("kept"):
+        print(f"  • kept prior fixture demos for cards not in the live rail: {summary['kept']}")
+    if summary["missing"]:
+        print(f"  ! WARNING: no pipeline exported for cards: {summary['missing']}")
 
 
 def seed() -> str:
@@ -280,4 +393,4 @@ def seed() -> str:
 if __name__ == "__main__":
     import sys
 
-    export_playground() if sys.argv[1:2] == ["export"] else seed()
+    _print_export_summary(export_playground()) if sys.argv[1:2] == ["export"] else seed()

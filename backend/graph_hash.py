@@ -20,7 +20,15 @@ from .graph_common import LOOSE_PORT, _nodes_of
 #   v6: slideshow accepts VIDEO items (was images only) — a video slide now PLAYS from
 #       its per-item in-point while active (SlideshowClip), so the same graph renders
 #       differently. (The per-item start/kind/order already ride in node.data.)
-RENDER_VERSION = 6
+#   v7: the look-FX wave (specs/look-fx/) — new echo card (motion trails). A pure
+#       addition, bumped by house rule so the wave invalidates as one version.
+#   v8: generative cards rebuilt as physical simulations — waves = pool caustics
+#       + refraction of an optional video input, rain = spectral wave-equation
+#       drops on an optional input, lightning = DBM growth + restrikes, fire =
+#       heat field riding the fluid solver, aurora = Chapman-layer curtains,
+#       clouds = Beer-Lambert-lit density; new port sets; gen cards can feed a
+#       merge combine (shared field). Same graphs render entirely differently.
+RENDER_VERSION = 8
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
@@ -130,4 +138,3 @@ def output_hash(
         ]
     blob = json.dumps(payload, sort_keys=True, default=str).encode()
     return hashlib.sha1(blob).hexdigest()[:16]
-

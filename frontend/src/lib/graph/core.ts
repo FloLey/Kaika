@@ -49,12 +49,24 @@ export const mkInputId = (): string => rid("in");
 export const mkSlotId = (): string => rid("slot");
 
 // Non-fluid video sources (no video input; synthesise frames). Producers, not emitters.
-export const VIDEO_SOURCES = new Set<string>(["lyrics", "image", "slideshow", "video", "backdrop"]);
+export const VIDEO_SOURCES = new Set<string>([
+  "lyrics",
+  "image",
+  "slideshow",
+  "video",
+  "backdrop",
+  "waves",
+  "lightning",
+  "fire",
+  "aurora",
+  "rain",
+  "clouds",
+]);
 
 // Video-FX cards: video in -> video out. They pass a stream through a per-frame op, so
 // (like `output`) they're renderable only with their `video` input wired — see
 // `nodeRenderable`. Never emitter sources: a merge combine needs raw fluid emitters.
-export const VIDEO_FX = new Set<string>(["transform", "stylize", "extract"]);
+export const VIDEO_FX = new Set<string>(["transform", "stylize", "extract", "echo", "colorgrade"]);
 
 export const VIDEO_PRODUCERS = new Set<string>([
   "fluid",

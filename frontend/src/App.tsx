@@ -8,6 +8,7 @@ import Studio from "./components/studio/Studio";
 import ExportStep from "./components/export/ExportStep";
 import Processing from "./components/Processing";
 import LogsPanel from "./components/LogsPanel";
+import SettingsModal from "./components/SettingsModal";
 import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
@@ -53,6 +54,7 @@ export default function App() {
 
   // ---- logs: panel toggle, error badge, backend polling --------------------
   const [logsOpen, setLogsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [errCount, setErrCount] = useState(0);
   useEffect(() => logbus.subscribe(() => setErrCount(logbus.errorCount())), []);
   // Poll the backend log feed always (slow) so the badge stays current; faster
@@ -112,15 +114,38 @@ export default function App() {
     [job, step, segments, output, exportSettings]
   );
 
+  // ---- playground 💾 save fixture -------------------------------------------
+  // Persist the CURRENT state first (the autosave is debounced — a sub-800ms edit may
+  // not even be queued yet), then capture the DB into the committed fixture. Joins the
+  // save chain so it can't interleave with an in-flight autosave.
+  const saveFixture = useCallback(async (): Promise<api.FixtureExport> => {
+    if (!job) throw new Error("no project open");
+    const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
+    const run = saveChain.current.then(async () => {
+      await api.saveProject(job, payload);
+      lastSaved.current = JSON.stringify(payload);
+      return api.exportPlaygroundFixture();
+    });
+    saveChain.current = run.then(
+      () => {},
+      () => {}
+    ); // keep the chain alive either way
+    return run;
+  }, [job, step, segments, output, exportSettings]);
+
   // ---- new track: upload + propose -----------------------------------------
   async function handleUpload({
     file,
     youtubeUrl,
+    ytStart,
+    ytEnd,
     lyrics,
     lyricsFile,
   }: {
     file: File | null;
     youtubeUrl: string;
+    ytStart: string;
+    ytEnd: string;
     lyrics: string;
     lyricsFile: File | null;
   }) {
@@ -132,7 +157,11 @@ export default function App() {
       setStatus(file ? "separating stems with demucs…" : "downloading audio from YouTube…");
       const fd = new FormData();
       if (file) fd.append("file", file);
-      else if (youtubeUrl) fd.append("youtube_url", youtubeUrl);
+      else if (youtubeUrl) {
+        fd.append("youtube_url", youtubeUrl);
+        if (ytStart) fd.append("yt_start", ytStart);
+        if (ytEnd) fd.append("yt_end", ytEnd);
+      }
       if (lyricsFile) fd.append("lyrics_file", lyricsFile);
       else if (lyrics && lyrics.trim()) fd.append("lyrics", lyrics);
 
@@ -262,6 +291,14 @@ export default function App() {
             </button>
           )}
           <button
+            className="btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings (remote inference)"
+            aria-label="Settings"
+          >
+            ⚙
+          </button>
+          <button
             className="btn logs-btn"
             onClick={() => setLogsOpen((v) => !v)}
             title="Logs"
@@ -333,6 +370,7 @@ export default function App() {
           audioMode={exportSettings.audioMode}
           onEditSplit={() => setStep("review")}
           onExport={() => setStep("export")}
+          onSaveFixture={saveFixture}
         />
       )}
 
@@ -353,6 +391,7 @@ export default function App() {
 
       <ErrorToast onOpenLogs={() => setLogsOpen(true)} />
       <LogsPanel open={logsOpen} onClose={() => setLogsOpen(false)} />
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

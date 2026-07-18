@@ -41,7 +41,7 @@ export function useAssetUpload(ctx: NodeCtx | undefined, onUrl: (url: string) =>
     }
   };
 
-  const fromYoutube = async (url: string) => {
+  const fromYoutube = async (url: string, start?: string, end?: string) => {
     if (!url.trim()) return;
     if (!jobId) {
       setErr("no project to import to");
@@ -50,7 +50,7 @@ export function useAssetUpload(ctx: NodeCtx | undefined, onUrl: (url: string) =>
     setBusy(true);
     setErr(null);
     try {
-      const { job_id } = await assetFromYoutube(jobId, url.trim());
+      const { job_id } = await assetFromYoutube(jobId, url.trim(), start?.trim(), end?.trim());
       const asset = await pollJob<Asset>(job_id);
       onUrl(asset.url);
     } catch (ex) {

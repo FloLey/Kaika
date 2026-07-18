@@ -37,9 +37,17 @@ export {
   slideshowNode,
   videoNode,
   backdropNode,
+  wavesNode,
+  lightningNode,
+  fireNode,
+  auroraNode,
+  rainNode,
+  cloudsNode,
   transformNode,
   stylizeNode,
   extractNode,
+  echoNode,
+  colorgradeNode,
 } from "./graph/factories";
 export {
   patchNodeData,

@@ -2998,22 +2998,18 @@
           "x": 200,
           "y": 620,
           "id": "ex",
-          "type": "extract",
           "data": {
             "kind": "density",
             "ports": {}
-          }
+          },
+          "type": "extract"
         },
         {
           "x": 480,
           "y": 160,
           "id": "st",
-          "type": "stylize",
           "data": {
             "model": "draft",
-            "inpaint": false,
-            "assetUrl": "",
-            "prompt": "flowers, blooming roses and peonies, lush colorful petals, dark background",
             "ports": {
               "strength": {
                 "binding": {
@@ -3021,8 +3017,12 @@
                   "value": 1
                 }
               }
-            }
-          }
+            },
+            "prompt": "flowers, blooming roses and peonies, lush colorful petals, dark background",
+            "inpaint": false,
+            "assetUrl": ""
+          },
+          "type": "stylize"
         },
         {
           "x": 840,
@@ -3846,6 +3846,1046 @@
         }
       ],
       "version": 21
+    }
+  },
+  {
+    "key": "waves",
+    "label": "Waves",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "img",
+          "target": "w",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "w",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 60,
+          "id": "img",
+          "data": {
+            "fit": "cover",
+            "box_h": 1,
+            "box_w": 1,
+            "box_x": 0,
+            "box_y": 0,
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            },
+            "assetUrl": "/assets/playground/sample.png"
+          },
+          "type": "image"
+        },
+        {
+          "x": 330,
+          "y": 60,
+          "id": "w",
+          "data": {
+            "seed": 3,
+            "ports": {
+              "depth": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "scale": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "shine": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              },
+              "speed": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "chroma": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.35
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "caustics": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "direction": {
+                "binding": {
+                  "kind": "const",
+                  "value": 30.0
+                }
+              },
+              "steepness": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.45
+                }
+              }
+            },
+            "palette": "ocean"
+          },
+          "type": "waves"
+        },
+        {
+          "x": 640,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "rain",
+    "label": "Rain",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "img",
+          "target": "r",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "r",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 60,
+          "id": "img",
+          "data": {
+            "fit": "cover",
+            "box_h": 1,
+            "box_w": 1,
+            "box_x": 0,
+            "box_y": 0,
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            },
+            "assetUrl": "/assets/playground/sample.png"
+          },
+          "type": "image"
+        },
+        {
+          "x": 330,
+          "y": 60,
+          "id": "r",
+          "data": {
+            "seed": 3,
+            "ports": {
+              "decay": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.7
+                }
+              },
+              "shine": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "density": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "distort": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "drop_size": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "ripple_speed": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              }
+            },
+            "palette": "downpour"
+          },
+          "type": "rain"
+        },
+        {
+          "x": 640,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "fire",
+    "label": "Fire",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "pts",
+          "target": "f",
+          "sourcePort": "out",
+          "targetPort": "positions"
+        },
+        {
+          "id": "e1",
+          "source": "f",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 220,
+          "id": "pts",
+          "data": {
+            "points": [
+              [
+                0.42,
+                0.86
+              ],
+              [
+                0.58,
+                0.86
+              ]
+            ]
+          },
+          "type": "points"
+        },
+        {
+          "x": 330,
+          "y": 60,
+          "id": "f",
+          "data": {
+            "seed": 3,
+            "ports": {
+              "glow": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "width": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "cooling": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "flicker": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "origin_x": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "origin_y": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.85
+                }
+              },
+              "direction": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270.0
+                }
+              },
+              "expansion": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              },
+              "intensity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.9
+                }
+              },
+              "turbulence": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              }
+            },
+            "palette": "flame"
+          },
+          "type": "fire"
+        },
+        {
+          "x": 640,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "lightning",
+    "label": "Lightning",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "lfo",
+          "target": "li",
+          "sourcePort": "out",
+          "targetPort": "strike"
+        },
+        {
+          "id": "e1",
+          "source": "li",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 220,
+          "id": "lfo",
+          "data": {
+            "duty": 0.25,
+            "rate": 2,
+            "phase": 0,
+            "shape": "square",
+            "rateMode": "cycles"
+          },
+          "type": "lfo"
+        },
+        {
+          "x": 330,
+          "y": 60,
+          "id": "li",
+          "data": {
+            "seed": 3,
+            "ports": {
+              "glow": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "flash": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.35
+                }
+              },
+              "length": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.8
+                }
+              },
+              "strike": {
+                "binding": {
+                  "hi": 1,
+                  "lo": 0,
+                  "kind": "node",
+                  "nodeId": "lfo"
+                }
+              },
+              "flicker": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "origin_x": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "origin_y": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "afterglow": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "direction": {
+                "binding": {
+                  "kind": "const",
+                  "value": 90.0
+                }
+              },
+              "thickness": {
+                "binding": {
+                  "kind": "const",
+                  "value": 2.2
+                }
+              },
+              "branchiness": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.55
+                }
+              }
+            },
+            "palette": "electric"
+          },
+          "type": "lightning"
+        },
+        {
+          "x": 640,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "aurora",
+    "label": "Aurora",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "a",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 60,
+          "id": "a",
+          "data": {
+            "seed": 3,
+            "ports": {
+              "rays": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "sway": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              },
+              "bands": {
+                "binding": {
+                  "kind": "const",
+                  "value": 2.0
+                }
+              },
+              "drift": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.3
+                }
+              },
+              "height": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "shimmer": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "brightness": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.65
+                }
+              },
+              "position_y": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.3
+                }
+              }
+            },
+            "palette": "aurora"
+          },
+          "type": "aurora"
+        },
+        {
+          "x": 640,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "clouds",
+    "label": "Clouds",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "c",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 60,
+          "id": "c",
+          "data": {
+            "seed": 3,
+            "ports": {
+              "drift": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "scale": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "silver": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "shading": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "coverage": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "softness": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "direction": {
+                "binding": {
+                  "kind": "const",
+                  "value": 15.0
+                }
+              },
+              "brightness": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.65
+                }
+              },
+              "turbulence": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.5
+                }
+              },
+              "light_angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 300.0
+                }
+              }
+            },
+            "palette": "sky"
+          },
+          "type": "clouds"
+        },
+        {
+          "x": 640,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "echo",
+    "label": "Echo",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "fx",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "fx",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 60,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "b": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "g": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.69
+                }
+              },
+              "r": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.27
+                }
+              },
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 30
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "intensity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.5,
+                  0.5
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 660,
+          "y": 60,
+          "id": "fx",
+          "data": {
+            "mode": "ghost",
+            "ports": {
+              "amount": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              },
+              "length": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              }
+            }
+          },
+          "type": "echo"
+        },
+        {
+          "x": 980,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
+    }
+  },
+  {
+    "key": "colorgrade",
+    "label": "Color Grade",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "fl",
+          "target": "fx",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e1",
+          "source": "fx",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 40,
+          "y": 60,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "b": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "g": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.69
+                }
+              },
+              "r": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.27
+                }
+              },
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.4
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 30
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "intensity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.5,
+                  0.5
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 660,
+          "y": 60,
+          "id": "fx",
+          "data": {
+            "map": "turbo",
+            "mode": "thermal",
+            "ports": {
+              "shift": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.0
+                }
+              },
+              "intensity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1.0
+                }
+              }
+            },
+            "colorA": "#ff4a3c",
+            "colorB": "#2a3cff"
+          },
+          "type": "colorgrade"
+        },
+        {
+          "x": 980,
+          "y": 170,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 26
     }
   }
 ]

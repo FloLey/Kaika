@@ -6,6 +6,7 @@
 
 import { FLUID_PARAM_KEYS } from "../fluidParams.js";
 import { slideshowKind } from "../imageCount";
+import { NODE_PARAMS } from "../nodeParams";
 import { FLUID_PARAMS, coercePorts, mkInputId, mkSlotId } from "./core";
 import { COLOR_STOPS_DEFAULT, COMBINE_MEDIUM, GRAPH_VERSION, combineSlot } from "./factories";
 import type {
@@ -48,9 +49,17 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "slideshow",
   "video",
   "backdrop",
+  "waves",
+  "lightning",
+  "fire",
+  "aurora",
+  "rain",
+  "clouds",
   "transform",
   "stylize",
   "extract",
+  "echo",
+  "colorgrade",
 ]);
 
 // ---- field coercers (the schema-table vocabulary) ------------------------------
@@ -168,6 +177,10 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     sync: oneOf(["segment"], "song"),
     start: num(0),
     loop: boolDefaultTrue,
+    crop_x: num(0),
+    crop_y: num(0),
+    crop_w: num(1),
+    crop_h: num(1),
     ports: portsFor("video"),
   },
   slideshow: {
@@ -189,6 +202,38 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     activeCount: (v) => (typeof v === "number" && v >= 0 ? v : undefined),
   },
   backdrop: { color: hexColor("#101418"), ports: portsFor("backdrop") },
+  waves: {
+    palette: oneOf(["ocean", "tropical", "storm", "sunset"], "ocean"),
+    seed: num(1),
+    ports: portsFor("waves"),
+  },
+  lightning: {
+    palette: oneOf(["electric", "violet", "white-hot", "ember"], "electric"),
+    seed: num(1),
+    ports: portsFor("lightning"),
+  },
+  fire: {
+    palette: oneOf(["flame", "blue-fire", "green-fire", "ghost"], "flame"),
+    seed: num(1),
+    ports: portsFor("fire"),
+  },
+  // v26: aurora/rain/clouds join the schema table (they previously passed
+  // through UNcoerced — stale data/ports survived forever on those types).
+  aurora: {
+    palette: oneOf(["aurora", "solar", "ice", "spectrum"], "aurora"),
+    seed: num(1),
+    ports: portsFor("aurora"),
+  },
+  rain: {
+    palette: oneOf(["downpour", "silver", "neon", "monsoon"], "downpour"),
+    seed: num(1),
+    ports: portsFor("rain"),
+  },
+  clouds: {
+    palette: oneOf(["sky", "nebula", "ink", "dust"], "sky"),
+    seed: num(1),
+    ports: portsFor("clouds"),
+  },
   transform: {
     mode: oneOf(["transform", "mirror", "kaleidoscope"], "transform"),
     segments: intClamp(2, 12, 6),
@@ -205,6 +250,14 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
   extract: {
     kind: oneOf(["canny", "soft", "density", "depth"], "canny"),
     ports: portsFor("extract"),
+  },
+  echo: { mode: oneOf(["ghost", "bright", "dark"], "ghost"), ports: portsFor("echo") },
+  colorgrade: {
+    mode: oneOf(["thermal", "duotone", "neon"], "thermal"),
+    map: oneOf(["turbo", "inferno", "jet", "ocean"], "turbo"),
+    colorA: hexColor("#0b1030"),
+    colorB: hexColor("#ff5ac8"),
+    ports: portsFor("colorgrade"),
   },
 };
 
@@ -337,12 +390,25 @@ export function normalizeGraph(graph: Graph): Graph {
   // "__in" = a loose (unassigned) wire parked on the card — legal on any node (v14).
   const valid = new Set([...FLUID_PARAM_KEYS, "positions", "color", "__in"]);
   const fluidIds = new Set(nodes.filter((n) => n.type === "fluid").map((n) => n.id));
-  const edges = (graph.edges || []).filter(
-    (e) =>
-      liveIds.has(e.source) &&
-      liveIds.has(e.target) &&
-      !(fluidIds.has(e.target) && !valid.has(e.targetPort))
-  );
+  // v26: the same pruning for the gen-sim cards — their v25→v26 port RENAMES
+  // would otherwise leave dangling param edges (coercePorts drops the binding,
+  // and a bindingless non-loose edge breaks the binding↔edge invariant while
+  // still hashing / faking "contributing"). Non-param inputs stay legal.
+  const genValid: Record<string, Set<string>> = {};
+  for (const t of ["waves", "lightning", "fire", "aurora", "rain", "clouds"]) {
+    genValid[t] = new Set([
+      ...(NODE_PARAMS[t] || []).map((p) => p.key),
+      "positions", "color", "video", "__in",
+    ]);
+  }
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const edges = (graph.edges || []).filter((e) => {
+    if (!liveIds.has(e.source) || !liveIds.has(e.target)) return false;
+    if (fluidIds.has(e.target) && !valid.has(e.targetPort)) return false;
+    const tv = genValid[nodeById.get(e.target)?.type ?? ""];
+    if (tv && !tv.has(e.targetPort)) return false;
+    return true;
+  });
   if (edges.length !== (graph.edges || []).length) changed = true;
   // v16: canvas view MODES. `viewMode` ("detailed" when absent — the classic default)
   // + `viewOverrides` (cards displayed opposite to the mode) replace both legacy sets:

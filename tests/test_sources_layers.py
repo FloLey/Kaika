@@ -106,6 +106,43 @@ def test_video_contain_letterboxes(assets):
     assert (out[0, ..., 3] == 0).any() and (out[0, ..., 3] == 255).any()  # transparent bars + opaque content
 
 
+@_needs_ffmpeg
+def test_video_crop_identity_is_byte_identical(assets):
+    """The default (full-frame) crop must add NO filter — existing renders stay stable."""
+    _job, _ip, _iu, _vu, vid_path = assets
+    kw = dict(asset_path=vid_path, src0=0.0, opacity=np.ones(3, np.float32))
+    base = S.video(3, 60, 40, 10, **kw)
+    same = S.video(3, 60, 40, 10, crop_x=0.0, crop_y=0.0, crop_w=1.0, crop_h=1.0, **kw)
+    assert np.array_equal(base, same)
+
+
+@_needs_ffmpeg
+def test_video_crop_selects_source_region(tmp_path, monkeypatch):
+    """Cropping the left/right half of a half-black/half-white clip yields a black/white
+    layer — the selected SOURCE region is what gets fitted into the box."""
+    img = Image.new("RGB", (40, 30), (255, 255, 255))
+    img.paste((0, 0, 0), (0, 0, 20, 30))  # left half black, right half white
+    img.save(tmp_path / "halves.png")
+    vid = tmp_path / "halves.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(tmp_path / "halves.png"),
+         "-t", "1", "-r", "10", "-pix_fmt", "yuv420p", str(vid)],
+        check=True)
+    kw = dict(asset_path=str(vid), src0=0.0, fit="stretch", opacity=np.ones(2, np.float32))
+    left = S.video(2, 30, 30, 10, crop_w=0.5, **kw)
+    right = S.video(2, 30, 30, 10, crop_x=0.5, crop_w=0.5, **kw)
+    assert left[0, ..., :3].mean() < 40  # the black half fills the frame
+    assert right[0, ..., :3].mean() > 215  # the white half fills the frame
+
+
+def test_video_static_carries_crop():
+    from backend.graph_render import _video_static
+
+    st = _video_static({"crop_x": 0.25, "crop_w": 0.5})
+    assert st["crop_x"] == 0.25 and st["crop_w"] == 0.5
+    assert st["crop_y"] == 0.0 and st["crop_h"] == 1.0  # defaults: full frame
+
+
 # --------------------------------------------------------------------------- #
 # Through the render DAG
 # --------------------------------------------------------------------------- #

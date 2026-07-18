@@ -4,6 +4,8 @@ import { fmtTime } from "../../lib/mel";
 import { labelColor } from "../../lib/segments";
 import { NODE_TYPES, PALETTE_CATEGORIES } from "../animation/nodes/registry";
 import type { Segment } from "../../lib/types";
+import type { FixtureExport } from "../../lib/api";
+import Info from "../../ui/Info";
 
 interface SegmentRailProps {
   segments: Segment[];
@@ -13,6 +15,8 @@ interface SegmentRailProps {
   // Playground mode: title "CARDS" and group the entries into collapsible categories
   // (matching the add-menu), with no time range — these are cards, not musical segments.
   grouped?: boolean;
+  // Playground only: capture the live state into the committed fixture (💾 button).
+  onSaveFixture?: () => Promise<FixtureExport>;
 }
 
 // Card display label -> palette category key, derived from the node registry so the
@@ -31,12 +35,38 @@ export default function SegmentRail({
   onSelect,
   onCollapse,
   grouped,
+  onSaveFixture,
 }: SegmentRailProps) {
   // Every category starts collapsed: the playground carries one card per type, so an
   // all-open rail is a long scroll of names. Folded, it reads as a table of contents.
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(
     () => new Set(PALETTE_CATEGORIES.map((c) => c.key))
   );
+  // 💾 save-fixture outcome, shown inline under the head (playground only).
+  const [fixMsg, setFixMsg] = useState<{ kind: "ok" | "warn" | "err"; text: string } | null>(null);
+  const [fixBusy, setFixBusy] = useState(false);
+
+  const saveFixture = async () => {
+    if (!onSaveFixture || fixBusy) return;
+    setFixBusy(true);
+    setFixMsg(null);
+    try {
+      const r = await onSaveFixture();
+      const warns = [
+        ...r.skipped.map((l) => `skipped "${l}" (not a card name)`),
+        ...(r.missing.length ? [`no demo left for: ${r.missing.join(", ")}`] : []),
+      ];
+      setFixMsg(
+        warns.length
+          ? { kind: "warn", text: `saved ${r.exported} pipelines — ${warns.join("; ")}` }
+          : { kind: "ok", text: `saved ${r.exported} pipelines to the fixture` }
+      );
+    } catch (e) {
+      setFixMsg({ kind: "err", text: e instanceof Error ? e.message : "export failed" });
+    } finally {
+      setFixBusy(false);
+    }
+  };
   const toggleCat = (key: string) =>
     setCollapsedCats((prev) => {
       const next = new Set(prev);
@@ -67,6 +97,22 @@ export default function SegmentRail({
   const head = (
     <div className="seg-rail-head">
       <span className="section-title">{grouped ? "CARDS" : "SEGMENTS"}</span>
+      {grouped && onSaveFixture && (
+        <>
+          <button
+            className="iconbtn sm"
+            title="Save fixture — make the current Playground state the new default (what a re-seed rebuilds)"
+            onClick={saveFixture}
+            disabled={fixBusy}
+          >
+            {fixBusy ? "…" : "💾"}
+          </button>
+          <Info
+            text="Writes the current Playground into the committed fixture (backend/playground_pipelines.json) — the state the Playground is rebuilt from. Same as `make export-playground`."
+            section="fluid-lab"
+          />
+        </>
+      )}
       <button className="iconbtn sm" title={grouped ? "Hide cards" : "Hide segments"} onClick={onCollapse}>
         ‹
       </button>
@@ -92,6 +138,7 @@ export default function SegmentRail({
   return (
     <div className="seg-rail">
       {head}
+      {fixMsg && <div className={"seg-rail-fixmsg " + fixMsg.kind}>{fixMsg.text}</div>}
       {PALETTE_CATEGORIES.filter((c) => byCat[c.key]?.length).map((c) => {
         const isCollapsed = collapsedCats.has(c.key);
         return (

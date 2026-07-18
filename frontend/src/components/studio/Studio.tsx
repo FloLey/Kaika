@@ -36,6 +36,8 @@ interface StudioProps {
   audioMode?: "original" | "instrumental";
   onEditSplit?: () => void;
   onExport?: () => void;
+  // Playground only: capture the live state into the committed fixture (💾 in the rail).
+  onSaveFixture?: () => Promise<import("../../lib/api").FixtureExport>;
 }
 
 // Stage 3 — the studio. Owns all playback/ephemeral state (rail open, what's
@@ -58,6 +60,7 @@ export default function Studio({
   audioMode,
   onEditSplit,
   onExport,
+  onSaveFixture,
 }: StudioProps) {
   const [railOpen, setRailOpen] = useState(true);
   // The Playground is about the cards, so it lands on the animation tab; a normal
@@ -221,6 +224,7 @@ export default function Studio({
           onSelect={selectSegment}
           onCollapse={() => setRailOpen(false)}
           grouped={job === "playground"}
+          onSaveFixture={onSaveFixture}
         />
       ) : (
         <button className="rail-reopen" title="Show segments" onClick={() => setRailOpen(true)}>

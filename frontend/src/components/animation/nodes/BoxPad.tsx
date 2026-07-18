@@ -31,6 +31,8 @@ export interface BoxPreview {
 // scaled per `fit`, following the transport `clock` so it plays synced to the timeline.
 // Timing approximates the backend (source_t = start + speed·base, base per `sync`, wrapped
 // when `loop`); per-frame speed modulation isn't previewed — the render stays authoritative.
+// `crop` is the card's source crop — the preview shows only that region of the clip,
+// placed exactly as the render fits it into the box.
 export interface BoxVideoPreview {
   src: string;
   fit: "cover" | "contain" | "stretch";
@@ -39,6 +41,7 @@ export interface BoxVideoPreview {
   speed: number;
   loop: boolean;
   segStart: number;
+  crop?: Box;
   clock?: RefObject<HTMLAudioElement | null>;
   playing?: boolean;
 }
@@ -53,8 +56,71 @@ export interface BoxImagePreview {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const MIN = 0.05; // smallest box side (fraction of the frame)
-const CORNERS = ["nw", "ne", "sw", "se"] as const;
-type Corner = (typeof CORNERS)[number];
+export const CORNERS = ["nw", "ne", "sw", "se"] as const;
+export type Corner = (typeof CORNERS)[number];
+
+// The rect-editing grammar shared by BoxPad and CropPad: drag the body to MOVE (the grab
+// offset stays under the cursor), drag a corner to RESIZE (the opposite corner anchors),
+// everything clamped to the pad. Live drags stay in local state; `onChange` commits once
+// on pointer-up (no graph churn per move).
+export function useBoxEdit(
+  box: Box,
+  onChange: (box: Box) => void,
+  padRef: RefObject<HTMLDivElement | null>
+) {
+  const { norm, startDrag } = useDragPad(padRef);
+  const [drag, setDrag] = useState<Box | null>(null);
+  const view = drag ?? box;
+
+  const onBodyDown = (e: PointerEvent) => {
+    if (e.target !== e.currentTarget) return; // a corner handle, not the body
+    const [gx, gy] = norm(e);
+    const ox = gx - box.x;
+    const oy = gy - box.y;
+    const moveTo = ([cx, cy]: [number, number]): Box => ({
+      x: clamp(cx - ox, 0, 1 - box.w),
+      y: clamp(cy - oy, 0, 1 - box.h),
+      w: box.w,
+      h: box.h,
+    });
+    startDrag(e, {
+      onMove: (coord) => setDrag(moveTo(coord)),
+      onEnd: ({ moved, coord }) => {
+        setDrag(null);
+        if (moved && coord) onChange(moveTo(coord));
+      },
+    });
+  };
+
+  const resize = (c: Corner, [cx, cy]: [number, number]): Box => {
+    const right = box.x + box.w;
+    const bottom = box.y + box.h;
+    let { x, y, w, h } = box;
+    if (c === "se" || c === "ne") w = clamp(cx - box.x, MIN, 1 - box.x);
+    if (c === "sw" || c === "nw") {
+      x = clamp(cx, 0, right - MIN);
+      w = right - x;
+    }
+    if (c === "se" || c === "sw") h = clamp(cy - box.y, MIN, 1 - box.y);
+    if (c === "ne" || c === "nw") {
+      y = clamp(cy, 0, bottom - MIN);
+      h = bottom - y;
+    }
+    return { x, y, w, h };
+  };
+
+  const onHandleDown = (c: Corner, e: PointerEvent) => {
+    startDrag(e, {
+      onMove: (coord) => setDrag(resize(c, coord)),
+      onEnd: ({ moved, coord }) => {
+        setDrag(null);
+        if (moved && coord) onChange(resize(c, coord));
+      },
+    });
+  };
+
+  return { view, onBodyDown, onHandleDown };
+}
 
 // The visual editor for a normalized box: drag the rectangle body to MOVE it, drag a
 // corner handle to RESIZE it (opposite corner stays put), all clamped to the frame. The
@@ -78,9 +144,11 @@ export default function BoxPad({
   const padRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { norm, startDrag } = useDragPad(padRef);
-  const [drag, setDrag] = useState<Box | null>(null);
-  const view = drag ?? box;
+  const { view, onBodyDown, onHandleDown } = useBoxEdit(box, onChange, padRef);
+  // Pad + source pixel sizes, so the cropped-clip preview can be laid out exactly
+  // (percent + object-fit can't express an arbitrary source crop).
+  const [padSize, setPadSize] = useState<[number, number] | null>(null);
+  const [srcDim, setSrcDim] = useState<[number, number] | null>(null);
 
   // Draw one frame of the WYSIWYG text preview: wrap + auto-fit `text` to the box (stroke
   // included) exactly like the backend, white fill + black outline. Approximate (canvas vs
@@ -191,6 +259,53 @@ export default function BoxPad({
     return () => ro.disconnect();
   }, [renderFrame]);
 
+  // Track the pad's pixel size for the cropped-clip layout below.
+  useEffect(() => {
+    const pad = padRef.current;
+    if (!pad || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => setPadSize([pad.clientWidth, pad.clientHeight]);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(pad);
+    return () => ro.disconnect();
+  }, []);
+
+  // The clip's layout inside the box: with the pad + source sizes known, place the video
+  // in PIXELS so the CROPPED source region lands in the box per `fit` — the same centring
+  // as the backend `_fit_rgba` (crop first, then cover/contain/stretch), with the box
+  // wrapper clipping the overflow. Until both sizes are measured (first paint / metadata
+  // still loading), fall back to object-fit of the whole frame — crop kicks in a tick later.
+  const clipStyle = (): CSSProperties => {
+    const vp = videoPreview!;
+    if (!padSize || !srcDim) {
+      return {
+        left: 0,
+        top: 0,
+        width: "100%",
+        height: "100%",
+        objectFit: vp.fit === "stretch" ? "fill" : vp.fit,
+      };
+    }
+    const crop = vp.crop ?? { x: 0, y: 0, w: 1, h: 1 };
+    const [sw, sh] = srcDim;
+    const bw = view.w * padSize[0];
+    const bh = view.h * padSize[1];
+    const cw = Math.max(1e-6, crop.w * sw); // cropped region, source pixels
+    const ch = Math.max(1e-6, crop.h * sh);
+    let sx = bw / cw;
+    let sy = bh / ch;
+    if (vp.fit !== "stretch") {
+      sx = sy = vp.fit === "cover" ? Math.max(sx, sy) : Math.min(sx, sy);
+    }
+    return {
+      left: (bw - cw * sx) / 2 - crop.x * sw * sx,
+      top: (bh - ch * sy) / 2 - crop.y * sh * sy,
+      width: sw * sx,
+      height: sh * sy,
+      maxWidth: "none",
+    };
+  };
+
   // Drive the live video preview off the transport clock. The key is to let the <video>
   // PLAY NATIVELY (smooth, hardware-decoded) and keep it loosely in sync — nudging
   // `playbackRate` a few % to absorb small drift, and hard-seeking only on a big desync
@@ -263,55 +378,6 @@ export default function BoxPad({
     };
   }, [videoPreview]);
 
-  // Move: keep the grab offset within the box so it doesn't jump under the cursor.
-  const onBodyDown = (e: PointerEvent) => {
-    if (e.target !== e.currentTarget) return; // a corner handle, not the body
-    const [gx, gy] = norm(e);
-    const ox = gx - box.x;
-    const oy = gy - box.y;
-    const moveTo = ([cx, cy]: [number, number]): Box => ({
-      x: clamp(cx - ox, 0, 1 - box.w),
-      y: clamp(cy - oy, 0, 1 - box.h),
-      w: box.w,
-      h: box.h,
-    });
-    startDrag(e, {
-      onMove: (coord) => setDrag(moveTo(coord)),
-      onEnd: ({ moved, coord }) => {
-        setDrag(null);
-        if (moved && coord) onChange(moveTo(coord));
-      },
-    });
-  };
-
-  // Resize: the dragged corner follows the cursor; the opposite corner is the anchor.
-  const resize = (c: Corner, [cx, cy]: [number, number]): Box => {
-    const right = box.x + box.w;
-    const bottom = box.y + box.h;
-    let { x, y, w, h } = box;
-    if (c === "se" || c === "ne") w = clamp(cx - box.x, MIN, 1 - box.x);
-    if (c === "sw" || c === "nw") {
-      x = clamp(cx, 0, right - MIN);
-      w = right - x;
-    }
-    if (c === "se" || c === "sw") h = clamp(cy - box.y, MIN, 1 - box.y);
-    if (c === "ne" || c === "nw") {
-      y = clamp(cy, 0, bottom - MIN);
-      h = bottom - y;
-    }
-    return { x, y, w, h };
-  };
-
-  const onHandleDown = (c: Corner, e: PointerEvent) => {
-    startDrag(e, {
-      onMove: (coord) => setDrag(resize(c, coord)),
-      onEnd: ({ moved, coord }) => {
-        setDrag(null);
-        if (moved && coord) onChange(resize(c, coord));
-      },
-    });
-  };
-
   const pct = (v: number) => `${v * 100}%`;
   return (
     <div className="anim-box-editor">
@@ -337,22 +403,25 @@ export default function BoxPad({
           />
         )}
         {videoPreview?.src && (
-          <video
-            ref={videoRef}
-            className="anim-box-video"
-            src={videoPreview.src}
-            style={{
-              left: pct(view.x),
-              top: pct(view.y),
-              width: pct(view.w),
-              height: pct(view.h),
-              objectFit: videoPreview.fit === "stretch" ? "fill" : videoPreview.fit,
-            }}
-            muted
-            loop={videoPreview.loop}
-            playsInline
-            preload="auto"
-          />
+          <div
+            className="anim-box-clip"
+            style={{ left: pct(view.x), top: pct(view.y), width: pct(view.w), height: pct(view.h) }}
+          >
+            <video
+              ref={videoRef}
+              className="anim-box-video"
+              src={videoPreview.src}
+              style={clipStyle()}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                if (v.videoWidth && v.videoHeight) setSrcDim([v.videoWidth, v.videoHeight]);
+              }}
+              muted
+              loop={videoPreview.loop}
+              playsInline
+              preload="auto"
+            />
+          </div>
         )}
         <div
           className="anim-box-rect"

@@ -258,17 +258,34 @@ export function resolveDropPort(
       const free = node.data.inputs.find((s) => !videoSource(graph, targetId, s.id));
       return free ? free.id : null;
     }
+    // waves/rain refract an optional video input (the pool floor / liquid bed).
+    if (node.type === "waves" || node.type === "rain")
+      return videoSource(graph, targetId, "video") ? null : "video";
     return null;
   }
   if (flow === "images") {
     return node.type === "slideshow" && !videoSource(graph, targetId, "images") ? "images" : null;
   }
   if (flow === "points") {
-    return node.type === "fluid" && !videoSource(graph, targetId, "positions") ? "positions" : null;
+    // fluid emitters and the gen-sim cards with multiple origins (fire flames,
+    // lightning strike points, rain drip points) all take a points card.
+    const takesPoints =
+      node.type === "fluid" ||
+      node.type === "fire" ||
+      node.type === "lightning" ||
+      node.type === "rain";
+    return takesPoints && !videoSource(graph, targetId, "positions") ? "positions" : null;
   }
   if (flow === "color") {
+    const GEN_TYPES = ["waves", "lightning", "fire", "aurora", "rain", "clouds"];
     const candidates =
-      node.type === "lyrics" ? ["fillColor", "outlineColor"] : node.type === "fluid" ? ["color"] : [];
+      node.type === "lyrics"
+        ? ["fillColor", "outlineColor"]
+        : node.type === "fluid" || GEN_TYPES.includes(node.type)
+          ? ["color"]
+          : node.type === "colorgrade"
+            ? ["tint"]
+            : [];
     const free = candidates.filter((p) => !videoSource(graph, targetId, p));
     return free.length === 1 ? free[0] : null;
   }

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy import fft as sfft
-from scipy.ndimage import map_coordinates
+from scipy.ndimage import gaussian_filter, map_coordinates
 
 
 def _series(x, nframes: int) -> np.ndarray:
@@ -111,6 +111,7 @@ class FluidSim:
         vorticity: float,
         wrap: bool = True,
         dye_modes: list | None = None,
+        fire: bool = False,
     ):
         # Rectangular grid (h rows x w cols). `short` is the reference dimension
         # that keeps splat size + motion scale consistent across aspect ratios
@@ -138,6 +139,17 @@ class FluidSim:
         # `dye_modes` it's a single layer matching the velocity edge mode (unchanged).
         self.dye_modes = list(dye_modes) if dye_modes else [self._adv_mode]
         self.dye = [np.zeros((h, w, 3), np.float32) for _ in self.dye_modes]
+        # FIRE mode (the fire card, specs/generative-cards): a normalised
+        # temperature field rides the same solver — heat emitters inject T,
+        # buoyancy lifts it along a rotatable "up", quartic radiative cooling
+        # shapes the flame, and rendering maps T through a blackbody ramp
+        # instead of tonemapping dye. Nguyen/Fedkiw/Jensen (SIGGRAPH 2002)
+        # boiled down to the visually load-bearing terms.
+        self.fire = bool(fire)
+        self.T = np.zeros((h, w), np.float32) if fire else None
+        self.buoy_fx = 0.0  # per-frame buoyancy force at T=1, cells/frame²
+        self.buoy_fy = 0.0  # (set by LayerInjector.apply from the fire tracks)
+        self.cooling = 0.06  # quartic cooling rate per frame
         # Per-frame divergence source (radial mode only); see add_radial/_project.
         self._src = None
         yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
@@ -175,6 +187,14 @@ class FluidSim:
         g = self._gauss(px, py, radius)
         self.u += g * fx
         self.v += g * fy
+
+    def add_heat(self, px, py, radius, amount):
+        """Fire-mode heat splat. MAX-blend (not additive): overlapping emitters
+        saturate at the flame temperature instead of super-heating past white,
+        and a steady emitter holds its core at `amount` while advection strips
+        the plume away — the anchored-base look of a real flame."""
+        g = self._gauss(px, py, radius)
+        np.maximum(self.T, np.float32(amount) * g, out=self.T)
 
     def add_radial(self, px, py, radius, strength):
         """Omnidirectional outward bloom: accumulate a DIVERGENCE source at the
@@ -216,7 +236,7 @@ class FluidSim:
             out[..., c] = map_coordinates(field[..., c], coords, order=1, mode=mode)
         return out
 
-    def _vorticity(self, eps):
+    def _vorticity(self, eps, weight=None):
         if eps <= 0:
             return
         eps *= 0.05  # gentle gain — raw curl feedback is unstable otherwise
@@ -229,6 +249,11 @@ class FluidSim:
         gy = (np.roll(absc, -1, 0) - np.roll(absc, 1, 0)) * 0.5
         norm = np.sqrt(gx * gx + gy * gy) + 1e-5
         gx, gy = gx / norm, gy / norm
+        if weight is not None:
+            # fire: confinement rides the hot column (tongues lick where it's
+            # hot, the surrounding air stays calm — Fedkiw ran the hot phase
+            # at ~4x the fuel's confinement)
+            eps = eps * (0.15 + 0.85 * np.clip(weight, 0.0, 1.0))
         self.u += eps * (gy * curl)
         self.v += eps * (-gx * curl)
 
@@ -248,15 +273,32 @@ class FluidSim:
                 nbr += f
                 nbr /= denom
                 setattr(self, fld, nbr)
-        self._vorticity(self.vorticity)
+        if self.fire:
+            # buoyancy f = β·T along the medium's "up" — the flame-direction
+            # control is literally rotating gravity for this field
+            self.u += self.buoy_fx * self.T
+            self.v += self.buoy_fy * self.T
+        self._vorticity(self.vorticity, self.T if self.fire else None)
         self._project(self._src)  # establish the radial outflow (if any source)
         self._src = None  # consume this frame's divergence source
         u0 = self._advect(self.u)
         v0 = self._advect(self.v)
         self.u, self.v = u0, v0
         self._project()  # clean up advection divergence (no source)
+        if self.fire:
+            t = self._advect(self.T)
+            # quartic radiative cooling (Fedkiw eq. 17, T_air = 0, normalised),
+            # integrated ANALYTICALLY so any cooling rate is unconditionally
+            # stable: T ← T / (1 + 3cT³)^⅓ — this term IS the flame shape
+            t /= np.cbrt(1.0 + (3.0 * self.cooling) * t * t * t)
+            t *= 0.995  # faint linear loss so cold tails truly vanish
+            # a whisper of diffusion: softens the cold-entrainment comb at the
+            # base and buys the hypnotic softness (heat conducts; dye doesn't)
+            self.T = gaussian_filter(t, 0.45)
         # Advect each dye layer with ITS OWN edge mode (shared velocity field).
         for i, mode in enumerate(self.dye_modes):
+            if self.fire and not self.dye[i].any():
+                continue  # fire fields usually carry no dye — skip the advect
             d = self._advect(self.dye[i], mode)
             d *= self.dissipation
             np.clip(d, 0.0, 16.0, out=d)
@@ -281,6 +323,25 @@ def _tonemap(d: np.ndarray, exposure=1.9, gamma=1.15, bg=None) -> np.ndarray:
         # through where there's no dye and never darkens the glow.
         ldr = 1.0 - (1.0 - bg[None, None, :]) * (1.0 - ldr)
     return (np.clip(ldr, 0, 1) * 255).astype(np.uint8)
+
+
+def _fire_frame(t_field: np.ndarray, stops: list, glow: float, opacity: float) -> np.ndarray:
+    """Render a fire field's temperature to RGB-on-black: T^p through the
+    blackbody ramp (chromaticity), gated by a visibility threshold (~the Draper
+    point — below it the gas is hot but not glowing), wide Gaussian bloom, then
+    the same saturating tonemap as dye. Emissive-on-black, so downstream
+    compositing screen-blends it exactly like fluid dye."""
+    from . import procgen  # local import: procgen ← fluid would be a cycle
+
+    e = np.clip(t_field, 0.0, 1.0) ** 1.55  # steeper ⇒ red rims, white-hot core
+    vis = np.clip((e - 0.05) / 0.95, 0.0, 1.0) ** 1.2
+    rgb = procgen.ramp_lookup(e, stops) * vis[..., None]
+    if glow > 1e-3:
+        sigma = 0.05 * min(t_field.shape) * (0.4 + 1.2 * glow)
+        rgb = rgb + (0.55 * glow) * gaussian_filter(rgb, (sigma, sigma, 0))
+    ldr = 1.0 - np.exp(-2.6 * np.clip(rgb, 0.0, None))
+    ldr = np.clip(ldr, 0.0, 1.0) ** (1.0 / 1.1)
+    return (np.clip(ldr * max(0.0, min(1.0, opacity)), 0.0, 1.0) * 255).astype(np.uint8)
 
 
 def flatten(frames: np.ndarray) -> np.ndarray:
@@ -316,6 +377,12 @@ def _emitter(src: dict, nframes: int):
     opac_s = _series(src.get("opacity", 1.0), nframes)
     radial = bool(src.get("radial", False))
     enabled = bool(src.get("enabled", True))
+
+    # Per-frame position series (fire cards: `origin_x/y` are modulatable ports,
+    # so the emitter can glide under an LFO). When absent, the path polyline
+    # below drives the position as before.
+    px_s = _series(src["px"], nframes) if "px" in src else None
+    py_s = _series(src["py"], nframes) if "py" in src else None
 
     # Source position: a polyline the source travels across the clip (one point
     # = static). pts[k] in 0..1; param t in [0,1] over the whole duration.
@@ -359,6 +426,8 @@ def _emitter(src: dict, nframes: int):
         fr = s - k
         return pts[k] * (1.0 - fr) + pts[k + 1] * fr
 
+    heat = bool(src.get("heat", False))  # a fire emitter: `emit` drives T, not dye
+
     def inject(sim, i, denom, layer=0):
         if not enabled:
             return
@@ -366,14 +435,18 @@ def _emitter(src: dict, nframes: int):
         g = gate_at(t)
         if g <= 0.0:
             return
-        px, py = pos_at(t)
+        px, py = (px_s[i], py_s[i]) if px_s is not None else pos_at(t)
         ang = np.deg2rad(angle_s[i])
-        color_i = np.array([r_s[i], g_s[i], b_s[i]], np.float32) * inten_s[i] * opac_s[i]
-        sim.add_dye(px, py, radius_s[i], color_i, emit_s[i] * g, layer)
+        if heat:
+            sim.add_heat(px, py, radius_s[i], emit_s[i] * inten_s[i] * g)
+        else:
+            color_i = np.array([r_s[i], g_s[i], b_s[i]], np.float32) * inten_s[i] * opac_s[i]
+            sim.add_dye(px, py, radius_s[i], color_i, emit_s[i] * g, layer)
         f = force_s[i] * 0.02 * g  # slider units -> a few cells/frame at steady state
         if radial:
             # Radial uses a divergence source (own gain); it builds outflow over
             # frames, so it wants a smaller per-frame strength than a velocity kick.
+            # For fire this is the combustion-expansion stand-in (fuller flames).
             sim.add_radial(px, py, radius_s[i], force_s[i] * 0.05 * g)
         elif f:
             sim.add_force(px, py, radius_s[i], np.cos(ang) * f, np.sin(ang) * f)
@@ -401,6 +474,18 @@ _MEDIUM_DEFAULTS = {
     "vorticity": 5.0,
 }
 
+# Fire-field tracks (params["fire"]) — per-frame like the medium. `buoyancy` is
+# the lift force at T=1 (cells/frame²); `direction` rotates it (emitter-angle
+# convention: 270° = screen-up); `cooling` 0..1 maps to the quartic rate (the
+# flame-height knob); `glow`/`opacity` are rendering-side.
+_FIRE_DEFAULTS = {
+    "buoyancy": 1.2,
+    "direction": 270.0,
+    "cooling": 0.5,
+    "glow": 0.5,
+    "opacity": 1.0,
+}
+
 
 class LayerInjector:
     """The per-frame "rules" of ONE fluid field over ONE clip/segment window: the medium
@@ -421,6 +506,12 @@ class LayerInjector:
         self._medium = {
             k: _series(fl.get(k, d), self.nframes).tolist() for k, d in _MEDIUM_DEFAULTS.items()
         }
+        fire = params.get("fire")
+        self._fire = None
+        if fire is not None:
+            self._fire = {
+                k: _series(fire.get(k, d), self.nframes).tolist() for k, d in _FIRE_DEFAULTS.items()
+            }
         sources = params.get("sources") or [params.get("source", {})]
         self._emitters = []
         for s in sources:
@@ -433,12 +524,23 @@ class LayerInjector:
         """This field's frame-0 value for a medium param (to seed a fresh FluidSim)."""
         return self._medium[key][0]
 
+    def fire_track(self, key: str) -> list:
+        """A fire per-frame track (rendering reads glow/opacity directly)."""
+        return self._fire[key]
+
     def apply(self, sim: "FluidSim", i: int) -> None:
         """Set `sim`'s medium from frame `i` and inject this frame's emitters (no step)."""
         sim.dissipation = self._medium["dissipation"][i]
         sim.vel_dissipation = self._medium["velocity_dissipation"][i]
         sim.viscosity = self._medium["viscosity"][i]
         sim.vorticity = self._medium["vorticity"][i]
+        if self._fire is not None:
+            ang = np.deg2rad(self._fire["direction"][i])
+            beta = self._fire["buoyancy"][i]
+            sim.buoy_fx = float(np.cos(ang) * beta)
+            sim.buoy_fy = float(np.sin(ang) * beta)
+            cool = min(max(self._fire["cooling"][i], 0.0), 1.0)
+            sim.cooling = 0.02 + 0.55 * cool * cool  # quadratic feel on the knob
         for inject, layer in self._emitters:
             inject(sim, i, self._denom, layer)
 
@@ -484,6 +586,8 @@ class FluidClip:
         # the same math the standalone clip used; here it drives our own sim.
         self._layer = LayerInjector(params, dye_modes)
         self.nframes = self._layer.nframes
+        fire = params.get("fire")
+        self._fire_stops = (fire or {}).get("stops")
         self._sim = FluidSim(
             self.gh,
             self.gw,
@@ -493,6 +597,7 @@ class FluidClip:
             vorticity=self._layer.medium0("vorticity"),
             wrap=vel_wrap,
             dye_modes=dye_modes,
+            fire=fire is not None,
         )
         self._bg = bg_rgb if apply_bg else None
         self._cursor = 0
@@ -509,7 +614,20 @@ class FluidClip:
         for i in range(a, b):
             self._layer.apply(sim, i)  # set medium + inject this frame's emitters
             sim.step()
-            frames[i - a] = _tonemap(sim.current_dye(), bg=self._bg)
+            if sim.fire:
+                ff = _fire_frame(
+                    sim.T,
+                    self._fire_stops,
+                    self._layer.fire_track("glow")[i],
+                    self._layer.fire_track("opacity")[i],
+                )
+                dye = sim.current_dye()
+                if dye.any():  # a fluid merged with fire: screen-blend the two
+                    dd = _tonemap(dye, bg=None)  # emissive glows over each other
+                    ff = 255 - ((255 - ff.astype(np.uint16)) * (255 - dd) // 255).astype(np.uint8)
+                frames[i - a] = ff
+            else:
+                frames[i - a] = _tonemap(sim.current_dye(), bg=self._bg)
         self._cursor = b
         return frames
 
@@ -582,7 +700,9 @@ def open_stream_encoder(
         "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
         str(path),
     ]  # fmt: skip
-    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    return subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+    )
 
 
 def encoder_error(enc: "subprocess.Popen") -> str:
@@ -619,7 +739,15 @@ class StreamEncoder:
     block never spawns a process. `close()` is the `finally`-safe teardown — a no-op once
     `finalize()` has succeeded."""
 
-    def __init__(self, path: Path, fps: int, gw: int, gh: int, out_w: int | None = None, out_h: int | None = None):
+    def __init__(
+        self,
+        path: Path,
+        fps: int,
+        gw: int,
+        gh: int,
+        out_w: int | None = None,
+        out_h: int | None = None,
+    ):
         self._args = (path, fps, gw, gh, out_w, out_h)
         self._enc: "subprocess.Popen | None" = None
 

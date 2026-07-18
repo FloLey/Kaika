@@ -122,9 +122,13 @@ or the executor's dispatch.
    already covered by `output_hash`'s contributing-DAG walk (no edit needed).
 5. **Playground pipeline** — every card must have a working demo segment: add its
    label to `backend/card_demo.py` `CARD_LABELS`, build the pipeline in the live
-   Playground, then `make export-playground` to capture it into
-   `playground_pipelines.json` (never hand-edit that file). `test_card_impact.py`
-   renders every pipeline and fails on a missing/blank one.
+   Playground, then capture it into `playground_pipelines.json` with either the
+   **💾 save fixture** button (top of the Playground's CARDS rail) or
+   `make export-playground` (never hand-edit that file). `test_card_impact.py`
+   renders every pipeline and fails on a missing/blank one. Once the fixture has
+   the demo, LIVE playgrounds pick it up additively on their next open
+   (`ensure_playground` appends segments for cards the rail lacks, by label —
+   no destructive `make seed-playground` needed; that stays the force-rebuild).
 6. **Tests**: `registry.test.tsx` and `test_graph_registry.py` already assert every
    registered type round-trips; add behaviour tests for the new card/handler.
 

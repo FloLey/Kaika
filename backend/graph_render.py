@@ -20,7 +20,7 @@ from typing import Callable
 import numpy as np
 from scipy.ndimage import map_coordinates
 
-from . import fluid, fluid_cache, paths, render_cache, sources
+from . import fluid, fluid_cache, look_fx, paths, procgen, render_cache, sources
 from .animation_params import PARAMS
 from .graph_common import (
     _PORT_SPECS,
@@ -302,16 +302,26 @@ class Dag:
         if fill:
             inten = fluid._series(fill["intensity"], nframes)
             for ch in ("r", "g", "b"):
-                out[ch] = np.clip(fluid._series(fill[ch], nframes) * inten, 0.0, 1.0).astype(np.float32)
+                out[ch] = np.clip(fluid._series(fill[ch], nframes) * inten, 0.0, 1.0).astype(
+                    np.float32
+                )
         else:
             for ch in ("r", "g", "b"):
                 out[ch] = np.ones(nframes, np.float32)
         outline = _resolve_node_color(self.graph, node, "outlineColor", self.nodes, resolve)
-        oint = fluid._series(outline["intensity"], nframes) if outline else np.ones(nframes, np.float32)
+        oint = (
+            fluid._series(outline["intensity"], nframes)
+            if outline
+            else np.ones(nframes, np.float32)
+        )
         for ch in ("r", "g", "b"):
             # Apply the outline card's `intensity` too (fill does), so equally-configured
             # fill/outline colour cards render at the same brightness.
-            v = fluid._series(outline[ch], nframes) * oint if outline else np.zeros(nframes, np.float32)
+            v = (
+                fluid._series(outline[ch], nframes) * oint
+                if outline
+                else np.zeros(nframes, np.float32)
+            )
             out[f"outline_{ch}"] = np.clip(v, 0.0, 1.0).astype(np.float32)
         return out
 
@@ -328,12 +338,24 @@ class Dag:
         return out
 
     def _merge_params(self, emitters, medium):
+        # A fire card's emitter list smuggles its field settings on the first
+        # emitter (`_fire`): strip it into params["fire"] so the shared sim
+        # runs in fire mode (the combine's medium still governs the flow).
+        fire_cfg = None
+        srcs = []
+        for e in emitters:
+            if "_fire" in e:
+                e = dict(e)
+                fire_cfg = fire_cfg or e.pop("_fire")
+            srcs.append(e)
         params = {
             "duration": self.duration,
             "fps": self.fps,
-            "sources": emitters,
+            "sources": srcs,
             "fluid": {k: float(medium.get(k, d)) for k, d in _MERGE_MEDIUM_DEFAULTS},
         }
+        if fire_cfg is not None:
+            params["fire"] = fire_cfg
         if self.output:
             params["output"] = _output_params(self.output, self.fps)
         else:
@@ -354,7 +376,12 @@ class Dag:
             if node.get("type") == "fluid":
                 params = self._fluid_video_params(node)
             else:  # combine(merge)
-                params = self._merge_params(self.emitters(nid), node.get("data", {}).get("medium", {}))
+                emitters = self.emitters(nid)
+                if any("_kind" in e for e in emitters):
+                    # a generative-sim merge (waves/rain/...) is not a fluid
+                    # field — it renders per segment through the video path
+                    continue
+                params = self._merge_params(emitters, node.get("data", {}).get("medium", {}))
             layer = int(node.get("data", {}).get("layer", k + 1))
             out.append({"node_id": nid, "layer": layer, "params": params})
         return out
@@ -454,11 +481,7 @@ def resolve_node_points(job_id, segment, graph, node_id, stem_audio_path) -> dic
     a live scatter in the editor."""
     dag = Dag(job_id, segment, graph, stem_audio_path, {})
     specs = dag._resolve_points(node_id)
-    pts = [
-        [float(s["points"][0][0]), float(s["points"][0][1])]
-        for s in specs
-        if s.get("points")
-    ]
+    pts = [[float(s["points"][0][0]), float(s["points"][0][1])] for s in specs if s.get("points")]
     return {"points": pts}
 
 
@@ -567,10 +590,22 @@ def _combine_video(dag: "_Dag", node: dict) -> np.ndarray:
         layers = [dag.video(s) for (s, _) in srcs]
         opac = [float(slot.get("opacity", 1.0)) for (_, slot) in srcs]
         return composite(layers, opac)
-    # merge: each emitter keeps its OWN `wrap` (from its source fluid). They share
-    # ONE velocity field (so they interact) but each component's dye advects with its
-    # own edge behaviour — see fluid.simulate().
-    params = dag._merge_params(dag.emitters(node["id"]), data.get("medium", {}))
+    # merge: one shared physical field. Gen-sim cards dispatch to their shared-
+    # field renderer (same-kind only); fluids + fires share one solver sim, each
+    # emitter keeping its OWN `wrap` — see fluid.simulate().
+    kind, layers, base_src = _gen_merge_split(dag, node)
+    if kind is not None:
+        gh, gw = _grid_dims(dag)
+        n = max(1, round(dag.duration * dag.fps))
+        base = _flatten_rgb(dag.video(base_src)) if base_src else None
+        fn = getattr(sources, kind)
+        if kind == "rain":
+            frames, _ = fn(n, gh, gw, dag.fps, layers, base=base)
+            return frames
+        if kind == "waves":
+            return fn(n, gh, gw, dag.fps, layers, base=base)
+        return fn(n, gh, gw, dag.fps, layers)
+    params = dag._merge_params(layers, data.get("medium", {}))
     return _sim_video(params)
 
 
@@ -645,16 +680,26 @@ def _asset_path(dag: "_Dag", node: dict) -> str:
 def _box_static(d: dict) -> dict:
     """The placement-box fields shared by image/video (fractions 0..1, default full-frame)."""
     return dict(
-        box_x=float(d.get("box_x", 0.0)), box_y=float(d.get("box_y", 0.0)),
-        box_w=float(d.get("box_w", 1.0)), box_h=float(d.get("box_h", 1.0)),
+        box_x=float(d.get("box_x", 0.0)),
+        box_y=float(d.get("box_y", 0.0)),
+        box_w=float(d.get("box_w", 1.0)),
+        box_h=float(d.get("box_h", 1.0)),
         fit=d.get("fit", "cover"),
     )
 
 
 def _video_static(d: dict) -> dict:
-    """The video node's non-modulatable fields (box/fit + loop). `start`/`sync` feed the
-    source-time origin (`_video_src0`); `speed` is now a modulatable port, not static."""
-    return {**_box_static(d), "loop": bool(d.get("loop", True))}
+    """The video node's non-modulatable fields (box/fit + source crop + loop). `start`/
+    `sync` feed the source-time origin (`_video_src0`); `speed` is now a modulatable
+    port, not static."""
+    return {
+        **_box_static(d),
+        "loop": bool(d.get("loop", True)),
+        "crop_x": float(d.get("crop_x", 0.0)),
+        "crop_y": float(d.get("crop_y", 0.0)),
+        "crop_w": float(d.get("crop_w", 1.0)),
+        "crop_h": float(d.get("crop_h", 1.0)),
+    }
 
 
 def _video_src0(d: dict, speed_full: np.ndarray, seg_start: float) -> float:
@@ -668,8 +713,14 @@ def _video_src0(d: dict, speed_full: np.ndarray, seg_start: float) -> float:
 def _image_video(dag: "_Dag", node: dict) -> np.ndarray:
     gh, gw = _grid_dims(dag)
     nframes = max(1, round(dag.duration * dag.fps))
-    return sources.image(nframes, gh, gw, asset_path=_asset_path(dag, node),
-                         **_box_static(node.get("data", {})), **dag._fx_params(node))
+    return sources.image(
+        nframes,
+        gh,
+        gw,
+        asset_path=_asset_path(dag, node),
+        **_box_static(node.get("data", {})),
+        **dag._fx_params(node),
+    )
 
 
 def _slideshow_kind(url: str) -> str:
@@ -706,8 +757,13 @@ def _slideshow_items(dag: "_Dag", node: dict) -> list:
         kind = it.get("kind")
         if kind not in ("image", "video"):
             kind = _slideshow_kind(url)
-        out.append({"path": _slideshow_url_path(url), "kind": kind,
-                    "start": float(it.get("start", 0.0) or 0.0)})
+        out.append(
+            {
+                "path": _slideshow_url_path(url),
+                "kind": kind,
+                "start": float(it.get("start", 0.0) or 0.0),
+            }
+        )
     gen_id = _video_source(dag.graph, node["id"], "images")
     gen = dag.nodes.get(gen_id) if gen_id else None
     if gen is not None and gen.get("type") == "imagegen":
@@ -720,8 +776,9 @@ def _slideshow_items(dag: "_Dag", node: dict) -> list:
         if isinstance(cap, (int, float)):
             # floor at 0: a negative cap must mean "none", not a from-the-end slice
             gen_urls = gen_urls[: max(0, int(cap))]
-        out += [{"path": _slideshow_url_path(u), "kind": "image", "start": 0.0}
-                for u in gen_urls if u]
+        out += [
+            {"path": _slideshow_url_path(u), "kind": "image", "start": 0.0} for u in gen_urls if u
+        ]
     return out
 
 
@@ -730,8 +787,9 @@ def _slideshow_index(trigger: "np.ndarray", n_assets: int, d: dict) -> "np.ndarr
     card's built-in hysteresis threshold (reusing the gate card's `_gate_curve`),
     and each RISING edge advances to the next image (wrapping). Frame 0 always
     shows image 0 — a trigger that starts high counts from its next rise."""
-    gate = _gate_curve(trigger, {"threshold": d.get("threshold", 0.5),
-                                 "hysteresis": d.get("hysteresis", 0.1)})
+    gate = _gate_curve(
+        trigger, {"threshold": d.get("threshold", 0.5), "hysteresis": d.get("hysteresis", 0.1)}
+    )
     rises = np.diff(gate) > 0
     idx = np.concatenate([[0], np.cumsum(rises)])
     return idx % max(1, n_assets)
@@ -757,14 +815,341 @@ def _video_video(dag: "_Dag", node: dict) -> np.ndarray:
     d = node.get("data", {})
     params = dag._fx_params(node)  # {opacity, speed} full-segment arrays
     src0 = _video_src0(d, params["speed"], float(dag.segment.get("start", 0.0)))
-    return sources.video(nframes, gh, gw, dag.fps, asset_path=_asset_path(dag, node),
-                         src0=src0, **_video_static(d), **params)
+    return sources.video(
+        nframes,
+        gh,
+        gw,
+        dag.fps,
+        asset_path=_asset_path(dag, node),
+        src0=src0,
+        **_video_static(d),
+        **params,
+    )
 
 
 def _backdrop_video(dag: "_Dag", node: dict) -> np.ndarray:
     gh, gw = _grid_dims(dag)
     nframes = max(1, round(dag.duration * dag.fps))
     return sources.backdrop(nframes, gh, gw, **dag._backdrop_params(node))
+
+
+# ── Generative source cards (waves / lightning / fire) ────────────────────────
+# Each mirrors the backdrop pattern: `_fx_params` resolves the modulatable ports;
+# the colour comes from a static `data.palette` preset or, if a `color` card is
+# wired into the "color" input, that card's ramp overrides the preset.
+
+
+def _wired_stops(dag: "_Dag", node: dict):
+    """The ramp from a `color` card wired into the card's "color" input, or None.
+    A gradient colour card supplies its stops directly; a swatch/rgb card becomes a
+    dark->colour two-stop ramp so the field still reads as a gradient."""
+    cid = _video_source(dag.graph, node["id"], "color")
+    cnode = dag.nodes.get(cid) if cid else None
+    if not cnode or cnode.get("type") != "color":
+        return None
+    data = cnode.get("data", {})
+    if data.get("mode") == "gradient" and data.get("stops"):
+        st = sorted(data["stops"], key=lambda s: float(s.get("t", 0.0)))
+        return [
+            (
+                float(s.get("t", 0.0)),
+                tuple(float(c) for c in fluid._hex_rgb(s.get("color", "#000000"))),
+            )
+            for s in st
+        ]
+    col = _resolve_node_color(dag.graph, node, "color", dag.nodes, dag._value_resolver())
+    if not col:
+        return None
+    r, g, b = (float(np.mean(np.asarray(col[ch], np.float32))) for ch in ("r", "g", "b"))
+    return [(0.0, (r * 0.15, g * 0.15, b * 0.15)), (1.0, (r, g, b))]
+
+
+def _gen_stops(dag: "_Dag", node: dict, fallback: str) -> list:
+    return _wired_stops(dag, node) or procgen.palette_stops(
+        node.get("data", {}).get("palette", fallback), fallback
+    )
+
+
+def _gen_seed(node: dict) -> int:
+    return int(node.get("data", {}).get("seed", 1))
+
+
+_GEN_FALLBACK = {
+    "waves": "ocean",
+    "lightning": "electric",
+    "aurora": "aurora",
+    "rain": "downpour",
+    "clouds": "sky",
+}
+
+
+def _gen_points(dag: "_Dag", node: dict):
+    """The emitter-source SPECS from a points-flow card wired into `positions`,
+    or None — the same resolver as fluid.positions (points / pattern /
+    animate-points / merge-points). Full specs pass through, path and gate
+    fields included, so ANIMATED points (orbit / drift / chase) drive the sim
+    cards exactly like they drive fluid emitters: fire flames ride their paths,
+    rain drips and lightning origins sample the moving position at each event."""
+    pid = _video_source(dag.graph, node["id"], "positions")
+    if not pid:
+        return None
+    return dag._resolve_points(pid) or None
+
+
+def _gen_layer(dag: "_Dag", node: dict, fallback: str) -> dict:
+    """One simulation card's layer dict (the sources.py contract): FULL-length
+    port arrays + seed + palette stops + optional points positions. A merge
+    passes one of these per merged card into ONE shared field."""
+    layer = dict(dag._fx_params(node))
+    layer["seed"] = _gen_seed(node)
+    layer["stops"] = _gen_stops(dag, node, fallback)
+    pts = _gen_points(dag, node)
+    if pts:
+        layer["points"] = pts
+    return layer
+
+
+def _flatten_rgb(clip: np.ndarray) -> np.ndarray:
+    return fluid.flatten(clip) if clip.shape[-1] == 4 else clip
+
+
+def _gen_base(dag: "_Dag", node: dict):
+    """The optional `video` input a waves/rain card refracts (whole-clip path):
+    upstream frames flattened to RGB (the pool floor / liquid bed), or None —
+    then the card renders onto its palette (standalone use, Playground demos)."""
+    src = _video_source(dag.graph, node["id"], "video")
+    return _flatten_rgb(dag.video(src)) if src is not None else None
+
+
+def _waves_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    n = max(1, round(dag.duration * dag.fps))
+    return sources.waves(
+        n, gh, gw, dag.fps, [_gen_layer(dag, node, "ocean")], base=_gen_base(dag, node)
+    )
+
+
+def _waves_block(dag: "_Dag", node: dict):
+    gh, gw = _grid_dims(dag)
+    layers = [_gen_layer(dag, node, "ocean")]  # full-length ports + frame_offset
+    src = _video_source(dag.graph, node["id"], "video")
+    producer = dag._block_producer(src) if src is not None else None
+
+    def produce(a, b):
+        base = _flatten_rgb(producer(a, b)) if producer is not None else None
+        return sources.waves(b - a, gh, gw, dag.fps, layers, frame_offset=a, base=base)
+
+    return produce
+
+
+def _flicker_curve(nframes: int, fps: float, seed: int) -> np.ndarray:
+    """Smoothed ~4 Hz noise in 0..1 modulating a fire's heat emission — the slow
+    organic breathing of a real flame (never per-frame randomness, which reads
+    as jitter). Deterministic from the card seed."""
+    rng = np.random.default_rng(seed * 31 + 7)
+    n_ctrl = max(3, int(np.ceil(nframes / max(fps, 1.0) * 4.0)) + 2)
+    ctrl = rng.random(n_ctrl).astype(np.float32)
+    xs = np.linspace(0.0, n_ctrl - 1.0, nframes)
+    i0 = np.minimum(np.floor(xs).astype(np.int64), n_ctrl - 2)
+    fr = (xs - i0).astype(np.float32)
+    fr = fr * fr * (3.0 - 2.0 * fr)
+    return ctrl[i0] * (1.0 - fr) + ctrl[i0 + 1] * fr
+
+
+def _fire_sources(dag: "_Dag", node: dict):
+    """A fire card -> (fluid HEAT-emitter dicts, fire field settings, ports).
+    The emitters are genuine fluid sources (fire rides the solver), so a fire
+    merges with other fires — and even with dye fluids — through the existing
+    combine machinery; the field settings ride `params["fire"]`."""
+    p = dag._fx_params(node)
+    seed = _gen_seed(node)
+    flick = _flicker_curve(len(p["intensity"]), dag.fps, seed)
+    emit = p["intensity"] * (1.0 - p["flicker"] * 0.55 * (1.0 - flick))
+    radius = 0.03 + 0.13 * p["width"]
+    force = 2.0 + 8.0 * p["expansion"]  # add_radial: the combustion-expansion term
+    base = dict(
+        heat=True,
+        radial=True,
+        wrap=False,
+        enabled=True,
+        emit=emit.tolist(),
+        radius=radius.tolist(),
+        force=force.tolist(),
+    )
+    specs = _gen_points(dag, node)
+    if specs:  # a points card: one flame per spec — path/gate fields ride along,
+        # so animate-points orbits/drifts/chases move and gate the flames
+        # exactly like fluid emitters
+        emitters = [dict(base, **spec) for spec in specs]
+    else:  # modulatable origin ports (an LFO can glide the flame around)
+        emitters = [dict(base, px=p["origin_x"].tolist(), py=p["origin_y"].tolist())]
+    fire_cfg = {
+        "buoyancy": 1.1,
+        "direction": p["direction"].tolist(),
+        "cooling": p["cooling"].tolist(),
+        "glow": p["glow"].tolist(),
+        "opacity": p["opacity"].tolist(),
+        "stops": [[float(t), [float(c) for c in col]] for t, col in _gen_stops(dag, node, "flame")],
+    }
+    return emitters, fire_cfg, p
+
+
+def _fire_params(dag: "_Dag", node: dict) -> dict:
+    """simulate() params for ONE fire card (the single-card path — a merge goes
+    through `_merge_params` with the combine's medium instead)."""
+    emitters, fire_cfg, p = _fire_sources(dag, node)
+    params = {
+        "duration": dag.duration,
+        "fps": dag.fps,
+        "sources": emitters,
+        "fluid": {
+            "dissipation": 0.95,
+            "velocity_dissipation": 0.94,
+            "viscosity": 0.0,
+            "vorticity": (2.0 + 10.0 * p["turbulence"]).tolist(),
+        },
+        "fire": fire_cfg,
+    }
+    if dag.output:
+        params["output"] = _output_params(dag.output, dag.fps)
+    else:
+        params["grid"] = LEGACY_GRID
+    return params
+
+
+def _fire_video(dag: "_Dag", node: dict) -> np.ndarray:
+    return _sim_video(_fire_params(dag, node))  # fluid path: frame cache + all
+
+
+def _fire_block(dag: "_Dag", node: dict):
+    return _sim_blocks(dag, _fire_params(dag, node))
+
+
+def _lightning_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    n = max(1, round(dag.duration * dag.fps))
+    return sources.lightning(n, gh, gw, dag.fps, [_gen_layer(dag, node, "electric")])
+
+
+def _lightning_block(dag: "_Dag", node: dict):
+    # Ports stay FULL-length (the strike schedule is absolute-frame-keyed); the
+    # bolt cache carries each strike's DBM geometry + glow stacks across blocks
+    # so a flash spanning a block seam doesn't regrow its discharge.
+    gh, gw = _grid_dims(dag)
+    layers = [_gen_layer(dag, node, "electric")]
+    cache: dict = {}
+
+    def produce(a, b):
+        return sources.lightning(b - a, gh, gw, dag.fps, layers, frame_offset=a, bolt_cache=cache)
+
+    return produce
+
+
+def _aurora_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    n = max(1, round(dag.duration * dag.fps))
+    return sources.aurora(n, gh, gw, dag.fps, [_gen_layer(dag, node, "aurora")])
+
+
+def _aurora_block(dag: "_Dag", node: dict):
+    gh, gw = _grid_dims(dag)
+    layers = [_gen_layer(dag, node, "aurora")]  # full-length (drift integrates)
+
+    def produce(a, b):
+        return sources.aurora(b - a, gh, gw, dag.fps, layers, frame_offset=a)
+
+    return produce
+
+
+def _rain_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    n = max(1, round(dag.duration * dag.fps))
+    frames, _ = sources.rain(
+        n, gh, gw, dag.fps, [_gen_layer(dag, node, "downpour")], base=_gen_base(dag, node)
+    )
+    return frames
+
+
+def _rain_block(dag: "_Dag", node: dict):
+    # STATEFUL sim: the spectral surface (ĥ, ĥ⁻) carries across produce() calls.
+    # Safe because `stream_blocks` pulls contiguous front-to-back blocks from
+    # frame 0 (a restart builds a fresh Dag) and `_block_producer`'s one-block
+    # memo + lock serve diamond consumers without re-invoking — the same
+    # contract `_echo_block` documents. Ports stay FULL-length (the drop
+    # schedule is absolute-frame-keyed) — the lightning convention. No frame
+    # cache on purpose: a partial writer is the only place stale sim state
+    # could ever leak, and the encoded-clip cache already covers replays.
+    gh, gw = _grid_dims(dag)
+    layers = [_gen_layer(dag, node, "downpour")]
+    src = _video_source(dag.graph, node["id"], "video")
+    producer = dag._block_producer(src) if src is not None else None
+    state = {"s": None}
+
+    def produce(a, b):
+        base = _flatten_rgb(producer(a, b)) if producer is not None else None
+        frames, state["s"] = sources.rain(
+            b - a, gh, gw, dag.fps, layers, frame_offset=a, base=base, state=state["s"]
+        )
+        return frames
+
+    return produce
+
+
+def _clouds_video(dag: "_Dag", node: dict) -> np.ndarray:
+    gh, gw = _grid_dims(dag)
+    n = max(1, round(dag.duration * dag.fps))
+    return sources.clouds(n, gh, gw, dag.fps, [_gen_layer(dag, node, "sky")])
+
+
+def _clouds_block(dag: "_Dag", node: dict):
+    gh, gw = _grid_dims(dag)
+    layers = [_gen_layer(dag, node, "sky")]  # full-length (drift integrates)
+
+    def produce(a, b):
+        return sources.clouds(b - a, gh, gw, dag.fps, layers, frame_offset=a)
+
+    return produce
+
+
+# ── merge dispatch for the simulation cards ──────────────────────────────────
+# A combine(merge) whose inputs are gen-sim cards shares ONE physical field:
+# waves superpose height spectra, rains drip into one surface, bolts light one
+# sky, curtains fill one sky, cloud densities shade under one sun. Fire is NOT
+# here — its emitters are fluid sources, so fire merges ride the fluid branch.
+
+
+def _gen_emitters_h(dag: "_Dag", node: dict) -> list:
+    t = node.get("type")
+    e = {"_kind": t, "layer": _gen_layer(dag, node, _GEN_FALLBACK[t])}
+    if t in ("waves", "rain"):
+        src = _video_source(dag.graph, node["id"], "video")
+        if src:
+            e["base_src"] = src
+    return [e]
+
+
+def _fire_emitters_h(dag: "_Dag", node: dict) -> list:
+    emitters, fire_cfg, _ = _fire_sources(dag, node)
+    return [dict(e, _fire=fire_cfg) if i == 0 else e for i, e in enumerate(emitters)]
+
+
+def _gen_merge_split(dag: "_Dag", node: dict):
+    """A merge combine's emitters -> ('gen kind', layers, base_src) for a
+    homogeneous gen-sim merge, or (None, emitters, None) for the fluid/fire
+    branch. Mixed kinds raise — a merge shares ONE physical medium."""
+    emitters = dag.emitters(node["id"])
+    kinds = sorted({e["_kind"] for e in emitters if "_kind" in e})
+    if not kinds:
+        return None, emitters, None
+    if len(kinds) > 1 or any("_kind" not in e for e in emitters):
+        mixed = kinds + (["fluid/fire"] if any("_kind" not in e for e in emitters) else [])
+        raise ValueError(
+            f"combine(merge) '{node['id']}' mixes different simulations "
+            f"({', '.join(mixed)}) — a merge shares one physical field, so merge "
+            "same-kind cards, or switch this combine to layered (stack)"
+        )
+    base_src = next((e["base_src"] for e in emitters if e.get("base_src")), None)
+    return kinds[0], [e["layer"] for e in emitters], base_src
 
 
 def _transform_static(d: dict) -> tuple:
@@ -778,8 +1163,9 @@ def _transform_static(d: dict) -> tuple:
     return mode, segments, bool(d.get("wrap", False))
 
 
-def _transform_frames(frames: np.ndarray, mode: str, segments: int, wrap: bool, *,
-                      zoom, rotate, pan_x, pan_y) -> np.ndarray:
+def _transform_frames(
+    frames: np.ndarray, mode: str, segments: int, wrap: bool, *, zoom, rotate, pan_x, pan_y
+) -> np.ndarray:
     """Warp `frames` (T, H, W, C) uint8, C in {3, 4} — an RGBA layer's alpha warps with
     its colour, so lyrics stay correctly cut out. Params are per-frame float arrays.
 
@@ -826,8 +1212,9 @@ def _transform_frames(frames: np.ndarray, mode: str, segments: int, wrap: bool, 
             sx, sy = r * np.cos(a), r * np.sin(a)
         coords = np.stack([sy + cy, sx + cx])
         for ch in range(c):
-            warped = map_coordinates(frames[i, :, :, ch].astype(np.float32), coords,
-                                     order=1, mode=edge, cval=0.0)
+            warped = map_coordinates(
+                frames[i, :, :, ch].astype(np.float32), coords, order=1, mode=edge, cval=0.0
+            )
             out[i, :, :, ch] = np.clip(warped, 0, 255).astype(np.uint8)
     return out
 
@@ -847,8 +1234,16 @@ def _stylize_video(dag: "_Dag", node: dict) -> np.ndarray:
     if ap:
         gh, gw = _grid_dims(dag)
         nframes = max(1, round(dag.duration * dag.fps))
-        dec = sources.video(nframes, gh, gw, dag.fps, asset_path=ap, src0=0.0, speed=1.0,
-                            opacity=np.ones(nframes, np.float32))
+        dec = sources.video(
+            nframes,
+            gh,
+            gw,
+            dag.fps,
+            asset_path=ap,
+            src0=0.0,
+            speed=1.0,
+            opacity=np.ones(nframes, np.float32),
+        )
         return np.ascontiguousarray(dec[..., :3])  # dye-on-black convention (drop coverage alpha)
     src = _video_source(dag.graph, node["id"], "video")
     if src is None:
@@ -905,6 +1300,62 @@ def _extract_video(dag: "_Dag", node: dict) -> np.ndarray:
     return _extract_apply(frames, _extract_static(node.get("data", {})))
 
 
+def _echo_static(d: dict) -> str:
+    """The echo card's trail memory: ghost (EMA afterimages), bright (decayed max),
+    or dark (bright's mirror — shadow trails)."""
+    mode = d.get("mode", "ghost")
+    return mode if mode in ("ghost", "bright", "dark") else "ghost"
+
+
+def _echo_video(dag: "_Dag", node: dict) -> np.ndarray:
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"echo '{node['id']}' has no video input")
+    mode = _echo_static(node.get("data", {}))
+    out, _acc = look_fx.echo_scan(dag.video(src), None, dag.fps, mode, **dag._fx_params(node))
+    return out
+
+
+def _colorgrade_static(d: dict) -> tuple:
+    """The Color Grade card's non-modulatable fields: mode, thermal map, swatches."""
+    mode = d.get("mode", "thermal")
+    if mode not in ("thermal", "duotone", "neon"):
+        mode = "thermal"
+    cmap = d.get("map", "turbo")
+    if cmap not in look_fx._THERMAL_MAPS:
+        cmap = "turbo"
+    return mode, cmap, d.get("colorA", "#0b1030"), d.get("colorB", "#ff5ac8")
+
+
+def _colorgrade_setup(dag: "_Dag", node: dict) -> tuple:
+    """Shared whole-clip/block setup: statics + the PER-FRAME (nframes,3) grade colour.
+    A `color` card wired into `tint` overrides the colorB swatch (its intensity folded
+    in, the `_lyrics_params` convention) — a gradient tint with a bound `position`
+    sweeps the grade's colour with the music."""
+    mode, cmap, color_a_hex, color_b_hex = _colorgrade_static(node.get("data", {}))
+    nframes = max(1, round(dag.duration * dag.fps))
+    tint = _resolve_node_color(dag.graph, node, "tint", dag.nodes, dag._value_resolver())
+    if tint:
+        inten = fluid._series(tint["intensity"], nframes)
+        color_b = np.stack(
+            [np.clip(fluid._series(tint[ch], nframes) * inten, 0.0, 1.0) for ch in ("r", "g", "b")],
+            axis=-1,
+        ).astype(np.float32)
+    else:
+        color_b = np.tile(fluid._hex_rgb(color_b_hex), (nframes, 1))
+    return mode, cmap, fluid._hex_rgb(color_a_hex), color_b
+
+
+def _colorgrade_video(dag: "_Dag", node: dict) -> np.ndarray:
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"colorgrade '{node['id']}' has no video input")
+    mode, cmap, color_a, color_b = _colorgrade_setup(dag, node)
+    return look_fx.colorgrade_apply(
+        dag.video(src), mode, cmap, color_a, color_b, dag.fps, 0, **dag._fx_params(node)
+    )
+
+
 _VIDEO_HANDLERS = {
     "fluid": _fluid_video,
     "output": _output_video,
@@ -917,11 +1368,25 @@ _VIDEO_HANDLERS = {
     "transform": _transform_video,
     "stylize": _stylize_video,
     "extract": _extract_video,
+    "echo": _echo_video,
+    "colorgrade": _colorgrade_video,
+    "waves": _waves_video,
+    "lightning": _lightning_video,
+    "fire": _fire_video,
+    "aurora": _aurora_video,
+    "rain": _rain_video,
+    "clouds": _clouds_video,
 }
 _EMITTER_HANDLERS = {
     "fluid": _fluid_emitters_h,
     "output": _output_emitters_h,
     "combine": _combine_emitters_h,
+    "fire": _fire_emitters_h,
+    "waves": _gen_emitters_h,
+    "lightning": _gen_emitters_h,
+    "aurora": _gen_emitters_h,
+    "rain": _gen_emitters_h,
+    "clouds": _gen_emitters_h,
 }
 
 
@@ -966,7 +1431,34 @@ def _combine_block(dag: "_Dag", node: dict):
 
         return produce
     # merge: one shared sim over the concatenated emitters (see _combine_video).
-    return _sim_blocks(dag, dag._merge_params(dag.emitters(node["id"]), data.get("medium", {})))
+    kind, layers, base_src = _gen_merge_split(dag, node)
+    if kind is not None:
+        gh, gw = _grid_dims(dag)
+        producer = dag._block_producer(base_src) if base_src else None
+        fn = getattr(sources, kind)
+        if kind == "rain":
+            state = {"s": None}
+
+            def produce_rain(a, b):
+                base = _flatten_rgb(producer(a, b)) if producer is not None else None
+                frames, state["s"] = fn(
+                    b - a, gh, gw, dag.fps, layers, frame_offset=a, base=base, state=state["s"]
+                )
+                return frames
+
+            return produce_rain
+        if kind == "lightning":
+            cache: dict = {}
+            return lambda a, b: fn(b - a, gh, gw, dag.fps, layers, frame_offset=a, bolt_cache=cache)
+        if kind == "waves":
+
+            def produce_waves(a, b):
+                base = _flatten_rgb(producer(a, b)) if producer is not None else None
+                return fn(b - a, gh, gw, dag.fps, layers, frame_offset=a, base=base)
+
+            return produce_waves
+        return lambda a, b: fn(b - a, gh, gw, dag.fps, layers, frame_offset=a)
+    return _sim_blocks(dag, dag._merge_params(layers, data.get("medium", {})))
 
 
 def _lyrics_block(dag: "_Dag", node: dict):
@@ -994,8 +1486,15 @@ def _image_block(dag: "_Dag", node: dict):
     params = dag._fx_params(node)  # {opacity} sliced per block
 
     def produce(a, b):
-        return sources.image(b - a, gh, gw, asset_path=ap, frame_offset=a, **static,
-                             **{k: v[a:b] for k, v in params.items()})
+        return sources.image(
+            b - a,
+            gh,
+            gw,
+            asset_path=ap,
+            frame_offset=a,
+            **static,
+            **{k: v[a:b] for k, v in params.items()},
+        )
 
     return produce
 
@@ -1045,8 +1544,9 @@ def _backdrop_block(dag: "_Dag", node: dict):
     params = dag._backdrop_params(node)  # {opacity, r, g, b} sliced per block
 
     def produce(a, b):
-        return sources.backdrop(b - a, gh, gw, frame_offset=a,
-                                **{k: v[a:b] for k, v in params.items()})
+        return sources.backdrop(
+            b - a, gh, gw, frame_offset=a, **{k: v[a:b] for k, v in params.items()}
+        )
 
     return produce
 
@@ -1060,8 +1560,9 @@ def _transform_block(dag: "_Dag", node: dict):
     producer = dag._block_producer(src)
 
     def produce(a, b):
-        return _transform_frames(producer(a, b), mode, segments, wrap,
-                                 **{k: v[a:b] for k, v in params.items()})
+        return _transform_frames(
+            producer(a, b), mode, segments, wrap, **{k: v[a:b] for k, v in params.items()}
+        )
 
     return produce
 
@@ -1103,6 +1604,52 @@ def _extract_block(dag: "_Dag", node: dict):
     return produce
 
 
+def _echo_block(dag: "_Dag", node: dict):
+    """The wave's one STATEFUL block handler: the trail accumulator is carried across
+    `produce(a, b)` calls. Exact, not an approximation — decay folds every past frame
+    into `acc`, so carrying it IS the whole-history scan (blocks can't re-pull earlier
+    upstream frames). Safe because `_block_producer`'s one-block cache + lock runs this
+    closure once per block, in contiguous front-to-back order (the FluidClip contract)."""
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"echo '{node['id']}' has no video input")
+    mode = _echo_static(node.get("data", {}))
+    params = dag._fx_params(node)  # {length, amount} full-segment arrays
+    producer = dag._block_producer(src)
+    state: dict = {"acc": None}
+
+    def produce(a, b):
+        out, state["acc"] = look_fx.echo_scan(
+            producer(a, b), state["acc"], dag.fps, mode, **{k: v[a:b] for k, v in params.items()}
+        )
+        return out
+
+    return produce
+
+
+def _colorgrade_block(dag: "_Dag", node: dict):
+    src = _video_source(dag.graph, node["id"], "video")
+    if src is None:
+        raise ValueError(f"colorgrade '{node['id']}' has no video input")
+    mode, cmap, color_a, color_b = _colorgrade_setup(dag, node)  # color_b: full-segment (n,3)
+    params = dag._fx_params(node)  # {intensity, shift} full-segment arrays
+    producer = dag._block_producer(src)
+
+    def produce(a, b):
+        return look_fx.colorgrade_apply(
+            producer(a, b),
+            mode,
+            cmap,
+            color_a,
+            color_b[a:b],
+            dag.fps,
+            a,
+            **{k: v[a:b] for k, v in params.items()},
+        )
+
+    return produce
+
+
 _BLOCK_HANDLERS = {
     "fluid": _fluid_block,
     "output": _output_block,
@@ -1115,6 +1662,14 @@ _BLOCK_HANDLERS = {
     "transform": _transform_block,
     "stylize": _stylize_block,
     "extract": _extract_block,
+    "echo": _echo_block,
+    "colorgrade": _colorgrade_block,
+    "waves": _waves_block,
+    "lightning": _lightning_block,
+    "fire": _fire_block,
+    "aurora": _aurora_block,
+    "rain": _rain_block,
+    "clouds": _clouds_block,
 }
 # Node types that produce a video stream (used by validate to check output wiring).
 _VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)

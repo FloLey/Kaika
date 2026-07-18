@@ -25,6 +25,21 @@ def playground_ensure():
     return jsonify({"job_id": seed_card_demo.ensure_playground()})
 
 
+@bp.route("/playground/export", methods=["POST"])
+def playground_export():
+    """The Playground's 💾 save-fixture button: capture the live Playground into the
+    committed fixture (backend/playground_pipelines.json) so the next seed rebuilds
+    from the current state — the in-app twin of `make export-playground`. Returns the
+    export summary; `missing` non-empty means a card lost its demo (the CI card-impact
+    test would fail), so the UI shows it as a warning."""
+    from .. import seed_card_demo
+
+    try:
+        return jsonify(seed_card_demo.export_playground())
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
 @bp.route("/projects/<job_id>", methods=["GET"])
 def project_get(job_id: str):
     row = db.get_project(job_id)

@@ -163,7 +163,7 @@ def test_asset_from_youtube_adds_video(live_db, tmp_path, monkeypatch):
     assets_dir.mkdir()
     monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
 
-    def fake_dl(url, out_dir, stem="ytvideo"):
+    def fake_dl(url, out_dir, stem="ytvideo", start=None, end=None):
         p = Path(out_dir) / f"{stem}.mp4"
         p.write_bytes(b"FAKE-VIDEO-BYTES")
         return p

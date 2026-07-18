@@ -29,6 +29,7 @@ from ..media import (
     make_spectrogram,
     download_youtube_audio,
     download_youtube_video,
+    parse_timestamp,
     DEVICE,
 )
 from ..paths import (
@@ -134,17 +135,31 @@ def asset_from_youtube(body, job_id):
     url = (body.get("url") or "").strip()
     if not url:
         return error_response("provide a YouTube URL", 400)
+    try:  # optional clip bounds — validate NOW so the user gets a 400, not a dead job
+        start, end = _clip_bounds(body.get("start"), body.get("end"))
+    except RuntimeError as e:
+        return error_response(str(e), 400)
     dl_job = uuid4().hex[:8]
-    jobs.submit(dl_job, "downloading", lambda: _download_asset_video(job_id, url))
+    jobs.submit(dl_job, "downloading", lambda: _download_asset_video(job_id, url, start, end))
     return jsonify({"job_id": dl_job})
 
 
-def _download_asset_video(job_id: str, url: str) -> dict:
+def _clip_bounds(start, end) -> tuple:
+    """Optional user-typed clip bounds → (seconds|None, seconds|None). Raises
+    RuntimeError (a 400-ready message) on garbage or an empty/negative range."""
+    lo = parse_timestamp(start) if str(start or "").strip() else None
+    hi = parse_timestamp(end) if str(end or "").strip() else None
+    if hi is not None and hi <= (lo or 0.0):
+        raise RuntimeError("end timestamp must be after start")
+    return lo, hi
+
+
+def _download_asset_video(job_id: str, url: str, start=None, end=None) -> dict:
     """Background worker: yt-dlp the video into a temp dir, store it as a library asset,
     clean up. Returns the asset dict (the job result the card consumes)."""
     tmp = Path(tempfile.mkdtemp(prefix=f"ytasset-{job_id}-"))
     try:
-        video = download_youtube_video(url, tmp)
+        video = download_youtube_video(url, tmp, start=start, end=end)
         return _store_asset(job_id, video.read_bytes(), video.name, kind="video")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -226,6 +241,12 @@ def upload():
     youtube_url = (request.form.get("youtube_url") or "").strip()
     if (not audio_upload or not audio_upload.filename) and not youtube_url:
         return error_response("provide an audio file or a YouTube URL", 400)
+    yt_start = yt_end = None
+    if youtube_url:  # optional clip bounds — validate NOW, not deep inside the job
+        try:
+            yt_start, yt_end = _clip_bounds(request.form.get("yt_start"), request.form.get("yt_end"))
+        except RuntimeError as e:
+            return error_response(str(e), 400)
 
     job_id = uuid4().hex[:8]
     job_upload_dir = UPLOAD_DIR / job_id
@@ -258,19 +279,23 @@ def upload():
         job_id,
         first_step,
         lambda: _process_upload(
-            job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename
+            job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename,
+            yt_start, yt_end,
         ),
     )
     return jsonify({"job_id": job_id})
 
 
-def _process_upload(job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename):
+def _process_upload(
+    job_id, input_path, youtube_url, job_upload_dir, has_lyrics, upload_filename,
+    yt_start=None, yt_end=None,
+):
     """Background worker for /upload. Returns the stems payload; raises on any
     failure (the job manager turns that into the job's error)."""
     # 1. Source audio: uploaded file already on disk, else download it.
     if input_path is None:
         jobs.set_step(job_id, "downloading")
-        input_path = download_youtube_audio(youtube_url, job_upload_dir)
+        input_path = download_youtube_audio(youtube_url, job_upload_dir, start=yt_start, end=yt_end)
 
     # 1b. Uploaded a VIDEO? Split off its audio for the pipeline (the "original" stem
     # must be audio, resolved by globbing original.*) and keep the video itself as a

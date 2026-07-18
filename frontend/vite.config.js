@@ -28,6 +28,7 @@ export default defineConfig({
       "/asset-from-youtube": "http://127.0.0.1:5000",
       "/generate-image": "http://127.0.0.1:5000",
       "/stylize": "http://127.0.0.1:5000",
+      "/settings": "http://127.0.0.1:5000",
     },
   },
   // `npm run test` — pure-logic unit tests default to node; DOM interaction tests

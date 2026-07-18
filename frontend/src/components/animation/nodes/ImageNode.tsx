@@ -18,7 +18,6 @@ export default function ImageNode(props: NodeProps) {
       dropIcon="🖼"
       dropEmptyLabel="drop an image"
       dropBusyLabel="uploading…"
-      dropThumb
       params={IMAGE_PARAMS}
       imagePreview={buildImagePreview(props.node.data as ImageData)}
     />

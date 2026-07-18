@@ -175,9 +175,19 @@ export async function deleteAsset(jobId: string, assetId: string): Promise<{ ok:
 }
 
 // Import a YouTube video into the library (Video card action). Async — returns a job id;
-// poll it (pollJob) for the resulting Asset.
-export async function assetFromYoutube(jobId: string, url: string): Promise<JobAck> {
-  return postJson<JobAck>(`/asset-from-youtube/${jobId}`, { url });
+// poll it (pollJob) for the resulting Asset. Optional start/end timestamps (SS, MM:SS or
+// HH:MM:SS) download ONLY that section of the video, not the whole file.
+export async function assetFromYoutube(
+  jobId: string,
+  url: string,
+  start?: string,
+  end?: string
+): Promise<JobAck> {
+  return postJson<JobAck>(`/asset-from-youtube/${jobId}`, {
+    url,
+    ...(start ? { start } : {}),
+    ...(end ? { end } : {}),
+  });
 }
 
 // Generate image(s) locally (the Image gen card's ✨). Async — returns a job id;
@@ -367,4 +377,51 @@ export async function saveProject(jobId: string, payload: unknown): Promise<{ ok
 
 export async function deleteProject(jobId: string): Promise<{ ok: boolean }> {
   return jsonOrThrow<{ ok: boolean }>(await fetch(`/projects/${jobId}`, { method: "DELETE" }));
+}
+
+// ---- app-level settings (⚙ modal) -------------------------------------------------
+// Remote inference: which diffusion operations run on a rented GPU box
+// (backend/remote_app.py) instead of locally. Stored server-side in data/settings.json.
+export interface AppSettings {
+  inference: {
+    enabled: boolean;
+    url: string;
+    token: string;
+    ops: { stylize: boolean; imagegen: boolean; depth: boolean };
+  };
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  return jsonOrThrow<AppSettings>(await fetch("/settings"));
+}
+
+export async function putSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+  return postJson<AppSettings>("/settings", patch, "PUT");
+}
+
+// Probe the remote box's /health from the backend (token stays server-side).
+// Returns device/GPU/latency, or throws with the backend's clean error message.
+export interface RemoteHealth {
+  ok: boolean;
+  device: string;
+  gpu: string;
+  torch: string;
+  latency_ms: number;
+}
+
+export async function testRemote(url?: string, token?: string): Promise<RemoteHealth> {
+  return postJson<RemoteHealth>("/settings/test-remote", { url, token });
+}
+
+// Playground 💾 save-fixture: capture the live Playground into the committed fixture
+// (backend/playground_pipelines.json) so the next seed starts from the current state.
+// `missing` non-empty = a card lost its demo (CI would fail) — surface as a warning.
+export interface FixtureExport {
+  exported: number;
+  skipped: string[];
+  missing: string[];
+}
+
+export async function exportPlaygroundFixture(): Promise<FixtureExport> {
+  return jsonOrThrow<FixtureExport>(await fetch("/playground/export", { method: "POST" }));
 }

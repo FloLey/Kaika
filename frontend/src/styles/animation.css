@@ -649,9 +649,15 @@
    own (empty) 52px label column and let the slider fill the row. */
 .anim-param-row .ctl {
   flex: 1;
+  /* flex items default to min-width:auto — the range input's native min-content
+     (~130px) would then push the row past a 230px card. Let it shrink. */
+  min-width: 0;
   margin: 0;
   grid-template-columns: 1fr auto;
   gap: 8px;
+}
+.anim-param-row .ctl input[type="range"] {
+  min-width: 0; /* same floor, one level down: the 1fr grid track */
 }
 .anim-param-row .ctl > .ctl-label {
   display: none;
@@ -661,12 +667,17 @@
   flex: none;
 }
 
-/* wired param: a dual-thumb range slider (two bullets = lo/hi) + a value readout */
+/* wired param: a dual-thumb range slider (two bullets = lo/hi) + a value readout.
+   min-width 0 (flex child) so the row never overflows a narrow card; the dual
+   slider keeps its own 90px floor and the row wraps it to a second line if the
+   label + readout + detach genuinely can't share one. */
 .anim-range {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .anim-range-fmt {
   flex: none;
@@ -2024,20 +2035,9 @@
   border-color: color-mix(in srgb, var(--courant) 45%, var(--line));
   color: var(--text);
 }
-.anim-asset-drop.has-asset {
-  padding: 6px;
-}
 .anim-asset-icon {
   font-size: 22px;
   line-height: 1;
-}
-.anim-asset-thumb {
-  display: block;
-  width: 100%;
-  max-height: 120px;
-  object-fit: contain;
-  border-radius: 6px;
-  background: #000;
 }
 .anim-asset-label {
   max-width: 100%;
@@ -2064,6 +2064,10 @@
 .asset-lib-yt .hz-input {
   flex: 1;
   min-width: 0;
+}
+/* Compact optional start/end timestamps next to the URL (section-only download). */
+.asset-lib-yt .hz-input.asset-lib-yt-ts {
+  flex: 0 0 52px;
 }
 
 /* ---- canvas view-mode switch ---------------------------------------------------- */
@@ -2521,6 +2525,30 @@
   pointer-events: none;
   border-radius: 3px;
 }
+/* the box-shaped window the video card's clip preview is laid out in: the (cropped)
+   source is positioned in pixels inside it and the overflow clipped, so the preview
+   shows exactly the region the crop + fit select */
+.anim-box-clip {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 3px;
+  pointer-events: none;
+}
+/* source-crop editor (video card): the whole clip fills the pad at its own aspect… */
+.anim-crop-src {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+/* …and the selection rect dims everything outside it (the huge shadow is clipped by the
+   pad's overflow:hidden) */
+.anim-crop-rect {
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+}
+.anim-crop-rect.full {
+  box-shadow: none; /* nothing is cropped away yet — don't dim the frame edge */
+}
 /* compact one-line drop/replace affordance (video card — the preview is the box) */
 .anim-asset-drop-row {
   flex-direction: row;
@@ -2782,4 +2810,46 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* ---- ⚙ app settings modal (remote inference) ------------------------------------ */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-toggle input:disabled + span {
+  color: var(--muted);
+}
+.settings-ops {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.settings-probe {
+  font-size: 12px;
+}
+.settings-probe.ok {
+  color: var(--ok, #7dc87d);
+}
+.settings-probe.err {
+  color: var(--err, #e07a7a);
+}
+.settings-probe.busy {
+  color: var(--muted);
+}
+.settings-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
 }

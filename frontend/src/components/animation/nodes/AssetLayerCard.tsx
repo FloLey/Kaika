@@ -3,7 +3,6 @@ import type { ChangeEvent, ReactNode } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
-import StreamPreview from "./StreamPreview";
 import { aspectOf } from "../../../lib/output";
 import { useAssetUpload, assetName } from "./useAssetUpload";
 import { useNodeData } from "./useNodeData";
@@ -24,12 +23,12 @@ interface AssetLayerCardProps extends NodeProps {
   dropIcon: string; // placeholder glyph shown before an asset is chosen
   dropEmptyLabel: string; // drop-zone label with no asset yet
   dropBusyLabel: string; // drop-zone label while uploading/importing
-  dropThumb?: boolean; // image: the uploaded still becomes the drop zone's preview
   params: FluidParam[]; // the ParamRow tail (IMAGE_PARAMS / VIDEO_PARAMS)
   // Extra ways to get an asset (video: the YouTube import row), rendered after the
   // library button. A render prop so the slot can use the shared upload state.
   extraSources?: (u: { busy: boolean; fromYoutube: (url: string) => void }) => ReactNode;
   extraStatic?: ReactNode; // extra static rows between `fit` and the box (video timing)
+  afterBox?: ReactNode; // extra rows after the box editor (video: the source-crop pad)
   videoPreview?: BoxVideoPreview; // video: live clip preview inside the BoxPad
   imagePreview?: BoxImagePreview; // image: the still, shown inside the BoxPad
 }
@@ -47,10 +46,10 @@ export default function AssetLayerCard({
   dropIcon,
   dropEmptyLabel,
   dropBusyLabel,
-  dropThumb,
   params,
   extraSources,
   extraStatic,
+  afterBox,
   videoPreview,
   imagePreview,
 }: AssetLayerCardProps) {
@@ -81,23 +80,12 @@ export default function AssetLayerCard({
         />
       }
     >
-      {/* The live rendered output (image/video placed in its box) — the same block-render
-          that exports. Suppressed in the settings window (its right column shows it). */}
-      <StreamPreview node={node} ctx={ctx} aspect={aspect} />
-      <label
-        className={
-          "anim-asset-drop" +
-          (dropThumb ? "" : " anim-asset-drop-row") +
-          " no-drag" +
-          (dropThumb && d.assetUrl ? " has-asset" : "")
-        }
-      >
+      {/* No StreamPreview and no drop-zone thumbnail: the BoxPad below already shows the
+          asset live (imagePreview / videoPreview), so any extra render would repeat the
+          same picture on one card. The drop zone stays a compact icon + filename row. */}
+      <label className="anim-asset-drop anim-asset-drop-row no-drag">
         <input type="file" accept={accept} onChange={onFile} disabled={busy} hidden />
-        {dropThumb && d.assetUrl ? (
-          <img className="anim-asset-thumb" src={d.assetUrl} alt="" draggable={false} />
-        ) : (
-          <span className="anim-asset-icon">{dropIcon}</span>
-        )}
+        <span className="anim-asset-icon">{dropIcon}</span>
         <span className="anim-asset-label">
           {busy ? dropBusyLabel : d.assetUrl ? assetName(d.assetUrl) : dropEmptyLabel}
         </span>
@@ -147,6 +135,7 @@ export default function AssetLayerCard({
             imagePreview={imagePreview}
           />
         </div>
+        {afterBox}
       </div>
       {params.map((p) => (
         <ParamRow

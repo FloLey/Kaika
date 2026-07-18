@@ -34,9 +34,17 @@ const EXPECTED_BADGES: Record<string, number> = {
   imagegen: 2, // seed + model (prompts use plain title tooltips)
   video: 7, // fit + sync + start + speed + loop + box + opacity port
   backdrop: 2, // colour swatch + opacity port
+  waves: 12, // palette + color + video row + 9 ports (scale/steepness/depth/speed/direction/caustics/chroma/shine/opacity)
+  lightning: 15, // palette + color + positions row + 12 ports (strike/origin_x/origin_y/direction/length/branchiness/thickness/glow/flicker/flash/afterglow/opacity)
+  fire: 14, // palette + color + positions row + 11 ports (origin_x/origin_y/direction/intensity/width/cooling/turbulence/flicker/expansion/glow/opacity)
+  aurora: 11, // palette + color + 9 ports (position_y/height/bands/sway/drift/shimmer/rays/brightness/opacity)
+  rain: 11, // palette + color + video row + positions row + 7 ports (density/drop_size/ripple_speed/decay/distort/shine/opacity)
+  clouds: 13, // palette + color + 11 ports (coverage/scale/softness/drift/direction/turbulence/light_angle/shading/silver/brightness/opacity)
   transform: 6, // mode + wrap + zoom/rotate/pan_x/pan_y ports (segments hidden unless kaleidoscope)
   extract: 1, // kind (video/out ports use plain title tooltips)
   stylize: 3, // model + inpaint + strength port (prompt + video/control ports use title tooltips)
+  echo: 3, // mode + length/amount ports
+  colorgrade: 4, // mode + map (thermal default) + intensity/shift ports (tint row: title tooltip)
 };
 
 const HELPERS = {
@@ -52,10 +60,17 @@ const HELPERS = {
 const INLINE_ARGS: Record<string, string[]> = {
   fluid: ["enabled", "radial", "wrap"],
   color: ["mode"],
+  colorgrade: ["mode", "map", "colorA", "colorB", "tint"],
   lyrics: ["font", "align", "case", "reveal", "box", "outline", "outlineWidth"],
   image: ["fit", "box"],
   video: ["fit", "sync", "start", "speed", "loop", "box"],
   backdrop: ["color"],
+  waves: ["palette", "color"],
+  lightning: ["palette", "color"],
+  fire: ["palette", "color"],
+  aurora: ["palette", "color"],
+  rain: ["palette", "color"],
+  clouds: ["palette", "color"],
   pattern: ["layout", "count", "radius", "rotation", "offsetX", "offsetY", "seed"],
   lfo: ["shape", "rateMode", "rate", "phase", "duty"],
   noise: ["rate", "octaves", "seed"],

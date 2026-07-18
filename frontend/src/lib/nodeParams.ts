@@ -29,10 +29,22 @@ export const IMAGE_PARAMS: FluidParam[] = SOURCE_PARAMS.image;
 export const SLIDESHOW_PARAMS: FluidParam[] = SOURCE_PARAMS.slideshow;
 export const VIDEO_PARAMS: FluidParam[] = SOURCE_PARAMS.video;
 export const BACKDROP_PARAMS: FluidParam[] = SOURCE_PARAMS.backdrop;
+// Generative source cards: behavioural ports only — colour is a static `palette`
+// preset + an optional wired `color` card override (both static data, not ports).
+export const WAVES_PARAMS: FluidParam[] = SOURCE_PARAMS.waves;
+export const LIGHTNING_PARAMS: FluidParam[] = SOURCE_PARAMS.lightning;
+export const FIRE_PARAMS: FluidParam[] = SOURCE_PARAMS.fire;
+export const AURORA_PARAMS: FluidParam[] = SOURCE_PARAMS.aurora;
+export const RAIN_PARAMS: FluidParam[] = SOURCE_PARAMS.rain;
+export const CLOUDS_PARAMS: FluidParam[] = SOURCE_PARAMS.clouds;
 // The transform FX card (video -> video): zoom/rotate/pan warp the incoming frames.
 export const TRANSFORM_PARAMS: FluidParam[] = SOURCE_PARAMS.transform;
 // The AI Stylize FX card: `strength` = the img2img denoise curseur.
 export const STYLIZE_PARAMS: FluidParam[] = SOURCE_PARAMS.stylize;
+// The Echo look-FX card: motion trails — `length` (half-life, s) + `amount` (mix).
+export const ECHO_PARAMS: FluidParam[] = SOURCE_PARAMS.echo;
+// The Color Grade look-FX card: `intensity` (dry↔graded) + `shift` (LUT/midpoint/hue).
+export const COLORGRADE_PARAMS: FluidParam[] = SOURCE_PARAMS.colorgrade;
 
 // node type -> its modulatable param specs. Cards with no entry have no ports.
 export const NODE_PARAMS: Record<string, FluidParam[]> = {
@@ -43,8 +55,16 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   slideshow: SLIDESHOW_PARAMS,
   video: VIDEO_PARAMS,
   backdrop: BACKDROP_PARAMS,
+  waves: WAVES_PARAMS,
+  lightning: LIGHTNING_PARAMS,
+  fire: FIRE_PARAMS,
+  aurora: AURORA_PARAMS,
+  rain: RAIN_PARAMS,
+  clouds: CLOUDS_PARAMS,
   transform: TRANSFORM_PARAMS,
   stylize: STYLIZE_PARAMS,
+  echo: ECHO_PARAMS,
+  colorgrade: COLORGRADE_PARAMS,
 };
 
 export const nodeParams = (type: string): FluidParam[] => NODE_PARAMS[type] || [];

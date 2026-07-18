@@ -427,3 +427,21 @@
     flex-wrap: wrap;
   }
 }
+
+/* Playground 💾 save-fixture outcome, inline under the CARDS head. */
+.seg-rail-fixmsg {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.seg-rail-fixmsg.ok {
+  color: var(--ok, #7dc87d);
+}
+.seg-rail-fixmsg.warn {
+  color: var(--warn, #d8b25a);
+}
+.seg-rail-fixmsg.err {
+  color: var(--err, #e07a7a);
+}

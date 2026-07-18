@@ -35,7 +35,7 @@ function inFlow(
 ): "value" | "points" | "color" | "video" {
   if (nodeParam(node.type, portId)) return "value";
   if (portId === "positions") return "points";
-  if (portId === "fillColor" || portId === "outlineColor") return "color";
+  if (portId === "fillColor" || portId === "outlineColor" || portId === "tint") return "color";
   const edge = (ctx.graph?.edges || []).find(
     (e) => e.target === node.id && e.targetPort === portId
   );

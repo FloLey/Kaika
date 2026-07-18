@@ -22,6 +22,8 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [yt, setYt] = useState("");
+  const [ytStart, setYtStart] = useState("");
+  const [ytEnd, setYtEnd] = useState("");
   const [ytBusy, setYtBusy] = useState(false);
   const closedRef = useRef(false);
 
@@ -74,9 +76,11 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
     setYtBusy(true);
     setErr(null);
     try {
-      const { job_id } = await assetFromYoutube(jobId, yt.trim());
+      const { job_id } = await assetFromYoutube(jobId, yt.trim(), ytStart.trim(), ytEnd.trim());
       await pollJob<Asset>(job_id);
       setYt("");
+      setYtStart("");
+      setYtEnd("");
       await refresh();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "youtube import failed");
@@ -138,6 +142,28 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
                   }}
                   disabled={ytBusy}
                 />
+                {yt.trim() && (
+                  <>
+                    <input
+                      type="text"
+                      className="hz-input asset-lib-yt-ts"
+                      placeholder="0:00"
+                      title="Optional start — only this section of the video is downloaded"
+                      value={ytStart}
+                      onChange={(e) => setYtStart(e.target.value)}
+                      disabled={ytBusy}
+                    />
+                    <input
+                      type="text"
+                      className="hz-input asset-lib-yt-ts"
+                      placeholder="end"
+                      title="Optional end — only this section of the video is downloaded"
+                      value={ytEnd}
+                      onChange={(e) => setYtEnd(e.target.value)}
+                      disabled={ytBusy}
+                    />
+                  </>
+                )}
                 <button className="btn sm" onClick={onImportYoutube} disabled={ytBusy || !yt.trim()}>
                   {ytBusy ? "importing…" : "import"}
                 </button>

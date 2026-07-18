@@ -7,6 +7,8 @@ import UploadZone from "./UploadZone";
 interface UploadSubmit {
   file: File | null;
   youtubeUrl: string;
+  ytStart: string;
+  ytEnd: string;
   lyrics: string;
   lyricsFile: File | null;
 }
@@ -14,6 +16,8 @@ interface UploadSubmit {
 export default function UploadStep({ onSubmit }: { onSubmit: (data: UploadSubmit) => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [ytStart, setYtStart] = useState("");
+  const [ytEnd, setYtEnd] = useState("");
   const [lyrics, setLyrics] = useState("");
   const [lyricsFile, setLyricsFile] = useState<File | null>(null);
   const lyricsInput = useRef<HTMLInputElement>(null);
@@ -44,6 +48,27 @@ export default function UploadStep({ onSubmit }: { onSubmit: (data: UploadSubmit
               onChange={(e) => setYoutubeUrl(e.target.value)}
             />
           </div>
+          {youtubeUrl.trim() && (
+            <div className="yt-range">
+              <span className="yt-range-label"
+                title="Only this part of the video is downloaded (not the whole file). Leave empty for the full track.">
+                clip (optional)
+              </span>
+              <input
+                className="yt-range-input"
+                placeholder="start 0:00"
+                value={ytStart}
+                onChange={(e) => setYtStart(e.target.value)}
+              />
+              <span className="yt-range-sep">→</span>
+              <input
+                className="yt-range-input"
+                placeholder="end 3:45"
+                value={ytEnd}
+                onChange={(e) => setYtEnd(e.target.value)}
+              />
+            </div>
+          )}
         </>
       ) : (
         <div className="picked">
@@ -90,7 +115,16 @@ export default function UploadStep({ onSubmit }: { onSubmit: (data: UploadSubmit
         <button
           className="btn"
           disabled={!file && !youtubeUrl.trim()}
-          onClick={() => onSubmit({ file, youtubeUrl: youtubeUrl.trim(), lyrics, lyricsFile })}
+          onClick={() =>
+            onSubmit({
+              file,
+              youtubeUrl: youtubeUrl.trim(),
+              ytStart: ytStart.trim(),
+              ytEnd: ytEnd.trim(),
+              lyrics,
+              lyricsFile,
+            })
+          }
         >
           ▶ separate &amp; propose segments
         </button>

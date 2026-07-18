@@ -37,10 +37,18 @@ export const VIDEO_TYPES = new Set([
   "transform",
   "stylize",
   "extract",
+  "echo",
+  "colorgrade",
   "image",
   "video",
   "slideshow",
   "lyrics",
+  "waves",
+  "lightning",
+  "fire",
+  "aurora",
+  "rain",
+  "clouds",
 ]);
 
 // animate/merge points depend on upstream + transforms, so their scatter is resolved

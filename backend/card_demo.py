@@ -32,8 +32,10 @@ CARD_LABELS = {
     "fluid": "Fluid", "lyrics": "Lyrics", "image": "Image", "slideshow": "Slideshow", "imagegen": "Image gen",
     "video": "Video",
     "color": "Color", "backdrop": "Backdrop",
+    "waves": "Waves", "lightning": "Lightning", "fire": "Fire",
+    "aurora": "Aurora", "rain": "Rain", "clouds": "Clouds",
     "combine": "Combine", "transform": "Transform", "extract": "Extract",
-    "stylize": "AI Stylize", "output": "Output",
+    "stylize": "AI Stylize", "echo": "Echo", "colorgrade": "Color Grade", "output": "Output",
 }
 ALL_CARDS = set(CARD_LABELS)
 

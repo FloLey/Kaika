@@ -30,9 +30,17 @@ import LyricsNode from "./LyricsNode";
 import ImageNode from "./ImageNode";
 import VideoNode from "./VideoNode";
 import BackdropNode from "./BackdropNode";
+import WavesNode from "./WavesNode";
+import LightningNode from "./LightningNode";
+import FireNode from "./FireNode";
+import AuroraNode from "./AuroraNode";
+import RainNode from "./RainNode";
+import CloudsNode from "./CloudsNode";
 import TransformNode from "./TransformNode";
 import StylizeNode from "./StylizeNode";
 import ExtractNode from "./ExtractNode";
+import EchoNode from "./EchoNode";
+import ColorGradeNode from "./ColorGradeNode";
 import {
   fluidNode,
   outputNode,
@@ -54,9 +62,17 @@ import {
   slideshowNode,
   videoNode,
   backdropNode,
+  wavesNode,
+  lightningNode,
+  fireNode,
+  auroraNode,
+  rainNode,
+  cloudsNode,
   transformNode,
   stylizeNode,
   extractNode,
+  echoNode,
+  colorgradeNode,
 } from "../../../lib/graphModel";
 import type { GraphNode, NodeType, PortFlow } from "../../../lib/types";
 import type { NodeProps } from "./nodeProps";
@@ -206,6 +222,34 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "compositing",
       help: "Repaints the incoming video toward a text prompt (img2img); strength is a modulatable port and inpaint confines it to the shape. Wire an Extract card into control to guide it. Generates on demand into a clip; passes the video through until then.",
       io: { in: "video", out: "video" },
+    },
+  },
+  echo: {
+    type: "echo",
+    Component: EchoNode,
+    chrome: { title: "echo", accent: "var(--fx)", outFlow: "video" },
+    factory: echoNode,
+    palette: {
+      label: "Echo",
+      title: "Motion trails — movement leaves fading ghosts",
+      order: 3.69,
+      category: "compositing",
+      help: "Motion trails: a decayed running max of the past mixed back under the frame, so movement leaves fading ghosts. Wire length to a signal for beat-pumped trails. Feeds an output or a layered combine (never a merge).",
+      io: { in: "video", out: "video" },
+    },
+  },
+  colorgrade: {
+    type: "colorgrade",
+    Component: ColorGradeNode,
+    chrome: { title: "color grade", accent: "var(--fx)", outFlow: "video" },
+    factory: colorgradeNode,
+    palette: {
+      label: "Color Grade",
+      title: "Recolour the video — thermal, duotone, or neon edges",
+      order: 3.67,
+      category: "compositing",
+      help: "Thermal heat-camera, duotone poster remap, or neon edge-glow. Wire a gradient color card into tint and bind its position — the grade sweeps colour with the music. Grade modes belong at the end of the chain.",
+      io: { in: "video + color (tint)", out: "video" },
     },
   },
   output: {
@@ -443,6 +487,90 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "generators",
       help: "Fills the whole frame with a solid colour as a video layer. Wire it into the BOTTOM input of a stack combine for a non-black background; opacity is a modulatable port.",
       io: { in: "a signal on opacity", out: "video" },
+    },
+  },
+  waves: {
+    type: "waves",
+    Component: WavesNode,
+    chrome: { title: "waves", accent: "var(--courant)", outFlow: "video" },
+    factory: wavesNode,
+    palette: {
+      label: "Waves",
+      title: "Pool water: caustics + refraction of an optional video input",
+      order: 34,
+      category: "generators",
+      help: "Real pool water: a dispersion-correct wave spectrum focuses light into the dancing caustic filaments and REFRACTS whatever you wire into `video` (an image, a clip, a fluid) — chromatic fringes, sun glints and the blue-green depth tint included. Empty input renders on the palette. Merged waves cards superpose their spectra on one surface.",
+      io: { in: "optional video + signals on its ports", out: "video" },
+    },
+  },
+  lightning: {
+    type: "lightning",
+    Component: LightningNode,
+    chrome: { title: "lightning", accent: "var(--electric, #7aa2ff)", outFlow: "video" },
+    factory: lightningNode,
+    palette: {
+      label: "Lightning",
+      title: "Real dielectric-breakdown bolts: origin, direction and restrikes",
+      order: 35,
+      category: "generators",
+      help: "Discharges grown by the physics of real lightning (Laplacian breakdown): hierarchical self-avoiding branches from any origin toward any direction, a white-hot core in a tinted halo, dart-leader restrikes of the same channel (`flicker`) and origin-centred sky flash. Wire an onset to `strike`; a points card into `positions` strikes from a different point each time.",
+      io: { in: "onset on strike, optional points", out: "video" },
+    },
+  },
+  fire: {
+    type: "fire",
+    Component: FireNode,
+    chrome: { title: "fire", accent: "var(--ember, #ff7a3c)", outFlow: "video" },
+    factory: fireNode,
+    palette: {
+      label: "Fire",
+      title: "Buoyant combustion on the fluid solver — place, aim and merge flames",
+      order: 36,
+      category: "generators",
+      help: "A real flame: heat rises through the fluid solver, cools quartically and glows with blackbody colour. Place it with origin x/y, aim it with `direction` (a sideways torch works), size it with `width`/`cooling`. A points card lights one flame per point, and close flames lean together and MERGE — as do fire cards merged in a combine, even with fluids.",
+      io: { in: "signals on its ports + optional points", out: "video" },
+    },
+  },
+  aurora: {
+    type: "aurora",
+    Component: AuroraNode,
+    chrome: { title: "aurora", accent: "var(--aurora, #4fe0a0)", outFlow: "video" },
+    factory: auroraNode,
+    palette: {
+      label: "Aurora",
+      title: "Calm northern-light curtains: horizontal arcs, vertical rays",
+      order: 37,
+      category: "generators",
+      help: "Built like the real thing: near-horizontal arcs with a sharp lower edge, vertical rays whose intensities breathe on the ~1 s oxygen-glow timescale, colours stratified by altitude (purple fringe, green body, red top). Quasi-static and veil-calm by default; `position y`/`height` place it in the sky. Wire harmonic to `brightness`.",
+      io: { in: "signals on brightness / sway / shimmer", out: "video" },
+    },
+  },
+  rain: {
+    type: "rain",
+    Component: RainNode,
+    chrome: { title: "rain", accent: "var(--courant)", outFlow: "video" },
+    factory: rainNode,
+    palette: {
+      label: "Rain",
+      title: "Drops on a liquid surface — real interfering rings refract the input",
+      order: 38,
+      category: "generators",
+      help: "The input layer becomes the floor of a liquid: each drop punches a crater, rebounds and rings out — real wave-equation rings that collide and interfere, bending the image as they cross. A points card turns uniform rain into fixed drip points; merged rain cards drip into ONE shared surface. Wire energy to `density` and it pours with the music.",
+      io: { in: "optional video + points + signals", out: "video" },
+    },
+  },
+  clouds: {
+    type: "clouds",
+    Component: CloudsNode,
+    chrome: { title: "clouds", accent: "var(--nebula, #a06fe0)", outFlow: "video" },
+    factory: cloudsNode,
+    palette: {
+      label: "Clouds",
+      title: "Sunlit cumulus: self-shadowed masses with a silver lining",
+      order: 39,
+      category: "generators",
+      help: "Real-looking clouds: billowing masses that self-shadow along `light angle` (a short Beer-Lambert march toward the sun), brighter in the crevices than on the bulges like true cumulus, with a silver lining flaring on thin rims near the sun. Sky shows through between them. Merged clouds cards shade under ONE sun. A dreamy sky or a nebula by palette.",
+      io: { in: "signals on coverage / drift / light", out: "video" },
     },
   },
 };

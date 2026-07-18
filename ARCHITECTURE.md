@@ -54,8 +54,9 @@ Postgres.
 backend/            Flask API + the render engine
   routes/           five blueprints (absolute URLs, no prefixes)
   graph.py          ← 87-line facade; the executor lives in graph_*.py
-  fluid.py          the fluid simulation + encoders
-  sources.py        non-fluid video layers (lyrics/image/video/backdrop)
+  fluid.py          the fluid simulation (+ fire mode) + encoders
+  sources.py        non-fluid video layers (lyrics/image/video/backdrop + sim cards)
+  procgen.py        the simulation kit (wave spectra, caustics, DBM, spectral ripple…)
   song_render.py    whole-song HD export
   *_cache.py, cache_gc.py, jobs.py, render_jobs.py, db.py, paths.py …
 frontend/src/
@@ -115,8 +116,9 @@ the implementation lives in five modules:
 
 A node graph has three edge flows: **value** (0..1 curves into modulatable
 ports, each mapped through a per-port `[lo, hi]` range), **points** (emitter
-position sets into a fluid's `positions`), and **video** (frame streams into
-combines/outputs). Every modulatable port is either a `const` or a
+position sets into a fluid's — or fire/lightning/rain's — `positions`, full
+specs so animate-points paths/gates ride along), and **video** (frame streams
+into combines/outputs, including the optional refracted input of waves/rain). Every modulatable port is either a `const` or a
 `{nodeId, lo, hi}` binding — kept in lockstep with a matching edge (the
 **binding↔edge invariant**, enforced by the frontend mutation helpers).
 
@@ -127,11 +129,32 @@ combines/outputs). Every modulatable port is either a `const` or a
   form: block streaming advances the same sim in ~5s chunks (block K+1's field
   *is* block K's — time can't be parallelised). Also owns the ffmpeg encoders
   (one-shot mp4 + a fragmented streaming encoder whose file is playable while it
-  grows).
+  grows). **Fire mode** (`params["fire"]`): a normalised temperature field rides
+  the same solver — heat emitters (max-blend splats), buoyancy along a rotatable
+  "up" (the fire card's `direction`), analytic quartic cooling, T-weighted
+  vorticity confinement, blackbody rendering — so the fire card inherits the
+  whole emitter system (paths, gates, points, per-frame modulation), the frame
+  cache, block streaming and the merge combine (fire merges with fire AND with
+  dye fluids: dye + fire tonemaps screen-blend).
 - **`sources.py`** — the non-fluid layers. Lyrics rasterise the aligned lines
   (font fit solved once per distinct line); image/video place an asset into a
   normalized box; **`VideoClip`** mirrors `FluidClip` — one persistent ffmpeg
-  decoder read forward across blocks, reopened only on a backward seek.
+  decoder read forward across blocks, reopened only on a backward seek. The
+  **generative simulation cards** (waves / lightning / aurora / rain / clouds)
+  live here too, on the `procgen` kit: each takes `layers` — one dict of
+  full-length port arrays per merged card — so a merge combine genuinely shares
+  ONE field (wave heights superpose, drops ripple one surface, bolts light one
+  sky, densities shade under one sun; mixed kinds raise → use a stack). Waves
+  and rain also take an optional `base` (the upstream `video` input they
+  refract). Rain is the one **stateful** non-fluid producer: its spectral
+  surface `(ĥ, ĥ⁻)` threads through contiguous blocks (the `_echo_block`
+  closure pattern); everything else is a pure function of the absolute frame.
+- **`procgen.py`** — the shared physics/rendering kit: 2-D value-noise fbm,
+  directional wave spectra with deep-water dispersion + analytic Hessians,
+  Jacobian caustic splatting, bilinear displacement, dielectric-breakdown
+  (Laplacian-growth) bolt trees, the spectral capillary-wave propagator,
+  the Planck blackbody ramp, palettes, and the capped internal sim grid
+  (`sim_dims`/`upscale`).
 - **`signals.py`** — audio features (energy/onset/flux/brightness/harmonic/
   chroma/beat/bar) + shaping into 0..1 curves; the STFT is LRU-cached.
 - **`song_render.py`** — the whole-song export. Instead of stitching segment
@@ -150,6 +173,18 @@ fine for a local tool):
   generation** (`imagegen.py`, the Image gen card's ✨ — a local diffusion model
   on MPS, lazily loaded). **One worker**, so GPU work never overlaps (and
   matplotlib state stays single-threaded).
+
+### Remote inference (optional)
+
+Every diffusion entrypoint (`imagegen.generate` / `stylize_frames` / `depth_frames`)
+consults `settings.remote_endpoint(op)` first: when the ⚙ settings
+(`data/settings.json`, `backend/settings.py`, routes in `routes/settings.py`) enable
+it for that operation, the call ships to a rented GPU running `backend/remote_app.py`
+— a thin Flask wrapper around the SAME imagegen module (which picks cuda there via
+`_pick_device`). Transport is compressed npz via `backend/remote_client.py`, stylize
+in batches of 8 frames (progress per batch). Failures raise a clear RuntimeError on
+the card — no silent local fallback. `remote_app` pins `KAIKA_FORCE_LOCAL` so the
+GPU box can never bounce a request back out.
 - **`render_jobs.py`** — streaming renders. Two workers, per-job cancel events;
   the UI cancels the previous render on every edit, so an abandoned render stops
   between blocks.

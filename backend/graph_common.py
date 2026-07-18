@@ -76,9 +76,18 @@ def _video_source(graph: dict, target_id: str, target_port: str):
     return None
 
 
+# Node types that can feed a MERGE combine: fluids (dye emitters), fire (heat
+# emitters — same solver, so fire merges with fire AND with fluids), and the
+# generative simulation cards, which merge homogeneously (two rains share one
+# surface, two waves superpose their height fields, ...). The render-side
+# dispatch enforces same-kind grouping for the latter (_combine_video).
+MERGE_SOURCE_TYPES = ("fluid", "fire", "waves", "rain", "lightning", "aurora", "clouds")
+
+
 def _is_emitter_source(graph: dict, node_id, nodes: dict, seen=None) -> bool:
-    """Whether `node_id` resolves to fluid emitter(s) for a MERGE — i.e. no layered
-    (stack) combine sits upstream (a composited video has no single emitter set)."""
+    """Whether `node_id` resolves to mergeable emitter(s) for a MERGE — i.e. an
+    emitter-bearing card with no layered (stack) combine upstream (a composited
+    video has no single emitter set)."""
     seen = seen if seen is not None else set()
     if node_id in seen:
         return False
@@ -87,7 +96,7 @@ def _is_emitter_source(graph: dict, node_id, nodes: dict, seen=None) -> bool:
     if node is None:
         return False
     t = node.get("type")
-    if t == "fluid":
+    if t in MERGE_SOURCE_TYPES:
         return True
     if t == "output":
         src = _video_source(graph, node_id, "video")
@@ -154,8 +163,8 @@ def _field_nodes(graph: dict, output_id: str) -> list[str]:
     """The raw-field producers (`fluid` / `combine(merge)`) feeding `output_id`, in
     video-chain order (used by the continuous song export). A fluid feeding a merge is
     absorbed by the merge, so we stop AT each field and don't recurse into a merge's
-    inputs; `output`/`transform`/`grade`/`combine(stack)` are pass-through and recursed;
-    `lyrics` is a generated layer, not a fluid field."""
+    inputs; `output`/`transform`/`grade`/`echo`/`colorgrade`/`combine(stack)` are
+    pass-through and recursed; `lyrics` is a generated layer, not a fluid field."""
     nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
     found: list[str] = []
     seen: set = set()
@@ -173,10 +182,17 @@ def _field_nodes(graph: dict, output_id: str) -> list[str]:
         elif t == "combine":  # stack: recurse each layer input
             for slot in node.get("data", {}).get("inputs", []):
                 walk(_video_source(graph, nid, slot.get("id")))
-        elif t in ("output", "transform", "grade"):  # pass-through video chain
-            walk(_video_source(graph, nid, "video"))
+        elif t in (
+            "output",
+            "transform",
+            "grade",
+            "echo",
+            "colorgrade",
+            "waves",
+            "rain",
+        ):  # pass-through (waves/rain refract their
+            walk(_video_source(graph, nid, "video"))  # optional video input)
         # lyrics / anything else: not a fluid field, ignore
 
     walk(output_id)
     return found
-

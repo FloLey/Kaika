@@ -17,12 +17,15 @@ export const DOC_SECTION_IDS = [
   "animation-points",
   "animation-sources",
   "assets",
+  "animation-generators",
   "animation-fx",
   "animation-combine",
   "animation-transform",
+  "animation-lookfx",
   "animation-stylize",
   "animation-output",
   "export",
+  "settings-remote",
   "fluid-lab",
   "fluid-source",
   "fluid-medium",
@@ -150,7 +153,9 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>🎮 playground</strong> — opens the always-present{" "}
-            <a href="#fluid-lab">Playground</a> sandbox (one segment per card).
+            <a href="#fluid-lab">Playground</a> sandbox (one segment per card). When new
+            cards ship, their demo segments are appended automatically the next time you
+            open it — your own edits and experiments stay untouched.
           </li>
         </ul>
         <p>
@@ -176,7 +181,10 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>YouTube URL</strong> — paste a link and the app downloads the audio. The video
-            title becomes the project name.
+            title becomes the project name. An optional <strong>clip range</strong> (start → end,
+            as <code>SS</code>, <code>MM:SS</code> or <code>HH:MM:SS</code>) appears under the URL:
+            only that section of the stream is downloaded — 20&nbsp;seconds of a 2-hour video
+            fetches ~20&nbsp;seconds, not 2&nbsp;hours. Either bound can be left empty.
           </li>
         </ul>
 
@@ -844,7 +852,13 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>Video</strong> — same box/fit/library as the image card, for a clip. Extra ways
-            in: <strong>import from YouTube</strong> right on the card (paste a URL). Timing
+            in: <strong>import from YouTube</strong> right on the card (paste a URL; optional
+            start/end timestamps fetch only that section of the video, not the whole file). A{" "}
+            <strong>crop</strong> pad below the placement box selects <em>which part of the source
+            frame is used</em>: drag a corner to cut a region out of the clip (drag the rectangle to
+            move it) and only that region gets fitted into the box — so when a clip is too wide or
+            tall for the project format, you choose what survives instead of a centre crop. The
+            clip plays live inside the placement box, showing exactly what will render. Timing
             controls: <em>sync</em> (<em>song</em> keeps a background clip phase-continuous across
             segments; <em>segment</em> restarts it at each cut), a <em>start</em> offset into the
             source, and <em>loop</em> (off = the last frame holds). Both <em>opacity</em> and{" "}
@@ -894,6 +908,71 @@ export default function Docs({ section }: { section?: string }) {
             <strong>Deleting.</strong> Remove an asset from the library manager (🗑). Cards that
             still reference it will render an empty (transparent) layer, so delete freely — the
             worst case is a see-through spot where the picture was.
+          </li>
+        </ul>
+
+        <h3 id="animation-generators">Simulation layers — water, lightning, fire &amp; skies</h3>
+        <p>
+          These cards are small physical <em>simulations</em>, driven by your signals — real wave
+          optics, a real electric discharge, real buoyant combustion, a real rippling surface, lit
+          volumetric clouds. They output a video layer, so stack them with fluids in a{" "}
+          <em>layered</em> combine or send one straight to an output. Each takes a <em>palette</em>{" "}
+          preset (or wire a <a href="#animation-fx">colour card</a> into its <em>colour</em> input to
+          override it), and like the fluid card they join the wider graph: a{" "}
+          <a href="#animation-points">points card</a> fans fire / lightning / rain out to several
+          origins (an <em>animate points</em> card even moves them), every port takes a signal or
+          LFO, and a <em>merge</em> combine joins same-kind cards into ONE shared field — two fires
+          become one blaze, two rains drip into one surface.
+        </p>
+        <ul>
+          <li>
+            <strong>Waves</strong> — pool water seen from above. A fan of real dispersive waves
+            (long swells genuinely outrun fine ripples) focuses light into the dancing caustic
+            filament network, and <em>refracts</em> whatever you wire into its <em>video</em> input —
+            an image, a clip, a fluid — complete with chromatic fringes (<em>chroma</em>), sun
+            glints (<em>shine</em>) and the blue-green depth tint (<em>depth</em>). Nothing wired =
+            the palette floor. Wire energy to <em>steepness</em> and the water chops with the music.
+          </li>
+          <li>
+            <strong>Lightning</strong> — a genuine dielectric-breakdown discharge: hierarchical,
+            self-avoiding branches grown from (<em>origin x</em>, <em>origin y</em>) toward{" "}
+            <em>direction</em>, with a white-hot core inside a tinted halo. Each rising edge of{" "}
+            <em>strike</em> fires one (wire an <a href="#animation-modulators">onset or gate</a>{" "}
+            signal); <em>flicker</em> adds the real thing's restrikes — the same channel, minus its
+            branches, re-flashing at ~50 ms — and <em>flash</em> lights the sky around the origin.{" "}
+            <em>branches</em> runs from a bare spear to a full Lichtenberg tree.
+          </li>
+          <li>
+            <strong>Fire</strong> — buoyant combustion on the fluid solver: heat rises, cools like
+            real radiating gas (<em>cooling</em> is the flame-height knob) and glows with true
+            blackbody colour. Place the base anywhere (<em>origin x/y</em>), aim it with{" "}
+            <em>direction</em> (a sideways torch works — it literally rotates gravity), and feed a
+            points card into <em>positions</em> for several flames: bring two close and they lean
+            into each other and merge, exactly like real fires. Merging fire cards in a combine —
+            even with a dye fluid — shares one simulation.
+          </li>
+          <li>
+            <strong>Aurora</strong> — built like the real curtains: near-horizontal arcs with a
+            sharp lower edge, vertical rays whose intensities bloom and die on the ~1 s oxygen-glow
+            timescale (<em>shimmer</em>), colours stratified by altitude — purple fringe, green
+            body, red top. Quasi-static and veil-calm by default; <em>position y</em> and{" "}
+            <em>height</em> place it in the sky. Wire a tonal <em>harmonic</em> signal to{" "}
+            <em>brightness</em>.
+          </li>
+          <li>
+            <strong>Rain</strong> — drops on a liquid surface whose floor is the layer wired into{" "}
+            <em>video</em>. Each drop punches a crater, rebounds and rings out; the rings race
+            outward (fine capillary ripples leading, as on real water), collide and{" "}
+            <em>interfere</em>, bending the image beneath (<em>distort</em>). A points card into{" "}
+            <em>positions</em> turns uniform rain into fixed drip points; merged rain cards drip
+            into one shared surface. Wire energy to <em>density</em> and it pours with the music.
+          </li>
+          <li>
+            <strong>Clouds</strong> — sunlit cumulus: billowing masses that self-shadow along{" "}
+            <em>light angle</em>, read brighter in the crevices than on the bulges (the real powder
+            effect) and flare a <em>silver</em> lining on thin rims near the sun. Sky shows through
+            between them, so it layers cleanly. A dreamy sky or a saturated <em>nebula</em> by
+            palette; wire <em>flux</em> to <em>turbulence</em> so busy passages churn the sky.
           </li>
         </ul>
 
@@ -970,6 +1049,44 @@ export default function Docs({ section }: { section?: string }) {
           A transform produces <em>frames</em>, not emitters, so it can feed an <strong>output</strong>{" "}
           or a <strong>layered</strong> combine — but not a <em>merge</em> (which needs the raw fluid
           sources to interact). Chain two transforms if you want, say, a kaleidoscope of a rotation.
+        </p>
+
+        <h3 id="animation-lookfx">Echo — motion trails</h3>
+        <p>
+          The <strong>echo</strong> card (Compositing) leaves fading trails behind anything that
+          moves, with three kinds of memory. <strong>ghost</strong> (the default) mixes each frame
+          with a fading afterimage of the recent past — every <em>change</em> lingers, whatever
+          the contrast, so it works on real footage (a person running leaves translucent copies of
+          themselves behind; the live frame always stays at least half visible).{" "}
+          <strong>bright</strong> remembers only the <em>brightest</em> thing that passed through
+          each pixel, at full brightness — comet tails for fluids and anything glowing on a dark
+          background (black stays black, so compositing on top keeps working).{" "}
+          <strong>dark</strong> is its mirror: a dark subject on a bright scene drags solid shadow
+          trails while staying fully sharp itself — the pick for daylight footage.
+        </p>
+        <p>
+          <strong>length</strong> is how long the trail lingers (its half-life, in seconds — 0
+          switches the effect off); <strong>amount</strong> mixes between the untouched video and
+          full trailing. Both are modulatable ports — wire <em>length</em> to a signal and the
+          trails stretch on every hit, snapping back between them. Like the other FX cards it
+          feeds an <strong>output</strong> or a <strong>layered</strong> combine, never a{" "}
+          <em>merge</em>. In a whole-song export the trails start fresh at each segment cut. Try{" "}
+          <em>bright</em> after a rotating kaleidoscope <strong>transform</strong> — it becomes a
+          spirograph.
+        </p>
+        <p>
+          The <strong>color grade</strong> card (Compositing) recolours the stream, three ways.{" "}
+          <strong>thermal</strong> maps brightness through a heat-camera colormap (pick the{" "}
+          <em>map</em>); <strong>duotone</strong> remaps everything onto a shadow→highlight
+          two-colour ramp (the poster look); <strong>neon</strong> keeps only glowing edges on
+          black. The grade colour can come from a wired <strong>color</strong> card on the{" "}
+          <em>tint</em> input — a <em>gradient</em> colour card with its <em>position</em> bound to
+          a signal makes the whole grade sweep colour with the music; unwired, the card's swatches
+          apply. <strong>intensity</strong> fades the grade in and out and <strong>shift</strong>{" "}
+          rolls the colormap / moves the duotone midpoint / rotates the neon hue — both are
+          modulatable ports. Thermal (except <em>inferno</em>) and duotone recolour the black
+          background too, so grade modes belong at the <strong>end</strong> of the chain (into the
+          output, or the bottom layer of a stack).
         </p>
 
         <h3 id="animation-stylize">AI Stylize — restyle the fluid with diffusion</h3>
@@ -1118,6 +1235,39 @@ export default function Docs({ section }: { section?: string }) {
         </div>
       </section>
 
+      <section id="settings-remote">
+        <h2>
+          <span className="num">⚙</span>Remote inference — rent a GPU for the AI cards
+        </h2>
+        <p>
+          The AI generation (AI Stylize, Image gen, Extract depth) normally runs on this machine,
+          which can be slow — an HD stylize clip takes tens of minutes locally. The{" "}
+          <strong>⚙ settings</strong> (header, any screen) can send that work to a{" "}
+          <strong>remote GPU server</strong> you rent (RunPod, Lambda, any box with a CUDA GPU)
+          instead. Everything else — fluid simulation, stem separation, rendering — always stays
+          local.
+        </p>
+        <h3>Setting up the server</h3>
+        <p>
+          On the GPU machine, from a checkout of this repo:{" "}
+          <code>pip install -r requirements.txt</code>, then{" "}
+          <code>KAIKA_REMOTE_TOKEN=&lt;secret&gt; python -m backend.remote_app</code> (port 5100).
+          It's the <em>same generation code</em> the app runs locally, so results match seed for
+          seed. Models download from Hugging Face on the first request — slow once, then cached.
+          Paste the server's URL and token into the ⚙ settings and hit{" "}
+          <strong>test connection</strong>: you should see its GPU and latency.
+        </p>
+        <h3>Choosing what runs remotely</h3>
+        <p>
+          Each operation has its own toggle — check <strong>AI Stylize</strong> to offload the
+          heavy ControlNet clips while keeping quick Image-gen drafts local, or check everything.
+          Changes apply to the <em>next</em> generation immediately, no restart. If the server is
+          unreachable, the generation <strong>fails with a clear error</strong> on the card —
+          nothing silently falls back to a slow local run; flip the master toggle off to go back
+          to local.
+        </p>
+      </section>
+
       <section id="fluid-lab">
         <h2>
           <span className="num">8</span>Playground &amp; the fluid card
@@ -1128,6 +1278,15 @@ export default function Docs({ section }: { section?: string }) {
           what that card does — the quickest way to see a card in isolation and copy its wiring. It
           opens in the Studio like any project, with synthetic stems so the signal cards have
           something to react to.
+        </p>
+        <p>
+          Reworked a demo and want to keep it? The <strong>💾 save fixture</strong> button at the
+          top of the CARDS rail writes the current Playground into the committed fixture
+          (<code>backend/playground_pipelines.json</code>) — the state the Playground is rebuilt
+          from on the next seed. It saves your latest edits first, so what you see is exactly what's
+          captured. The file is under git, so review the diff and commit when you're happy (it's the
+          in-app twin of <code>make export-playground</code>). A warning appears if a card would be
+          left without a demo — every card must keep one.
         </p>
         <p>
           At the heart of most pipelines is the <strong>fluid</strong> card — a real-time fluid

@@ -113,6 +113,18 @@ def create_project(
         )
 
 
+def set_duration(job_id: str, duration: float) -> bool:
+    """Update a project's duration (seconds). Used by the Playground's additive demo
+    sync, which appends new card demos after the existing timeline and must extend the
+    song to cover them. Returns False if the project doesn't exist."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE projects SET duration=%s, updated_at=now() WHERE job_id=%s",
+            (duration, job_id),
+        )
+        return cur.rowcount > 0
+
+
 def save_segments(
     job_id: str,
     segments: list,

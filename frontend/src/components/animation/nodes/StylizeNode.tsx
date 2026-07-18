@@ -24,6 +24,13 @@ const MODELS: { id: StylizeData["model"]; label: string }[] = [
   { id: "hd", label: "Z-Image — HD (slow)" },
 ];
 
+// In-flight ✨ jobs by node id, at MODULE scope: the card unmounts when the user
+// switches segments, but the job keeps running server-side — on remount the card
+// finds its entry here and re-attaches (progress bar + result). Session-only by
+// design: across a reload the server-side write-back already lands the finished
+// clip on the node in the DB.
+const pendingJobs = new Map<string, string>();
+
 export default function StylizeNode({
   node,
   selected,
@@ -56,6 +63,40 @@ export default function StylizeNode({
   }, []);
   const isAbort = (ex: unknown) => ex instanceof DOMException && ex.name === "AbortError";
 
+  // Follow a job to completion. Shared by ✨ Generate and the mount-resume below.
+  // On an unmount abort the pendingJobs entry stays (the job is still running —
+  // the next mount re-attaches); on success/error it's cleared.
+  const track = async (job_id: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const result = await pollJob<{ assets: Asset[] }>(
+        job_id,
+        setStep,
+        1500,
+        pollAbort.current.signal
+      );
+      pendingJobs.delete(node.id);
+      const url = result.assets?.[0]?.url;
+      if (url) set({ assetUrl: url });
+    } catch (ex) {
+      if (!isAbort(ex)) {
+        pendingJobs.delete(node.id);
+        setErr(ex instanceof Error ? ex.message : "stylize failed");
+      }
+    } finally {
+      setBusy(false);
+      setStep(null);
+    }
+  };
+
+  // Re-attach to a generation started before this mount (segment switch & back).
+  useEffect(() => {
+    const pending = pendingJobs.get(node.id);
+    if (pending) track(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
+
   const onGenerate = async () => {
     if (!jobId || busy || !ctx?.graph || !ctx?.segment) return;
     setBusy(true);
@@ -68,19 +109,11 @@ export default function StylizeNode({
         output: ctx.output,
         node_id: node.id,
       });
-      const result = await pollJob<{ assets: Asset[] }>(
-        job_id,
-        setStep,
-        1500,
-        pollAbort.current.signal
-      );
-      const url = result.assets?.[0]?.url;
-      if (url) set({ assetUrl: url });
+      pendingJobs.set(node.id, job_id);
+      await track(job_id);
     } catch (ex) {
       if (!isAbort(ex)) setErr(ex instanceof Error ? ex.message : "stylize failed");
-    } finally {
       setBusy(false);
-      setStep(null);
     }
   };
 

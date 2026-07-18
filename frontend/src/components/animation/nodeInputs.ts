@@ -130,6 +130,34 @@ export function cardInputs(node: GraphNode): CardInputs {
       return {
         inputs: [...params, { portId: "control", flow: "video", label: "control", kind: "edge" }],
       };
+    // The gen-sim cards: every one takes a colour override; waves/rain also the
+    // refracted video input; fire/lightning/rain the points positions input.
+    case "waves":
+    case "rain":
+      return {
+        inputs: [
+          ...params,
+          { portId: "video", flow: "video", label: "video", kind: "edge" },
+          ...(node.type === "rain"
+            ? [{ portId: "positions", flow: "points", label: "positions", kind: "edge" } as const]
+            : []),
+          { portId: "color", flow: "color", label: "colour", kind: "edge" },
+        ],
+      };
+    case "fire":
+    case "lightning":
+      return {
+        inputs: [
+          ...params,
+          { portId: "positions", flow: "points", label: "positions", kind: "edge" },
+          { portId: "color", flow: "color", label: "colour", kind: "edge" },
+        ],
+      };
+    case "aurora":
+    case "clouds":
+      return {
+        inputs: [...params, { portId: "color", flow: "color", label: "colour", kind: "edge" }],
+      };
     default:
       // image / video / backdrop → params only; signal/lfo/noise/points/pattern have none.
       return { inputs: params };

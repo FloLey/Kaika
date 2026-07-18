@@ -170,6 +170,47 @@ def stem_audio_path(job_id: str, stem: str) -> Path | None:
     return wav if wav.exists() else None
 
 
+def parse_timestamp(text: str) -> float:
+    """A user-typed clip bound — ``SS``, ``MM:SS`` or ``HH:MM:SS`` (fractions allowed) —
+    in seconds. Raises RuntimeError with a message fit for a 400 response."""
+    shown = str(text).strip()
+    parts = shown.split(":")
+    bad = RuntimeError(f"bad timestamp {shown!r} — use SS, MM:SS or HH:MM:SS")
+    if not 1 <= len(parts) <= 3 or any(not p.strip() for p in parts):
+        raise bad
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError:
+        raise bad from None
+    if any(n < 0 for n in nums):
+        raise bad
+    if any(n >= 60 for n in nums[1:]):  # e.g. '00:12:60' — right format, value overflows
+        raise RuntimeError(
+            f"bad timestamp {shown!r} — minutes and seconds must be below 60"
+        )
+    secs = 0.0
+    for n in nums:
+        secs = secs * 60 + n
+    return secs
+
+
+def _section_flags(start: float | None, end: float | None, precise_cuts: bool) -> list:
+    """yt-dlp flags to download ONLY [start, end] of a stream (both optional). yt-dlp
+    hands the range to ffmpeg, which byte-range-seeks the stream — 20s of a 2h video
+    downloads ~20s, not 2h. `precise_cuts` re-encodes at the cut points: needed for
+    video (keyframes can be seconds apart → visible slack) but skipped for audio
+    (packet-level cuts are already tight, and we'd rather not re-encode before demucs)."""
+    if start is None and end is None:
+        return []
+    lo = float(start or 0.0)
+    if end is not None and float(end) <= lo:
+        raise RuntimeError("end timestamp must be after start")
+    flags = ["--download-sections", f"*{lo}-{'inf' if end is None else float(end)}"]
+    if precise_cuts:
+        flags.append("--force-keyframes-at-cuts")
+    return flags
+
+
 def _ytdlp_download(url: str, out_dir: Path, stem: str, fmt: str, extra: list, what: str) -> list:
     """Run yt-dlp with format `fmt` into ``out_dir/<stem>.<ext>`` and return the
     matching output files (sorted; .txt/.lrc sidecars excluded). `extra` appends
@@ -197,30 +238,38 @@ def _ytdlp_download(url: str, out_dir: Path, stem: str, fmt: str, extra: list, w
     return hits
 
 
-def download_youtube_audio(url: str, out_dir: Path) -> Path:
+def download_youtube_audio(
+    url: str, out_dir: Path, start: float | None = None, end: float | None = None
+) -> Path:
     """Download the best available audio of a YouTube URL into ``out_dir`` as
-    ``original.<ext>`` (native container, no re-encode). Returns the path.
+    ``original.<ext>`` (native container, no re-encode). `start`/`end` (seconds)
+    optionally fetch ONLY that section of the stream. Returns the path.
 
     Raises RuntimeError with yt-dlp's output on failure.
     """
     hits = _ytdlp_download(
         url, out_dir, "original",
         "bestaudio/best",  # best audio-only stream, else best overall
-        ["--print-to-file", "%(title)s", str(out_dir / "yt_title.txt")],
+        ["--print-to-file", "%(title)s", str(out_dir / "yt_title.txt")]
+        + _section_flags(start, end, precise_cuts=False),
         "audio",
     )
     return hits[0]
 
 
-def download_youtube_video(url: str, out_dir: Path, stem: str = "ytvideo") -> Path:
+def download_youtube_video(
+    url: str, out_dir: Path, stem: str = "ytvideo",
+    start: float | None = None, end: float | None = None,
+) -> Path:
     """Download the best video+audio of a YouTube URL into ``out_dir`` as
-    ``<stem>.mp4`` (merged), returning the path. Used by the Video card's YouTube
-    import (the pipeline-start YouTube stays audio-only). Raises RuntimeError on
-    failure with yt-dlp's output."""
+    ``<stem>.mp4`` (merged), returning the path. `start`/`end` (seconds) optionally
+    fetch ONLY that section. Used by the Video card's YouTube import (the
+    pipeline-start YouTube stays audio-only). Raises RuntimeError on failure with
+    yt-dlp's output."""
     hits = _ytdlp_download(
         url, out_dir, stem,
         "bv*+ba/b",  # best video+audio, else best single stream
-        ["--merge-output-format", "mp4"],
+        ["--merge-output-format", "mp4"] + _section_flags(start, end, precise_cuts=True),
         "video",
     )
     # Prefer the merged .mp4 if several intermediate files linger.

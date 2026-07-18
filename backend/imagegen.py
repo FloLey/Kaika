@@ -36,6 +36,8 @@ import threading
 # fetch never hangs; a user can re-enable Xet by setting HF_HUB_DISABLE_XET=0.
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
+from . import settings as app_settings  # noqa: E402 — stdlib-only module, safe anywhere
+
 log = logging.getLogger("kaika.imagegen")
 
 # The two known models. `kind` selects the diffusers pipeline class; `steps` is the
@@ -48,6 +50,18 @@ MODELS: dict[str, dict] = {
 }
 # Back-compat env override for the *default* model when a caller passes none.
 DEFAULT_MODEL = os.environ.get("IMAGEGEN_MODEL", HD_MODEL)
+
+
+def _pick_device() -> str:
+    """cuda > mps > cpu. cuda matters for `backend/remote_app.py`, which runs THIS
+    module unchanged on a rented GPU box."""
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    return "mps" if torch.backends.mps.is_available() else "cpu"
+
+
 # The long edge (px) for the fast in-editor draft previews.
 DRAFT_EDGE = int(os.environ.get("IMAGEGEN_DRAFT_EDGE", "512"))
 
@@ -87,7 +101,7 @@ def _load_pipe(model: str):
                 "image generation needs the diffusers stack — "
                 "`pip install -r requirements.txt` (diffusers/transformers/safetensors)"
             ) from e
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        device = _pick_device()
         try:
             if spec["kind"] == "zimage":
                 # Z-Image ships fp32; bfloat16 halves the resident footprint and is its
@@ -98,7 +112,7 @@ def _load_pipe(model: str):
                     model, torch_dtype=torch.bfloat16, low_cpu_mem_usage=False
                 )
             else:
-                dtype = torch.float16 if device == "mps" else torch.float32
+                dtype = torch.float16 if device != "cpu" else torch.float32
                 pipe = AutoPipelineForText2Image.from_pretrained(model, torch_dtype=dtype)
         except Exception as e:  # noqa: BLE001 — network/model errors get one clean message
             raise RuntimeError(f"could not load image model '{model}': {e}") from e
@@ -140,6 +154,13 @@ def generate(
 
     model = model or DEFAULT_MODEL
     spec = _spec(model)
+    # Remote inference (⚙ settings): ship the resolved params to the rented GPU, which
+    # runs this same function there and returns the images.
+    ep = app_settings.remote_endpoint("imagegen")
+    if ep is not None:
+        from . import remote_client
+
+        return remote_client.generate_remote(prompt, seed, count, model, long_edge, aspect, *ep)
     pipe = _load_pipe(model)
     width, height = _target_size(long_edge or spec["max_edge"], aspect, spec["max_edge"])
     out = []
@@ -190,9 +211,9 @@ def _load_stylize_pipe(model: str, inpaint: bool, control: bool):
                 "image generation needs the diffusers stack — "
                 "`pip install -r requirements.txt` (diffusers/transformers/safetensors)"
             ) from e
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        device = _pick_device()
         dtype = torch.bfloat16 if spec["kind"] == "zimage" else (
-            torch.float16 if device == "mps" else torch.float32
+            torch.float16 if device != "cpu" else torch.float32
         )
         try:
             if control:
@@ -317,7 +338,24 @@ def stylize_frames(
     # stronger flattens texture — petals become a uniform glow. The SD ControlNet takes 0.8.
     if control_scale is None:
         control_scale = 0.65 if spec["kind"] == "zimage" else 0.8
+    # Default (preview) short side, per model. Draft: 384 — fast iteration, SD-Turbo stays
+    # coherent there. Z-Image: 576 — the empirical QUALITY FLOOR for the 6B DiT (trained at
+    # ~1024+): at 384/448/512 it paints blobs instead of subjects on a sparse input (measured
+    # on the playground fluid). The export passes a larger `short` (768).
+    if short is None:
+        short = 576 if spec["kind"] == "zimage" else 384
     have_control = control is not None and len(control) > 0
+    # Remote inference (⚙ settings): once every default is resolved, the whole call can run
+    # verbatim on the rented GPU — the server invokes THIS function there with explicit params.
+    ep = app_settings.remote_endpoint("stylize")
+    if ep is not None:
+        from . import remote_client
+
+        return remote_client.stylize_remote(
+            frames, prompt, strength, inpaint, model, seed,
+            control if have_control else None, control_scale, negative, int(short),
+            *ep, on_progress=on_progress,
+        )
     # Follow the input by default (draft only): with no explicit control wired, use canny of
     # the input as a ControlNet so the output tracks the input's shapes. HD (Z-Image) keeps
     # its progressive img2img `strength` by default and only uses the Union when control is
@@ -343,12 +381,6 @@ def stylize_frames(
 
         device = pipe._execution_device
     gh, gw = int(frames.shape[1]), int(frames.shape[2])
-    # Default (preview) short side, per model. Draft: 384 — fast iteration, SD-Turbo stays
-    # coherent there. Z-Image: 576 — the empirical QUALITY FLOOR for the 6B DiT (trained at
-    # ~1024+): at 384/448/512 it paints blobs instead of subjects on a sparse input (measured
-    # on the playground fluid). The export passes a larger `short` (768).
-    if short is None:
-        short = 576 if spec["kind"] == "zimage" else 384
     H, W = _work_dims(gh, gw, int(short))
     strength = float(np.clip(strength, 0.05, 1.0))
     # diffusers img2img runs int(steps*strength) real steps — pick steps so that's ≥1
@@ -432,13 +464,12 @@ def _depth_estimator():
         if key in _pipes:
             return _pipes[key]
         try:
-            import torch
             from transformers import pipeline
         except ImportError as e:
             raise RuntimeError(
                 "depth extraction needs the transformers stack — `pip install -r requirements.txt`"
             ) from e
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        device = _pick_device()
         try:
             est = pipeline("depth-estimation", model=DEPTH_MODEL, device=device)
         except Exception as e:  # noqa: BLE001
@@ -454,6 +485,11 @@ def depth_frames(frames):
     import numpy as np
     from PIL import Image
 
+    ep = app_settings.remote_endpoint("depth")
+    if ep is not None:
+        from . import remote_client
+
+        return remote_client.depth_remote(frames, *ep)
     est = _depth_estimator()
     out = np.empty_like(frames)
     for i in range(len(frames)):

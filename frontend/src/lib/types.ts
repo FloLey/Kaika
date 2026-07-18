@@ -254,6 +254,39 @@ export interface BackdropData {
   color: string; // hex fill colour
   ports: Record<string, FluidPort>;
 }
+// Generative source cards (docs/generative-cards/): synthesise an RGBA layer from
+// scratch, reactive to signal-driven ports. Colour is a static `palette` preset,
+// overridable by a `color` card wired into the "color" input. `seed` varies the noise.
+export interface WavesData {
+  palette: "ocean" | "tropical" | "storm" | "sunset";
+  seed: number;
+  ports: Record<string, FluidPort>;
+}
+export interface LightningData {
+  palette: "electric" | "violet" | "white-hot" | "ember";
+  seed: number;
+  ports: Record<string, FluidPort>;
+}
+export interface FireData {
+  palette: "flame" | "blue-fire" | "green-fire" | "ghost";
+  seed: number;
+  ports: Record<string, FluidPort>;
+}
+export interface AuroraData {
+  palette: "aurora" | "solar" | "ice" | "spectrum";
+  seed: number;
+  ports: Record<string, FluidPort>;
+}
+export interface RainData {
+  palette: "downpour" | "silver" | "neon" | "monsoon";
+  seed: number;
+  ports: Record<string, FluidPort>;
+}
+export interface CloudsData {
+  palette: "sky" | "nebula" | "ink" | "dust";
+  seed: number;
+  ports: Record<string, FluidPort>;
+}
 // The transform video-FX card (video -> video): an affine warp of the incoming frames
 // (zoom/rotate/pan are modulatable ports), optionally folded into a mirror or a
 // kaleidoscope. `wrap` tiles the edges instead of leaving them black.
@@ -279,12 +312,41 @@ export interface ExtractData {
   kind: "canny" | "soft" | "density" | "depth";
   ports: Record<string, FluidPort>;
 }
+// The Echo look-FX card (video → video): motion trails — movement leaves fading ghosts.
+// `mode` picks the memory: `ghost` = translucent afterimages of every change (real
+// footage), `bright` = decayed running max (comet tails on dark backgrounds; black stays
+// black), `dark` = its mirror (shadow trails behind dark subjects on bright scenes).
+// `length` (trail half-life, seconds) and `amount` (dry↔trail mix) are modulatable ports.
+export interface EchoData {
+  mode: "ghost" | "bright" | "dark";
+  ports: Record<string, FluidPort>;
+}
+// The Color Grade look-FX card (video → video): recolour the stream. `thermal` maps
+// luminance through a heat colormap (`map`), `duotone` onto a colorA→colorB ramp,
+// `neon` draws glowing edges on black. A `color` card wired into the `tint` input
+// overrides colorB (gradient + bound position = colour sweeps with the music).
+// `intensity` (dry↔graded / glow gain) and `shift` (LUT roll / midpoint / hue) are
+// modulatable ports.
+export interface ColorGradeData {
+  mode: "thermal" | "duotone" | "neon";
+  map: "turbo" | "inferno" | "jet" | "ocean"; // thermal only
+  colorA: string; // duotone shadow hex
+  colorB: string; // duotone highlight / neon glow hex (a wired tint overrides it)
+  ports: Record<string, FluidPort>;
+}
 // A video layer adds playback timing on top of the image placement fields. `speed` is a
 // modulatable port (in `ports`), not a static field — a wired signal time-warps the clip.
+// `crop_*` selects a region of the SOURCE frame (fractions, default all of it) — that
+// region is what gets fitted into the placement box, so a clip too wide/tall for the
+// project format shows exactly the part the user picked.
 export interface VideoData extends ImageData {
   sync: "song" | "segment"; // clock the playhead to the whole song or just this segment
   start: number; // start offset into the source, seconds
   loop: boolean; // loop the clip if it's shorter than the window
+  crop_x: number; // source crop, fractions 0..1 of the source frame (default full-frame)
+  crop_y: number;
+  crop_w: number;
+  crop_h: number;
 }
 // One own pick of the slideshow: an image OR a video clip, in display order. `kind` is
 // set at add-time (upload/library returns it), inferred from the URL extension as a
@@ -436,6 +498,36 @@ export interface BackdropNode extends NodeBase {
   data: BackdropData;
 }
 
+export interface WavesNode extends NodeBase {
+  type: "waves";
+  data: WavesData;
+}
+
+export interface LightningNode extends NodeBase {
+  type: "lightning";
+  data: LightningData;
+}
+
+export interface FireNode extends NodeBase {
+  type: "fire";
+  data: FireData;
+}
+
+export interface AuroraNode extends NodeBase {
+  type: "aurora";
+  data: AuroraData;
+}
+
+export interface RainNode extends NodeBase {
+  type: "rain";
+  data: RainData;
+}
+
+export interface CloudsNode extends NodeBase {
+  type: "clouds";
+  data: CloudsData;
+}
+
 export interface TransformNode extends NodeBase {
   type: "transform";
   data: TransformData;
@@ -449,6 +541,16 @@ export interface StylizeNode extends NodeBase {
 export interface ExtractNode extends NodeBase {
   type: "extract";
   data: ExtractData;
+}
+
+export interface EchoNode extends NodeBase {
+  type: "echo";
+  data: EchoData;
+}
+
+export interface ColorGradeNode extends NodeBase {
+  type: "colorgrade";
+  data: ColorGradeData;
 }
 
 export type GraphNode =
@@ -473,9 +575,17 @@ export type GraphNode =
   | SlideshowNode
   | ImagegenNode
   | BackdropNode
+  | WavesNode
+  | LightningNode
+  | FireNode
+  | AuroraNode
+  | RainNode
+  | CloudsNode
   | TransformNode
   | StylizeNode
-  | ExtractNode;
+  | ExtractNode
+  | EchoNode
+  | ColorGradeNode;
 
 export type NodeType = GraphNode["type"];
 
