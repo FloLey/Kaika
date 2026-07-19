@@ -106,3 +106,108 @@ def test_previewing_a_non_producer_is_rejected():
     g["nodes"].append({"id": "n-l", "type": "lfo", "x": 0, "y": 0, "data": {}})
     with pytest.raises(ValueError, match="not a video producer"):
         graph.validate(g, "n-l")
+
+
+# --------------------------------------------------------------------------- #
+# One case per rule `validate` enforces. Cleanup step 10 splits that 130-line
+# function (C901 = 35, the worst in the repo) into six named checks, and validation
+# fails OPEN: a rule dropped in the split doesn't throw, the graph just renders
+# wrongly. Nothing goes red unless each rule is pinned individually first.
+#
+# Rules covered above: outputs (exists / exactly one source / is a producer),
+# bindings (4 cases), combine slot ids. Covered in test_montage.py: montage slot
+# exclusivity. The two below had NO test anywhere.
+# --------------------------------------------------------------------------- #
+def test_rejects_a_non_dict_graph():
+    with pytest.raises(ValueError, match="graph must be an object"):
+        graph.validate([])
+
+
+def test_rejects_an_output_wired_to_a_non_producer():
+    """An output fed by a modulator card, not a video card."""
+    g = _g()
+    g["nodes"].append({"id": "n-lfo", "type": "lfo", "x": 0, "y": 0, "data": {}})
+    g["edges"] = [
+        {"id": "e", "source": "n-lfo", "sourcePort": "out", "target": "n-o", "targetPort": "video"}
+    ]
+    with pytest.raises(ValueError, match="must be wired to a video producer"):
+        graph.validate(g)
+
+
+def test_rejects_montage_slot_without_id():
+    montage = {
+        "id": "n-m",
+        "type": "montage",
+        "x": 0,
+        "y": 0,
+        "data": {"inputs": [{"opacity": 1}]},
+    }
+    with pytest.raises(ValueError, match="slot with no id"):
+        graph.validate(_g(extra_nodes=[montage]))
+
+
+def test_rejects_a_merge_combine_fed_by_a_non_emitter():
+    """A merge combine composites EMITTERS, so it needs raw fluid sources. A video card
+    (here lyrics) has no single emitter set — the message tells you to switch to
+    'layered' instead. This rule had no test."""
+    nodes = [
+        {"id": "n-l", "type": "lyrics", "x": 0, "y": 0, "data": {"ports": {}}},
+        {
+            "id": "n-c",
+            "type": "combine",
+            "x": 0,
+            "y": 0,
+            "data": {"mode": "merge", "inputs": [{"id": "s0", "opacity": 1}], "medium": {}},
+        },
+        {"id": "n-o", "type": "output", "x": 0, "y": 0, "data": {}},
+    ]
+    edges = [
+        {"id": "e1", "source": "n-l", "sourcePort": "out", "target": "n-c", "targetPort": "s0"},
+        {"id": "e2", "source": "n-c", "sourcePort": "out", "target": "n-o", "targetPort": "video"},
+    ]
+    g = {"version": 2, "nodes": nodes, "edges": edges}
+    with pytest.raises(ValueError, match="merge combine only accepts fluid sources"):
+        graph.validate(g)
+
+
+def test_accepts_a_layered_combine_fed_by_a_video_card():
+    """The same graph in 'layered' mode is legal — the rule is about merge only, so the
+    split must not over-apply it."""
+    nodes = [
+        {"id": "n-l", "type": "lyrics", "x": 0, "y": 0, "data": {"ports": {}}},
+        {
+            "id": "n-c",
+            "type": "combine",
+            "x": 0,
+            "y": 0,
+            "data": {"mode": "layered", "inputs": [{"id": "s0", "opacity": 1}], "medium": {}},
+        },
+        {"id": "n-o", "type": "output", "x": 0, "y": 0, "data": {}},
+    ]
+    edges = [
+        {"id": "e1", "source": "n-l", "sourcePort": "out", "target": "n-c", "targetPort": "s0"},
+        {"id": "e2", "source": "n-c", "sourcePort": "out", "target": "n-o", "targetPort": "video"},
+    ]
+    graph.validate({"version": 2, "nodes": nodes, "edges": edges})  # no raise
+
+
+def test_rejects_a_cycle():
+    """Acyclic over ALL edges (value bindings + video). This rule had no test, and a
+    cycle reaches the render as unbounded recursion rather than a 400."""
+    g = _g()
+    # the output feeds a fluid port back — legal shapes on both ends, a loop together
+    g["edges"].append(
+        {"id": "e2", "source": "n-o", "sourcePort": "out", "target": "n-f", "targetPort": "force"}
+    )
+    with pytest.raises(ValueError, match="cycle"):
+        graph.validate(g)
+
+
+def test_a_loose_wire_cannot_form_a_cycle():
+    """Parked wires (`targetPort: "__in"`, no binding) feed nothing, so they must be
+    filtered out of the cycle walk — a hard invariant per CLAUDE.md."""
+    g = _g()
+    g["edges"].append(
+        {"id": "e2", "source": "n-o", "sourcePort": "out", "target": "n-f", "targetPort": "__in"}
+    )
+    graph.validate(g)  # no raise: the loose edge is not a real dependency
