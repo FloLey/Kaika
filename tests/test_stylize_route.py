@@ -59,6 +59,8 @@ def test_persist_asset_url_survives_missing_project_and_node(live_db):
         db.save_segments(job, _segments())
         _persist_asset_url(job, "deleted-mid-job", URL)  # node gone: graph left as-is
         seg = db.get_project(job)["data"]["segments"][0]
-        assert {n["id"]: n for n in seg["graph"]["nodes"]}["st"]["data"]["assetUrl"] == "/assets/old.mp4"
+        assert {n["id"]: n for n in seg["graph"]["nodes"]}["st"]["data"][
+            "assetUrl"
+        ] == "/assets/old.mp4"
     finally:
         db.delete_project(job)

@@ -104,43 +104,45 @@ def _song_export_stems(row: dict, job_id: str, lines: list) -> set[str]:
     return stems
 
 
-def _asset_file(url: str):
-    """`/assets/<job>/<name>` -> its on-disk path, or None (test-patchable ASSETS_DIR)."""
-    return asset_file_for_url(url, ASSETS_DIR)
+def _asset_file(url: str, root=None):
+    """`/assets/<job>/<name>` -> its on-disk path, or None. `root` defaults to the module
+    ASSETS_DIR; `sweep` passes an explicit snapshot so the keep-set and the directory it
+    later walks are guaranteed to be the same one (see the safety check in `sweep`)."""
+    return asset_file_for_url(url, ASSETS_DIR if root is None else root)
 
 
-def _assets_from(row: dict) -> set:
+def _assets_from(row: dict, root=None) -> set:
     """The asset files a project keeps alive: every entry in its `data.assets` LIBRARY
     plus any node carrying an `assetUrl` (image/video/backdrop). So a library asset stays
     even before a card uses it, and a card's asset stays even if not (yet) in the library."""
     data = row.get("data") or {}
     files: set = set()
     for a in data.get("assets") or []:
-        f = _asset_file(a.get("url"))
+        f = _asset_file(a.get("url"), root)
         if f:
             files.add(f)
     for seg in data.get("segments") or []:
         for n in (seg.get("graph") or {}).get("nodes") or []:
             d = n.get("data") or {}
-            f = _asset_file(d.get("assetUrl"))
+            f = _asset_file(d.get("assetUrl"), root)
             if f:
                 files.add(f)
             # The imagegen card carries a LIST of generated image urls (assetUrls).
             for url in d.get("assetUrls") or []:
-                f = _asset_file(url)
+                f = _asset_file(url, root)
                 if f:
                     files.add(f)
             # The slideshow card's own picks live in `items: [{url, kind, start}]`
             # (v23) — keep each item's file alive too, else a slideshow video/image gets
             # swept while still referenced. (Legacy assetUrls handled by the loop above.)
             for it in d.get("items") or []:
-                f = _asset_file((it or {}).get("url")) if isinstance(it, dict) else None
+                f = _asset_file((it or {}).get("url"), root) if isinstance(it, dict) else None
                 if f:
                     files.add(f)
     return files
 
 
-def _reachable() -> tuple[set[str], set]:
+def _reachable(assets_root=None) -> tuple[set[str], set]:
     """(reachable clip hashes, reachable asset files) across ALL saved projects (the
     Playground row included), in a SINGLE query — one connection instead of one per
     project.
@@ -151,7 +153,7 @@ def _reachable() -> tuple[set[str], set]:
     assets: set = set()
     for row in db.get_projects_full():
         hashes |= _hashes_from(row, row["job_id"])
-        assets |= _assets_from(row)
+        assets |= _assets_from(row, assets_root)
     return hashes, assets
 
 
@@ -176,15 +178,25 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
     if now - _last_run < 5.0:  # a burst of saves shouldn't re-sweep repeatedly
         return 0
     _last_run = now
+    # Snapshot the two directories ONCE. They are module/`paths` globals, and this used to
+    # read them twice: the keep-set was resolved against whatever ASSETS_DIR held at that
+    # instant, then the delete loop walked whatever it held a moment later. A test fixture
+    # (or any code) that re-pointed them in between turned "nothing here is reachable" into
+    # a full wipe of the real library — which is exactly what happened once. Same snapshot
+    # for both halves, and a re-read check before deleting anything.
+    anim_dir, assets_dir = paths.ANIM_DIR, ASSETS_DIR
     try:
-        reachable, keep_assets = _reachable()  # single DB pass for both clips + assets
+        reachable, keep_assets = _reachable(assets_dir)
     except db.DBUnavailable as e:
         log.warning("cache gc: DB unavailable, skipping sweep (%s)", e)
+        return 0
+    if (paths.ANIM_DIR, ASSETS_DIR) != (anim_dir, assets_dir):
+        log.warning("cache gc: data dirs changed while scanning — skipping sweep")
         return 0
 
     removed = 0
     cutoff = now - keep_recent_sec
-    for p in paths.ANIM_DIR.glob("*.mp4"):  # non-recursive: leaves stream/ scratch
+    for p in anim_dir.glob("*.mp4"):  # non-recursive: leaves stream/ scratch
         if p.stem in reachable:
             continue
         try:
@@ -201,7 +213,7 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
     # for card previews — routes/uploads.py) are never referenced by a project itself:
     # they live and die with their base file.
     kept_stems = {(p.parent, p.stem) for p in keep_assets}
-    for p in ASSETS_DIR.glob("*/*"):
+    for p in assets_dir.glob("*/*"):
         if p in keep_assets:
             continue
         # `<sha>-thumb.jpg` / `<sha>-proxy.mp4` / `<sha>-clip-<t>-<d>.mp4`: all keyed
@@ -216,7 +228,7 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
             removed += 1
         except OSError:
             continue
-    for d in ASSETS_DIR.glob("*"):
+    for d in assets_dir.glob("*"):
         try:
             if d.is_dir() and not any(d.iterdir()):
                 d.rmdir()

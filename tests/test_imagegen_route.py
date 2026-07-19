@@ -41,7 +41,10 @@ def test_generate_image_stores_assets(client, live_db, tmp_path, monkeypatch):
     monkeypatch.setattr(imagegen, "generate", fake_generate)
 
     try:
-        r = client.post(f"/generate-image/{job}", json={"prompts": ["wedding flowers", "first dance"], "seed": 7})
+        r = client.post(
+            f"/generate-image/{job}",
+            json={"prompts": ["wedding flowers", "first dance"], "seed": 7},
+        )
         assert r.status_code == 200
         st = _wait_job(client, r.get_json()["job_id"])
         assert st["state"] == "done", st

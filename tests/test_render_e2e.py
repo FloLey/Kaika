@@ -9,7 +9,11 @@ import shutil
 import numpy as np
 import pytest
 
-from backend import fluid, graph, paths
+from backend import fluid, graph
+
+from backend import paths
+
+from helpers import assert_moves
 
 _OUTPUT = {"width": 64, "height": 64, "quality": "draft", "fps": 12, "background": "#000000"}
 _SEG = {"start": 0.0, "end": 0.5, "signals": []}  # 0.5s @ 12fps -> 6 frames
@@ -50,6 +54,7 @@ def test_dag_resolves_fluid_to_uint8_frames():
     gh, gw = fluid.grid_from_output(_OUTPUT)
     assert frames.shape == (6, gh, gw, 3)
     assert frames.dtype == np.uint8
+    assert_moves(frames, "fluid dag")  # shape+dtype alone passed six identical frames
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

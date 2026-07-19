@@ -50,9 +50,21 @@ def video_asset(tmp_path, monkeypatch):
     d.mkdir(exist_ok=True)
     Image.new("RGB", (8, 8), (255, 0, 0)).save(d / "red.png")
     subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
-         "-i", "testsrc=size=32x32:rate=10:duration=3", "-pix_fmt", "yuv420p", str(d / "clip.mp4")],
-        check=True)
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=32x32:rate=10:duration=3",
+            "-pix_fmt",
+            "yuv420p",
+            str(d / "clip.mp4"),
+        ],
+        check=True,
+    )
     return "/assets/job/red.png", "/assets/job/clip.mp4"
 
 
@@ -70,8 +82,10 @@ def test_index_starts_on_image_zero_even_if_trigger_starts_high():
 
 
 def test_slideshow_frames_show_the_indexed_item(assets, tmp_path):
-    items = [_img_item(str(tmp_path / "job" / "red.png")),
-             _img_item(str(tmp_path / "job" / "blue.png"))]
+    items = [
+        _img_item(str(tmp_path / "job" / "red.png")),
+        _img_item(str(tmp_path / "job" / "blue.png")),
+    ]
     idx = np.array([0, 0, 1, 1])
     clip = SlideshowClip(8, 8, 12, items=items, index=idx)
     try:
@@ -129,20 +143,44 @@ def test_video_in_point_offsets_the_first_frame(video_asset):
 
 
 def test_block_streaming_matches_whole_clip(assets):
-    g = {"version": 23, "nodes": [
-        {"id": "lfo", "type": "lfo", "data": {"shape": "square", "rateMode": "cycles", "rate": 2, "duty": 0.5}},
-        {"id": "ig", "type": "slideshow", "data": {
-            "items": [{"url": assets[0], "kind": "image"}, {"url": assets[1], "kind": "image"}],
-            "box_x": 0, "box_y": 0, "box_w": 1, "box_h": 1,
-            "fit": "cover", "threshold": 0.5, "hysteresis": 0.1,
-            "ports": {"trigger": {"binding": {"kind": "node", "nodeId": "lfo", "lo": 0, "hi": 1}}},
-        }},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("lfo", "ig", "trigger"), _edge("ig", "o", "video")]}
+    g = {
+        "version": 23,
+        "nodes": [
+            {
+                "id": "lfo",
+                "type": "lfo",
+                "data": {"shape": "square", "rateMode": "cycles", "rate": 2, "duty": 0.5},
+            },
+            {
+                "id": "ig",
+                "type": "slideshow",
+                "data": {
+                    "items": [
+                        {"url": assets[0], "kind": "image"},
+                        {"url": assets[1], "kind": "image"},
+                    ],
+                    "box_x": 0,
+                    "box_y": 0,
+                    "box_w": 1,
+                    "box_h": 1,
+                    "fit": "cover",
+                    "threshold": 0.5,
+                    "hysteresis": 0.1,
+                    "ports": {
+                        "trigger": {"binding": {"kind": "node", "nodeId": "lfo", "lo": 0, "hi": 1}}
+                    },
+                },
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("lfo", "ig", "trigger"), _edge("ig", "o", "video")],
+    }
     G.validate(g)
     whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     assert not np.array_equal(whole[0], whole[-1])  # the slideshow actually switched
-    streamed = np.concatenate([f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)])
+    streamed = np.concatenate(
+        [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
+    )
     assert np.array_equal(whole, streamed)  # image-only seams are exact (pure indexing)
 
 
@@ -154,22 +192,44 @@ def test_mixed_video_slideshow_block_matches_whole_clip(video_asset):
     img_url, vid_url = video_asset
     seg = {"start": 0.0, "end": 2.0, "signals": []}
     out_cfg = {"width": 48, "height": 48, "quality": "draft", "fps": 10}
-    g = {"version": 23, "nodes": [
-        {"id": "lfo", "type": "lfo", "data": {"shape": "square", "rateMode": "cycles", "rate": 3, "duty": 0.5}},
-        {"id": "sl", "type": "slideshow", "data": {
-            "items": [{"url": img_url, "kind": "image"},
-                      {"url": vid_url, "kind": "video", "start": 0.0},
-                      {"url": img_url, "kind": "image"}],
-            "box_x": 0, "box_y": 0, "box_w": 1, "box_h": 1, "fit": "cover",
-            "threshold": 0.5, "hysteresis": 0.1,
-            "ports": {"trigger": {"binding": {"kind": "node", "nodeId": "lfo", "lo": 0, "hi": 1}}},
-        }},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("lfo", "sl", "trigger"), _edge("sl", "o", "video")]}
+    g = {
+        "version": 23,
+        "nodes": [
+            {
+                "id": "lfo",
+                "type": "lfo",
+                "data": {"shape": "square", "rateMode": "cycles", "rate": 3, "duty": 0.5},
+            },
+            {
+                "id": "sl",
+                "type": "slideshow",
+                "data": {
+                    "items": [
+                        {"url": img_url, "kind": "image"},
+                        {"url": vid_url, "kind": "video", "start": 0.0},
+                        {"url": img_url, "kind": "image"},
+                    ],
+                    "box_x": 0,
+                    "box_y": 0,
+                    "box_w": 1,
+                    "box_h": 1,
+                    "fit": "cover",
+                    "threshold": 0.5,
+                    "hysteresis": 0.1,
+                    "ports": {
+                        "trigger": {"binding": {"kind": "node", "nodeId": "lfo", "lo": 0, "hi": 1}}
+                    },
+                },
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("lfo", "sl", "trigger"), _edge("sl", "o", "video")],
+    }
     G.validate(g)
     whole = G._Dag("job", seg, g, NOAUDIO, out_cfg).video("o")
     streamed = np.concatenate(
-        [f for *_, f in G._Dag("job", seg, g, NOAUDIO, out_cfg).stream_blocks("o", 7)])
+        [f for *_, f in G._Dag("job", seg, g, NOAUDIO, out_cfg).stream_blocks("o", 7)]
+    )
     assert whole.shape == streamed.shape
     assert np.abs(whole.astype(int) - streamed.astype(int)).mean() < 2.0  # ~exact (seam jitter)
     # the slideshow actually cycles through items (some frame differs from the first)
@@ -178,10 +238,14 @@ def test_mixed_video_slideshow_block_matches_whole_clip(video_asset):
 
 def test_asset_list_changes_bust_the_output_hash(assets):
     def graph_for(items):
-        return {"version": 23, "nodes": [
-            {"id": "ig", "type": "slideshow", "data": {"items": items, "ports": {}}},
-            {"id": "o", "type": "output", "data": {}},
-        ], "edges": [_edge("ig", "o", "video")]}
+        return {
+            "version": 23,
+            "nodes": [
+                {"id": "ig", "type": "slideshow", "data": {"items": items, "ports": {}}},
+                {"id": "o", "type": "output", "data": {}},
+            ],
+            "edges": [_edge("ig", "o", "video")],
+        }
 
     full = [{"url": u, "kind": "image"} for u in assets]
     h1 = G.output_hash("job", SEG, graph_for(full), "o", OUT)
@@ -192,10 +256,14 @@ def test_asset_list_changes_bust_the_output_hash(assets):
 def test_legacy_asseturls_still_render(assets):
     """A pre-v23 save (own picks in `assetUrls`, no `items`) still resolves to image
     items — the backend legacy fallback keeps old projects rendering."""
-    g = {"version": 22, "nodes": [
-        {"id": "sl", "type": "slideshow", "data": {"assetUrls": assets, "ports": {}}},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("sl", "o", "video")]}
+    g = {
+        "version": 22,
+        "nodes": [
+            {"id": "sl", "type": "slideshow", "data": {"assetUrls": assets, "ports": {}}},
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("sl", "o", "video")],
+    }
     G.validate(g)
     dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
@@ -206,13 +274,23 @@ def test_legacy_asseturls_still_render(assets):
 def test_wired_imagegen_list_feeds_the_slideshow(assets, tmp_path):
     """A generator card wired into the slideshow's `images` input appends its
     generated list (image items) after the slideshow's own picks."""
-    g = {"version": 23, "nodes": [
-        {"id": "gen", "type": "imagegen", "data": {"prompts": ["a", "b"], "seed": 1,
-                                                    "assetUrls": [assets[1]]}},
-        {"id": "sl", "type": "slideshow", "data": {
-            "items": [{"url": assets[0], "kind": "image"}], "ports": {}}},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")]}
+    g = {
+        "version": 23,
+        "nodes": [
+            {
+                "id": "gen",
+                "type": "imagegen",
+                "data": {"prompts": ["a", "b"], "seed": 1, "assetUrls": [assets[1]]},
+            },
+            {
+                "id": "sl",
+                "type": "slideshow",
+                "data": {"items": [{"url": assets[0], "kind": "image"}], "ports": {}},
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")],
+    }
     G.validate(g)
     dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
@@ -224,13 +302,24 @@ def test_wired_imagegen_list_feeds_the_slideshow(assets, tmp_path):
 def test_imagegen_active_count_caps_the_passed_images(assets):
     """A wired gate sets `activeCount` on the imagegen: only the first N of its images
     pass to the slideshow (the extras are hidden, not deleted)."""
-    g = {"version": 23, "nodes": [
-        {"id": "gen", "type": "imagegen", "data": {
-            "prompts": ["a", "b", "c"], "seed": 1,
-            "assetUrls": [assets[0], assets[1], assets[0]], "activeCount": 2}},
-        {"id": "sl", "type": "slideshow", "data": {"items": [], "ports": {}}},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")]}
+    g = {
+        "version": 23,
+        "nodes": [
+            {
+                "id": "gen",
+                "type": "imagegen",
+                "data": {
+                    "prompts": ["a", "b", "c"],
+                    "seed": 1,
+                    "assetUrls": [assets[0], assets[1], assets[0]],
+                    "activeCount": 2,
+                },
+            },
+            {"id": "sl", "type": "slideshow", "data": {"items": [], "ports": {}}},
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")],
+    }
     G.validate(g)
     dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
@@ -239,13 +328,23 @@ def test_imagegen_active_count_caps_the_passed_images(assets):
 
 def test_imagegen_empty_rows_dont_become_blank_slots(assets):
     """Ungenerated ("") rows in the index-aligned assetUrls never reach the slideshow."""
-    g = {"version": 23, "nodes": [
-        {"id": "gen", "type": "imagegen", "data": {
-            "prompts": ["a", "b", "c"], "seed": 1,
-            "assetUrls": [assets[0], "", assets[1]]}},
-        {"id": "sl", "type": "slideshow", "data": {"items": [], "ports": {}}},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")]}
+    g = {
+        "version": 23,
+        "nodes": [
+            {
+                "id": "gen",
+                "type": "imagegen",
+                "data": {
+                    "prompts": ["a", "b", "c"],
+                    "seed": 1,
+                    "assetUrls": [assets[0], "", assets[1]],
+                },
+            },
+            {"id": "sl", "type": "slideshow", "data": {"items": [], "ports": {}}},
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")],
+    }
     G.validate(g)
     dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
@@ -269,7 +368,7 @@ def test_zimage_sigmas_never_start_from_pure_noise():
         sub = _zimage_sigmas(Z_SIGMAS, strength)
         assert sub, "schedule must never be empty"
         assert sub[0] < 1.0, f"strength={strength} started from pure noise (no img2img anchor)"
-        assert sub == Z_SIGMAS[len(Z_SIGMAS) - len(sub):], "must be a tail of the full schedule"
+        assert sub == Z_SIGMAS[len(Z_SIGMAS) - len(sub) :], "must be a tail of the full schedule"
 
 
 def test_zimage_sigmas_lower_strength_starts_closer_to_the_input():

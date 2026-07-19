@@ -29,7 +29,11 @@ def _seg():
 
 def _build(graph_dict):
     return graph.build_params(
-        "job", _seg(), graph_dict, lambda j, s: None, output={"fps": 24, "width": 256, "height": 256}
+        "job",
+        _seg(),
+        graph_dict,
+        lambda j, s: None,
+        output={"fps": 24, "width": 256, "height": 256},
     )
 
 
@@ -93,9 +97,7 @@ def test_shaper_delay_zero_pads_head():
 def test_shaper_delay_wrap_recirculates_tail():
     base = np.zeros(8, np.float32)
     base[7] = 1.0
-    out = graph._shaper_curve(
-        base, {"delay": 125.0, "wrap": True, "attack": 0, "release": 0}, 24
-    )
+    out = graph._shaper_curve(base, {"delay": 125.0, "wrap": True, "attack": 0, "release": 0}, 24)
     # shift 3 with wrap: index 7 -> (7 + 3) % 8 = 2 (the tail reappears at the head).
     assert int(np.argmax(out)) == 2
 
@@ -107,11 +109,23 @@ def test_lfo_into_fluid_param_becomes_array():
     g = {
         "version": 3,
         "nodes": [
-            {"id": "lfo1", "type": "lfo", "x": 0, "y": 0, "data": {"rateMode": "cycles", "rate": 3}},
+            {
+                "id": "lfo1",
+                "type": "lfo",
+                "x": 0,
+                "y": 0,
+                "data": {"rateMode": "cycles", "rate": 3},
+            },
             _fluid_with_port("emit", "lfo1", 0.0, 1.0),
         ],
         "edges": [
-            {"id": "e1", "source": "lfo1", "sourcePort": "out", "target": "n-fluid01", "targetPort": "emit"}
+            {
+                "id": "e1",
+                "source": "lfo1",
+                "sourcePort": "out",
+                "target": "n-fluid01",
+                "targetPort": "emit",
+            }
         ],
     }
     p = _build(g)
@@ -123,13 +137,31 @@ def test_chained_math_from_noise_maps_into_range():
     g = {
         "version": 3,
         "nodes": [
-            {"id": "n1", "type": "noise", "x": 0, "y": 0, "data": {"seed": 3, "octaves": 2, "rate": 2}},
-            {"id": "m1", "type": "math", "x": 0, "y": 0, "data": {"op": "max", "inputs": ["a", "b"]}},
+            {
+                "id": "n1",
+                "type": "noise",
+                "x": 0,
+                "y": 0,
+                "data": {"seed": 3, "octaves": 2, "rate": 2},
+            },
+            {
+                "id": "m1",
+                "type": "math",
+                "x": 0,
+                "y": 0,
+                "data": {"op": "max", "inputs": ["a", "b"]},
+            },
             _fluid_with_port("radius", "m1", 0.02, 0.3),
         ],
         "edges": [
             {"id": "e1", "source": "n1", "sourcePort": "out", "target": "m1", "targetPort": "a"},
-            {"id": "e2", "source": "m1", "sourcePort": "out", "target": "n-fluid01", "targetPort": "radius"},
+            {
+                "id": "e2",
+                "source": "m1",
+                "sourcePort": "out",
+                "target": "n-fluid01",
+                "targetPort": "radius",
+            },
         ],
     }
     p = _build(g)
@@ -142,10 +174,18 @@ def test_scope_resolves_and_passes_through():
     g = {
         "version": 6,
         "nodes": [
-            {"id": "lfo", "type": "lfo", "x": 0, "y": 0, "data": {"shape": "saw", "rateMode": "cycles", "rate": 2}},
+            {
+                "id": "lfo",
+                "type": "lfo",
+                "x": 0,
+                "y": 0,
+                "data": {"shape": "saw", "rateMode": "cycles", "rate": 2},
+            },
             {"id": "sc", "type": "scope", "x": 0, "y": 0, "data": {}},
         ],
-        "edges": [{"id": "e0", "source": "lfo", "sourcePort": "out", "target": "sc", "targetPort": "in"}],
+        "edges": [
+            {"id": "e0", "source": "lfo", "sourcePort": "out", "target": "sc", "targetPort": "in"}
+        ],
     }
     sc = graph.resolve_node_curve("job", _seg(), g, "sc", lambda j, s: None, fps=30)
     # the scope shows a real, varying curve...
@@ -159,7 +199,9 @@ def test_scope_resolves_and_passes_through():
 
 def test_scope_into_fluid_param_is_passthrough():
     # fluid.emit bound to a scope (scope <- lfo) resolves identically to binding the lfo.
-    base_nodes = [{"id": "lfo", "type": "lfo", "x": 0, "y": 0, "data": {"rateMode": "cycles", "rate": 3}}]
+    base_nodes = [
+        {"id": "lfo", "type": "lfo", "x": 0, "y": 0, "data": {"rateMode": "cycles", "rate": 3}}
+    ]
     via_scope = {
         "version": 6,
         "nodes": base_nodes
@@ -169,19 +211,37 @@ def test_scope_into_fluid_param_is_passthrough():
         ],
         "edges": [
             {"id": "e0", "source": "lfo", "sourcePort": "out", "target": "sc", "targetPort": "in"},
-            {"id": "e1", "source": "sc", "sourcePort": "out", "target": "n-fluid01", "targetPort": "emit"},
+            {
+                "id": "e1",
+                "source": "sc",
+                "sourcePort": "out",
+                "target": "n-fluid01",
+                "targetPort": "emit",
+            },
         ],
     }
     direct = {
         "version": 6,
         "nodes": base_nodes + [_fluid_with_port("emit", "lfo", 0.0, 1.0)],
-        "edges": [{"id": "e1", "source": "lfo", "sourcePort": "out", "target": "n-fluid01", "targetPort": "emit"}],
+        "edges": [
+            {
+                "id": "e1",
+                "source": "lfo",
+                "sourcePort": "out",
+                "target": "n-fluid01",
+                "targetPort": "emit",
+            }
+        ],
     }
     assert _build(via_scope)["source"]["emit"] == _build(direct)["source"]["emit"]
 
 
 def test_scope_with_no_input_is_flat_zero():
-    g = {"version": 6, "nodes": [{"id": "sc", "type": "scope", "x": 0, "y": 0, "data": {}}], "edges": []}
+    g = {
+        "version": 6,
+        "nodes": [{"id": "sc", "type": "scope", "x": 0, "y": 0, "data": {}}],
+        "edges": [],
+    }
     out = graph.resolve_node_curve("job", _seg(), g, "sc", lambda j, s: None, fps=24)
     assert set(out["curve"]) == {0.0}
 
@@ -198,7 +258,13 @@ def test_value_cycle_degrades_to_flat_zero_not_infinite_loop():
         "edges": [
             {"id": "e1", "source": "s2", "sourcePort": "out", "target": "s1", "targetPort": "in"},
             {"id": "e2", "source": "s1", "sourcePort": "out", "target": "s2", "targetPort": "in"},
-            {"id": "e3", "source": "s1", "sourcePort": "out", "target": "n-fluid01", "targetPort": "emit"},
+            {
+                "id": "e3",
+                "source": "s1",
+                "sourcePort": "out",
+                "target": "n-fluid01",
+                "targetPort": "emit",
+            },
         ],
     }
     p = _build(g)  # must return, not hang

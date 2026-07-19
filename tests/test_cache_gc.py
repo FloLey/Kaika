@@ -222,3 +222,34 @@ def test_sweep_bails_when_db_unavailable(wired, monkeypatch):
     monkeypatch.setattr(cache_gc, "_last_run", 0.0)
     assert cache_gc.sweep() == 0
     assert stale.exists()  # a DB outage must NOT be read as "nothing is reachable"
+
+
+def test_sweep_refuses_when_the_data_dirs_move_under_it(monkeypatch, tmp_path):
+    """The sweep must NEVER compute "what to keep" against one directory and then delete
+    from another. It used to read ASSETS_DIR twice; a background thread outliving a test
+    fixture's monkeypatch hit that window and wiped a real asset library — the keep-set
+    resolved to temp paths, then the delete loop walked the real one and matched nothing.
+    """
+    from backend import cache_gc
+
+    real = tmp_path / "real"
+    (real / "job1").mkdir(parents=True)
+    keeper = real / "job1" / "aaaa.mp4"
+    keeper.write_bytes(b"x")
+    monkeypatch.setattr(cache_gc, "ASSETS_DIR", real)
+    monkeypatch.setattr(cache_gc.paths, "ANIM_DIR", tmp_path / "anim")
+    (tmp_path / "anim").mkdir()
+
+    proj = {"job_id": "job1", "data": {"assets": [{"url": "/assets/job1/aaaa.mp4"}]}}
+
+    def move_the_dirs_mid_scan():
+        # what the daemon thread effectively did: the dirs change between the scan and
+        # the delete loop
+        monkeypatch.setattr(cache_gc, "ASSETS_DIR", tmp_path / "elsewhere")
+        return [proj]
+
+    monkeypatch.setattr(cache_gc.db, "get_projects_full", move_the_dirs_mid_scan)
+    monkeypatch.setattr(cache_gc, "_last_run", 0.0)
+
+    assert cache_gc.sweep(keep_recent_sec=0, now=9e9) == 0
+    assert keeper.exists(), "the sweep deleted a file after its directories moved"

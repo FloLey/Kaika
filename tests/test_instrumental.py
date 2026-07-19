@@ -22,10 +22,19 @@ _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpe
 
 def _sine(path, freq, duration=0.2):
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-         "-i", f"sine=frequency={freq}:duration={duration}",
-         str(path)],
-        check=True, capture_output=True,
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={freq}:duration={duration}",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
     )
 
 
@@ -46,9 +55,21 @@ def test_subtraction_recovers_the_music_and_caches(tmp_path):
     _sine(stem_dir / "vocals.wav", 440)
     original = tmp_path / "original.wav"
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(music), "-i", str(stem_dir / "vocals.wav"),
-         "-filter_complex", "amix=inputs=2:normalize=0", str(original)],
-        check=True, capture_output=True,
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(music),
+            "-i",
+            str(stem_dir / "vocals.wav"),
+            "-filter_complex",
+            "amix=inputs=2:normalize=0",
+            str(original),
+        ],
+        check=True,
+        capture_output=True,
     )
 
     out = media._ensure_instrumental(stem_dir, original)

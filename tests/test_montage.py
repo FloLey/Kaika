@@ -19,6 +19,8 @@ from backend import sources as S
 from backend.graph_common import composite
 from backend.graph_render import _montage_starts, _to_rgba
 
+from helpers import assert_moves
+
 _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 12}
@@ -191,6 +193,9 @@ def test_montage_cuts_between_inputs(assets):
     assert whole.shape[0] == 12 and whole.shape[-1] == 4
     assert whole[0, 32, 32, 0] > 200 and whole[0, 32, 32, 2] < 50  # red first
     assert whole[6, 32, 32, 2] > 200 and whole[6, 32, 32, 0] < 50  # blue after the cut
+    # DELIBERATELY static within a slot: this fixture wires still IMAGES, so a slot
+    # holding its picture is correct here. Motion is asserted where a real clip plays
+    # (test_montage_retimes_each_slot_to_its_cut).
     assert np.array_equal(whole[5], whole[0]) and np.array_equal(whole[11], whole[6])
     streamed = np.concatenate(
         [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
@@ -298,6 +303,7 @@ def test_montage_retimes_each_slot_to_its_cut(video_asset):
     ref = G._Dag("job", SEG, solo, NOAUDIO, OUT).video("o")
     assert np.array_equal(whole[6], ref[0])  # the cut lands exactly on the in-point
     assert not np.array_equal(whole[6], whole[5])  # and it IS a visible cut
+    assert_moves(whole, "montage of real clips")  # the clips PLAY, they don't freeze
 
 
 def test_montage_accepts_a_3ch_producer(assets):

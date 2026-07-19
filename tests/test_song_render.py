@@ -22,8 +22,17 @@ EXPORT = {"width": 64, "height": 96, "fps": 20, "gridCells": 32, "background": "
 
 
 def _fluid(nid, emit, rgb=(1.0, 0.3, 0.2), layer=None):
-    ports = {k: {"binding": {"kind": "const", "value": v}} for k, v in
-             [("emit", emit), ("force", 40), ("radius", 0.12), ("r", rgb[0]), ("g", rgb[1]), ("b", rgb[2])]}
+    ports = {
+        k: {"binding": {"kind": "const", "value": v}}
+        for k, v in [
+            ("emit", emit),
+            ("force", 40),
+            ("radius", 0.12),
+            ("r", rgb[0]),
+            ("g", rgb[1]),
+            ("b", rgb[2]),
+        ]
+    }
     data = {"static": {"points": [[0.5, 0.5]], "wrap": True}, "ports": ports}
     if layer is not None:
         data["layer"] = layer
@@ -35,12 +44,22 @@ def _edge(s, t, tp):
 
 
 def _fluid_out(emit, rgb=(1.0, 0.3, 0.2)):
-    return {"version": 1, "nodes": [_fluid("f1", emit, rgb), {"id": "o", "type": "output", "data": {}}],
-            "edges": [_edge("f1", "o", "video")]}
+    return {
+        "version": 1,
+        "nodes": [_fluid("f1", emit, rgb), {"id": "o", "type": "output", "data": {}}],
+        "edges": [_edge("f1", "o", "video")],
+    }
 
 
 def _seg(sid, start, end, graph, oid="o"):
-    return {"id": sid, "start": start, "end": end, "signals": [], "graph": graph, "finalOutputId": oid}
+    return {
+        "id": sid,
+        "start": start,
+        "end": end,
+        "signals": [],
+        "graph": graph,
+        "finalOutputId": oid,
+    }
 
 
 def _render(segs, export=EXPORT):
@@ -58,8 +77,13 @@ def test_field_carries_across_boundary():
     assert frames[w1 + 1].mean() > 5.0  # seg2's opening still has advected dye (carried)
 
     # Control: seg2 rendered ALONE starts from a blank field -> ~black.
-    dag = G._Dag("job", {**segs[1], "lyric_lines": []}, segs[1]["graph"], NOAUDIO,
-                 {**EXPORT, "quality": "draft"})
+    dag = G._Dag(
+        "job",
+        {**segs[1], "lyric_lines": []},
+        segs[1]["graph"],
+        NOAUDIO,
+        {**EXPORT, "quality": "draft"},
+    )
     solo = G.fluid.flatten(dag.video("o"))
     assert solo[1].mean() < 1.0
 
@@ -82,20 +106,30 @@ def test_layer_number_controls_continuity():
         return g
 
     _, matched = _render([_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 2.0, seg2_on(1))])
-    _, mismatched = _render([_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 2.0, seg2_on(9))])
+    _, mismatched = _render(
+        [_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 2.0, seg2_on(9))]
+    )
     w1 = round(1.0 * EXPORT["fps"])
-    assert matched[w1 + 1].mean() > 5.0     # layer 1 continued
+    assert matched[w1 + 1].mean() > 5.0  # layer 1 continued
     assert mismatched[w1 + 1].mean() < 1.0  # layer 9 is a fresh field -> blank
 
 
 def test_per_segment_styling_is_applied():
     # The same continuous field, styled by two segment downstreams: a stack combine that
     # dims the layer (opacity 0.3) must change the frames vs the plain pass-through.
-    dimmed = {"version": 1, "nodes": [
-        _fluid("f1", 0.6),
-        {"id": "cb", "type": "combine", "data": {"mode": "stack", "inputs": [{"id": "s0", "opacity": 0.3}]}},
-        {"id": "o", "type": "output", "data": {}},
-    ], "edges": [_edge("f1", "cb", "s0"), _edge("cb", "o", "video")]}
+    dimmed = {
+        "version": 1,
+        "nodes": [
+            _fluid("f1", 0.6),
+            {
+                "id": "cb",
+                "type": "combine",
+                "data": {"mode": "stack", "inputs": [{"id": "s0", "opacity": 0.3}]},
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("f1", "cb", "s0"), _edge("cb", "o", "video")],
+    }
     _, plain = _render([_seg("s1", 0.0, 1.0, _fluid_out(0.6))])
     _, styled = _render([_seg("s1", 0.0, 1.0, dimmed)])
     assert plain.shape == styled.shape
@@ -112,8 +146,14 @@ def test_progress_preview_url_is_servable(tmp_path, monkeypatch):
     (tmp_path / "fluid").mkdir()
 
     urls: list[str] = []
-    SR.render_song("job", [_seg("s1", 0.0, 0.4, _fluid_out(0.6))], [], EXPORT, NOAUDIO,
-                   on_progress=lambda done, total, url: urls.append(url))
+    SR.render_song(
+        "job",
+        [_seg("s1", 0.0, 0.4, _fluid_out(0.6))],
+        [],
+        EXPORT,
+        NOAUDIO,
+        on_progress=lambda done, total, url: urls.append(url),
+    )
 
     previews = [u for u in urls if u.startswith("/fluid/stream/")]
     assert previews, "the export reported no in-progress preview URL"
@@ -123,6 +163,8 @@ def test_progress_preview_url_is_servable(tmp_path, monkeypatch):
 
 
 def test_build_plan_rejects_unmarked_segment():
-    segs = [{"id": "s1", "start": 0.0, "end": 1.0, "signals": [], "graph": _fluid_out(0.5)}]  # no finalOutputId
+    segs = [
+        {"id": "s1", "start": 0.0, "end": 1.0, "signals": [], "graph": _fluid_out(0.5)}
+    ]  # no finalOutputId
     with pytest.raises(ValueError):
         SR.build_plan("job", segs, [], EXPORT, NOAUDIO)

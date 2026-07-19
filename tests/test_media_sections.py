@@ -32,7 +32,9 @@ def test_section_flags_shapes():
     assert _section_flags(None, None, precise_cuts=True) == []
     # Video gets keyframe-precise cuts (re-encode); audio doesn't (no re-encode).
     assert _section_flags(10.0, 30.0, precise_cuts=True) == [
-        "--download-sections", "*10.0-30.0", "--force-keyframes-at-cuts",
+        "--download-sections",
+        "*10.0-30.0",
+        "--force-keyframes-at-cuts",
     ]
     assert _section_flags(10.0, 30.0, precise_cuts=False) == ["--download-sections", "*10.0-30.0"]
     # Open-ended bounds.

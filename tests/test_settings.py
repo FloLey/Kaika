@@ -43,7 +43,9 @@ def test_remote_endpoint_gating(settings_file, monkeypatch):
     monkeypatch.delenv("KAIKA_FORCE_LOCAL", raising=False)  # may be pinned by remote_app's import
     # off by default
     assert settings.remote_endpoint("stylize") is None
-    settings.update_settings({"inference": {"enabled": True, "url": " http://gpu:5100/ ", "token": " t "}})
+    settings.update_settings(
+        {"inference": {"enabled": True, "url": " http://gpu:5100/ ", "token": " t "}}
+    )
     # enabled + url + op on → endpoint, trimmed and unslashed
     assert settings.remote_endpoint("stylize") == ("http://gpu:5100", "t")
     # op toggled off → None (per-op switch)

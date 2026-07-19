@@ -16,6 +16,8 @@ import pytest
 from backend import graph as G
 from backend.sources import SOURCE_PARAMS
 
+from helpers import assert_moves
+
 OUT = {"width": 120, "height": 64, "quality": "draft", "fps": 24}
 SEG = {"start": 0.0, "end": 2.5, "signals": [], "lyric_lines": []}
 NOAUDIO = lambda j, s: None  # noqa: E731
@@ -53,9 +55,23 @@ def test_block_stream_matches_whole_clip(card):
     # surface carries across blocks); the others must stay pure functions of the
     # absolute frame. (Lightning's strike-spanning-a-seam case is exercised by
     # the dedicated strike test below.)
+    # Lightning only draws when its `strike` port RISES past the midpoint, so a card on
+    # default constants renders 60 identical empty frames — and a lockstep check over
+    # empty frames proves nothing. Give it an LFO to fire on. (Found by assert_moves.)
     nodes = [_card("n", card)]
-    whole = _dag(nodes, []).video("n")
-    dagb = _dag(nodes, [])
+    edges = []
+    if card == "lightning":
+        nodes = [
+            _card("n", card, strike=0.0),
+            _node("lfo", "lfo", {"shape": "square", "rateMode": "cycles", "rate": 3}),
+        ]
+        nodes[0]["data"]["ports"]["strike"] = {
+            "binding": {"kind": "node", "nodeId": "lfo", "lo": 0, "hi": 1}
+        }
+        edges = [_edge("lfo", "n", "strike")]
+    whole = _dag(nodes, edges).video("n")
+    assert_moves(whole, card)  # a generative card that does not animate is broken
+    dagb = _dag(nodes, edges)
     prod = dagb._block_producer("n")
     n = len(whole)
     cuts = [0, max(1, n // 3), max(2, 2 * n // 3), n]

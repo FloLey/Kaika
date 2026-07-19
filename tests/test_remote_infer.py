@@ -31,7 +31,8 @@ def remote_client_app(monkeypatch):
 
     monkeypatch.setattr(remote_app, "TOKEN", "sekret")
     monkeypatch.setattr(
-        imagegen, "stylize_frames",
+        imagegen,
+        "stylize_frames",
         lambda frames, prompt, **kw: 255 - np.asarray(frames),
     )
     monkeypatch.setattr(imagegen, "depth_frames", lambda frames: np.asarray(frames) // 2)
@@ -48,9 +49,9 @@ def test_remote_app_requires_token(remote_client_app):
 def test_remote_app_stylize_roundtrip(remote_client_app):
     frames = np.full((2, 8, 6, 3), 10, np.uint8)
     r = remote_client_app.post(
-        "/stylize", data=pack_npz(frames=frames),
-        headers={"Authorization": "Bearer sekret",
-                 "X-Kaika-Params": '{"prompt": "x", "seed": 1}'},
+        "/stylize",
+        data=pack_npz(frames=frames),
+        headers={"Authorization": "Bearer sekret", "X-Kaika-Params": '{"prompt": "x", "seed": 1}'},
     )
     assert r.status_code == 200
     assert np.array_equal(unpack_npz(r.data)["styled"], 255 - frames)
@@ -62,7 +63,8 @@ def test_remote_app_surfaces_generation_errors(remote_client_app, monkeypatch):
 
     monkeypatch.setattr(imagegen, "stylize_frames", boom)
     r = remote_client_app.post(
-        "/stylize", data=pack_npz(frames=np.zeros((1, 4, 4, 3), np.uint8)),
+        "/stylize",
+        data=pack_npz(frames=np.zeros((1, 4, 4, 3), np.uint8)),
         headers={"Authorization": "Bearer sekret", "X-Kaika-Params": "{}"},
     )
     assert r.status_code == 500 and "model exploded" in r.get_json()["error"]
@@ -85,8 +87,19 @@ def test_client_batches_and_reports_progress(monkeypatch):
     frames = np.zeros((19, 4, 4, 3), np.uint8)
     seen = []
     out = remote_client.stylize_remote(
-        frames, "p", 1.0, False, "m", 1, None, 0.65, "neg", 576,
-        "http://gpu", "t", on_progress=lambda done, total: seen.append((done, total)),
+        frames,
+        "p",
+        1.0,
+        False,
+        "m",
+        1,
+        None,
+        0.65,
+        "neg",
+        576,
+        "http://gpu",
+        "t",
+        on_progress=lambda done, total: seen.append((done, total)),
     )
     assert out.shape == frames.shape and calls == [8, 8, 3]  # 19 frames → 8+8+3
     assert seen == [(8, 19), (16, 19), (19, 19)]
@@ -102,8 +115,21 @@ def test_stylize_dispatches_to_remote_with_resolved_defaults(monkeypatch, tmp_pa
 
     got = {}
 
-    def fake_stylize_remote(frames, prompt, strength, inpaint, model, seed, control,
-                            control_scale, negative, short, url, token, on_progress=None):
+    def fake_stylize_remote(
+        frames,
+        prompt,
+        strength,
+        inpaint,
+        model,
+        seed,
+        control,
+        control_scale,
+        negative,
+        short,
+        url,
+        token,
+        on_progress=None,
+    ):
         got.update(model=model, control_scale=control_scale, short=short, url=url)
         return np.zeros((len(frames), 4, 4, 3), np.uint8)
 
@@ -111,5 +137,9 @@ def test_stylize_dispatches_to_remote_with_resolved_defaults(monkeypatch, tmp_pa
     frames = np.zeros((2, 8, 6, 3), np.uint8)
     imagegen.stylize_frames(frames, "x", model=imagegen.HD_MODEL)
     # the per-model defaults must be resolved BEFORE shipping (the server has none)
-    assert got == {"model": imagegen.HD_MODEL, "control_scale": 0.65, "short": 576,
-                   "url": "http://gpu:5100"}
+    assert got == {
+        "model": imagegen.HD_MODEL,
+        "control_scale": 0.65,
+        "short": 576,
+        "url": "http://gpu:5100",
+    }

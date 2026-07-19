@@ -30,18 +30,43 @@ def _graph(opacity, force):
     # fluid -> stack combine (single layer) -> output. Editing the combine layer's
     # opacity is a downstream compositing change (must reuse the cached sim); editing
     # the fluid `force` changes the physics (must re-run).
-    return {"version": 5, "nodes": [
-        {"id": "f1", "type": "fluid", "data": {"static": {"color": [0.3, 0.7, 1.0], "points": [[0.4, 0.4]]},
-         "ports": {"force": {"binding": {"kind": "const", "value": force}},
-                   "emit": {"binding": {"kind": "const", "value": 0.4}},
-                   "radius": {"binding": {"kind": "const", "value": 0.09}}}}},
-        {"id": "cb", "type": "combine", "data": {"mode": "stack",
-         "inputs": [{"id": "s0", "opacity": opacity}], "medium": {}}},
-        {"id": "o1", "type": "output", "data": {}},
-    ], "edges": [
-        {"id": "e1", "source": "f1", "sourcePort": "out", "target": "cb", "targetPort": "s0"},
-        {"id": "e2", "source": "cb", "sourcePort": "out", "target": "o1", "targetPort": "video"},
-    ]}
+    return {
+        "version": 5,
+        "nodes": [
+            {
+                "id": "f1",
+                "type": "fluid",
+                "data": {
+                    "static": {"color": [0.3, 0.7, 1.0], "points": [[0.4, 0.4]]},
+                    "ports": {
+                        "force": {"binding": {"kind": "const", "value": force}},
+                        "emit": {"binding": {"kind": "const", "value": 0.4}},
+                        "radius": {"binding": {"kind": "const", "value": 0.09}},
+                    },
+                },
+            },
+            {
+                "id": "cb",
+                "type": "combine",
+                "data": {
+                    "mode": "stack",
+                    "inputs": [{"id": "s0", "opacity": opacity}],
+                    "medium": {},
+                },
+            },
+            {"id": "o1", "type": "output", "data": {}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "f1", "sourcePort": "out", "target": "cb", "targetPort": "s0"},
+            {
+                "id": "e2",
+                "source": "cb",
+                "sourcePort": "out",
+                "target": "o1",
+                "targetPort": "video",
+            },
+        ],
+    }
 
 
 def _render(g, out=OUT):
@@ -74,12 +99,12 @@ def test_downstream_edit_reuses_sim_but_fluid_edit_reruns(monkeypatch):
 
     n1, base = sims(lambda: _render(_graph(1.0, 30)))
     n2, dimmed = sims(lambda: _render(_graph(0.5, 30)))  # downstream-only (opacity)
-    n3, _ = sims(lambda: _render(_graph(1.0, 55)))       # fluid physics changed
-    n4, back = sims(lambda: _render(_graph(1.0, 30)))    # original fluid, still cached
+    n3, _ = sims(lambda: _render(_graph(1.0, 55)))  # fluid physics changed
+    n4, back = sims(lambda: _render(_graph(1.0, 30)))  # original fluid, still cached
 
     assert (n1, n2, n3, n4) == (1, 0, 1, 0)
     assert not np.array_equal(base, dimmed)  # the composite really re-ran on cached frames
-    assert np.array_equal(base, back)        # revert reproduces the original exactly
+    assert np.array_equal(base, back)  # revert reproduces the original exactly
 
 
 def test_streamed_matches_cached_whole(monkeypatch):

@@ -31,7 +31,9 @@ def test_gate_defaults_leave_the_square_untouched():
     # so existing graphs are unaffected.
     base = np.array([0.0, 0.55, 0.65, 0.5, 0.45, 0.35, 0.55, 0.7], np.float32)
     plain = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.2})
-    defaulted = _gate_curve(base, {"threshold": 0.5, "hysteresis": 0.2, "divide": 1, "minGap": 0}, fps=24)
+    defaulted = _gate_curve(
+        base, {"threshold": 0.5, "hysteresis": 0.2, "divide": 1, "minGap": 0}, fps=24
+    )
     assert defaulted.tolist() == plain.tolist()
 
 
@@ -71,7 +73,9 @@ def test_resolver_dispatches_gate_over_its_input():
             {"id": "l", "type": "lfo", "data": {"shape": "saw", "rateMode": "cycles", "rate": 1}},
             {"id": "g", "type": "gate", "data": {"threshold": 0.5, "hysteresis": 0.0}},
         ],
-        "edges": [{"id": "e", "source": "l", "sourcePort": "out", "target": "g", "targetPort": "in"}],
+        "edges": [
+            {"id": "e", "source": "l", "sourcePort": "out", "target": "g", "targetPort": "in"}
+        ],
     }
     nodes = {n["id"]: n for n in graph["nodes"]}
     resolve = _make_value_resolver(graph, nodes, "job", 0.0, 1.0, 24, 24, {}, lambda j, s: None)

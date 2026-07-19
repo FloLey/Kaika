@@ -40,10 +40,19 @@ def test_finished_job_survives_a_restart(monkeypatch, tmp_path):
 def test_job_killed_mid_run_reports_a_clear_error(monkeypatch, tmp_path):
     f = _with_tmp_state(monkeypatch, tmp_path)
     # a running job as the snapshot would leave it when the process dies
-    f.write_text(json.dumps({"midjob01": {
-        "state": "running", "step": "frame 3/72", "error": None, "result": None,
-        "updated": 0.0,
-    }}))
+    f.write_text(
+        json.dumps(
+            {
+                "midjob01": {
+                    "state": "running",
+                    "step": "frame 3/72",
+                    "error": None,
+                    "result": None,
+                    "updated": 0.0,
+                }
+            }
+        )
+    )
     jobs._restore()
     j = jobs.get("midjob01")
     assert j["state"] == "error" and j["error"] == jobs.RESTART_ERROR

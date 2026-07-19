@@ -104,9 +104,6 @@ def _startup_cache_gc():
         log.warning("startup cache gc failed: %s", e)
 
 
-threading.Thread(target=_startup_cache_gc, name="cache-gc", daemon=True).start()
-
-
 if __name__ == "__main__":
     if not shutil.which("ffmpeg"):
         log.warning("ffmpeg not found on PATH; non-WAV inputs may fail.")
@@ -114,6 +111,10 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     debug = os.environ.get("FLASK_DEBUG", "1") == "1"
     log.info("Kaika starting — device: %s, http://%s:%s", DEVICE, host, port)
+    # Started HERE, not at import: as an import-time daemon thread it also ran inside the
+    # test suite, where it could outlive a fixture's path monkeypatch and sweep the real
+    # data dir using a keep-set computed against a temporary one.
+    threading.Thread(target=_startup_cache_gc, name="cache-gc", daemon=True).start()
     # threaded so /jobs/<id> polling is served while a background job runs.
     # (In-memory jobs reset when the debug reloader restarts — fine for dev.)
     app.run(host=host, port=port, debug=debug, threaded=True)

@@ -13,6 +13,8 @@ import soundfile as sf
 
 from backend import card_demo, graph
 
+from helpers import assert_moves, assert_not_black
+
 OUT = {"fps": 8, "width": 120, "height": 120, "quality": "draft", "background": "#000000"}
 LINES = [{"t0": 0.0, "t1": 1.0, "text": "playground lyrics"}]
 
@@ -51,14 +53,10 @@ def _frames(demo, stem):
 def test_pipeline_renders(demo, stem_path):
     frames = _frames(demo, stem_path)
     assert frames.ndim == 4 and frames.shape[0] >= 1, demo["key"]
-    # `max > 0` was too lax: a kaleidoscope sampling empty space rendered max=2 (visually
-    # black) and still "passed". Every real demo clears max>=216 and lights >=6.7% of its
-    # pixels, so these floors are far below any legitimate pipeline yet catch a dark one.
-    rgb = graph.fluid.flatten(frames)
-    peak = int(rgb.max())
-    lit = float((rgb.max(axis=3) > 8).mean())
-    assert peak >= 32, f"{demo['key']} pipeline is visually black (peak brightness {peak})"
-    assert lit >= 0.005, f"{demo['key']} pipeline lights only {lit:.3%} of its pixels"
+    assert_not_black(frames, demo["key"])
+    # …and it must MOVE. Brightness alone let a clip of 80 identical frames pass exactly
+    # like an animated one — which is how a whole segment shipped frozen.
+    assert_moves(frames, demo["key"])
 
 
 @pytest.mark.parametrize("demo", card_demo.DEMOS, ids=[d["key"] for d in card_demo.DEMOS])
@@ -117,4 +115,6 @@ def test_every_card_is_present_in_the_playground():
 
     # EVERY video card — including image/video (which demo a bundled sample asset) — must
     # have a Playground pipeline. Nothing is excluded from the Playground.
-    assert set(_VIDEO_HANDLERS) <= covered, f"video cards missing: {sorted(set(_VIDEO_HANDLERS) - covered)}"
+    assert (
+        set(_VIDEO_HANDLERS) <= covered
+    ), f"video cards missing: {sorted(set(_VIDEO_HANDLERS) - covered)}"

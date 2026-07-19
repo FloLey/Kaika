@@ -6,6 +6,11 @@
 # is run as `pytest` (CI) or `python -m pytest` (the Makefile); without this CI fails
 # collection with ModuleNotFoundError: No module named 'backend'.
 pythonpath = ["."]
+markers = [
+    # Wall-clock budgets (tests/test_perf_budget.py). Loose by design — they catch a 10x
+    # regression, not milliseconds. Deselect on a busy machine with -m "not perf".
+    "perf: order-of-magnitude performance guard",
+]
 
 [tool.black]
 line-length = 100

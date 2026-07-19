@@ -69,8 +69,13 @@ def test_list_projects_excludes_the_playground(live_db):
     created = False
     if db.get_project("playground") is None:
         db.create_project(
-            "playground", title="Playground", source="synthetic", duration=1.0, fmin=20,
-            has_lyrics=False, stems={},
+            "playground",
+            title="Playground",
+            source="synthetic",
+            duration=1.0,
+            fmin=20,
+            has_lyrics=False,
+            stems={},
         )
         created = True
     try:

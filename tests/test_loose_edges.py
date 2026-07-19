@@ -13,7 +13,11 @@ def _graph(extra_edges=()):
     return {
         "version": 14,
         "nodes": [
-            {"id": "f", "type": "fluid", "data": {"static": {"points": [[0.5, 0.5]]}, "ports": ports}},
+            {
+                "id": "f",
+                "type": "fluid",
+                "data": {"static": {"points": [[0.5, 0.5]]}, "ports": ports},
+            },
             {"id": "lfo", "type": "lfo", "data": {"shape": "sine"}},
             {"id": "o", "type": "output", "data": {}},
         ],

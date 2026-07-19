@@ -30,7 +30,9 @@ def test_animate_orbit_and_drift_produce_paths():
     specs = [graph._static_point_spec((0.6, 0.5))]
     orbit = graph._animate_point_specs(specs, {"mode": "orbit", "amount": 0.2, "rate": 1})
     assert len(orbit[0]["points"]) > 2 and orbit[0]["path_closed"]
-    drift = graph._animate_point_specs(specs, {"mode": "drift", "amount": 0.2, "rate": 2, "angle": 90})
+    drift = graph._animate_point_specs(
+        specs, {"mode": "drift", "amount": 0.2, "rate": 2, "angle": 90}
+    )
     assert len(drift[0]["points"]) == 2 and drift[0]["path_pingpong"]
 
 
@@ -42,7 +44,9 @@ def test_animate_chase_gates_each_point():
     assert [o["points"] for o in out] == [s["points"] for s in specs]
     # ... and each carries gate fields: phase = slot, duty = count/n, speed = rate.
     assert [o["gate_phase"] for o in out] == [0.0, 0.25, 0.5, 0.75]
-    assert all(o["gate_duty"] == 0.25 and o["gate_speed"] == 2 and o["gate_fade"] == 0.1 for o in out)
+    assert all(
+        o["gate_duty"] == 0.25 and o["gate_speed"] == 2 and o["gate_fade"] == 0.1 for o in out
+    )
 
 
 def test_animate_chase_count_clamped_to_point_count():
@@ -56,13 +60,37 @@ def test_pattern_into_fluid_positions_yields_one_emitter_per_point():
     g = {
         "version": 4,
         "nodes": [
-            {"id": "p1", "type": "pattern", "x": 0, "y": 0, "data": {"layout": "ring", "count": 8, "radius": 0.3}},
-            {"id": "f1", "type": "fluid", "x": 0, "y": 0, "data": {"static": {"color": [0.3, 0.7, 1.0]}, "ports": {}}},
+            {
+                "id": "p1",
+                "type": "pattern",
+                "x": 0,
+                "y": 0,
+                "data": {"layout": "ring", "count": 8, "radius": 0.3},
+            },
+            {
+                "id": "f1",
+                "type": "fluid",
+                "x": 0,
+                "y": 0,
+                "data": {"static": {"color": [0.3, 0.7, 1.0]}, "ports": {}},
+            },
             {"id": "o1", "type": "output", "x": 0, "y": 0, "data": {"title": "p"}},
         ],
         "edges": [
-            {"id": "e1", "source": "p1", "sourcePort": "out", "target": "f1", "targetPort": "positions"},
-            {"id": "e2", "source": "f1", "sourcePort": "out", "target": "o1", "targetPort": "video"},
+            {
+                "id": "e1",
+                "source": "p1",
+                "sourcePort": "out",
+                "target": "f1",
+                "targetPort": "positions",
+            },
+            {
+                "id": "e2",
+                "source": "f1",
+                "sourcePort": "out",
+                "target": "o1",
+                "targetPort": "video",
+            },
         ],
     }
     graph.validate(g)  # no raise
@@ -78,15 +106,45 @@ def test_chained_points_pipeline_resolves():
     g = {
         "version": 4,
         "nodes": [
-            {"id": "p1", "type": "pattern", "x": 0, "y": 0, "data": {"layout": "line", "count": 3, "radius": 0.3}},
-            {"id": "a1", "type": "animate-points", "x": 0, "y": 0, "data": {"mode": "orbit", "amount": 0.2, "rate": 1}},
-            {"id": "f1", "type": "fluid", "x": 0, "y": 0, "data": {"static": {"color": [0.3, 0.7, 1.0]}, "ports": {}}},
+            {
+                "id": "p1",
+                "type": "pattern",
+                "x": 0,
+                "y": 0,
+                "data": {"layout": "line", "count": 3, "radius": 0.3},
+            },
+            {
+                "id": "a1",
+                "type": "animate-points",
+                "x": 0,
+                "y": 0,
+                "data": {"mode": "orbit", "amount": 0.2, "rate": 1},
+            },
+            {
+                "id": "f1",
+                "type": "fluid",
+                "x": 0,
+                "y": 0,
+                "data": {"static": {"color": [0.3, 0.7, 1.0]}, "ports": {}},
+            },
             {"id": "o1", "type": "output", "x": 0, "y": 0, "data": {"title": "p"}},
         ],
         "edges": [
             {"id": "e1", "source": "p1", "sourcePort": "out", "target": "a1", "targetPort": "in"},
-            {"id": "e2", "source": "a1", "sourcePort": "out", "target": "f1", "targetPort": "positions"},
-            {"id": "e3", "source": "f1", "sourcePort": "out", "target": "o1", "targetPort": "video"},
+            {
+                "id": "e2",
+                "source": "a1",
+                "sourcePort": "out",
+                "target": "f1",
+                "targetPort": "positions",
+            },
+            {
+                "id": "e3",
+                "source": "f1",
+                "sourcePort": "out",
+                "target": "o1",
+                "targetPort": "video",
+            },
         ],
     }
     graph.validate(g)
