@@ -141,3 +141,62 @@ def test_one_frame_below_one_disables_the_opacity_shortcut():
     slow = _opacity_the_slow_way(frames.copy(), op)
     assert np.array_equal(fast, slow)
     assert int(fast[2, 0, 0, 3]) < int(frames[2, 0, 0, 3])  # it really did scale
+
+
+# ── the encoder composites RGBA the same way flatten did ─────────────────────
+#
+# The terminal encoders now take RGBA straight and let ffmpeg composite it over black,
+# which removed the last 9.4s of a 20s render. The danger is subtle and silent: feeding
+# rgba to a yuv420p encoder normally DROPS the alpha, so a half-transparent lyric would
+# come out at full brightness and nothing would fail. These pin the composite instead.
+
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+def test_rgba_encoder_args_composite_over_black_rather_than_dropping_alpha():
+    args = " ".join(fluid._encode_args(64, 64, 8, 64, 64, channels=4))
+    assert "-pix_fmt rgba" in args  # the raw input really is RGBA
+    assert "color=black" in args and "overlay" in args, (
+        "a bare rgba->yuv420p conversion DROPS alpha; the composite over black is what "
+        "makes it equal flatten's premultiply"
+    )
+    # and the 3-channel form stays exactly as it was
+    assert "-pix_fmt rgb24" in " ".join(fluid._encode_args(64, 64, 8, 64, 64))
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_ffmpeg_composite_matches_the_numpy_one_through_a_real_encode(tmp_path):
+    """Encode the same RGBA fade both ways and decode both back.
+
+    Not byte-equality: h264 is lossy, so the only honest bar is "within codec noise".
+    Flat colours keep that noise small enough (~1 level) for a real mismatch — an alpha
+    drop would be up to 255 levels — to be unmissable.
+    """
+    w = h = 64
+    frames = np.zeros((8, h, w, 4), np.uint8)
+    frames[..., 0], frames[..., 1], frames[..., 2] = 200, 100, 50
+    for i, a in enumerate([0, 32, 64, 96, 128, 160, 200, 255]):
+        frames[i, ..., 3] = a
+
+    def decode(path):
+        out = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            capture_output=True,
+        ).stdout
+        return np.frombuffer(out, np.uint8).reshape(-1, h, w, 3)
+
+    old = tmp_path / "numpy.mp4"
+    fluid.render_mp4(fluid.flatten(frames), 8, old, w, h)  # the pre-change path
+    new = tmp_path / "ffmpeg.mp4"
+    fluid.render_mp4(frames, 8, new, w, h)  # RGBA straight in
+
+    a, b = decode(old), decode(new)
+    assert a.shape == b.shape == (8, h, w, 3)
+    diff = np.abs(a.astype(int) - b.astype(int))
+    assert diff.mean() < 2 and diff.max() < 8, f"mean {diff.mean():.2f}, max {diff.max()}"
+    # the fade really is a fade in BOTH (an alpha drop would make every frame identical)
+    for clip in (a, b):
+        assert int(clip[0, 32, 32].max()) < 8 < int(clip[7, 32, 32].max())

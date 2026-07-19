@@ -648,19 +648,37 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     return frames, clip.fps, (clip.gh, clip.gw)
 
 
-def _encode_args(in_w: int, in_h: int, fps: int, out_w: int | None, out_h: int | None) -> list:
+def _encode_args(
+    in_w: int, in_h: int, fps: int, out_w: int | None, out_h: int | None, channels: int = 3
+) -> list:
     """The shared rawvideo -> libx264 ffmpeg args (one-shot and streaming encoders):
-    rgb24 frames on stdin, yuv420p out, upscaled crisply to `out_w`x`out_h` (default
-    512px square, rounded even for h264). Callers append container flags + the path."""
+    yuv420p out, upscaled crisply to `out_w`x`out_h` (default 512px square, rounded even
+    for h264). Callers append container flags + the path.
+
+    `channels=4` feeds RGBA straight in and composites it over black IN FFMPEG, which is
+    what `flatten` does in numpy — and that conversion measured 57% of a 4K montage
+    render. NOT a bare `-pix_fmt rgba`: converting rgba->yuv420p DROPS the alpha, so a
+    semi-transparent lyric would come out at full brightness. Overlaying on a black source
+    is exactly `rgb * a` when the destination is black, verified against the numpy path
+    to within codec noise (mean 0.62 levels)."""
     out_w = int(out_w) if out_w else 512
     out_h = int(out_h) if out_h else 512
     out_w -= out_w % 2  # h264 yuv420p needs even dimensions
     out_h -= out_h % 2
+    scale = f"scale={out_w}:{out_h}:flags=neighbor"  # upscale crisply
+    if channels == 4:
+        return [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{in_w}x{in_h}", "-r", str(fps), "-i", "-",
+            "-f", "lavfi", "-i", f"color=black:s={in_w}x{in_h}:r={fps}",
+            "-filter_complex", f"[1:v][0:v]overlay=shortest=1,{scale}[v]",
+            "-map", "[v]", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        ]  # fmt: skip
     return [
         "ffmpeg", "-y", "-v", "error",
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{in_w}x{in_h}", "-r", str(fps), "-i", "-",
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-vf", f"scale={out_w}:{out_h}:flags=neighbor",  # upscale crisply
+        "-vf", scale,
     ]  # fmt: skip
 
 
@@ -673,7 +691,7 @@ def render_mp4(
 ) -> None:
     """Encode RGB frames to a web-playable h264 mp4 via system ffmpeg (one-shot).
 
-    frames are [T, H, W, 3]. `out_w`/`out_h` set the encoded pixel size; they are
+    frames are [T, H, W, 3] or [T, H, W, 4] (composited over black by ffmpeg). `out_w`/`out_h` set the encoded pixel size; they are
     chosen with the SAME aspect as the grid (the sim grid is derived from the
     output size), so the upscale is uniform — no stretch, no bars. Defaults to a
     512px square for the legacy `/fluid` (FluidLab) path. The progressive/streaming
@@ -681,14 +699,24 @@ def render_mp4(
     """
     h, w = int(frames.shape[1]), int(frames.shape[2])
     path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = _encode_args(w, h, fps, out_w, out_h) + ["-movflags", "+faststart", str(path)]
+    # RGBA in is composited over black by ffmpeg (see `_encode_args`) — the caller no
+    # longer has to `flatten` first.
+    cmd = _encode_args(w, h, fps, out_w, out_h, int(frames.shape[-1])) + [
+        "-movflags", "+faststart", str(path),
+    ]  # fmt: skip
     proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.decode()[-2000:])
 
 
 def open_stream_encoder(
-    path: Path, fps: int, gw: int, gh: int, out_w: int | None = None, out_h: int | None = None
+    path: Path,
+    fps: int,
+    gw: int,
+    gh: int,
+    out_w: int | None = None,
+    out_h: int | None = None,
+    channels: int = 3,
 ) -> "subprocess.Popen":
     """Open a persistent ffmpeg that encodes a CONTINUOUS rawvideo stream into `path`.
 
@@ -700,7 +728,7 @@ def open_stream_encoder(
     writes each block, then closes stdin and waits to finalize (see graph.render_stream).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = _encode_args(gw, gh, fps, out_w, out_h) + [
+    cmd = _encode_args(gw, gh, fps, out_w, out_h, channels) + [
         # ~1s GOPs with a keyframe at each fragment so partial reads decode cleanly.
         "-g", str(max(1, int(fps))), "-keyint_min", str(max(1, int(fps))), "-sc_threshold", "0",
         "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
@@ -756,13 +784,33 @@ class StreamEncoder:
     ):
         self._args = (path, fps, gw, gh, out_w, out_h)
         self._enc: "subprocess.Popen | None" = None
+        self._ch = 0  # set from the FIRST block; the input format is fixed at open
 
     def write(self, data: "bytes | np.ndarray") -> None:
         """Feed one block. A dead ffmpeg surfaces as its stderr, not a bare BrokenPipe."""
         if self._enc is None:
-            self._enc = open_stream_encoder(*self._args)
+            # RGBA blocks go in as RGBA and ffmpeg composites them over black — the
+            # numpy flatten that used to happen here was the single biggest cost of a
+            # 4K render. `bytes` is assumed already-RGB (the legacy callers).
+            self._ch = 3 if isinstance(data, bytes) else int(data.shape[-1])
+            self._enc = open_stream_encoder(*self._args, channels=self._ch)
+        if not isinstance(data, bytes) and int(data.shape[-1]) != self._ch:
+            # A later block changed channel count — a whole-SONG export can follow a
+            # montage segment (RGBA) with a fluid one (RGB dye-on-black). The input
+            # format was fixed when ffmpeg opened, so convert this block to match.
+            data = (
+                flatten(data)
+                if self._ch == 3
+                else np.concatenate([data, np.full((*data.shape[:-1], 1), 255, np.uint8)], axis=-1)
+            )
         try:
-            self._enc.stdin.write(data if isinstance(data, bytes) else data.tobytes())
+            # A C-contiguous ndarray IS a buffer — hand it to the pipe directly. `tobytes()`
+            # copied the whole block first, which at 4K is ~24 MB per frame duplicated for
+            # nothing. `np.ascontiguousarray` is a no-op on the already-contiguous blocks
+            # every producer returns, and the guarantee matters more than the branch.
+            self._enc.stdin.write(
+                data if isinstance(data, bytes) else memoryview(np.ascontiguousarray(data))
+            )
         except BrokenPipeError as exc:
             raise RuntimeError(encoder_error(self._enc)) from exc
 

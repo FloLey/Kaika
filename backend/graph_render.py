@@ -1857,8 +1857,7 @@ def render(
     # video / stylize register clip.close on the DAG), and used to leak every one of them.
     with Dag(job_id, segment, graph, stem_audio_path, output) as dag:
         src = _render_target(graph, dag.nodes, output_id)  # output OR direct producer preview
-        frames = dag.video(src)
-        frames = fluid.flatten(frames)  # RGBA -> RGB on black (backgrounds are now layers)
+        frames = dag.video(src)  # RGBA stays RGBA — render_mp4 composites it over black
         out_w = int(output.get("width", 0)) or None
         out_h = int(output.get("height", 0)) or None
         fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
@@ -1930,7 +1929,7 @@ def render_stream(
         for k, (_a, b, tot, block) in enumerate(gen):
             if should_cancel and should_cancel():
                 return None
-            enc.write(fluid.flatten(block))
+            enc.write(block)  # RGBA goes straight in — ffmpeg composites it
             wrote = True
             if on_progress:
                 on_progress(b, tot, f"/fluid/stream/{render_id}/preview.mp4?n={k}")
