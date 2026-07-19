@@ -96,13 +96,31 @@ def test_image_missing_asset_is_transparent():
     assert out.shape == (2, 20, 20, 4) and out[..., 3].max() == 0
 
 
+def _video(count, h, w, fps, *, asset_path, src0=0.0, speed=1.0, opacity=None, **static):
+    """A whole-clip video decode, built the way `_video_block` builds it in production.
+
+    `sources.video` used to provide this shape, but after cleanup step 07 the render only
+    ever decodes through `VideoClip` — so these tests were the module's ONLY caller, i.e.
+    they guarded a decoder nothing shipped. Same assertions, now aimed at the live path:
+    video_src_times -> VideoClip.frames -> apply_video_opacity.
+    """
+    src_t = S.video_src_times(count, fps, src0, speed)
+    clip = S.VideoClip(h, w, fps, asset_path=asset_path, **static)
+    try:
+        frames = clip.frames(src_t)
+    finally:
+        clip.close()
+    op = np.ones(count, np.float32) if opacity is None else opacity
+    return S.apply_video_opacity(frames, op)
+
+
 @_needs_ffmpeg
 def test_video_plays_and_sync_modes_differ(assets):
     _job, _ip, _iu, _vu, vid_path = assets
-    seg = S.video(5, 60, 40, 10, asset_path=vid_path, src0=0.0, opacity=np.ones(5, np.float32))
+    seg = _video(5, 60, 40, 10, asset_path=vid_path, src0=0.0, opacity=np.ones(5, np.float32))
     assert seg.shape == (5, 60, 40, 4)
     assert not np.array_equal(seg[0, ..., :3], seg[4, ..., :3])  # it advances (plays)
-    song = S.video(5, 60, 40, 10, asset_path=vid_path, src0=1.0, opacity=np.ones(5, np.float32))
+    song = _video(5, 60, 40, 10, asset_path=vid_path, src0=1.0, opacity=np.ones(5, np.float32))
     assert not np.array_equal(seg[0], song[0])  # a later source-time origin picks a different frame
 
 
@@ -111,7 +129,7 @@ def test_video_speed_time_warps(assets):
     """A per-frame speed array warps playback: 2x advances the source twice as fast as 1x,
     and a modulated array is deterministic (whole-clip == same call)."""
     _job, _ip, _iu, _vu, vid_path = assets
-    fast = S.video(
+    fast = _video(
         6,
         60,
         40,
@@ -121,7 +139,7 @@ def test_video_speed_time_warps(assets):
         speed=np.full(6, 2.0, np.float32),
         opacity=np.ones(6, np.float32),
     )
-    slow = S.video(
+    slow = _video(
         6,
         60,
         40,
@@ -133,7 +151,7 @@ def test_video_speed_time_warps(assets):
     )
     # After 5 output frames, 2x has advanced 1.0s of source, 1x only 0.5s -> different frame.
     assert not np.array_equal(fast[5, ..., :3], slow[5, ..., :3])
-    paused = S.video(
+    paused = _video(
         4,
         60,
         40,
@@ -149,7 +167,7 @@ def test_video_speed_time_warps(assets):
 @_needs_ffmpeg
 def test_video_contain_letterboxes(assets):
     _job, _ip, _iu, _vu, vid_path = assets
-    out = S.video(
+    out = _video(
         2, 80, 40, 10, asset_path=vid_path, fit="contain", src0=0.0, opacity=np.ones(2, np.float32)
     )
     assert (out[0, ..., 3] == 0).any() and (
@@ -162,8 +180,8 @@ def test_video_crop_identity_is_byte_identical(assets):
     """The default (full-frame) crop must add NO filter — existing renders stay stable."""
     _job, _ip, _iu, _vu, vid_path = assets
     kw = dict(asset_path=vid_path, src0=0.0, opacity=np.ones(3, np.float32))
-    base = S.video(3, 60, 40, 10, **kw)
-    same = S.video(3, 60, 40, 10, crop_x=0.0, crop_y=0.0, crop_w=1.0, crop_h=1.0, **kw)
+    base = _video(3, 60, 40, 10, **kw)
+    same = _video(3, 60, 40, 10, crop_x=0.0, crop_y=0.0, crop_w=1.0, crop_h=1.0, **kw)
     assert np.array_equal(base, same)
 
 
@@ -196,8 +214,8 @@ def test_video_crop_selects_source_region(tmp_path, monkeypatch):
         check=True,
     )
     kw = dict(asset_path=str(vid), src0=0.0, fit="stretch", opacity=np.ones(2, np.float32))
-    left = S.video(2, 30, 30, 10, crop_w=0.5, **kw)
-    right = S.video(2, 30, 30, 10, crop_x=0.5, crop_w=0.5, **kw)
+    left = _video(2, 30, 30, 10, crop_w=0.5, **kw)
+    right = _video(2, 30, 30, 10, crop_x=0.5, crop_w=0.5, **kw)
     assert left[0, ..., :3].mean() < 40  # the black half fills the frame
     assert right[0, ..., :3].mean() > 215  # the white half fills the frame
 

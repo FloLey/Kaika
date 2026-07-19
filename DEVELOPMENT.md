@@ -117,11 +117,17 @@ or the executor's dispatch.
    `nodes/registry.ts` (`NODE_TYPES`): `Component`, `chrome` (title/accent/outFlow),
    and — if it's palette-addable — a `factory` + `palette` entry. That single entry
    wires the palette button, the canvas dispatch, and the minimized card.
-4. **Executor** (`backend/graph_render.py`): a `_xxx_video` handler (+ a
-   `_xxx_block` streaming handler, and `_xxx_emitters` if it can feed a merge)
-   registered in `_VIDEO_HANDLERS` / `_BLOCK_HANDLERS` / `_EMITTER_HANDLERS`.
-   `_VIDEO_PRODUCERS` and the output-wiring check pick it up automatically. It's
-   already covered by `output_hash`'s contributing-DAG walk (no edit needed).
+4. **Executor** (`backend/graph_render.py`): normally just a **`_xxx_block`**
+   streaming handler in `_BLOCK_HANDLERS`, with the whole-clip entry registered as
+   `_whole_from_block("xxx")` in `_VIDEO_HANDLERS` — one handler per card, not two.
+   Write a separate `_xxx_video` **only** when the block handler carries cross-block
+   state (fluid, combine, montage, fire). Add `_xxx_emitters` to
+   `_EMITTER_HANDLERS` if the card can feed a merge combine.
+   Then add the type to **`VIDEO_PRODUCERS` in `backend/graph_common.py` by hand** —
+   it does *not* register itself, and an import-time assert in `graph_render.py`
+   fails loudly if you forget. `output_hash`'s contributing-DAG walk needs no edit.
+   `test_card_impact` asserts whole == streamed for every card, so the two paths
+   cannot drift.
 5. **Playground pipeline** — every card must have a working demo segment: add its
    label to `backend/card_demo.py` `CARD_LABELS`, build the pipeline in the live
    Playground, then capture it into `playground_pipelines.json` with either the

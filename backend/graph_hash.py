@@ -20,7 +20,13 @@ from .graph_common import LOOSE_PORT, _nodes_of
 #  v12: a video card feeding a MONTAGE slot ignores the `sync="song"` pre-roll — the
 #       montage already re-times its inputs, and the pre-roll seeked past the end of any
 #       clip shorter than the segment's song offset, freezing a whole slot.
-RENDER_VERSION = 12
+#  v13: the last 8 cards with hand-maintained whole-clip handlers now derive them from
+#       their block handler (`_whole_from_block`). Mostly identical restatements, but
+#       STYLIZE genuinely changes decoder: the whole-clip path used `sources.video`
+#       while the block path used `VideoClip(loop=True)`. The parity test's tolerance
+#       could never have proven those byte-identical, so the cached clips are
+#       invalidated rather than assumed equivalent.
+RENDER_VERSION = 13
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.

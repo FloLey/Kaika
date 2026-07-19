@@ -745,23 +745,6 @@ def _lyrics_static(d: dict) -> dict:
     )
 
 
-def _lyrics_video(dag: "_Dag", node: dict) -> np.ndarray:
-    d = node.get("data", {})
-    nframes = max(1, round(dag.duration * dag.fps))
-    gh, gw = _grid_dims(dag)
-    lines = dag.segment.get("lyric_lines") or []
-    return sources.lyrics(
-        nframes,
-        gh,
-        gw,
-        dag.fps,
-        lines=lines,
-        seg_start=float(dag.segment.get("start", 0.0)),
-        **_lyrics_static(d),
-        **dag._lyrics_params(node),
-    )
-
-
 def _asset_path(dag: "_Dag", node: dict) -> str:
     """The on-disk path for an image/video node's `assetUrl` (`/assets/<job>/<name>`),
     or "" if unset/missing (-> a transparent layer)."""
@@ -904,20 +887,6 @@ def _slideshow_index(trigger: "np.ndarray", n_assets: int, d: dict) -> "np.ndarr
     return idx % max(1, n_assets)
 
 
-def _slideshow_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    nframes = max(1, round(dag.duration * dag.fps))
-    d = node.get("data", {})
-    params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
-    items = _slideshow_items(dag, node)
-    index = _slideshow_index(params["trigger"], len(items), d)
-    clip = sources.SlideshowClip(gh, gw, dag.fps, items=items, index=index, **_box_static(d))
-    try:
-        return clip.frames(0, nframes, params["opacity"])
-    finally:
-        clip.close()
-
-
 def _montage_srcs(dag: "_Dag", node: dict) -> list:
     """The montage's wired slots as `(source_id, span)` pairs, in slot order (unwired
     slots are skipped, combine-style, so the k-th WIRED input plays the k-th musical
@@ -1018,29 +987,6 @@ def _montage_video(dag: "_Dag", node: dict) -> np.ndarray:
         out[r:end] = frames[:need]
         fluid_cache.store(key, frames)
     return sources.apply_video_opacity(out, params["opacity"])
-
-
-def _video_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    nframes = max(1, round(dag.duration * dag.fps))
-    d = node.get("data", {})
-    params = dag._fx_params(node)  # {opacity, speed} full-segment arrays
-    src0 = _video_src0(
-        d,
-        params["speed"],
-        float(dag.segment.get("start", 0.0)),
-        montage_slot=_feeds_a_montage(dag, node["id"]),
-    )
-    return sources.video(
-        nframes,
-        gh,
-        gw,
-        dag.fps,
-        asset_path=_asset_path(dag, node),
-        src0=src0,
-        **_video_static(d),
-        **params,
-    )
 
 
 # ── Generative source cards (waves / lightning / fire) ────────────────────────
@@ -1386,38 +1332,6 @@ def _transform_frames(
     return out
 
 
-def _transform_video(dag: "_Dag", node: dict) -> np.ndarray:
-    src = _video_source(dag.graph, node["id"], "video")
-    if src is None:
-        raise ValueError(f"transform '{node['id']}' has no video input")
-    mode, segments, wrap = _transform_static(node.get("data", {}))
-    return _transform_frames(dag.video(src), mode, segments, wrap, **dag._fx_params(node))
-
-
-def _stylize_video(dag: "_Dag", node: dict) -> np.ndarray:
-    """AI Stylize (video→video): if a stylized clip was generated (`data.assetUrl`), decode
-    it; otherwise pass the upstream fluid through (the 'not generated yet' preview)."""
-    ap = _asset_path(dag, node)
-    if ap:
-        gh, gw = _grid_dims(dag)
-        nframes = max(1, round(dag.duration * dag.fps))
-        dec = sources.video(
-            nframes,
-            gh,
-            gw,
-            dag.fps,
-            asset_path=ap,
-            src0=0.0,
-            speed=1.0,
-            opacity=np.ones(nframes, np.float32),
-        )
-        return np.ascontiguousarray(dec[..., :3])  # dye-on-black convention (drop coverage alpha)
-    src = _video_source(dag.graph, node["id"], "video")
-    if src is None:
-        raise ValueError(f"stylize '{node['id']}' has no video input")
-    return dag.video(src)
-
-
 def _extract_static(d: dict) -> str:
     """The Extract card's control kind: canny / soft / density (OpenCV) or depth (a model)."""
     kind = d.get("kind", "canny")
@@ -1457,30 +1371,11 @@ def _extract_apply(frames: np.ndarray, kind: str) -> np.ndarray:
     return out
 
 
-def _extract_video(dag: "_Dag", node: dict) -> np.ndarray:
-    src = _video_source(dag.graph, node["id"], "video")
-    if src is None:
-        raise ValueError(f"extract '{node['id']}' has no video input")
-    frames = dag.video(src)
-    if frames.shape[-1] == 4:
-        frames = fluid.flatten(frames)
-    return _extract_apply(frames, _extract_static(node.get("data", {})))
-
-
 def _echo_static(d: dict) -> str:
     """The echo card's trail memory: ghost (EMA afterimages), bright (decayed max),
     or dark (bright's mirror — shadow trails)."""
     mode = d.get("mode", "ghost")
     return mode if mode in ("ghost", "bright", "dark") else "ghost"
-
-
-def _echo_video(dag: "_Dag", node: dict) -> np.ndarray:
-    src = _video_source(dag.graph, node["id"], "video")
-    if src is None:
-        raise ValueError(f"echo '{node['id']}' has no video input")
-    mode = _echo_static(node.get("data", {}))
-    out, _acc = look_fx.echo_scan(dag.video(src), None, dag.fps, mode, **dag._fx_params(node))
-    return out
 
 
 def _colorgrade_static(d: dict) -> tuple:
@@ -1513,16 +1408,6 @@ def _colorgrade_setup(dag: "_Dag", node: dict) -> tuple:
     return mode, cmap, fluid._hex_rgb(color_a_hex), color_b
 
 
-def _colorgrade_video(dag: "_Dag", node: dict) -> np.ndarray:
-    src = _video_source(dag.graph, node["id"], "video")
-    if src is None:
-        raise ValueError(f"colorgrade '{node['id']}' has no video input")
-    mode, cmap, color_a, color_b = _colorgrade_setup(dag, node)
-    return look_fx.colorgrade_apply(
-        dag.video(src), mode, cmap, color_a, color_b, dag.fps, 0, **dag._fx_params(node)
-    )
-
-
 def _whole_from_block(card: str):
     """Derive a whole-clip handler from the block one: `produce(0, nframes)`.
 
@@ -1544,17 +1429,17 @@ _VIDEO_HANDLERS = {
     "fluid": _fluid_video,
     "output": _output_video,
     "combine": _combine_video,
-    "lyrics": _lyrics_video,
+    "lyrics": _whole_from_block("lyrics"),
     "image": _whole_from_block("image"),
-    "slideshow": _slideshow_video,
+    "slideshow": _whole_from_block("slideshow"),
     "montage": _montage_video,
-    "video": _video_video,
+    "video": _whole_from_block("video"),
     "backdrop": _whole_from_block("backdrop"),
-    "transform": _transform_video,
-    "stylize": _stylize_video,
-    "extract": _extract_video,
-    "echo": _echo_video,
-    "colorgrade": _colorgrade_video,
+    "transform": _whole_from_block("transform"),
+    "stylize": _whole_from_block("stylize"),
+    "extract": _whole_from_block("extract"),
+    "echo": _whole_from_block("echo"),
+    "colorgrade": _whole_from_block("colorgrade"),
     "waves": _whole_from_block("waves"),
     "lightning": _whole_from_block("lightning"),
     "fire": _fire_video,
@@ -1826,8 +1711,11 @@ def _transform_block(dag: "_Dag", node: dict):
 
 
 def _stylize_block(dag: "_Dag", node: dict):
-    """Block mirror of `_stylize_video`: decode the generated clip (persistent VideoClip)
-    or pass the upstream producer through when nothing is generated yet."""
+    """AI Stylize (video->video): decode the generated clip (`data.assetUrl`) through a
+    persistent VideoClip, or pass the upstream producer through when nothing is generated
+    yet. Now the ONLY stylize handler — the whole-clip entry derives from it. The old
+    `_stylize_video` decoded via `sources.video` instead, so the two paths ran different
+    decoders and were held in agreement only by test_card_impact's tolerance."""
     ap = _asset_path(dag, node)
     if ap:
         gh, gw = _grid_dims(dag)
