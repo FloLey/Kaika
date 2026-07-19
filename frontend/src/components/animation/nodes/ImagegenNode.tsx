@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import ArgInfo from "./ArgInfo";
@@ -12,6 +12,7 @@ import { assetName } from "./useAssetUpload";
 import { jobIdOf } from "./nodeProps";
 import type { NodeProps } from "./nodeProps";
 import type { Asset, ImagegenData } from "../../../lib/types";
+import { useUnmountAbort } from "./useUnmountAbort";
 
 // The selectable models: a fast low-res draft and the HD model. The card's ✨ makes
 // drafts for speed while building; the final export always regenerates in HD.
@@ -96,12 +97,7 @@ export default function ImagegenNode({
 
   // Abort in-flight job polls on unmount — the backend job keeps running (the
   // images still land in the library), but this card stops polling + setState-ing.
-  const pollAbort = useRef(new AbortController());
-  useEffect(() => {
-    const ctl = pollAbort.current;
-    return () => ctl.abort();
-  }, []);
-  const isAbort = (ex: unknown) => ex instanceof DOMException && ex.name === "AbortError";
+  const { controller: pollAbort, isAbort } = useUnmountAbort();
 
   const onGenerate = async () => {
     if (!jobId || !filled.length || busy) return;

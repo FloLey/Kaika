@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { Toggle } from "../../../ui/Ctl";
@@ -13,6 +13,7 @@ import { stylizeClip, pollJob } from "../../../lib/api";
 import { jobIdOf } from "./nodeProps";
 import type { NodeProps } from "./nodeProps";
 import type { Asset, StylizeData } from "../../../lib/types";
+import { useUnmountAbort } from "./useUnmountAbort";
 
 // The AI Stylize video-FX card: one video in, one video out. It repaints the incoming
 // fluid toward a prompt via img2img (`strength` = the keep↔reinvent curseur, a modulatable
@@ -56,12 +57,7 @@ export default function StylizeNode({
 
   // Abort in-flight polls on unmount — the backend job keeps running (the clip still lands
   // as an asset), this card just stops polling + setState-ing.
-  const pollAbort = useRef(new AbortController());
-  useEffect(() => {
-    const c = pollAbort.current;
-    return () => c.abort();
-  }, []);
-  const isAbort = (ex: unknown) => ex instanceof DOMException && ex.name === "AbortError";
+  const { controller: pollAbort, isAbort } = useUnmountAbort();
 
   // Follow a job to completion. Shared by ✨ Generate and the mount-resume below.
   // On an unmount abort the pendingJobs entry stays (the job is still running —
