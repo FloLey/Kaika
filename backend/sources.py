@@ -1176,8 +1176,17 @@ class VideoClip:
         if not self.path or count == 0:
             return out
         src_t = np.asarray(src_t, np.float64)
-        if self.dur > 0 and not self.loop:  # hold the last frame once past the end
-            src_t = np.clip(src_t, 0.0, max(0.0, self.dur - 1.0 / float(self.fps)))
+        # Past the end with `loop` off: the frames stay TRANSPARENT (black at the
+        # terminal). Holding the last frame used to be the fallback, but in a montage a
+        # slot longer than its clip then froze on a still for the rest of the cut, which
+        # reads as a broken render; blank is unambiguous, and the card's shortfall
+        # warning already says how much material is missing. Tick `loop` to replay
+        # instead. `spent` is computed BEFORE clipping so we know which frames to blank.
+        spent = None
+        if self.dur > 0 and not self.loop:
+            last = max(0.0, self.dur - 1.0 / float(self.fps))
+            spent = src_t > last
+            src_t = np.clip(src_t, 0.0, last)
         if self._proc is None:
             self._open(float(src_t[0]))
         idx = np.round((src_t - self._fold - self._seek) * self.fps).astype(int)
@@ -1186,6 +1195,8 @@ class VideoClip:
             idx = np.round((src_t - self._fold - self._seek) * self.fps).astype(int)
         idx = np.maximum(idx, 0)
         for i, k in enumerate(idx):
+            if spent is not None and spent[i]:
+                continue  # out of material — leave this frame blank
             f = self._frame(int(k))
             if f is not None:
                 out[i, self.y0 : self.y0 + self.bh, self.x0 : self.x0 + self.bw] = f
@@ -1311,7 +1322,15 @@ def video_src_times(count, fps, src0, speed) -> np.ndarray:
 
 
 def apply_video_opacity(out: np.ndarray, opacity) -> np.ndarray:
-    """Scale a video layer's alpha by the per-frame `opacity` array, in place."""
+    """Scale a video layer's alpha by the per-frame `opacity` array, in place.
+
+    Opacity is 1.0 unless something is wired to it — the overwhelmingly common case, and
+    then this is the identity. The guard costs an O(frames) reduce; what it skips is a
+    float32 round-trip over the whole alpha PLANE, which measured 21.4s of a 133s 4K
+    render (16%) while changing nothing. Returns the same array either way: callers rely
+    on the in-place mutation, not on the return value."""
     op = np.asarray(opacity, np.float32).reshape(-1)[: out.shape[0], None, None]
+    if op.size and float(op.min()) == 1.0 and float(op.max()) == 1.0:
+        return out
     out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
     return out

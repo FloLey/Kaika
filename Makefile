@@ -101,6 +101,13 @@ clean-cache:
 gc-cache:
 	.venv/bin/python -m backend.cache_gc
 
+# Where a render's time actually goes (decode / flatten / opacity / cache / encode),
+# plus peak ffmpeg processes and RSS. Run this BEFORE optimising a render path — it is
+# what showed that two numpy conversions, not decode or H.264, were 73% of a 4K export.
+#   make measure-render JOB=e883da29 SEGMENT=chorus
+measure-render:
+	.venv/bin/python scripts/measure_render.py
+
 # Regenerate the frontend's generated files from the backend:
 #   src/lib/fluidParams.js        <- animation_params.{FLUID,COLOR,SOURCE}_PARAM_SPEC
 #   src/lib/graph/generated.ts    <- graph_common.VIDEO_PRODUCERS,
