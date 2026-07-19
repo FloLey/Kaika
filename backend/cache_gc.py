@@ -46,14 +46,25 @@ def _lyric_lines(job_id: str) -> list:
         return []
 
 
-def _hashes_from(row: dict, job_id: str) -> set[str]:
-    """Every render-cache key the given project row's CURRENT state maps to — one per
-    (segment × output node), plus the whole-song `song_<hash>` export stems. A
-    malformed segment/graph is skipped, not fatal."""
+def _hashes_from(row: dict, job_id: str) -> tuple[set[str], bool]:
+    """`(render-cache keys the row's CURRENT state maps to, keys_are_complete)`.
+
+    One key per (segment × output node), plus the whole-song `song_<hash>` export stems.
+
+    The second element is the important one. A hashing failure used to be swallowed per
+    segment and the sweep carried on with an INCOMPLETE keep-set — which reads exactly
+    like "these clips are junk" and deletes minutes of rendered work. The module already
+    refuses to confuse "can't tell what's reachable" with "nothing is reachable" for a DB
+    outage (`_reachable`) and for a moved data directory (`sweep`); this is the same rule
+    at segment granularity. We still skip the bad segment and keep scanning — a partial
+    keep-set is useful for the ASSET half — but we report that the clip keep-set can't be
+    trusted, and `sweep` then declines to delete any clip.
+    """
     data = row.get("data") or {}
     output = data.get("output") or {}
     lines = _lyric_lines(job_id)
     keys: set[str] = set()
+    complete = True
     for seg in data.get("segments") or []:
         graph = seg.get("graph")
         if not graph:
@@ -63,14 +74,20 @@ def _hashes_from(row: dict, job_id: str) -> set[str]:
             outputs = [n["id"] for n in graph.get("nodes", []) if n.get("type") == "output"]
             for output_id in outputs:
                 keys.add(graphmod.output_hash(job_id, seg_h, graph, output_id, output))
-        except Exception as e:  # noqa: BLE001 — one bad graph must not sink the sweep
-            log.warning("cache gc: skipped a segment of %s (%s)", job_id, e)
-    keys |= _song_export_stems(row, job_id, lines)
-    return keys
+        except Exception as e:  # noqa: BLE001 — one bad graph must not sink the whole scan
+            log.warning(
+                "cache gc: could not hash a segment of %s (%s) — clip deletion suspended",
+                job_id,
+                e,
+            )
+            complete = False
+    stems, stems_complete = _song_export_stems(row, job_id, lines)
+    return keys | stems, complete and stems_complete
 
 
-def _song_export_stems(row: dict, job_id: str, lines: list) -> set[str]:
-    """The HD-export stems of this project — whole-song masters (`song_<hash>`) AND
+def _song_export_stems(row: dict, job_id: str, lines: list) -> tuple[set[str], bool]:
+    """`(HD-export stems of this project, stems_are_complete)` — whole-song masters
+    (`song_<hash>`) AND
     single-segment HD renders (`<hash>` + its muxed `hd-…` sibling). These took
     minutes (plus HD asset regeneration) and must never be reaped as junk. Two
     sources, both kept:
@@ -85,23 +102,33 @@ def _song_export_stems(row: dict, job_id: str, lines: list) -> set[str]:
     from . import song_render  # lazy: keeps `python -m backend.cache_gc` startup light
 
     stems: set[str] = set()
+    complete = True
     p = ANALYSIS_DIR / f"{job_id}.json"
     if p.exists():
         try:
             analysis = json.loads(p.read_text())
             for key in ("song_exports", "segment_exports"):
                 stems |= {str(s) for s in analysis.get(key, []) or []}
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as e:
+            # The RECORDED stems are the only source for a segment HD render, so losing
+            # them to a corrupt analysis file means we genuinely cannot tell what is
+            # reachable — don't let the sweep delete on that basis.
+            log.warning("cache gc: unreadable analysis cache for %s (%s)", job_id, e)
+            complete = False
     data = row.get("data") or {}
     segments = data.get("segments") or []
     if segments and all(s.get("finalOutputId") for s in segments):
         export = {**song_render.EXPORT_DEFAULTS, **(data.get("export") or {})}
         try:
             stems.add("song_" + song_render._export_hash(job_id, segments, lines, export))
-        except Exception as e:  # noqa: BLE001 — a bad segment must not sink the sweep
-            log.warning("cache gc: couldn't hash %s's song export (%s)", job_id, e)
-    return stems
+        except Exception as e:  # noqa: BLE001 — a bad segment must not sink the whole scan
+            log.warning(
+                "cache gc: couldn't hash %s's song export (%s) — clip deletion suspended",
+                job_id,
+                e,
+            )
+            complete = False
+    return stems, complete
 
 
 def _asset_file(url: str, root=None):
@@ -142,23 +169,34 @@ def _assets_from(row: dict, root=None) -> set:
     return files
 
 
-def _reachable(assets_root=None) -> tuple[set[str], set]:
-    """(reachable clip hashes, reachable asset files) across ALL saved projects (the
-    Playground row included), in a SINGLE query — one connection instead of one per
-    project.
+def _reachable(assets_root=None) -> tuple[set[str], set, bool]:
+    """(reachable clip hashes, reachable asset files, clip hashes are complete) across ALL
+    saved projects (the Playground row included), in a SINGLE query — one connection
+    instead of one per project.
 
     Raises `db.DBUnavailable` if the project list can't be read — callers MUST treat
-    that as "unknown" and NOT delete anything (empty sets would nuke the caches)."""
+    that as "unknown" and NOT delete anything (empty sets would nuke the caches).
+
+    The third element is the same guarantee at a finer grain: False means at least one
+    project's clip keys could not be computed, so the hash set is a SUBSET of what is
+    really reachable and must not be used to decide deletions. Asset reachability is
+    computed without hashing, so it stays trustworthy either way."""
     hashes: set[str] = set()
     assets: set = set()
+    complete = True
     for row in db.get_projects_full():
-        hashes |= _hashes_from(row, row["job_id"])
+        row_hashes, row_complete = _hashes_from(row, row["job_id"])
+        hashes |= row_hashes
+        complete = complete and row_complete
         assets |= _assets_from(row, assets_root)
-    return hashes, assets
+    return hashes, assets, complete
 
 
 def reachable_hashes() -> set[str]:
-    """The cache keys reachable from all saved projects' current state (+ Playground)."""
+    """The cache keys reachable from all saved projects' current state (+ Playground).
+
+    Best-effort: if a project's hashing fails this is a subset. Use `_reachable`'s third
+    element before deleting anything on the strength of it."""
     return _reachable()[0]
 
 
@@ -186,7 +224,7 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
     # for both halves, and a re-read check before deleting anything.
     anim_dir, assets_dir = paths.ANIM_DIR, ASSETS_DIR
     try:
-        reachable, keep_assets = _reachable(assets_dir)
+        reachable, keep_assets, clips_known = _reachable(assets_dir)
     except db.DBUnavailable as e:
         log.warning("cache gc: DB unavailable, skipping sweep (%s)", e)
         return 0
@@ -196,16 +234,24 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
 
     removed = 0
     cutoff = now - keep_recent_sec
-    for p in anim_dir.glob("*.mp4"):  # non-recursive: leaves stream/ scratch
-        if p.stem in reachable:
-            continue
-        try:
-            if p.stat().st_mtime > cutoff:  # a clip from the active session
+    # An incomplete keep-set means we know some clips are reachable but not WHICH, so
+    # every unmatched clip is a maybe, not junk. Skip the clip phase entirely and keep
+    # sweeping assets, whose reachability never went through a hash — otherwise one
+    # permanently-malformed project would disable the GC forever instead of just the part
+    # it actually undermines.
+    if not clips_known:
+        log.warning("cache gc: clip keep-set incomplete — not deleting any clip this sweep")
+    else:
+        for p in anim_dir.glob("*.mp4"):  # non-recursive: leaves stream/ scratch
+            if p.stem in reachable:
                 continue
-            p.unlink()
-            removed += 1
-        except OSError:
-            continue
+            try:
+                if p.stat().st_mtime > cutoff:  # a clip from the active session
+                    continue
+                p.unlink()
+                removed += 1
+            except OSError:
+                continue
 
     # Reap image/video assets no saved project references (recency protects fresh
     # uploads for an unsaved edit), then drop any per-job dirs left empty. A video's

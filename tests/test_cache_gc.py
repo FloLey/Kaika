@@ -224,6 +224,78 @@ def test_sweep_bails_when_db_unavailable(wired, monkeypatch):
     assert stale.exists()  # a DB outage must NOT be read as "nothing is reachable"
 
 
+def _age(p, seconds):
+    """Push a file's mtime past the recency window, so only REACHABILITY protects it."""
+    import os
+
+    st = os.stat(p)
+    os.utime(p, (st.st_atime, st.st_mtime - seconds))
+
+
+def test_sweep_keeps_clips_when_a_segment_hash_raises(wired, monkeypatch):
+    """A raising `output_hash` is "we can't tell what's reachable", not "nothing is".
+
+    `_hashes_from` swallowed every exception per segment and carried on with an
+    INCOMPLETE keep-set, so a bug in hashing silently made a live project's clips look
+    like junk and the sweep deleted them — minutes of render each. Same principle the
+    DB-outage and moved-directory guards above already encode.
+    """
+    _, _, tmp = wired
+    live = tmp / "fluid" / f"{next(iter(cache_gc.reachable_hashes()))}.mp4"
+    live.write_bytes(b"x")
+    _age(live, cache_gc.KEEP_RECENT_SEC + 3600)
+
+    def boom(*a, **k):
+        raise RuntimeError("output_hash is broken")
+
+    monkeypatch.setattr(cache_gc.graphmod, "output_hash", boom)
+    monkeypatch.setattr(cache_gc, "_last_run", 0.0)
+
+    assert cache_gc.sweep() == 0
+    assert live.exists(), "a hashing failure deleted a clip the project still references"
+
+
+def test_sweep_keeps_song_exports_when_the_export_hash_raises(wired, monkeypatch):
+    """Same guarantee for the whole-song master, which costs minutes plus HD asset
+    regeneration to rebuild."""
+    proj, _, tmp = wired
+    proj["data"]["segments"][0]["finalOutputId"] = "oA"
+    stem = tmp / "fluid" / "song_0123456789abcdef.mp4"
+    stem.write_bytes(b"x")
+    _age(stem, cache_gc.KEEP_RECENT_SEC + 3600)
+
+    from backend import song_render
+
+    def boom(*a, **k):
+        raise RuntimeError("_export_hash is broken")
+
+    monkeypatch.setattr(song_render, "_export_hash", boom)
+    monkeypatch.setattr(cache_gc, "_last_run", 0.0)
+
+    assert cache_gc.sweep() == 0
+    assert stem.exists(), "a hashing failure deleted a whole-song export"
+
+
+def test_sweep_still_reaps_assets_when_a_hash_fails(wired, monkeypatch):
+    """The incomplete keep-set is specifically the CLIP one — asset reachability is
+    computed without hashing, so suspending the clip phase must not disable asset GC
+    (otherwise one permanently-malformed project would stop the sweep forever)."""
+    proj, _, tmp = wired
+    junk = tmp / "assets" / "proj1" / "orphan.png"
+    junk.parent.mkdir(parents=True, exist_ok=True)
+    junk.write_bytes(b"x")
+    _age(junk, cache_gc.KEEP_RECENT_SEC + 3600)
+
+    def boom(*a, **k):
+        raise RuntimeError("output_hash is broken")
+
+    monkeypatch.setattr(cache_gc.graphmod, "output_hash", boom)
+    monkeypatch.setattr(cache_gc, "_last_run", 0.0)
+
+    cache_gc.sweep()
+    assert not junk.exists(), "asset GC stopped working because clip hashing failed"
+
+
 def test_sweep_refuses_when_the_data_dirs_move_under_it(monkeypatch, tmp_path):
     """The sweep must NEVER compute "what to keep" against one directory and then delete
     from another. It used to read ASSETS_DIR twice; a background thread outliving a test
