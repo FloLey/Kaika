@@ -10,6 +10,7 @@ demucs/spectrogram step is faked so the video-ingest test stays fast.
 import io
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -449,3 +450,46 @@ def test_asset_proxy_rejects_unknown_and_unsafe_ids(client, tmp_path, monkeypatc
     monkeypatch.setattr(assets_mod, "ASSETS_DIR", tmp_path)
     assert client.get("/asset-proxy/a7a7a7a7/nope").status_code == 404
     assert client.get("/asset-proxy/a7a7a7a7/-evil").status_code == 400
+
+
+def test_every_derived_transcode_goes_through_the_concurrency_cap(tmp_path, monkeypatch):
+    """No ffmpeg call site may skip `_FFMPEG_SLOTS`.
+
+    The cap used to sit on the proxy path only; the clip-excerpt route added later went
+    straight past it, so opening a segment with 37 video cards fired 37 concurrent
+    ffmpeg on top of the renders and the backend stopped answering. The cap now lives
+    inside `_ffmpeg_atomic` — this pins that it is actually taken, for every maker.
+    """
+    import threading
+
+    from backend.routes import assets
+
+    live = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def fake_run(args, **kw):
+        nonlocal live, peak
+        with lock:
+            live += 1
+            peak = max(peak, live)
+        time.sleep(0.02)  # long enough that unbounded callers would overlap
+        with lock:
+            live -= 1
+        Path(args[-1]).write_bytes(b"x")  # a non-empty output = success
+        return subprocess.CompletedProcess(args, 0, b"", b"")
+
+    monkeypatch.setattr(assets.subprocess, "run", fake_run)
+    monkeypatch.setattr(assets, "_FFMPEG_SLOTS", threading.Semaphore(2))
+
+    threads = [
+        threading.Thread(target=assets._ffmpeg_atomic, args=([], tmp_path / f"out{i}.mp4", 5))
+        for i in range(8)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert peak <= 2, f"{peak} concurrent ffmpeg — the cap is not being taken"
+    assert all((tmp_path / f"out{i}.mp4").exists() for i in range(8))  # all still ran

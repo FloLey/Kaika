@@ -29,6 +29,7 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 
 from ..config import (
+    FFMPEG_SLOTS,
     ASSET_MAX_BYTES,
     CLIP_TIMEOUT,
     PREVIEW_HEIGHT,
@@ -68,7 +69,12 @@ _THUMB_WIDTH = PREVIEW_THUMB_WIDTH
 _PROXY_TIMEOUT = PROXY_TIMEOUT
 _CLIP_TIMEOUT = CLIP_TIMEOUT
 _THUMB_TIMEOUT = THUMB_TIMEOUT
-_PROXY_SLOTS = threading.Semaphore(2)  # cap concurrent transcodes (they're CPU-heavy)
+# ONE cap for every derived-media transcode (proxy / clip excerpt / thumb), taken
+# inside `_ffmpeg_atomic` so no call site can forget it. It was on the proxy path only,
+# and the clip-excerpt route added later went straight past it: opening a segment with
+# 37 video cards fired 37 concurrent ffmpeg, on top of the segment renders — the backend
+# stopped answering for ~25s and the browser reported it as a lost connection.
+_FFMPEG_SLOTS = threading.Semaphore(FFMPEG_SLOTS)
 _proxy_pending: set[str] = set()
 _proxy_lock = threading.Lock()
 
@@ -80,9 +86,12 @@ def _ffmpeg_atomic(args: list, dest: Path, timeout: int) -> bool:
     between `ffmpeg` and the destination path."""
     tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp{dest.suffix}")
     try:
-        proc = subprocess.run(
-            ["ffmpeg", "-v", "error", "-y", *args, str(tmp)], capture_output=True, timeout=timeout
-        )
+        with _FFMPEG_SLOTS:  # never let previews starve the renders (or each other)
+            proc = subprocess.run(
+                ["ffmpeg", "-v", "error", "-y", *args, str(tmp)],
+                capture_output=True,
+                timeout=timeout,
+            )
     except (OSError, subprocess.TimeoutExpired):
         tmp.unlink(missing_ok=True)
         return False
@@ -131,8 +140,7 @@ def _ensure_proxy_async(src: Path) -> None:
 
     def run():
         try:
-            with _PROXY_SLOTS:
-                _make_video_proxy(src)
+            _make_video_proxy(src)  # capped inside _ffmpeg_atomic
         finally:
             with _proxy_lock:
                 _proxy_pending.discard(key)

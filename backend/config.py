@@ -41,6 +41,11 @@ PREVIEW_THUMB_WIDTH = 240
 PREVIEW_EXCERPT_SECONDS = 8  # mirrored in frontend/src/lib/assetPreview.ts
 
 # ffmpeg wall-clock ceilings (seconds) for those derived files.
+# How many derived-media transcodes may run at once (proxy / clip excerpt / thumb).
+# Each ffmpeg happily eats every core, and these run ALONGSIDE the segment renders —
+# uncapped, one editor tab starved the backend for half a minute.
+FFMPEG_SLOTS = int(os.environ.get("FFMPEG_SLOTS", "2"))
+
 PROXY_TIMEOUT = 900  # a 4K phone clip transcodes in ~40s; this is the pathological case
 CLIP_TIMEOUT = 180
 THUMB_TIMEOUT = 30

@@ -9,7 +9,30 @@ images passed exactly like an animated one.
 
 from __future__ import annotations
 
+import re
+from functools import lru_cache
+from pathlib import Path
+
 import numpy as np
+
+_FACTORIES = (
+    Path(__file__).resolve().parents[1] / "frontend" / "src" / "lib" / "graph" / "factories.ts"
+)
+
+
+@lru_cache(maxsize=1)
+def graph_version() -> int:
+    """`GRAPH_VERSION` read from its ONE source of truth (`factories.ts`).
+
+    This used to be a hardcoded `28` in `graph_of`'s signature. A bump on the frontend
+    would have left fixture graphs stamped at the old version — invisible to pytest and,
+    per ARCHITECTURE.md's own warning, enough to silently drop a card the moment the UI
+    loads the graph. Deriving it means the bump propagates or this raises.
+    """
+    m = re.search(r"export const GRAPH_VERSION = (\d+)", _FACTORIES.read_text())
+    assert m, f"GRAPH_VERSION not found in {_FACTORIES} — did the declaration move?"
+    return int(m.group(1))
+
 
 # One documented default for render settings. Deliberately NOT retrofitted over the
 # per-file `OUT` dicts: theirs differ in size/fps/background in ways their assertions
@@ -93,5 +116,11 @@ def node(node_id: str, node_type: str, **data) -> dict:
     return {"id": node_id, "type": node_type, "data": data}
 
 
-def graph_of(nodes: list, edges: list, version: int = 28) -> dict:
-    return {"version": version, "nodes": nodes, "edges": edges}
+def graph_of(nodes: list, edges: list, version: int | None = None) -> dict:
+    """A graph stamped at the CURRENT `GRAPH_VERSION` unless a version is forced
+    (migration tests want an old stamp on purpose)."""
+    return {
+        "version": graph_version() if version is None else version,
+        "nodes": nodes,
+        "edges": edges,
+    }
