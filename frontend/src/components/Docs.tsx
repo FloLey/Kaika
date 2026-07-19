@@ -1103,6 +1103,15 @@ export default function Docs({ section }: { section?: string }) {
           on its last frame). Its preview on the card free-runs for the same reason.
         </p>
         <p>
+          <strong>Two warnings per row.</strong> <strong>⚠ −1.2s</strong> means the clip is shorter
+          than its slot — from its in-point there isn't enough material, so it loops back (or
+          freezes, if its loop is off). <strong>⧉ 3</strong> means this slot plays a clip slot 3
+          already used: from the same in-point the two play <em>identical frames</em>, which on
+          screen looks like the video looping rather than cutting — the badge turns red for that
+          case, and stays grey when the in-points differ (another moment of the same footage, often
+          deliberate). Both are read-offs, not errors: nothing stops you.
+        </p>
+        <p>
           <strong>Reading the order off the canvas.</strong> Hit <strong>✨ arrange</strong> and the
           clips are stacked in slot order, slot 1 at the top, right of their montage — so the column
           reads exactly as the film plays and no wire crosses another. Arrange is layout only: it

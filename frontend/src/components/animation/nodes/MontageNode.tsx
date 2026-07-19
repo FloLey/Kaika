@@ -158,6 +158,29 @@ export default function MontageNode({
     return byUrl;
   }, [ctx?.assets]);
 
+  // Per row, the EARLIER row playing the same clip — or null. Two slots fed by the
+  // same file replay the same footage; with the same in-point they are frame-identical,
+  // which on screen looks exactly like the video looping instead of cutting. Nothing
+  // else catches it: the shortfall warning only ever watched length, so this played
+  // wrong and silently (reported as "the first video loops but nothing tells me").
+  const repeats = useMemo(() => {
+    const firstRow = new Map<string, number>();
+    return clips.map((c, i) => {
+      if (!c?.url) return null;
+      const first = firstRow.get(c.url);
+      if (first === undefined) {
+        firstRow.set(c.url, i);
+        return null;
+      }
+      return {
+        row: first + 1,
+        // Same in-point = the very same frames; a different one still repeats the clip
+        // but shows another moment of it, which is often deliberate.
+        identical: Math.abs((clips[first]?.start || 0) - (c.start || 0)) < 0.05,
+      };
+    });
+  }, [clips]);
+
   // `{ short: seconds missing, avail, needed }` when the clip falls short, else null.
   const shortfall = (i: number, w: number | null) => {
     const c = clips[i];
@@ -263,6 +286,22 @@ export default function MontageNode({
                   </span>
                 );
               })()}
+              {repeats[i] && (
+                <span
+                  className={"anim-montage-dup" + (repeats[i]!.identical ? " same" : "")}
+                  title={
+                    repeats[i]!.identical
+                      ? `same clip as slot ${repeats[i]!.row}, from the same in-point — these ` +
+                        "two slots play identical frames, which looks like the video looping " +
+                        "instead of cutting. Move this one's in-point (🎞 on the video card) " +
+                        "or wire a different clip."
+                      : `same clip as slot ${repeats[i]!.row}, but from a different in-point — ` +
+                        "it shows another moment of the same footage. Fine if that's deliberate."
+                  }
+                >
+                  ⧉ {repeats[i]!.row}
+                </span>
+              )}
               {inputs.length > 1 && (
                 <button
                   className="iconbtn anim-combine-rm"

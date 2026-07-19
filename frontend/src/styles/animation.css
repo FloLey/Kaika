@@ -2018,6 +2018,20 @@
   white-space: nowrap;
   cursor: help;
 }
+/* "⧉ 1" — this slot plays a clip an earlier slot already used. Muted when the
+   in-points differ (often deliberate), red when they match: identical frames, which
+   reads on screen as the video looping rather than cutting. */
+.anim-montage-dup {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.anim-montage-dup.same {
+  color: var(--danger, #d9534f);
+}
+
 /* The montage's per-slot duration read-off ("2.8s", "unwired", "unused"). */
 .anim-montage-dur {
   flex: 1;
