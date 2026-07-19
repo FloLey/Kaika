@@ -3,7 +3,7 @@ import Ctl from "../../../ui/Ctl";
 import NodeFrame, { Port } from "./NodeFrame";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { fluidParam } from "../../../lib/fluidParams.js";
 import { argHelp } from "../../../lib/paramHelp";
 import {
@@ -67,7 +67,7 @@ export default function CombineNode({
       {/* Live composite preview — every on-screen composite streams (no selection
           needed); the global 2-slot queue in useStreamRender staggers renders so the
           pool never floods, and each holds its looping frame once rendered. */}
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
       <div className="anim-combine-modes">
         <button
           className={"anim-mode-btn" + (mode === "merge" ? " on" : "")}

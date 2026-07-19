@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { Toggle } from "../../../ui/Ctl";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
 import { useNodeData } from "./useNodeData";
 import { argHelp } from "../../../lib/paramHelp";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { STYLIZE_PARAMS } from "../../../lib/nodeParams";
 import { stylizeClip, pollJob } from "../../../lib/api";
 import { jobIdOf } from "./nodeProps";
@@ -147,7 +147,7 @@ export default function StylizeNode({
         />
       }
     >
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
 
       <div className="anim-combine-row">
         <Port
@@ -199,16 +199,13 @@ export default function StylizeNode({
         />
       </div>
 
-      {STYLIZE_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={STYLIZE_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
 
       <button
         className="btn sm on anim-imagegen-generate"

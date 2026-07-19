@@ -3,7 +3,7 @@ import NodeFrame, { Port } from "./NodeFrame";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
 import { useNodeData } from "./useNodeData";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { ExtractData } from "../../../lib/types";
 
@@ -59,7 +59,7 @@ export default function ExtractNode({
         />
       }
     >
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
 
       <label className="anim-select-row">
         <span className="anim-select-label">kind</span>

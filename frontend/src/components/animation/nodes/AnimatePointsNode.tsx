@@ -7,7 +7,7 @@ import { useResolvedPoints } from "./useResolvedPoints";
 import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { AnimatePointsData, AnimatePointsMode } from "../../../lib/types";
 
@@ -29,7 +29,7 @@ export default function AnimatePointsNode({
 }: NodeProps) {
   const d = node.data as AnimatePointsData;
   const set = useNodeData<AnimatePointsData>(node, onGraphChange);
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
 

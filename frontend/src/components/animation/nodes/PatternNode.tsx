@@ -8,7 +8,7 @@ import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { patternPoints } from "../../../lib/pointsGen";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { PatternData, PatternLayout } from "../../../lib/types";
 
@@ -26,7 +26,7 @@ export default function PatternNode({
   onDelete,
 }: NodeProps) {
   const d = node.data as PatternData;
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   const pts = useMemo(() => patternPoints(d), [d]);
   const set = useNodeData<PatternData>(node, onGraphChange);
 

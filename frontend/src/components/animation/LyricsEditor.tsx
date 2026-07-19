@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { portalTarget } from "../../lib/portalTarget";
 import LyricsLinesEditor, { type LyricLine } from "./LyricsLinesEditor";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 
 interface LyricsEditorProps {
   lines: LyricLine[];
@@ -14,13 +14,7 @@ interface LyricsEditorProps {
 // the same editor also embeds in the lyrics settings window's second tab.
 export default function LyricsEditor({ lines, onSave, onClose }: LyricsEditorProps) {
   // ESC closes (discarding unsaved edits), same as the other modals.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return createPortal(
     <div className="anim-modal-scrim" onPointerDown={onClose}>

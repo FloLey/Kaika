@@ -3,7 +3,7 @@ import type { ChangeEvent, ReactNode } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRow } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { useAssetUpload, assetName } from "./useAssetUpload";
 import { useNodeData } from "./useNodeData";
 import { FITS } from "./nodeConstants";
@@ -59,7 +59,7 @@ export default function AssetLayerCard({
   const { busy, err, onFile, fromYoutube, jobId } = useAssetUpload(ctx, (url) =>
     set({ assetUrl: url })
   );
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   const [libOpen, setLibOpen] = useState(false);
 
   return (

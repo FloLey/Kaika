@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import Ctl from "../../../ui/Ctl";
 import StreamPreview from "./StreamPreview";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { useAssetUpload, assetName } from "./useAssetUpload";
 import { useNodeData } from "./useNodeData";
 import { useResolvedCurve } from "./useResolvedCurve";
@@ -53,7 +53,7 @@ export default function SlideshowNode({
   const { busy, err, onFile, jobId } = useAssetUpload(ctx, (url) =>
     set({ items: [...own, mkItem(url)] })
   );
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   const [libOpen, setLibOpen] = useState(false);
   const [editIdx, setEditIdx] = useState<number | null>(null); // own video whose in-point is open
   const [dragIdx, setDragIdx] = useState<number | null>(null); // own item being dragged
@@ -285,16 +285,13 @@ export default function SlideshowNode({
           />
         </div>
       </div>
-      {SLIDESHOW_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={SLIDESHOW_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
     </NodeFrame>
   );
 }

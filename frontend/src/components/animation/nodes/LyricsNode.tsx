@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import Ctl, { Toggle } from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
 import { videoSource } from "../../../lib/graphModel";
@@ -9,7 +9,7 @@ import { useNodeData } from "./useNodeData";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { LYRICS_PARAMS } from "../../../lib/nodeParams";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { useLyricsFont } from "../../../lib/lyricsFont";
 import { listFonts, type FontOption } from "../../../lib/api";
 import BoxPad, { type BoxPreview } from "./BoxPad";
@@ -112,7 +112,7 @@ export default function LyricsNode({
     </label>
   );
 
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   const family = useLyricsFont(d.font);
   // The preview plays the reveal off the shared clock (see BoxPad): `getText(t)` gives the
   // revealed text at song time t; when paused it shows `idleText` (the longest line so the
@@ -272,16 +272,13 @@ export default function LyricsNode({
           {...argHelp("lyrics", "outlineWidth")}
         />
       </div>
-      {LYRICS_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={LYRICS_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
     </NodeFrame>
   );
 }

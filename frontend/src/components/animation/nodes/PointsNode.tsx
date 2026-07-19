@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { addPoint, movePoint, removePoint } from "../../../lib/graphModel";
 import { useDragPad } from "../../../lib/useDragPad";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { PointsData } from "../../../lib/types";
 
@@ -25,7 +25,7 @@ export default function PointsNode({
   const padRef = useRef<HTMLDivElement>(null);
   const { norm, startDrag } = useDragPad(padRef);
   const points = (node.data as PointsData).points || [];
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
 
   // The marker being dragged tracks against local state and commits to the graph
   // once on pointer-up — dragging no longer replaces the whole segment graph (and

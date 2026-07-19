@@ -1,12 +1,12 @@
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl, { Toggle } from "../../../ui/Ctl";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
 import { useNodeData } from "./useNodeData";
 import { argHelp } from "../../../lib/paramHelp";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { TRANSFORM_PARAMS } from "../../../lib/nodeParams";
 import type { NodeProps } from "./nodeProps";
 import type { TransformData } from "../../../lib/types";
@@ -68,7 +68,7 @@ export default function TransformNode({
         />
       }
     >
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
 
       <label className="anim-select-row">
         <span className="anim-select-label">mode</span>
@@ -115,16 +115,13 @@ export default function TransformNode({
         />
       </div>
 
-      {TRANSFORM_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={TRANSFORM_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
     </NodeFrame>
   );
 }

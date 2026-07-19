@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { listAssets, uploadAsset, deleteAsset, assetFromYoutube, pollJob } from "../../lib/api";
 import { videoThumbSrc } from "../../lib/assetPreview";
 import type { Asset } from "../../lib/types";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 
 interface AssetLibraryProps {
   jobId?: string;
@@ -112,13 +113,7 @@ export default function AssetLibrary({
   }, [refresh]);
 
   // ESC closes.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const shown = kind ? assets.filter((a) => a.kind === kind) : assets;
 

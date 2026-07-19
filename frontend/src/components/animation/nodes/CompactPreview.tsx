@@ -5,7 +5,7 @@ import BoxPad from "./BoxPad";
 import { buildCompactVideoPreview, buildImagePreview } from "./boxPreview";
 import { useResolvedPoints } from "./useResolvedPoints";
 import { patternPoints } from "../../../lib/pointsGen";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import type { NodeCtx } from "./nodeProps";
 import type {
   BackdropData,
@@ -61,9 +61,7 @@ export const VIDEO_TYPES = new Set([
 function ResolvedPointsPreview({ node, ctx }: { node: GraphNode; ctx: NodeCtx }) {
   const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
-  return (
-    <PointsPad points={points} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} compact />
-  );
+  return <PointsPad points={points} aspect={ctxAspect(ctx)} compact />;
 }
 
 // ---- colour helpers (mirrors ColorNode's swatch math, kept tiny) ----------------
@@ -128,7 +126,7 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
   if (VALUE_TYPES.has(node.type)) {
     return <ValuePreview node={node} ctx={ctx} color={accent} compact />;
   }
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   // Plain asset layers (image / video) preview CLIENT-SIDE, through the same read-only
   // BoxPad the full card uses — identical picture (the clip placed in its box, cropped),
   // for free. Streaming them would mean ONE SERVER RENDER OF THE WHOLE SEGMENT PER CARD:

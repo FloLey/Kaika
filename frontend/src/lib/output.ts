@@ -71,3 +71,9 @@ export function fitToRatio(size: Size, ratio: number): Size {
     ? { width: clamp(long), height: clamp(long / ratio) }
     : { width: clamp(long * ratio), height: clamp(long) };
 }
+
+// The card-preview aspect: a project output's ratio, or a square while no output size is
+// known yet. `ctx?.output ? aspectOf(ctx.output) : "1 / 1"` was written out at 19 call
+// sites — enough that a card added with a different fallback would not look out of place.
+export const ctxAspect = (ctx?: { output?: Size | null } | null): string =>
+  ctx?.output ? aspectOf(ctx.output) : "1 / 1";

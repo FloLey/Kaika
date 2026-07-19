@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import { useNodeData } from "./useNodeData";
 import { BACKDROP_PARAMS } from "../../../lib/nodeParams";
@@ -51,16 +51,13 @@ export default function BackdropNode({
         <span className="anim-param-label">colour</span>
         <ArgInfo type="backdrop" k="color" />
       </div>
-      {BACKDROP_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={BACKDROP_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
     </NodeFrame>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ChangeEvent } from "react";
 import {
   ORIENTATION_PRESETS,
@@ -8,6 +8,7 @@ import {
   aspectOf,
 } from "../../lib/output";
 import type { OutputSettings as Output, Quality } from "../../lib/types";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 
 interface OutputSettingsProps {
   output: Output;
@@ -39,13 +40,7 @@ export default function OutputSettings({ output, onChange, onClose }: OutputSett
   };
 
   // ESC closes; lock the page scroll while open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const clampDim = (v: number) => Math.max(16, Math.min(4096, Math.round(v || 0)));
 

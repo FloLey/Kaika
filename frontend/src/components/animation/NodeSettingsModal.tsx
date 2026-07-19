@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { portalTarget } from "../../lib/portalTarget";
@@ -11,6 +11,7 @@ import LyricsLinesEditor, { type LyricLine } from "./LyricsLinesEditor";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 import type { Graph, GraphNode } from "../../lib/types";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 
 // The per-card settings window a CompactCard opens: the node's FULL card component,
 // rendered in a modal instead of on the canvas. Same portal + scrim pattern as
@@ -60,13 +61,7 @@ export default function NodeSettingsModal({
   onClose,
 }: NodeSettingsModalProps) {
   // ESC closes (same listener shape as AssetLibrary).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   // The card in the modal must NOT consult the editor's compact set (it would hide its
   // own body — the node IS compact on canvas); an empty set renders it full. The no-op

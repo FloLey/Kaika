@@ -4,7 +4,7 @@ import NodeFrame, { Port } from "./NodeFrame";
 import { argHelp } from "../../../lib/paramHelp";
 import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../../../lib/fluidParams.js";
 import { videoSource } from "../../../lib/graphModel";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import StreamPreview from "./StreamPreview";
 import { patchStatic, setFluidLayer } from "./fluidBindings";
 import { ParamRow, GroupAnchor } from "./FluidParamRow";
@@ -100,7 +100,7 @@ export default function FluidNode({
       {/* Live sim preview — every on-screen sim streams (no selection needed); the
           global 2-slot queue in useStreamRender staggers renders so the pool never
           floods, and each holds its looping frame once rendered. */}
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
       {/* Source positions: a labelled `points` input. Wire a points card here to put
           a source at each drawn point (otherwise a single source at the centre). */}
       <div className="anim-pos-row">

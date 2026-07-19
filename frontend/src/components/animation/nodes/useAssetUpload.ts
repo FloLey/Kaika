@@ -2,14 +2,8 @@ import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { uploadAsset, assetFromYoutube, pollJob } from "../../../lib/api";
 import type { Asset } from "../../../lib/types";
+import { jobIdOf } from "./nodeProps";
 import type { NodeCtx } from "./nodeProps";
-
-// `ctx.job` may be a bare id string or a project-ish record — normalise to the id.
-export function jobIdOf(job: unknown): string | undefined {
-  if (typeof job === "string") return job;
-  const r = job as { job_id?: string; jobId?: string } | undefined;
-  return r?.job_id || r?.jobId;
-}
 
 // Shared upload flow for the Image/Video layer cards (they only differ in the preview
 // markup + accept filter). Extracts the project job id from `ctx`, POSTs a picked file

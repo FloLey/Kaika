@@ -152,3 +152,32 @@ export function ParamRow({ node, param, helpers, onGraphChange, onDetach }: Para
     </div>
   );
 }
+
+interface ParamRowsProps {
+  params: readonly FluidParam[];
+  node: GraphNode;
+  helpers: NodeHelpers;
+  onGraphChange: (updater: (g: Graph) => Graph) => void;
+  onDetach?: (nodeId: string, key: string) => void;
+}
+
+// Every card's port list, rendered the same way. This exact eight-line block was written
+// out in eight cards, identical apart from the params constant — including the
+// `onDetach?.(node.id, key)` re-binding, which is easy to get subtly wrong on a new card
+// (pass `key` alone and detach silently targets the wrong node).
+export function ParamRows({ params, node, helpers, onGraphChange, onDetach }: ParamRowsProps) {
+  return (
+    <>
+      {params.map((p) => (
+        <ParamRow
+          key={p.key}
+          node={node}
+          param={p}
+          helpers={helpers}
+          onGraphChange={onGraphChange}
+          onDetach={(key) => onDetach?.(node.id, key)}
+        />
+      ))}
+    </>
+  );
+}

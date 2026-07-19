@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getSettings, putSettings, testRemote } from "../lib/api";
 import type { AppSettings, RemoteHealth } from "../lib/api";
 import Info from "../ui/Info";
+import { useEscapeKey } from "../lib/useEscapeKey";
 
 // App-level ⚙ settings (opened from the header, any screen). One section today:
 // REMOTE INFERENCE — run the heavy diffusion operations on a rented GPU box
@@ -21,13 +22,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     getSettings().then(setSettings, (e) => setSaveErr(e.message));
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const patch = (p: Partial<AppSettings["inference"]>) => {
     if (!settings) return;

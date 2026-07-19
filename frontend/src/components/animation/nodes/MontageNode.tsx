@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { useNodeData } from "./useNodeData";
 import { useResolvedCurve } from "./useResolvedCurve";
 import { dp2 } from "./nodeConstants";
@@ -233,7 +233,7 @@ export default function MontageNode({
       }
     >
       {/* The live switched output — the cuts landing exactly as they export. */}
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
       {/* Live wiring summary: inputs available × how many cuts the trigger makes. */}
       <div className="anim-fx-hint anim-slideshow-count">
         {nWired}/{inputs.length} input{inputs.length === 1 ? "" : "s"} · cuts{" "}
@@ -359,16 +359,13 @@ export default function MontageNode({
           {...argHelp("montage", "hysteresis")}
         />
       </div>
-      {MONTAGE_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={MONTAGE_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
     </NodeFrame>
   );
 }

@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import type { ChangeEvent } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
-import { ParamRow } from "./FluidParamRow";
+import { ParamRows } from "./FluidParamRow";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
 import { useNodeData } from "./useNodeData";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { videoSource } from "../../../lib/graphModel";
 import { COLORGRADE_PARAMS } from "../../../lib/nodeParams";
 import type { NodeProps } from "./nodeProps";
@@ -72,7 +72,7 @@ export default function ColorGradeNode({
         />
       }
     >
-      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
+      <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
 
       <label className="anim-select-row">
         <span className="anim-select-label">mode</span>
@@ -160,16 +160,13 @@ export default function ColorGradeNode({
         )}
       </div>
 
-      {COLORGRADE_PARAMS.map((p) => (
-        <ParamRow
-          key={p.key}
-          node={node}
-          param={p}
-          helpers={helpers}
-          onGraphChange={onGraphChange}
-          onDetach={(key) => onDetach?.(node.id, key)}
-        />
-      ))}
+      <ParamRows
+        params={COLORGRADE_PARAMS}
+        node={node}
+        helpers={helpers}
+        onGraphChange={onGraphChange}
+        onDetach={onDetach}
+      />
     </NodeFrame>
   );
 }

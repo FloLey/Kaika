@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { portalTarget } from "../lib/portalTarget";
+import { useEscapeKey } from "../lib/useEscapeKey";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -29,14 +30,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onCancel]);
+  useEscapeKey(onCancel, open);
 
   useEffect(() => {
     if (open) confirmRef.current?.focus();

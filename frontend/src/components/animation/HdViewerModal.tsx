@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { portalTarget } from "../../lib/portalTarget";
 import type { ExportSettings } from "../../lib/export";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 
 // The HD render of one segment, at full size. The card's preview well is a thumbnail —
 // the whole point of an HD render is to actually LOOK at it, so it opens here: real
@@ -20,13 +20,7 @@ interface HdViewerModalProps {
 }
 
 export default function HdViewerModal({ url, settings, streaming, onClose }: HdViewerModalProps) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const aspect = settings ? `${settings.width} / ${settings.height}` : "9 / 16";
   const specs = settings

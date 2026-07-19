@@ -6,7 +6,7 @@ import CompactPreview from "./CompactPreview";
 import ImagegenGallery from "./ImagegenGallery";
 import { useResolvedPoints } from "./useResolvedPoints";
 import { patternPoints } from "../../../lib/pointsGen";
-import { aspectOf } from "../../../lib/output";
+import { ctxAspect } from "../../../lib/output";
 import { VIDEO_TYPES } from "./CompactPreview";
 import type { NodeCtx } from "./nodeProps";
 import type {
@@ -56,7 +56,7 @@ const colorCss = (d: ColorData): string => {
 function ResolvedPointsPreview({ node, ctx }: { node: GraphNode; ctx: NodeCtx }) {
   const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
-  return <PointsPad points={points} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />;
+  return <PointsPad points={points} aspect={ctxAspect(ctx)} />;
 }
 
 interface Props {
@@ -66,7 +66,7 @@ interface Props {
 }
 
 export default function SettingsVisual({ node, ctx, accent }: Props) {
-  const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  const aspect = ctxAspect(ctx);
   const wrap = (mode: string, content: ReactNode) => (
     <div className={`sv sv-${mode}`}>{content}</div>
   );
