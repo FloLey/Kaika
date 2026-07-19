@@ -118,3 +118,32 @@ def test_every_card_is_present_in_the_playground():
     assert (
         set(_VIDEO_HANDLERS) <= covered
     ), f"video cards missing: {sorted(set(_VIDEO_HANDLERS) - covered)}"
+
+
+@pytest.mark.parametrize("demo", card_demo.DEMOS, ids=[d["key"] for d in card_demo.DEMOS])
+def test_whole_clip_matches_the_block_stream(demo, stem_path):
+    """Every card renders the same frames whichever path produced them.
+
+    The engine has TWO renderers over the same cards: whole-clip (`/animate`, the song
+    export) and block-streaming (the interactive preview). They were hand-written in
+    pairs, so a card could silently render differently in the export than in the preview
+    — the worst bug class here, and previously checked only card-by-card in scattered
+    files. This is the table-driven guarantee: one assertion over every demo, which is
+    also what makes deriving the identical handlers from their block versions safe.
+    """
+    g = demo["graph"]
+    seg = {"start": 0.0, "end": 1.0, "signals": demo["signals"]}
+    if any(n.get("type") == "lyrics" for n in g["nodes"]):
+        seg["lyric_lines"] = LINES
+    out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
+    whole = graph._Dag("playground", seg, g, stem_path, OUT).video(out_id)
+    streamed = np.concatenate(
+        [f for *_, f in graph._Dag("playground", seg, g, stem_path, OUT).stream_blocks(out_id, 3)]
+    )
+    assert whole.shape == streamed.shape, demo["key"]
+    # ffmpeg seeking makes a video-backed card differ by a hair at a block seam; a
+    # genuine divergence (a card rendering different content) is orders of magnitude
+    # bigger than this.
+    assert (
+        np.abs(whole.astype(int) - streamed.astype(int)).mean() < 2.0
+    ), f"{demo['key']}: the export path and the preview path disagree"

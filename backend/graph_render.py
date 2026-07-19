@@ -1547,27 +1547,44 @@ def _colorgrade_video(dag: "_Dag", node: dict) -> np.ndarray:
     )
 
 
+def _whole_from_block(card: str):
+    """Derive a whole-clip handler from the block one: `produce(0, nframes)`.
+
+    For most cards the two handlers were literal restatements of each other — the block
+    version with `frame_offset=0` and no carried state. Keeping both meant every new card
+    cost two handlers and two chances to diverge, and a divergence here shows up as "the
+    export doesn't look like the preview", the worst bug class in this engine. Cards whose
+    block handler carries genuine cross-block state (fluid/combine/montage/echo and the
+    FX that accumulate) still define both, and `test_card_impact` asserts whole == streamed
+    for EVERY card so the two paths can never drift apart unnoticed."""
+
+    def whole(dag: "Dag", node: dict) -> np.ndarray:
+        return _BLOCK_HANDLERS[card](dag, node)(0, max(1, round(dag.duration * dag.fps)))
+
+    return whole
+
+
 _VIDEO_HANDLERS = {
     "fluid": _fluid_video,
     "output": _output_video,
     "combine": _combine_video,
     "lyrics": _lyrics_video,
-    "image": _image_video,
+    "image": _whole_from_block("image"),
     "slideshow": _slideshow_video,
     "montage": _montage_video,
     "video": _video_video,
-    "backdrop": _backdrop_video,
+    "backdrop": _whole_from_block("backdrop"),
     "transform": _transform_video,
     "stylize": _stylize_video,
     "extract": _extract_video,
     "echo": _echo_video,
     "colorgrade": _colorgrade_video,
-    "waves": _waves_video,
-    "lightning": _lightning_video,
+    "waves": _whole_from_block("waves"),
+    "lightning": _whole_from_block("lightning"),
     "fire": _fire_video,
-    "aurora": _aurora_video,
-    "rain": _rain_video,
-    "clouds": _clouds_video,
+    "aurora": _whole_from_block("aurora"),
+    "rain": _whole_from_block("rain"),
+    "clouds": _whole_from_block("clouds"),
 }
 _EMITTER_HANDLERS = {
     "fluid": _fluid_emitters_h,
