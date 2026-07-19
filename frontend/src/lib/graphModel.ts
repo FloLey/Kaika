@@ -71,6 +71,7 @@ export {
   connectVideo,
   addCombineInput,
   removeCombineInput,
+  addAssetCard,
   addMontageInput,
   removeMontageInput,
   setMontageSlotSpan,

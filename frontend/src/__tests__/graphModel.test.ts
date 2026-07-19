@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  addAssetCard,
   signalNode,
   outputNode,
   fluidNode,
@@ -284,7 +285,13 @@ describe("data mutation helpers", () => {
     expect(m2.data.inputs.length).toBe(3);
 
     const port = m2.data.inputs[2];
-    g2.edges.push({ id: "e-in", source: "n-lfo", sourcePort: "out", target: m.id, targetPort: port });
+    g2.edges.push({
+      id: "e-in",
+      source: "n-lfo",
+      sourcePort: "out",
+      target: m.id,
+      targetPort: port,
+    });
     const g3 = removeInputPort(g2, m.id, port);
     const m3 = g3.nodes.find((n) => n.id === m.id) as typeof m;
     expect(m3.data.inputs).not.toContain(port);
@@ -304,9 +311,7 @@ describe("data mutation helpers", () => {
     const fl = fluidNode(0, 0);
     const out = outputNode(0, 0);
     g.nodes = [fl, out];
-    g.edges = [
-      { id: "e", source: fl.id, sourcePort: "out", target: out.id, targetPort: "video" },
-    ];
+    g.edges = [{ id: "e", source: fl.id, sourcePort: "out", target: out.id, targetPort: "video" }];
     const before = outputHash(g, out.id, "job", 0, 8, []);
 
     const g2 = renameNode(g, fl.id, "  bass blob  ");
@@ -937,8 +942,13 @@ describe("loose edges (v14): drop-anywhere wiring", () => {
     // value into a fluid: MANY unbound params -> ambiguous -> loose
     expect(resolveDropPort(g2, fluidId, "value")).toBe(null);
     // value into a single-port card (backdrop: only opacity) -> that port
-    const bd = { id: "n-bd", type: "backdrop", x: 0, y: 0,
-      data: { color: "#101418", ports: { opacity: { binding: { kind: "const", value: 1 } } } } } as GraphNode;
+    const bd = {
+      id: "n-bd",
+      type: "backdrop",
+      x: 0,
+      y: 0,
+      data: { color: "#101418", ports: { opacity: { binding: { kind: "const", value: 1 } } } },
+    } as GraphNode;
     const g3 = { ...g2, nodes: [...g2.nodes, bd] };
     expect(resolveDropPort(g3, "n-bd", "value")).toBe("opacity");
   });
@@ -987,9 +997,15 @@ describe("v15 migration: the imagegen split", () => {
         y: 0,
         data: {
           assetUrls: ["/assets/j/a.png"],
-          box_x: 0, box_y: 0, box_w: 1, box_h: 1,
-          fit: "cover", threshold: 0.5, hysteresis: 0.1,
-          prompt: "old combined prompt", seed: 3,
+          box_x: 0,
+          box_y: 0,
+          box_w: 1,
+          box_h: 1,
+          fit: "cover",
+          threshold: 0.5,
+          hysteresis: 0.1,
+          prompt: "old combined prompt",
+          seed: 3,
           ports: {},
         },
       } as unknown as GraphNode,
@@ -1011,5 +1027,42 @@ describe("v15 migration: the imagegen split", () => {
     const norm = normalizeGraph(g);
     expect(norm.nodes[0].type).toBe("imagegen");
     expect((norm.nodes[0].data as { prompts: string[] }).prompts).toEqual([""]);
+  });
+});
+
+describe("addAssetCard (library click → card on the canvas)", () => {
+  const clip = { url: "/assets/job/abc.mp4", kind: "video" as const };
+
+  it("drops a video card already pointing at the asset", () => {
+    const g = addAssetCard(emptyGraph(), clip);
+    const node = g.nodes[g.nodes.length - 1];
+    expect(node.type).toBe("video");
+    expect((node.data as { assetUrl: string }).assetUrl).toBe(clip.url);
+  });
+
+  it("drops an image card for an image asset", () => {
+    const g = addAssetCard(emptyGraph(), { url: "/assets/job/p.jpg", kind: "image" });
+    expect(g.nodes[g.nodes.length - 1].type).toBe("image");
+  });
+
+  it("stacks repeated picks in a column instead of piling them up", () => {
+    let g = emptyGraph();
+    for (let i = 0; i < 3; i++) g = addAssetCard(g, { ...clip, url: `/assets/job/${i}.mp4` });
+    const ys = g.nodes.map((n) => n.y);
+    expect(new Set(ys).size).toBe(3); // every card got its own row
+    expect(new Set(g.nodes.map((n) => n.x)).size).toBe(1); // ...in one column
+    expect(g.nodes.map((n) => (n.data as { assetUrl: string }).assetUrl)).toEqual([
+      "/assets/job/0.mp4",
+      "/assets/job/1.mp4",
+      "/assets/job/2.mp4",
+    ]);
+  });
+
+  it("leaves the existing graph untouched (immutable) and wires nothing", () => {
+    const base = addAssetCard(emptyGraph(), clip);
+    const before = JSON.stringify(base);
+    const next = addAssetCard(base, clip);
+    expect(JSON.stringify(base)).toBe(before);
+    expect(next.edges).toEqual(base.edges);
   });
 });

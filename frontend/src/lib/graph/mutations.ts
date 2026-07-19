@@ -3,7 +3,7 @@
 // binding and the edge; removing a node resets any binding that pointed at it.
 
 import { LOOSE_PORT, isLooseEdge, mkEdgeId, mkInputId, portsOf, videoSource } from "./core";
-import { combineSlot, montageSlot } from "./factories";
+import { combineSlot, imageNode, montageSlot, videoNode } from "./factories";
 import { nodeParam } from "../nodeParams";
 import type { Binding, CombineMedium, CombineNode, Graph, GraphNode, MontageNode } from "../types";
 
@@ -184,6 +184,19 @@ export function removeMontageInput(graph: Graph, montageId: string, slotId: stri
     ...g,
     edges: g.edges.filter((e) => !(e.target === montageId && e.targetPort === slotId)),
   };
+}
+
+// Drop a library asset onto the canvas as its own card (image or video, per `kind`),
+// already pointing at the file. New cards stack in a COLUMN under the existing graph:
+// picking twenty clips for a montage should never pile them on top of each other, and a
+// predictable column is easy to re-arrange afterwards.
+export function addAssetCard(graph: Graph, asset: { url: string; kind: "image" | "video" }): Graph {
+  const nodes = graph.nodes || [];
+  const x = nodes.length ? Math.min(...nodes.map((n) => n.x)) : 80;
+  const y = nodes.length ? Math.max(...nodes.map((n) => n.y)) + 140 : 80;
+  const node = asset.kind === "video" ? videoNode(x, y) : imageNode(x, y);
+  (node.data as { assetUrl: string }).assetUrl = asset.url;
+  return { ...graph, nodes: [...nodes, node] };
 }
 
 // ---- wiring (keeps the §3.3 binding<->edge invariant) ------------------------

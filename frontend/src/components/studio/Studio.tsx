@@ -6,6 +6,9 @@ import TransportClock from "./TransportClock";
 import AnimationCanvas from "../animation/AnimationCanvas";
 import OutputSettings from "../animation/OutputSettings";
 import AssetLibrary from "../assets/AssetLibrary";
+import { defaultCardName } from "../animation/nodeInputs";
+import { addAssetCard, emptyGraph } from "../../lib/graphModel";
+import type { Asset as AssetT } from "../../lib/types";
 import VolumeControl from "./VolumeControl";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
@@ -195,7 +198,10 @@ export default function Studio({
   // up or down the track. `copyLayout` deep-copies the graph AND rewires its signal
   // cards onto the target segment's own signals (matching bands, cloning any it's
   // missing) — so the copy drives the right segment, never the source.
-  const segIdx = useMemo(() => segments.findIndex((s) => s.id === activeSegId), [segments, activeSegId]);
+  const segIdx = useMemo(
+    () => segments.findIndex((s) => s.id === activeSegId),
+    [segments, activeSegId]
+  );
   const prevSeg = segIdx > 0 ? segments[segIdx - 1] : null;
   const nextSeg = segIdx >= 0 && segIdx + 1 < segments.length ? segments[segIdx + 1] : null;
   const hasCards = !!activeSeg?.graph?.nodes?.length;
@@ -208,6 +214,37 @@ export default function Studio({
     },
     [activeSeg, setSegments, selectSegment]
   );
+  // Clicking an asset in the library DROPS ITS CARD on the canvas, already pointing at
+  // that file — the montage workflow is "pick twenty clips", and doing that through the
+  // palette meant: add card, open its library, pick, repeat. The modal stays open so a
+  // run of clips is a run of clicks; cards stack in a column under the existing graph so
+  // nothing lands on top of anything.
+  const [addedCount, setAddedCount] = useState(0);
+  const dropAssetCard = useCallback(
+    (asset: AssetT) => {
+      if (!activeSeg) return;
+      setSegments((prev) =>
+        prev.map((seg) => {
+          if (seg.id !== activeSeg.id) return seg;
+          const graph = addAssetCard(seg.graph || emptyGraph(), asset);
+          const added = graph.nodes[graph.nodes.length - 1];
+          return {
+            ...seg,
+            graph: {
+              ...graph,
+              nodes: graph.nodes.map((n) =>
+                n.id === added.id ? { ...n, name: defaultCardName(seg.graph || graph, n.type) } : n
+              ),
+            },
+          };
+        })
+      );
+      setAddedCount((n) => n + 1);
+      setTab("animation"); // the card lands on the canvas — show it
+    },
+    [activeSeg, setSegments]
+  );
+
   // Overwriting a segment that already has cards asks first (the target's graph is
   // replaced wholesale); an empty target copies straight through.
   const [copyTarget, setCopyTarget] = useState<Segment | null>(null);
@@ -239,7 +276,9 @@ export default function Studio({
       <div className={"studio-main" + (isFull ? " full" : "")} ref={studioMainRef}>
         <audio
           ref={refAudio}
-          src={job ? `/audio/${job}/${audioMode === "instrumental" ? "instrumental" : "original"}` : ""}
+          src={
+            job ? `/audio/${job}/${audioMode === "instrumental" ? "instrumental" : "original"}` : ""
+          }
           preload="auto"
           onLoadedMetadata={(e) => {
             const d = e.currentTarget.duration;
@@ -407,7 +446,19 @@ export default function Studio({
             onClose={() => setShowOutput(false)}
           />
         )}
-        {showAssets && <AssetLibrary jobId={job} onClose={() => setShowAssets(false)} />}
+        {showAssets && (
+          <AssetLibrary
+            jobId={job}
+            onPick={activeSeg ? dropAssetCard : undefined}
+            pickLabel={
+              addedCount ? `${addedCount} card${addedCount === 1 ? "" : "s"} added` : undefined
+            }
+            onClose={() => {
+              setShowAssets(false);
+              setAddedCount(0);
+            }}
+          />
+        )}
 
         <nav className="mode-bar">
           <button

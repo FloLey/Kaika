@@ -276,16 +276,25 @@ _thumb_jobs: set[str] = set()
 _thumb_lock = threading.Lock()
 
 
-def _backfill_thumbs(job_id: str) -> None:
+def _backfill_derived(job_id: str) -> None:
+    """Fill in what a video asset's record is missing: its poster frame and its
+    duration. Both are produced at upload time now, but a library predating either
+    would silently lose the library grid's thumbnails and the montage card's
+    "this clip can't fill its slot" warning — so listing a project heals it."""
     try:
         for a in db.list_assets(job_id):
             if a.get("kind") != "video":
                 continue
             p = asset_file_for_url(a.get("url"), ASSETS_DIR)
-            if p is not None and p.exists():
-                _make_video_thumb(p)
+            if p is None or not p.exists():
+                continue
+            _make_video_thumb(p)
+            if not a.get("duration"):
+                duration = _video_duration(p)
+                if duration:
+                    db.add_asset(job_id, {**a, "duration": round(duration, 3)})
     except Exception as e:  # noqa: BLE001 — background nicety, never user-facing
-        logging.getLogger("kaika").warning("thumb backfill failed (%s): %s", job_id, e)
+        logging.getLogger("kaika").warning("asset backfill failed (%s): %s", job_id, e)
     finally:
         with _thumb_lock:
             _thumb_jobs.discard(job_id)
@@ -340,9 +349,9 @@ def _store_asset(
 
 @bp.get("/assets/<job_id>")
 def list_assets_route(job_id: str):
-    """The project's asset library `[{id, url, kind, name, addedAt}]` (the file route is
-    `/assets/<job>/<name>` — this one-segment path lists the library). Kicks a one-shot
-    background backfill of missing video thumbnails for pre-thumbnail libraries."""
+    """The project's asset library `[{id, url, kind, name, addedAt, duration?}]` (the
+    file route is `/assets/<job>/<name>` — this one-segment path lists the library).
+    Kicks a one-shot background backfill of anything a video record is missing."""
     if not validate_job_id(job_id):
         return error_response("bad job id", 404)
     with _thumb_lock:
@@ -350,7 +359,7 @@ def list_assets_route(job_id: str):
         if fresh:
             _thumb_jobs.add(job_id)
     if fresh:
-        threading.Thread(target=_backfill_thumbs, args=(job_id,), daemon=True).start()
+        threading.Thread(target=_backfill_derived, args=(job_id,), daemon=True).start()
     return jsonify(db.list_assets(job_id))
 
 

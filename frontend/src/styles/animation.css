@@ -2981,3 +2981,12 @@
   line-height: 1.5;
   margin-top: 4px;
 }
+
+/* Library header hint / running count while picking cards onto the canvas. */
+.asset-lib-hint {
+  margin-left: 10px;
+  font: 400 11px/1 var(--mono);
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}

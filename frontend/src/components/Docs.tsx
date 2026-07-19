@@ -155,9 +155,9 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>🎮 playground</strong> — opens the always-present{" "}
-            <a href="#fluid-lab">Playground</a> sandbox (one segment per card). When new
-            cards ship, their demo segments are appended automatically the next time you
-            open it — your own edits and experiments stay untouched.
+            <a href="#fluid-lab">Playground</a> sandbox (one segment per card). When new cards ship,
+            their demo segments are appended automatically the next time you open it — your own
+            edits and experiments stay untouched.
           </li>
         </ul>
         <p>
@@ -183,8 +183,8 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>YouTube URL</strong> — paste a link and the app downloads the audio. The video
-            title becomes the project name. An optional <strong>clip range</strong> (start → end,
-            as <code>SS</code>, <code>MM:SS</code> or <code>HH:MM:SS</code>) appears under the URL:
+            title becomes the project name. An optional <strong>clip range</strong> (start → end, as{" "}
+            <code>SS</code>, <code>MM:SS</code> or <code>HH:MM:SS</code>) appears under the URL:
             only that section of the stream is downloaded — 20&nbsp;seconds of a 2-hour video
             fetches ~20&nbsp;seconds, not 2&nbsp;hours. Either bound can be left empty.
           </li>
@@ -500,50 +500,49 @@ export default function Docs({ section }: { section?: string }) {
         <p>
           The palette (top-left of the canvas) groups cards into category buttons —{" "}
           <strong>Sources</strong> (signal, colour), <strong>Modulators</strong> (the value cards),{" "}
-          <strong>Points</strong> (source positions for a fluid), <strong>Generators</strong> (fluid,
-          image, video, slideshow, image gen, backdrop, lyrics), <strong>Compositing</strong>,{" "}
-          <strong>Output</strong> (in data-flow order). Open a category
-          and <strong>hover any item</strong> for a tip describing what it does and what it takes in
-          → puts out, then click to drop it. The canvas has <strong>two views</strong>, switched
-          from the toolbar: <strong>▦ detailed</strong> (the default — every card shows its full
-          controls) and <strong>▤ compact</strong> (just the name, a small live preview, and one
-          input + one output dot). <strong>Each view remembers its own card positions</strong> —
-          arrange them tight in compact and spread in detailed, and switching never scrambles
-          either layout (cards only move if they would overlap, and then as little as possible).
-          The <strong>✨ arrange</strong> toolbar button lays the view you're looking at out
-          along the data flow — sources left, output right — giving the cards room and
-          untangling wire crossings where it can (compact uses the same layout, just tighter).
-          In compact view, <strong>click a card's body</strong> to open
-          its settings window: <strong>inputs &amp; controls on the left, a big live preview on the
-          right</strong> (editing the graph live — <kbd>Esc</kbd>, the ✕, or a click outside
-          closes it). The right-hand preview is tailored per card — the sim/composite,
-          a value's pulse, an image/video in its placement box, a colour swatch, a gallery
-          of generated images (click one for a lightbox with ‹ › arrows), or a slideshow
-          cycling its slides. The <em>lyrics</em> window adds a second <strong>lyrics</strong>{" "}
-          tab to edit the line words &amp; timings; clicking the <em>output</em> card's render
-          opens it big with a ★ mark-final toggle. Every card gets a <strong>default name</strong> (its type plus
-          a counter — <em>fluid 1</em>, <em>fluid 2</em>…); <strong>double-click the title</strong>{" "}
-          to rename it (on the canvas or in its settings window), so you can find it again by name in
-          every input dropdown. The <strong>▢/–</strong> button in a card's title bar
-          overrides the view for that one card (switching views clears the overrides). Every card
-          has a <strong>✕</strong> in its top-right corner to delete it (which also removes its
-          wires). The <em>output</em> card is the one exception — its body is the live render
-          preview, so it always shows in full.
+          <strong>Points</strong> (source positions for a fluid), <strong>Generators</strong>{" "}
+          (fluid, image, video, slideshow, image gen, backdrop, lyrics),{" "}
+          <strong>Compositing</strong>, <strong>Output</strong> (in data-flow order). Open a
+          category and <strong>hover any item</strong> for a tip describing what it does and what it
+          takes in → puts out, then click to drop it. The canvas has <strong>two views</strong>,
+          switched from the toolbar: <strong>▦ detailed</strong> (the default — every card shows its
+          full controls) and <strong>▤ compact</strong> (just the name, a small live preview, and
+          one input + one output dot). <strong>Each view remembers its own card positions</strong> —
+          arrange them tight in compact and spread in detailed, and switching never scrambles either
+          layout (cards only move if they would overlap, and then as little as possible). The{" "}
+          <strong>✨ arrange</strong> toolbar button lays the view you're looking at out along the
+          data flow — sources left, output right — giving the cards room and untangling wire
+          crossings where it can (compact uses the same layout, just tighter). In compact view,{" "}
+          <strong>click a card's body</strong> to open its settings window:{" "}
+          <strong>inputs &amp; controls on the left, a big live preview on the right</strong>{" "}
+          (editing the graph live — <kbd>Esc</kbd>, the ✕, or a click outside closes it). The
+          right-hand preview is tailored per card — the sim/composite, a value's pulse, an
+          image/video in its placement box, a colour swatch, a gallery of generated images (click
+          one for a lightbox with ‹ › arrows), or a slideshow cycling its slides. The{" "}
+          <em>lyrics</em> window adds a second <strong>lyrics</strong> tab to edit the line words
+          &amp; timings; clicking the <em>output</em> card's render opens it big with a ★ mark-final
+          toggle. Every card gets a <strong>default name</strong> (its type plus a counter —{" "}
+          <em>fluid 1</em>, <em>fluid 2</em>…); <strong>double-click the title</strong> to rename it
+          (on the canvas or in its settings window), so you can find it again by name in every input
+          dropdown. The <strong>▢/–</strong> button in a card's title bar overrides the view for
+          that one card (switching views clears the overrides). Every card has a <strong>✕</strong>{" "}
+          in its top-right corner to delete it (which also removes its wires). The <em>output</em>{" "}
+          card is the one exception — its body is the live render preview, so it always shows in
+          full.
         </p>
         <p>
           Three more canvas tools: the canvas <strong>opens fitted</strong> (every card framed in
           view), and <strong>⊙ fit</strong> (toolbar, or <strong>double-click empty canvas</strong>)
           re-fits it any time — the rescue move when a card was dragged off-screen. The{" "}
-          <strong>↶ / ↷</strong> toolbar buttons (or <kbd>Cmd</kbd>+<kbd>Z</kbd> /{" "}
-          <kbd>Shift</kbd>+<kbd>Cmd</kbd>+<kbd>Z</kbd>) <strong>undo/redo</strong> graph edits
-          (wires, cards, knob drags — a whole slider drag reverts as one step; typing in a text
-          field keeps its own undo). They grey out when there's nothing to step through, and the
-          history is per segment and resets when you reload. And when the graph contains <strong>dead wiring</strong> that
+          <strong>↶ / ↷</strong> toolbar buttons (or <kbd>Cmd</kbd>+<kbd>Z</kbd> / <kbd>Shift</kbd>+
+          <kbd>Cmd</kbd>+<kbd>Z</kbd>) <strong>undo/redo</strong> graph edits (wires, cards, knob
+          drags — a whole slider drag reverts as one step; typing in a text field keeps its own
+          undo). They grey out when there's nothing to step through, and the history is per segment
+          and resets when you reload. And when the graph contains <strong>dead wiring</strong> that
           would render silently wrong — a gate with no input (a flat 0), a wired port whose lo–hi
           range collapsed to zero width (the signal is flattened, so e.g. a slideshow trigger never
-          fires), an output with no input, a stale ★ final mark — a{" "}
-          <strong>⚠ problems</strong> chip appears in the toolbar; click a row to jump straight to
-          the offending card.
+          fires), an output with no input, a stale ★ final mark — a <strong>⚠ problems</strong> chip
+          appears in the toolbar; click a row to jump straight to the offending card.
         </p>
         <table>
           <tbody>
@@ -563,9 +562,9 @@ export default function Docs({ section }: { section?: string }) {
               <td>math · lfo · noise · shaper</td>
               <td>
                 The <strong>modulator</strong> cards — they make a 0–1 curve composable in the graph
-                itself (see <a href="#animation-modulators">below</a>). <em>Math</em> blends signals,{" "}
-                <em>LFO</em> and <em>noise</em> generate motion with no audio, and <em>shaper</em>{" "}
-                re-curves a signal. Each has one value output.
+                itself (see <a href="#animation-modulators">below</a>). <em>Math</em> blends
+                signals, <em>LFO</em> and <em>noise</em> generate motion with no audio, and{" "}
+                <em>shaper</em> re-curves a signal. Each has one value output.
               </td>
             </tr>
             <tr>
@@ -598,9 +597,8 @@ export default function Docs({ section }: { section?: string }) {
               <td>
                 A <strong>slideshow</strong> switches between several images and video clips on a
                 trigger signal (<a href="#animation-sources">see below</a>); an{" "}
-                <strong>image gen</strong> card
-                generates images locally — one per prompt — and feeds them into a slideshow via
-                its <em>images</em> wire.
+                <strong>image gen</strong> card generates images locally — one per prompt — and
+                feeds them into a slideshow via its <em>images</em> wire.
               </td>
             </tr>
             <tr>
@@ -654,21 +652,21 @@ export default function Docs({ section }: { section?: string }) {
         <ul>
           <li>
             <strong>Connect (detailed view)</strong> — drag from a card's output dot onto a specific
-            input port (or a fluid's video output onto the output card). You can also <strong>drop
-            the wire anywhere on a card</strong>: when the destination is obvious (an output's video
-            input, a combine's free slot, a fluid's positions, a card with a single free port) it
-            wires itself; otherwise the line parks on the card in <strong>gray</strong> — connected,
-            but not assigned to a port yet.
+            input port (or a fluid's video output onto the output card). You can also{" "}
+            <strong>drop the wire anywhere on a card</strong>: when the destination is obvious (an
+            output's video input, a combine's free slot, a fluid's positions, a card with a single
+            free port) it wires itself; otherwise the line parks on the card in{" "}
+            <strong>gray</strong> — connected, but not assigned to a port yet.
           </li>
           <li>
             <strong>Connect (compact view)</strong> — a compact card shows one input dot standing in
             for <em>all</em> its inputs, so a wire dropped on it can't know which one you mean: it
             <strong> always parks gray</strong>. Open the card (click its body) and use each input's
             dropdown to assign it. The dropdown has <strong>three sections</strong>: the gray wires
-            waiting on this card (<em>connected — unassigned</em>) on top, then sources already wired
-            to one of this card's inputs (<em>connected</em>), then <em>other</em> candidates. Pick
-            one and the gray line goes live. Choosing <em>— none —</em> sends a wire back to gray so
-            you can re-route it without redrawing it.
+            waiting on this card (<em>connected — unassigned</em>) on top, then sources already
+            wired to one of this card's inputs (<em>connected</em>), then <em>other</em> candidates.
+            Pick one and the gray line goes live. Choosing <em>— none —</em> sends a wire back to
+            gray so you can re-route it without redrawing it.
           </li>
           <li>
             <strong>Compact cards keep their wires</strong> — every assigned inbound wire converges
@@ -693,9 +691,9 @@ export default function Docs({ section }: { section?: string }) {
           <li>
             <strong>Select several at once</strong> — <kbd>Shift</kbd>- or <kbd>⌘</kbd>-click cards
             to add them to the selection, or <kbd>Shift</kbd>-drag a box across the background to
-            grab everything inside it. Then drag any selected card to <strong>move the whole group
-            in one go</strong>, or press Delete to remove them all. Click an empty spot to clear the
-            selection.
+            grab everything inside it. Then drag any selected card to{" "}
+            <strong>move the whole group in one go</strong>, or press Delete to remove them all.
+            Click an empty spot to clear the selection.
           </li>
         </ul>
         <p>
@@ -744,31 +742,31 @@ export default function Docs({ section }: { section?: string }) {
             while the input is above the <em>threshold</em>, 0 below it. The <em>hysteresis</em>{" "}
             band (centred on the threshold) keeps a hovering signal from flickering — the gate only
             releases once the input falls below the band. Two <strong>thinners</strong> cut down how
-            often it spikes: <em>min gap</em> drops any spike that lands within N seconds of the last
-            kept one (caps the rate by time), and <em>divide</em> keeps only every Nth spike (1/N — a
-            divider off the input's own rate); combine them to, say, advance a slideshow at most once
-            a second and only on every other beat. Use the gate to drive on/off-style ports: an{" "}
-            image generator's <em>trigger</em>, a fluid's <em>emit</em>, a lyrics <em>opacity</em>.{" "}
-            <em>invert</em> flips it.
+            often it spikes: <em>min gap</em> drops any spike that lands within N seconds of the
+            last kept one (caps the rate by time), and <em>divide</em> keeps only every Nth spike
+            (1/N — a divider off the input's own rate); combine them to, say, advance a slideshow at
+            most once a second and only on every other beat. Use the gate to drive on/off-style
+            ports: an image generator's <em>trigger</em>, a fluid's <em>emit</em>, a lyrics{" "}
+            <em>opacity</em>. <em>invert</em> flips it.
           </li>
           <li>
             <strong>Change</strong> — measures how fast its input is <strong>moving</strong>: the
-            output is the signal's rate of change (per second), smoothed with a fast{" "}
-            <em>attack</em> and a slow <em>release</em> so a burst of movement becomes one clean
-            bump. Where the gate asks «is the signal high?», change asks «is it{" "}
-            <em>changing</em>?» — wire <em>signal → change → gate → montage trigger</em> and the{" "}
+            output is the signal's rate of change (per second), smoothed with a fast <em>attack</em>{" "}
+            and a slow <em>release</em> so a burst of movement becomes one clean bump. Where the
+            gate asks «is the signal high?», change asks «is it <em>changing</em>?» — wire{" "}
+            <em>signal → change → gate → montage trigger</em> and the{" "}
             <a href="#animation-montage">montage</a> cuts on musical transitions (verse→chorus,
             drops; on a <em>chroma</em> signal, chord changes) instead of on level.{" "}
             <em>direction</em> picks any movement, rises only, or falls only; <em>gain</em> scales
             the sensitivity. (For raw audio busy-ness, the <em>flux</em> and <em>onset</em> signal
-            features measure spectral change directly — change generalises the idea to any curve
-            in the graph.)
+            features measure spectral change directly — change generalises the idea to any curve in
+            the graph.)
           </li>
           <li>
             <strong>Scope</strong> — a monitor: wire any value into it (an lfo, signal, noise,
             math…) and it shows that value on a live sparkline + pulse pad, exactly like the signal
-            card. It <em>passes the value straight through</em>, so you can splice it inline
-            (<em>lfo → scope → fluid</em>) or just hang it off a value to confirm it's moving.
+            card. It <em>passes the value straight through</em>, so you can splice it inline (
+            <em>lfo → scope → fluid</em>) or just hang it off a value to confirm it's moving.
           </li>
         </ul>
 
@@ -790,21 +788,22 @@ export default function Docs({ section }: { section?: string }) {
         </p>
         <ul>
           <li>
-            <strong>Pattern</strong> — a parametric layout (<em>circle, ring, grid, line, spiral,
-            scatter</em>) with a count, radius and rotation. <em>offset x/y</em> shift the whole
-            layout off-centre, so a figure needn't sit in the middle. The card previews the dots it
-            makes.
+            <strong>Pattern</strong> — a parametric layout (
+            <em>circle, ring, grid, line, spiral, scatter</em>) with a count, radius and rotation.{" "}
+            <em>offset x/y</em> shift the whole layout off-centre, so a figure needn't sit in the
+            middle. The card previews the dots it makes.
           </li>
           <li>
             <strong>Animate points</strong> — takes a points set and moves it over the clip:{" "}
             <em>orbit</em> circles each source around the centre; <em>drift</em> slides them along a
-            heading and loops back; <em>chase</em> keeps them put and runs a lit snake around the set.
+            heading and loops back; <em>chase</em> keeps them put and runs a lit snake around the
+            set.
           </li>
           <li>
             <strong>Merge points</strong> — concatenates two or more points sets into one. Wire a
             Pattern/Points/Animate card into each input (<strong>+ input</strong> for more) and its
-            output into a fluid's <strong>positions</strong> — e.g. two offset Pattern rings combined
-            into a single emitter set.
+            output into a fluid's <strong>positions</strong> — e.g. two offset Pattern rings
+            combined into a single emitter set.
           </li>
         </ul>
         <div className="note">
@@ -815,13 +814,13 @@ export default function Docs({ section }: { section?: string }) {
 
         <h3 id="animation-sources">Other video sources — lyrics, image, video &amp; backdrop</h3>
         <p>
-          Not every layer has to be a fluid. These cards synthesise a video stream you can stack with
-          fluids (in a <em>layered</em> combine) or send straight to an output:
+          Not every layer has to be a fluid. These cards synthesise a video stream you can stack
+          with fluids (in a <em>layered</em> combine) or send straight to an output:
         </p>
         <ul>
           <li>
-            <strong>Backdrop</strong> — fills the whole frame with a solid <em>colour</em> (a swatch),
-            output as a video layer. Wire it into the <strong>bottom</strong> input of a{" "}
+            <strong>Backdrop</strong> — fills the whole frame with a solid <em>colour</em> (a
+            swatch), output as a video layer. Wire it into the <strong>bottom</strong> input of a{" "}
             <em>layered</em> combine to get a non-black background behind everything above it (the
             render otherwise flattens onto black). Opacity is modulatable.
           </li>
@@ -830,8 +829,8 @@ export default function Docs({ section }: { section?: string }) {
             <strong>Drop a file</strong> on the card (or click it to browse, or pick from the{" "}
             <a href="#assets">📚 library</a>); drag the <em>placement box</em> to position it and
             pull a corner to size it, then choose how the picture fills the box: <em>cover</em>{" "}
-            (fill + crop), <em>contain</em> (fit inside, transparent letterbox), or <em>stretch</em>.
-            Opacity is modulatable — wire a signal to fade it with the music.
+            (fill + crop), <em>contain</em> (fit inside, transparent letterbox), or <em>stretch</em>
+            . Opacity is modulatable — wire a signal to fade it with the music.
           </li>
           <li>
             <strong>Slideshow</strong> — an ordered set of <strong>images and video clips</strong>{" "}
@@ -839,16 +838,16 @@ export default function Docs({ section }: { section?: string }) {
             rises past the <em>threshold</em> (wrapping back to the first). Items come from
             drops/uploads (images <em>or</em> videos), the <a href="#assets">📚 library</a>,{" "}
             <em>and</em> any images wired into its <em>images</em> input (an Image gen card).{" "}
-            <strong>Drag the thumbnails</strong> to reorder your own picks. A <strong>video item
-            plays</strong> from its <strong>in-point</strong> for as long as the trigger keeps it
-            visible (looping past the clip end); <strong>click a video thumbnail</strong> to open a
-            small scrubbable preview and set where its extract starts — since the display duration
-            is driven by the signal, the start-cut is the only per-video choice. The card shows a
-            live counter — how many items it holds and how many times it will switch this segment.
-            The <em>hysteresis</em> band stops a hovering signal from machine-gunning; you control
-            exactly <em>when</em> it switches by shaping the trigger (e.g. through a{" "}
-            <a href="#animation-modulators">gate</a>). Same box/fit placement as the image card;{" "}
-            <em>opacity</em> is modulatable too.
+            <strong>Drag the thumbnails</strong> to reorder your own picks. A{" "}
+            <strong>video item plays</strong> from its <strong>in-point</strong> for as long as the
+            trigger keeps it visible (looping past the clip end);{" "}
+            <strong>click a video thumbnail</strong> to open a small scrubbable preview and set
+            where its extract starts — since the display duration is driven by the signal, the
+            start-cut is the only per-video choice. The card shows a live counter — how many items
+            it holds and how many times it will switch this segment. The <em>hysteresis</em> band
+            stops a hovering signal from machine-gunning; you control exactly <em>when</em> it
+            switches by shaping the trigger (e.g. through a <a href="#animation-modulators">gate</a>
+            ). Same box/fit placement as the image card; <em>opacity</em> is modulatable too.
           </li>
           <li>
             <strong>Image gen</strong> — a pure <strong>generator</strong>: write{" "}
@@ -857,40 +856,41 @@ export default function Docs({ section }: { section?: string }) {
             the ✨ makes <strong>fast, low-res drafts</strong> so the canvas stays responsive — the{" "}
             <em>model</em> dropdown chooses which model does that: <code>SD-Turbo</code> (~2 GB,
             near-instant) or <code>Z-Image-Turbo</code> (a ~33 GB HD model, minutes per image). The{" "}
-            <a href="#export">final export</a> then <strong>regenerates every image fresh in HD</strong>{" "}
-            (Z-Image) automatically, at your project's aspect and the export's{" "}
-            <em>HD image size</em> — so drafts stay fast and the master stays crisp. Images generate
-            at the <strong>project aspect</strong> (not a fixed square) and are seeded — the same
-            prompts + seed + size reproduce the same image — and land in the{" "}
-            <a href="#assets">library</a>. It makes no video itself: wire its <em>images</em>{" "}
-            output into a Slideshow card to show them.
+            <a href="#export">final export</a> then{" "}
+            <strong>regenerates every image fresh in HD</strong> (Z-Image) automatically, at your
+            project's aspect and the export's <em>HD image size</em> — so drafts stay fast and the
+            master stays crisp. Images generate at the <strong>project aspect</strong> (not a fixed
+            square) and are seeded — the same prompts + seed + size reproduce the same image — and
+            land in the <a href="#assets">library</a>. It makes no video itself: wire its{" "}
+            <em>images</em> output into a Slideshow card to show them.
           </li>
           <li>
             <strong>Video</strong> — same box/fit/library as the image card, for a clip. Extra ways
             in: <strong>import from YouTube</strong> right on the card (paste a URL; optional
             start/end timestamps fetch only that section of the video, not the whole file). A{" "}
-            <strong>crop</strong> pad below the placement box selects <em>which part of the source
-            frame is used</em>: drag a corner to cut a region out of the clip (drag the rectangle to
-            move it) and only that region gets fitted into the box — so when a clip is too wide or
-            tall for the project format, you choose what survives instead of a centre crop. The
-            clip plays live inside the placement box, showing exactly what will render. Timing
-            controls: <em>sync</em> (<em>song</em> keeps a background clip phase-continuous across
-            segments; <em>segment</em> restarts it at each cut), a <em>start</em> offset into the
-            source, and <em>loop</em> (off = the last frame holds). Both <em>opacity</em> and{" "}
-            <em>speed</em> are modulatable — a signal on <em>speed</em>{" "}
+            <strong>crop</strong> pad below the placement box selects{" "}
+            <em>which part of the source frame is used</em>: drag a corner to cut a region out of
+            the clip (drag the rectangle to move it) and only that region gets fitted into the box —
+            so when a clip is too wide or tall for the project format, you choose what survives
+            instead of a centre crop. The clip plays live inside the placement box, showing exactly
+            what will render. Timing controls: <em>sync</em> (<em>song</em> keeps a background clip
+            phase-continuous across segments; <em>segment</em> restarts it at each cut), a{" "}
+            <em>start</em> offset into the source, and <em>loop</em> (off = the last frame holds).
+            Both <em>opacity</em> and <em>speed</em> are modulatable — a signal on <em>speed</em>{" "}
             <strong>time-warps the clip</strong> (slow-motion in the quiet bars, whip-fast on the
             drop).
           </li>
           <li>
             <strong>Lyrics</strong> — burns this track's <strong>aligned lyrics</strong> into the
             frame, timed to the vocal (the same alignment the review screen uses). Pick a{" "}
-            <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs <em>word</em>{" "}
-            reveal (word fills the line in as it's sung). Drag the <em>text box</em> to place it and
-            pull a corner to size it — the text word-wraps and fills the box (the box defines size +
-            placement). A black <em>outline</em> keeps it readable over anything. Wire a{" "}
-            <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em> input to
-            recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
-            keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.
+            <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs{" "}
+            <em>word</em> reveal (word fills the line in as it's sung). Drag the <em>text box</em>{" "}
+            to place it and pull a corner to size it — the text word-wraps and fills the box (the
+            box defines size + placement). A black <em>outline</em> keeps it readable over anything.
+            Wire a <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em>{" "}
+            input to recolour the text (defaults: white fill, black outline) — the outline stays
+            opaque so it keeps occluding the video. Opacity is modulatable. Needs lyrics on the
+            track.
             <br />
             <strong>✎ edit lines</strong> (on the card) edits each line's <em>words</em> and its{" "}
             <em>start/end time</em> (as <code>m:ss.cc</code>). For covers and rewritten lyrics,
@@ -915,6 +915,12 @@ export default function Docs({ section }: { section?: string }) {
             reference the same asset.
           </li>
           <li>
+            <strong>Click to drop a card.</strong> Opened from the bottom bar, clicking any asset
+            adds its card — <em>video</em> or <em>image</em> — straight onto the canvas, already
+            pointing at that file. The library stays open, so building a montage is one click per
+            clip; the new cards stack in a column under your existing graph.
+          </li>
+          <li>
             <strong>Adding.</strong> Drop a file on an image/video card, browse from the card, or
             import a YouTube video from the video card — all of them register the asset in the
             library automatically.
@@ -922,10 +928,10 @@ export default function Docs({ section }: { section?: string }) {
           <li>
             <strong>Whole folders.</strong> The library's <strong>📁 upload folder</strong> button
             imports every image/video inside a folder you pick (subfolders included) and{" "}
-            <strong>keeps the folder structure</strong>: the grid groups assets under their
-            relative path (e.g. <em>May 2026/venise</em>). Perfect for a month of clips headed
-            into a <a href="#animation-montage">Montage</a>. Non-media files are skipped; files
-            upload one by one with a progress count.
+            <strong>keeps the folder structure</strong>: the grid groups assets under their relative
+            path (e.g. <em>May 2026/venise</em>). Perfect for a month of clips headed into a{" "}
+            <a href="#animation-montage">Montage</a>. Non-media files are skipped; files upload one
+            by one with a progress count.
           </li>
           <li>
             <strong>Deleting.</strong> Remove an asset from the library manager (🗑). Cards that
@@ -940,8 +946,8 @@ export default function Docs({ section }: { section?: string }) {
           optics, a real electric discharge, real buoyant combustion, a real rippling surface, lit
           volumetric clouds. They output a video layer, so stack them with fluids in a{" "}
           <em>layered</em> combine or send one straight to an output. Each takes a <em>palette</em>{" "}
-          preset (or wire a <a href="#animation-fx">colour card</a> into its <em>colour</em> input to
-          override it), and like the fluid card they join the wider graph: a{" "}
+          preset (or wire a <a href="#animation-fx">colour card</a> into its <em>colour</em> input
+          to override it), and like the fluid card they join the wider graph: a{" "}
           <a href="#animation-points">points card</a> fans fire / lightning / rain out to several
           origins (an <em>animate points</em> card even moves them), every port takes a signal or
           LFO, and a <em>merge</em> combine joins same-kind cards into ONE shared field — two fires
@@ -951,8 +957,8 @@ export default function Docs({ section }: { section?: string }) {
           <li>
             <strong>Waves</strong> — pool water seen from above. A fan of real dispersive waves
             (long swells genuinely outrun fine ripples) focuses light into the dancing caustic
-            filament network, and <em>refracts</em> whatever you wire into its <em>video</em> input —
-            an image, a clip, a fluid — complete with chromatic fringes (<em>chroma</em>), sun
+            filament network, and <em>refracts</em> whatever you wire into its <em>video</em> input
+            — an image, a clip, a fluid — complete with chromatic fringes (<em>chroma</em>), sun
             glints (<em>shine</em>) and the blue-green depth tint (<em>depth</em>). Nothing wired =
             the palette floor. Wire energy to <em>steepness</em> and the water chops with the music.
           </li>
@@ -1052,36 +1058,34 @@ export default function Docs({ section }: { section?: string }) {
 
         <h3 id="animation-montage">Montage — cutting clips to the beat</h3>
         <p>
-          The <strong>montage</strong> card (Compositing) is made for recap videos: a pile of
-          little clips cut to a song's rhythm. It holds N ordered <strong>slots</strong>, each fed
-          by a <a href="#animation-sources">Video</a> card (with any FX in between). The{" "}
+          The <strong>montage</strong> card (Compositing) is made for recap videos: a pile of little
+          clips cut to a song's rhythm. It holds N ordered <strong>slots</strong>, each fed by a{" "}
+          <a href="#animation-sources">Video</a> card (with any FX in between). The{" "}
           <strong>trigger</strong> port decides the cuts: each rising edge past the threshold
           switches to the next slot, and that slot's input is{" "}
           <strong>re-timed to start at the cut</strong> — so the clip begins exactly at its
           in-point, on the beat. Slot 1 plays from the segment start; when the cuts run out of
           inputs, the <strong>last input holds</strong> to the end of the segment. A slot's{" "}
           <strong>×N</strong> button makes it swallow N cuts — its video plays through N gate
-          intervals before the montage moves on, so one longer clip can cover two beats while
-          the rest keep cutting fast.
+          intervals before the montage moves on, so one longer clip can cover two beats while the
+          rest keep cutting fast.
         </p>
         <p>
           The musical wiring: add a <strong>signal</strong> card (beat, or a drum onset), feed it
           through a <a href="#animation-modulators">gate</a> — its <em>divide</em> keeps every Nth
-          pulse, so <em>divide 4</em> cuts every fourth beat — and wire the gate into the
-          montage's <em>trigger</em>. To cut on musical <em>transitions</em> instead of a steady
-          beat, insert a <strong>change</strong> card before the gate (signal → change → gate):
-          the gate then fires when the music <em>shifts</em>, not when it's merely loud. Each slot
-          row shows its <strong>start – end window</strong> in segment seconds (computed from the
-          trigger), so you can read the timeline straight off the card. Pick <em>where</em> each
-          clip starts with the 🎞 in-point picker on its video card; the montage takes care of
-          the length.
+          pulse, so <em>divide 4</em> cuts every fourth beat — and wire the gate into the montage's{" "}
+          <em>trigger</em>. To cut on musical <em>transitions</em> instead of a steady beat, insert
+          a <strong>change</strong> card before the gate (signal → change → gate): the gate then
+          fires when the music <em>shifts</em>, not when it's merely loud. Each slot row shows its{" "}
+          <strong>start – end window</strong> in segment seconds (computed from the trigger), so you
+          can read the timeline straight off the card. Pick <em>where</em> each clip starts with the
+          🎞 in-point picker on its video card; the montage takes care of the length.
         </p>
         <p>
-          Each slot's clip always starts at <strong>its in-point</strong> when the cut lands —
-          a video card's <em>sync</em> setting is ignored inside a montage, since the montage
-          owns the timing (otherwise a clip shorter than the segment's position in the song
-          would sit frozen on its last frame). Its preview on the card free-runs for the same
-          reason.
+          Each slot's clip always starts at <strong>its in-point</strong> when the cut lands — a
+          video card's <em>sync</em> setting is ignored inside a montage, since the montage owns the
+          timing (otherwise a clip shorter than the segment's position in the song would sit frozen
+          on its last frame). Its preview on the card free-runs for the same reason.
         </p>
         <p>
           One rule: a card feeding a montage slot can't <em>also</em> feed something else (another
@@ -1099,43 +1103,43 @@ export default function Docs({ section }: { section?: string }) {
           whole frame spins on the beat, or wire <em>zoom</em> to a kick for a pulsing punch-in.
         </p>
         <p>
-          Three <strong>modes</strong>: <em>transform</em> just pans/zooms/rotates;{" "}
-          <em>mirror</em> reflects one half across the centre; <em>kaleidoscope</em> folds the frame
-          into 2–12 mirrored wedges (a classic music-video look — try it with a slow rotate).
-          The two fold modes <strong>mirror the frame at its edges</strong>, so there are no black
-          gaps at any rotation even on a tall or wide canvas. A plain <em>transform</em> is{" "}
+          Three <strong>modes</strong>: <em>transform</em> just pans/zooms/rotates; <em>mirror</em>{" "}
+          reflects one half across the centre; <em>kaleidoscope</em> folds the frame into 2–12
+          mirrored wedges (a classic music-video look — try it with a slow rotate). The two fold
+          modes <strong>mirror the frame at its edges</strong>, so there are no black gaps at any
+          rotation even on a tall or wide canvas. A plain <em>transform</em> is{" "}
           <strong>black</strong> outside the frame by default (which keeps the dye-on-black
           transparency intact for compositing); turn on <strong>wrap edges</strong> to tile the
           frame so it loops around seamlessly instead.
         </p>
         <p>
-          A transform produces <em>frames</em>, not emitters, so it can feed an <strong>output</strong>{" "}
-          or a <strong>layered</strong> combine — but not a <em>merge</em> (which needs the raw fluid
-          sources to interact). Chain two transforms if you want, say, a kaleidoscope of a rotation.
+          A transform produces <em>frames</em>, not emitters, so it can feed an{" "}
+          <strong>output</strong> or a <strong>layered</strong> combine — but not a <em>merge</em>{" "}
+          (which needs the raw fluid sources to interact). Chain two transforms if you want, say, a
+          kaleidoscope of a rotation.
         </p>
 
         <h3 id="animation-lookfx">Echo — motion trails</h3>
         <p>
           The <strong>echo</strong> card (Compositing) leaves fading trails behind anything that
           moves, with three kinds of memory. <strong>ghost</strong> (the default) mixes each frame
-          with a fading afterimage of the recent past — every <em>change</em> lingers, whatever
-          the contrast, so it works on real footage (a person running leaves translucent copies of
+          with a fading afterimage of the recent past — every <em>change</em> lingers, whatever the
+          contrast, so it works on real footage (a person running leaves translucent copies of
           themselves behind; the live frame always stays at least half visible).{" "}
           <strong>bright</strong> remembers only the <em>brightest</em> thing that passed through
           each pixel, at full brightness — comet tails for fluids and anything glowing on a dark
-          background (black stays black, so compositing on top keeps working).{" "}
-          <strong>dark</strong> is its mirror: a dark subject on a bright scene drags solid shadow
-          trails while staying fully sharp itself — the pick for daylight footage.
+          background (black stays black, so compositing on top keeps working). <strong>dark</strong>{" "}
+          is its mirror: a dark subject on a bright scene drags solid shadow trails while staying
+          fully sharp itself — the pick for daylight footage.
         </p>
         <p>
           <strong>length</strong> is how long the trail lingers (its half-life, in seconds — 0
           switches the effect off); <strong>amount</strong> mixes between the untouched video and
           full trailing. Both are modulatable ports — wire <em>length</em> to a signal and the
-          trails stretch on every hit, snapping back between them. Like the other FX cards it
-          feeds an <strong>output</strong> or a <strong>layered</strong> combine, never a{" "}
-          <em>merge</em>. In a whole-song export the trails start fresh at each segment cut. Try{" "}
-          <em>bright</em> after a rotating kaleidoscope <strong>transform</strong> — it becomes a
-          spirograph.
+          trails stretch on every hit, snapping back between them. Like the other FX cards it feeds
+          an <strong>output</strong> or a <strong>layered</strong> combine, never a <em>merge</em>.
+          In a whole-song export the trails start fresh at each segment cut. Try <em>bright</em>{" "}
+          after a rotating kaleidoscope <strong>transform</strong> — it becomes a spirograph.
         </p>
         <p>
           The <strong>color grade</strong> card (Compositing) recolours the stream, three ways.{" "}
@@ -1159,8 +1163,9 @@ export default function Docs({ section }: { section?: string }) {
           result, but its <em>look</em> becomes flowers, molten lava, storm clouds, whatever you
           type. <strong>strength</strong> is the img2img curseur (a modulatable port): near 0 keeps
           the fluid almost untouched, near 1 fully reinvents it; around 0.6–0.9 keeps the motion
-          while changing the material. Turn on <strong>inpaint</strong> to confine the repaint to the
-          fluid's shape (the black background stays untouched) instead of repainting the whole frame.
+          while changing the material. Turn on <strong>inpaint</strong> to confine the repaint to
+          the fluid's shape (the black background stays untouched) instead of repainting the whole
+          frame.
         </p>
         <p>
           Generation is expensive, so it doesn't run on every render: pick a <strong>model</strong>{" "}
@@ -1170,25 +1175,25 @@ export default function Docs({ section }: { section?: string }) {
           take. HD is genuinely slow (~30&nbsp;s per frame): it has to generate at a higher
           resolution than the draft — below its floor the model paints blobs instead of subjects —
           so a whole clip takes tens of minutes. Iterate in draft, switch to HD when the look is
-          right (the export regenerates in HD sharper still). You can safely close or reload the
-          tab while it runs: the finished clip is saved onto the card server-side, so it's there
-          when you come back.
+          right (the export regenerates in HD sharper still). You can safely close or reload the tab
+          while it runs: the finished clip is saved onto the card server-side, so it's there when
+          you come back.
         </p>
         <p>
           It works on <strong>any video</strong>, not just fluids — wire a Video card (an uploaded
           clip) in too. By default the output <strong>follows the input's shapes</strong> (a canny
           ControlNet is applied automatically on the draft model). To override that with a different
           control, drop an <strong>Extract</strong> card (Compositing) between the video and Stylize
-          — <strong>canny</strong>, <strong>soft-edge</strong>, <strong>density</strong> (the input's
-          brightness, best for fluids) or <strong>depth</strong> (a model, for real 3D footage) —
-          and wire it into Stylize's <em>control</em> input. Wired control works on{" "}
-          <strong>both models</strong>, and on both the <strong>strength</strong> slider still rules how
-          far the result travels from the input.
+          — <strong>canny</strong>, <strong>soft-edge</strong>, <strong>density</strong> (the
+          input's brightness, best for fluids) or <strong>depth</strong> (a model, for real 3D
+          footage) — and wire it into Stylize's <em>control</em> input. Wired control works on{" "}
+          <strong>both models</strong>, and on both the <strong>strength</strong> slider still rules
+          how far the result travels from the input.
         </p>
         <p>
           Worth knowing: a ControlNet <strong>guides</strong> the shapes but never{" "}
-          <strong>confines</strong> the generation. On a wispy fluid — a control that's mostly black —
-          guidance alone isn't enough, and the model happily fills the whole frame. What keeps the
+          <strong>confines</strong> the generation. On a wispy fluid — a control that's mostly black
+          — guidance alone isn't enough, and the model happily fills the whole frame. What keeps the
           fluid's black background black is starting the generation <em>from the fluid</em>: that's
           exactly what <strong>strength</strong> does (lower = closer to the input). Turn on{" "}
           <strong>inpaint</strong> to pin it harder — only the fluid's own shape is repainted.
@@ -1213,9 +1218,9 @@ export default function Docs({ section }: { section?: string }) {
         <p>
           Built a pipeline you like? The <strong>⧉ copy ‹prev│next›</strong> control (in the
           transport bar) copies the whole card layout onto the adjacent segment — and rewires its
-          signal cards onto that segment's own signals (cloning any it's missing), so the copy reacts
-          to the right audio, not the source segment's. Each side is disabled at the ends of the
-          track (no segment on that side).
+          signal cards onto that segment's own signals (cloning any it's missing), so the copy
+          reacts to the right audio, not the source segment's. Each side is disabled at the ends of
+          the track (no segment on that side).
         </p>
 
         <h3 id="animation-output">Output settings</h3>
@@ -1255,13 +1260,13 @@ export default function Docs({ section }: { section?: string }) {
 
         <h3 id="animation-output-hd">See one segment in HD</h3>
         <p>
-          The clip on an output card is a <em>draft</em> — small, and simulated on the coarse
-          grid the quality preset picks, so it stays responsive while you edit. To judge how a
-          segment will really look, hit <strong>⬛ HD</strong> on the output card: it renders that
-          one segment at <strong>exactly the final export's settings</strong> (size, fps,
-          detail, and HD-regenerated Image-gen / AI-Stylize assets), muxes in the segment's audio,
-          and opens it full screen with playback controls and a download link. What you see is what
-          the master will contain for that segment — no need to export the whole track to find out.
+          The clip on an output card is a <em>draft</em> — small, and simulated on the coarse grid
+          the quality preset picks, so it stays responsive while you edit. To judge how a segment
+          will really look, hit <strong>⬛ HD</strong> on the output card: it renders that one
+          segment at <strong>exactly the final export's settings</strong> (size, fps, detail, and
+          HD-regenerated Image-gen / AI-Stylize assets), muxes in the segment's audio, and opens it
+          full screen with playback controls and a download link. What you see is what the master
+          will contain for that segment — no need to export the whole track to find out.
         </p>
         <ul>
           <li>
@@ -1303,20 +1308,20 @@ export default function Docs({ section }: { section?: string }) {
           </li>
           <li>
             <strong>Render.</strong> The <strong>Final export ▸</strong> button (top of the Studio)
-            opens the export stage. Set the <em>size</em> — its <strong>aspect ratio is locked to
-            your canvas</strong> (the editor's ⚙ output orientation), so you only pick the resolution
-            and the export keeps the exact shape you built for; editing one side scales the other.
-            Also set <em>fps</em>, <em>detail / grid</em> (simulation cells — higher is sharper and slower),
-            and the <em>audio</em>: the <strong>original</strong> full mix, or{" "}
-            <strong>instrumental</strong> — the original with the separated vocal subtracted, for
-            covers and karaoke (the studio transport follows the same choice, so you build against
-            the track you'll ship). Note the instrumental removes everything the separation model
-            classifies as vocal — lead <em>and</em> backing vocals, harmonies, vocal chops. If it
-            takes out too much of your track's character, re-upload with{" "}
-            <code>DEMUCS_MODEL=htdemucs_ft</code> set (a finer separation model, ~4× slower to
-            separate) — it keeps more instrument content out of the vocal stem. Then generate: the
-            render streams progressively — a growing preview plays while it works — and finishes
-            with a <strong>download</strong> link.
+            opens the export stage. Set the <em>size</em> — its{" "}
+            <strong>aspect ratio is locked to your canvas</strong> (the editor's ⚙ output
+            orientation), so you only pick the resolution and the export keeps the exact shape you
+            built for; editing one side scales the other. Also set <em>fps</em>,{" "}
+            <em>detail / grid</em> (simulation cells — higher is sharper and slower), and the{" "}
+            <em>audio</em>: the <strong>original</strong> full mix, or <strong>instrumental</strong>{" "}
+            — the original with the separated vocal subtracted, for covers and karaoke (the studio
+            transport follows the same choice, so you build against the track you'll ship). Note the
+            instrumental removes everything the separation model classifies as vocal — lead{" "}
+            <em>and</em> backing vocals, harmonies, vocal chops. If it takes out too much of your
+            track's character, re-upload with <code>DEMUCS_MODEL=htdemucs_ft</code> set (a finer
+            separation model, ~4× slower to separate) — it keeps more instrument content out of the
+            vocal stem. Then generate: the render streams progressively — a growing preview plays
+            while it works — and finishes with a <strong>download</strong> link.
           </li>
         </ul>
         <div className="note">
@@ -1353,12 +1358,12 @@ export default function Docs({ section }: { section?: string }) {
         </p>
         <h3>Choosing what runs remotely</h3>
         <p>
-          Each operation has its own toggle — check <strong>AI Stylize</strong> to offload the
-          heavy ControlNet clips while keeping quick Image-gen drafts local, or check everything.
-          Changes apply to the <em>next</em> generation immediately, no restart. If the server is
+          Each operation has its own toggle — check <strong>AI Stylize</strong> to offload the heavy
+          ControlNet clips while keeping quick Image-gen drafts local, or check everything. Changes
+          apply to the <em>next</em> generation immediately, no restart. If the server is
           unreachable, the generation <strong>fails with a clear error</strong> on the card —
-          nothing silently falls back to a slow local run; flip the master toggle off to go back
-          to local.
+          nothing silently falls back to a slow local run; flip the master toggle off to go back to
+          local.
         </p>
       </section>
 
@@ -1375,9 +1380,9 @@ export default function Docs({ section }: { section?: string }) {
         </p>
         <p>
           Reworked a demo and want to keep it? The <strong>💾 save fixture</strong> button at the
-          top of the CARDS rail writes the current Playground into the committed fixture
-          (<code>backend/playground_pipelines.json</code>) — the state the Playground is rebuilt
-          from on the next seed. It saves your latest edits first, so what you see is exactly what's
+          top of the CARDS rail writes the current Playground into the committed fixture (
+          <code>backend/playground_pipelines.json</code>) — the state the Playground is rebuilt from
+          on the next seed. It saves your latest edits first, so what you see is exactly what's
           captured. The file is under git, so review the diff and commit when you're happy (it's the
           in-app twin of <code>make export-playground</code>). A warning appears if a card would be
           left without a demo — every card must keep one.
@@ -1386,8 +1391,8 @@ export default function Docs({ section }: { section?: string }) {
           At the heart of most pipelines is the <strong>fluid</strong> card — a real-time fluid
           simulation. A source injects coloured dye and pushes the fluid around; the result renders
           to a short looping video. Every control below is a port you can drive with a signal, and
-          each carries a <strong>?</strong> in the card that links back here. The controls group into
-          the <em>source</em> (the emitter) and the <em>medium</em> (how the fluid flows).
+          each carries a <strong>?</strong> in the card that links back here. The controls group
+          into the <em>source</em> (the emitter) and the <em>medium</em> (how the fluid flows).
         </p>
 
         <h3 id="fluid-source">The source — the dye emitter</h3>
@@ -1401,8 +1406,8 @@ export default function Docs({ section }: { section?: string }) {
               <td>colour</td>
               <td>
                 The dye colour, intensity (HDR glow) and opacity now live on the separate{" "}
-                <strong>Color</strong> card — wire it into the fluid's <em>color</em> input. Unwired,
-                the fluid uses its default colour.
+                <strong>Color</strong> card — wire it into the fluid's <em>color</em> input.
+                Unwired, the fluid uses its default colour.
               </td>
             </tr>
             <tr>

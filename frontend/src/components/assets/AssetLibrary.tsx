@@ -9,15 +9,25 @@ import type { Asset } from "../../lib/types";
 interface AssetLibraryProps {
   jobId?: string;
   kind?: "image" | "video"; // filter to one kind (picker mode); undefined = show all
-  onPick?: (asset: Asset) => void; // present = picker mode (click selects); absent = manager
+  onPick?: (asset: Asset) => void; // present = a click selects; absent = browse only
+  // Set by the manager (Studio): the modal STAYS OPEN after a pick, and this line says
+  // what happened. Picking twenty clips for a montage is twenty clicks, not twenty
+  // open-pick-reopen rounds.
+  pickLabel?: string;
   onClose: () => void;
 }
 
 // Mirror of backend `paths.ASSET_EXTS` — a folder upload filters to these client-side
 // (everything else in the folder — .DS_Store, sidecars, raw files — is skipped quietly).
 const FOLDER_EXTS: Record<string, "image" | "video"> = {
-  png: "image", jpg: "image", jpeg: "image", webp: "image",
-  mp4: "video", mov: "video", webm: "video", m4v: "video",
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
+  webp: "image",
+  mp4: "video",
+  mov: "video",
+  webm: "video",
+  m4v: "video",
 };
 const extKind = (name: string): "image" | "video" | null =>
   FOLDER_EXTS[name.split(".").pop()?.toLowerCase() || ""] ?? null;
@@ -50,7 +60,14 @@ export function groupByFolder(assets: Asset[]): { folder: string; items: Asset[]
 function VideoThumb({ a }: { a: Asset }) {
   const [broken, setBroken] = useState(false);
   if (broken) return <div className="asset-lib-thumb-fallback">🎞</div>;
-  return <img src={videoThumbSrc(a.url)} alt={a.name} draggable={false} onError={() => setBroken(true)} />;
+  return (
+    <img
+      src={videoThumbSrc(a.url)}
+      alt={a.name}
+      draggable={false}
+      onError={() => setBroken(true)}
+    />
+  );
 }
 
 // The per-project asset library modal. In MANAGER mode (no `onPick`, opened from the
@@ -60,7 +77,13 @@ function VideoThumb({ a }: { a: Asset }) {
 // image/video inside a picked folder, keeping its structure as per-asset `folder`
 // metadata the grid groups by. Rendered through a portal to <body> so the fixed-position
 // scrim isn't clipped by the pan/zoomed graph canvas it may open from.
-export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibraryProps) {
+export default function AssetLibrary({
+  jobId,
+  kind,
+  onPick,
+  pickLabel,
+  onClose,
+}: AssetLibraryProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -194,6 +217,11 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
         <div className="anim-modal-head">
           <span className="anim-modal-title">
             ASSET LIBRARY{kind ? ` · ${kind}s` : ""}
+            {onPick && !kind && (
+              <span className="asset-lib-hint">
+                {pickLabel || "click a clip to drop its card on the canvas"}
+              </span>
+            )}
           </span>
           <button className="iconbtn" title="Close" onClick={onClose}>
             ✕
@@ -205,7 +233,9 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
             <label className={"btn sm" + (busy ? " on" : "")}>
               <input
                 type="file"
-                accept={kind === "image" ? "image/*" : kind === "video" ? "video/*" : "image/*,video/*"}
+                accept={
+                  kind === "image" ? "image/*" : kind === "video" ? "video/*" : "image/*,video/*"
+                }
                 onChange={onFile}
                 disabled={busy}
                 hidden
@@ -262,7 +292,11 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
                     />
                   </>
                 )}
-                <button className="btn sm" onClick={onImportYoutube} disabled={ytBusy || !yt.trim()}>
+                <button
+                  className="btn sm"
+                  onClick={onImportYoutube}
+                  disabled={ytBusy || !yt.trim()}
+                >
                   {ytBusy ? "importing…" : "import"}
                 </button>
               </div>
