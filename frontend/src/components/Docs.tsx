@@ -1082,6 +1082,17 @@ export default function Docs({ section }: { section?: string }) {
           🎞 in-point picker on its video card; the montage takes care of the length.
         </p>
         <p>
+          <strong>Building the rig in one click — + fill.</strong> Once the trigger is wired, the
+          card knows how many cuts the segment makes, so <strong>+ fill</strong> does the whole
+          setup: it adds however many slots the cut count calls for, then drops an{" "}
+          <em>empty video card</em> on every unwired slot, already wired in. All that's left is
+          dropping a clip on each (or picking one with its 📚). The new cards land in a column
+          beside the montage — ✨ arrange tidies them further. Without a trigger the cut count is
+          unknown, so it only fills the slots you've added yourself. The reverse gesture exists too:
+          from the <a href="#assets">asset library</a>, clicking a clip drops its card on the
+          canvas.
+        </p>
+        <p>
           Each slot's clip always starts at <strong>its in-point</strong> when the cut lands — a
           video card's <em>sync</em> setting is ignored inside a montage, since the montage owns the
           timing (otherwise a clip shorter than the segment's position in the song would sit frozen

@@ -186,6 +186,65 @@ export function removeMontageInput(graph: Graph, montageId: string, slotId: stri
   };
 }
 
+// Fill a montage: create one empty Video card per unwired slot and wire it in — the
+// inverse of picking clips from the library. Building a 12-cut montage by hand meant
+// "+ slot" eleven times, then twelve rounds of drop-a-card-and-drag-a-wire.
+//
+// `cuts` = how many cuts the trigger makes this segment. The first slot plays from 0 to
+// the first cut and then one slot per cut, so the budget is `cuts + 1` SPAN UNITS — an
+// existing ×2 slot already covers two of them (mirrors `_montage_starts`). Missing slots
+// are appended to reach that budget. `cuts == null` (no trigger wired, or /resolve hasn't
+// answered yet) means we don't know the count: fill the existing empty slots and add none.
+//
+// New cards land in a column to the LEFT of the montage — its inputs come from that side —
+// centred on it, spaced by `cardH`. `nameFor` is injected rather than imported because
+// `defaultCardName` lives in components/ and lib/ must not depend on it; it is applied
+// per card against the graph that already holds the previously named ones, since it
+// dedupes on names already present (calling it N times on one snapshot yields "video 1"
+// N times).
+export function fillMontageSlots(
+  graph: Graph,
+  montageId: string,
+  opts: {
+    cuts?: number | null;
+    cardH?: number;
+    nameFor?: (g: Graph, type: string) => string;
+  } = {}
+): Graph {
+  const montage = graph.nodes.find((n) => n.id === montageId && n.type === "montage");
+  if (!montage) return graph;
+  const { cuts = null, cardH = 356, nameFor } = opts;
+
+  let g = graph;
+  if (cuts != null) {
+    const budget = Math.max(1, Math.round(cuts) + 1);
+    const spent = () =>
+      ((g.nodes.find((n) => n.id === montageId) as MontageNode).data.inputs || []).reduce(
+        (sum, s) => sum + Math.max(1, Math.round(s.span || 1)),
+        0
+      );
+    // Bounded by `budget` so a bad `cuts` can never spin: each pass adds exactly one unit.
+    for (let guard = 0; spent() < budget && guard < budget; guard++)
+      g = addMontageInput(g, montageId);
+  }
+
+  const empty = ((g.nodes.find((n) => n.id === montageId) as MontageNode).data.inputs || []).filter(
+    (s) => !videoSource(g, montageId, s.id)
+  );
+  if (!empty.length) return graph; // nothing to do — leave the graph (and undo) untouched
+
+  // Centre the column on the montage so short fills sit beside it rather than below.
+  const top = montage.y - ((empty.length - 1) * cardH) / 2;
+  const x = montage.x - 260; // one card width + a gutter
+  empty.forEach((slot, i) => {
+    const card = videoNode(x, Math.round(top + i * cardH));
+    const named = nameFor ? { ...card, name: nameFor(g, card.type) } : card;
+    g = { ...g, nodes: [...g.nodes, named] };
+    g = connectVideo(g, named.id, "out", montageId, slot.id);
+  });
+  return g;
+}
+
 // Drop a library asset onto the canvas as its own card (image or video, per `kind`),
 // already pointing at the file. New cards stack in a COLUMN under the existing graph:
 // picking twenty clips for a montage should never pile them on top of each other, and a

@@ -73,6 +73,7 @@ export {
   removeCombineInput,
   addAssetCard,
   addMontageInput,
+  fillMontageSlots,
   removeMontageInput,
   setMontageSlotSpan,
   setCombineMode,

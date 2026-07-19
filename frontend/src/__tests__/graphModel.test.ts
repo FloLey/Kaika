@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   addAssetCard,
+  fillMontageSlots,
+  montageNode,
+  setMontageSlotSpan,
   signalNode,
   outputNode,
   fluidNode,
@@ -47,10 +50,12 @@ import {
   VIDEO_PRODUCERS,
   VIDEO_SOURCES,
 } from "../lib/graphModel";
+import { defaultCardName } from "../components/animation/nodeInputs";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
 import type {
   CombineData,
+  MontageNode,
   FluidData,
   FluidNode,
   Graph,
@@ -1064,5 +1069,93 @@ describe("addAssetCard (library click → card on the canvas)", () => {
     const next = addAssetCard(base, clip);
     expect(JSON.stringify(base)).toBe(before);
     expect(next.edges).toEqual(base.edges);
+  });
+});
+
+describe("fillMontageSlots (+ fill on the montage card)", () => {
+  // A montage plus a wired trigger, so `validate` has something renderable to chew on.
+  const withMontage = () => {
+    const mg = montageNode(600, 200);
+    return { mg, g: { ...emptyGraph(), nodes: [mg] } as Graph };
+  };
+  const slotsOf = (g: Graph, id: string) =>
+    (g.nodes.find((n) => n.id === id) as MontageNode).data.inputs;
+  const cardsFor = (g: Graph, id: string) => slotsOf(g, id).map((s) => videoSource(g, id, s.id));
+
+  it("sizes the fill to the cuts: one slot per cut plus the opening one", () => {
+    const { mg, g } = withMontage();
+    const next = fillMontageSlots(g, mg.id, { cuts: 7 });
+    expect(slotsOf(next, mg.id)).toHaveLength(8); // 7 cuts → 8 played slots
+    expect(next.nodes.filter((n) => n.type === "video")).toHaveLength(8);
+    expect(cardsFor(next, mg.id).every(Boolean)).toBe(true);
+  });
+
+  it("counts an existing ×N slot as N cuts of budget", () => {
+    const { mg, g } = withMontage();
+    const spanned = setMontageSlotSpan(g, mg.id, slotsOf(g, mg.id)[0].id, 4);
+    // montageNode starts with 2 slots; ×4 on the first = 5 units already, 6 needed.
+    const next = fillMontageSlots(spanned, mg.id, { cuts: 5 });
+    expect(slotsOf(next, mg.id)).toHaveLength(3);
+  });
+
+  it("wires each new card to a DISTINCT slot on its 'out' port", () => {
+    const { mg, g } = withMontage();
+    const next = fillMontageSlots(g, mg.id, { cuts: 4 });
+    const sources = cardsFor(next, mg.id);
+    expect(new Set(sources).size).toBe(sources.length); // no card serves two slots
+    expect(next.edges.every((e) => e.sourcePort === "out")).toBe(true);
+    expect(next.edges.every((e) => e.target === mg.id)).toBe(true);
+  });
+
+  it("keeps the slot-exclusivity rule the backend enforces", () => {
+    const { mg, g } = withMontage();
+    const next = fillMontageSlots(g, mg.id, { cuts: 6 });
+    expect(() => validate(next)).not.toThrow();
+  });
+
+  it("leaves already-wired slots alone", () => {
+    const { mg, g } = withMontage();
+    const filled = fillMontageSlots(g, mg.id, { cuts: 2 });
+    const before = cardsFor(filled, mg.id);
+    const again = fillMontageSlots(filled, mg.id, { cuts: 2 });
+    expect(again).toBe(filled); // nothing to do → the very same graph (no undo entry)
+    expect(cardsFor(again, mg.id)).toEqual(before);
+  });
+
+  it("adds no slot when the cut count is unknown, but still fills the empty ones", () => {
+    const { mg, g } = withMontage();
+    const next = fillMontageSlots(g, mg.id, { cuts: null });
+    expect(slotsOf(next, mg.id)).toHaveLength(2); // the montage's own two, none added
+    expect(next.nodes.filter((n) => n.type === "video")).toHaveLength(2);
+  });
+
+  it("names each card uniquely (the fold every single-add call site gets wrong)", () => {
+    const { mg, g } = withMontage();
+    const nameFor = (gr: Graph, type: string) => defaultCardName(gr, type);
+    const next = fillMontageSlots(g, mg.id, { cuts: 4, nameFor });
+    const names = next.nodes.filter((n) => n.type === "video").map((n) => n.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toEqual(["video 1", "video 2", "video 3", "video 4", "video 5"]);
+  });
+
+  it("stacks the cards in a column beside the montage, never overlapping", () => {
+    const { mg, g } = withMontage();
+    const next = fillMontageSlots(g, mg.id, { cuts: 3 });
+    const cards = next.nodes.filter((n) => n.type === "video");
+    expect(new Set(cards.map((n) => n.x)).size).toBe(1); // one column...
+    expect(cards[0].x).toBeLessThan(mg.x); // ...on the input side
+    expect(new Set(cards.map((n) => n.y)).size).toBe(cards.length);
+  });
+
+  it("does not mutate the graph it is given", () => {
+    const { mg, g } = withMontage();
+    const before = JSON.stringify(g);
+    fillMontageSlots(g, mg.id, { cuts: 5 });
+    expect(JSON.stringify(g)).toBe(before);
+  });
+
+  it("ignores an id that is not a montage", () => {
+    const { g } = withMontage();
+    expect(fillMontageSlots(g, "nope", { cuts: 3 })).toBe(g);
   });
 });

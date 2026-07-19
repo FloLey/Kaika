@@ -10,8 +10,10 @@ import { useResolvedCurve } from "./useResolvedCurve";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { MONTAGE_PARAMS } from "../../../lib/nodeParams";
+import { defaultCardName } from "../nodeInputs";
 import {
   addMontageInput,
+  fillMontageSlots,
   removeMontageInput,
   setMontageSlotSpan,
   upstreamKey,
@@ -167,6 +169,26 @@ export default function MontageNode({
     return avail < needed - 0.05 ? { short: needed - avail, avail, needed, loop: c.loop } : null;
   };
 
+  // What `+ fill` would do, for the button's label-in-a-tooltip and its disabled state.
+  // Same arithmetic as `fillMontageSlots`: the budget is one span unit per cut plus one
+  // for the opening slot; unwired slots (existing + about to be created) each get a card.
+  const fill = useMemo(() => {
+    const spent = inputs.reduce((sum, s) => sum + Math.max(1, Math.round(s.span || 1)), 0);
+    const toAdd = cuts ? Math.max(0, cuts.rises + 1 - spent) : 0;
+    const n = inputs.filter((s) => !(graph && videoSource(graph, node.id, s.id))).length + toAdd;
+    if (!n) {
+      return { n, title: cuts ? "every slot is already wired" : "no empty slot to fill" };
+    }
+    const slots = toAdd ? ` (${toAdd} new slot${toAdd === 1 ? "" : "s"})` : "";
+    const why = cuts
+      ? ` — enough for the ${cuts.rises} cuts`
+      : " — wire a trigger to size it to the cuts";
+    return {
+      n,
+      title: `create ${n} empty video card${n === 1 ? "" : "s"}${slots} and wire them to the empty slots${why}. Drop a clip on each afterwards.`,
+    };
+  }, [inputs, cuts, graph, node.id]);
+
   return (
     <NodeFrame
       node={node}
@@ -258,6 +280,21 @@ export default function MontageNode({
           onClick={() => onGraphChange((g) => addMontageInput(g, node.id))}
         >
           + slot
+        </button>
+        <button
+          className="btn sm anim-combine-add"
+          disabled={!fill.n}
+          title={fill.title}
+          onClick={() =>
+            onGraphChange((g) =>
+              fillMontageSlots(g, node.id, {
+                cuts: cuts ? cuts.rises : null,
+                nameFor: defaultCardName,
+              })
+            )
+          }
+        >
+          + fill
         </button>
       </div>
 

@@ -16,13 +16,15 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     force: "How hard the source pushes the fluid — higher = faster, more turbulent motion.",
     angle: "Direction the source pushes, in degrees (0 = right, 90 = down).",
     dissipation: "How fast the dye fades. Lower = trails vanish quickly; higher = they linger.",
-    velocity_dissipation: "How fast the motion settles. Lower = quick calm; higher = keeps swirling.",
+    velocity_dissipation:
+      "How fast the motion settles. Lower = quick calm; higher = keeps swirling.",
     viscosity: "Thickness of the fluid — higher smears neighbouring motion together (syrupy).",
     vorticity: "Adds swirl and curl back into the fluid — higher = more eddies and detail.",
     enabled: "Turn this fluid's dye emission on or off.",
     radial: "Push dye outward from the centre instead of along a fixed heading.",
     wrap: "On: dye leaving one edge re-enters the opposite (a looping torus). Off: it's gone for good.",
-    positions: "Wire a Points / Pattern card here to emit a source at each drawn point (else one source at the centre).",
+    positions:
+      "Wire a Points / Pattern card here to emit a source at each drawn point (else one source at the centre).",
     color: "Wire a Colour card here to set the dye colour (else the fluid's static colour).",
   },
   color: {
@@ -32,7 +34,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     b: "Blue channel of the dye colour.",
     intensity: "Overall brightness multiplier of the colour.",
     opacity: "How opaque the dye is over the background.",
-    position: "Where along the gradient to sample (0 = first stop, 1 = last) — modulate to sweep it.",
+    position:
+      "Where along the gradient to sample (0 = first stop, 1 = last) — modulate to sweep it.",
   },
   lyrics: {
     font: "Typeface for the burned-in lyrics. Drop a .ttf in backend/assets/fonts to add more.",
@@ -52,19 +55,23 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     opacity: "Image opacity over the video.",
   },
   slideshow: {
-    trigger: "Each RISING edge of this signal past the threshold shows the NEXT image (wrapping). Feed it through a gate card to control exactly when it switches.",
+    trigger:
+      "Each RISING edge of this signal past the threshold shows the NEXT image (wrapping). Feed it through a gate card to control exactly when it switches.",
     opacity: "Layer transparency \u2014 wire a signal to fade the slideshow with the music.",
     threshold: "The trigger level that counts as a switch: rising past it advances the image.",
-    hysteresis: "Dead band under the threshold \u2014 the trigger must fall below it before it can advance again (no machine-gunning).",
+    hysteresis:
+      "Dead band under the threshold \u2014 the trigger must fall below it before it can advance again (no machine-gunning).",
     fit: "How each image fills the box: cover (fill + crop), contain (letterbox), stretch.",
     box: "Where the slideshow sits in the frame \u2014 drag to move, pull a corner to size.",
     images: "Wire an Image gen card here to feed its generated list into the slideshow.",
   },
   imagegen: {
     in: "Wire a gate here to size the prompt list to its pulses (one image per switch).",
-    prompts: "One image per prompt \u2014 the card generates them in order (image i uses seed + i).",
+    prompts:
+      "One image per prompt \u2014 the card generates them in order (image i uses seed + i).",
     seed: "Generation seed \u2014 the same prompts + seed reproduce the same images; it bumps automatically after each \u2728.",
-    model: "Which model the \u2728 draft uses: SD-Turbo is fast and low-res for building; Z-Image-Turbo is HD but slow. The final export always regenerates in HD regardless.",
+    model:
+      "Which model the \u2728 draft uses: SD-Turbo is fast and low-res for building; Z-Image-Turbo is HD but slow. The final export always regenerates in HD regardless.",
   },
   video: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",
@@ -77,20 +84,30 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     opacity: "Clip opacity over the video.",
   },
   backdrop: {
-    color: "The fill colour. Wire this into the BOTTOM input of a stack combine for a non-black background.",
+    color:
+      "The fill colour. Wire this into the BOTTOM input of a stack combine for a non-black background.",
     opacity: "Backdrop opacity over the layers beneath it.",
   },
   waves: {
-    palette: "The water colour scheme (ocean / tropical / storm / sunset) — the pool floor when no video is wired.",
-    color: "Optional: wire a color card here to override the palette. A gradient card supplies the whole water ramp.",
-    video: "Optional: the layer the water refracts — an image, a clip, a fluid. The caustics dance on it and the ripples bend it. Empty = the palette floor.",
-    scale: "Wavelength of the dominant waves — small is fine ripples, large is broad slow swells (they really travel slower: deep-water dispersion).",
-    steepness: "Wave slope — the realism knob. Low is glassy calm, high is lively chop. Wire energy here and the water stirs with the music.",
-    depth: "How deep the pool is: focuses the caustic filaments, strengthens the refraction and deepens the blue-green absorption tint.",
-    speed: "Time multiplier on the whole surface (dispersion preserved — big and small waves keep their relative speeds).",
-    direction: "The mean travel direction of the wave fan, in degrees (a couple of components always reflect back off the pool walls).",
+    palette:
+      "The water colour scheme (ocean / tropical / storm / sunset) — the pool floor when no video is wired.",
+    color:
+      "Optional: wire a color card here to override the palette. A gradient card supplies the whole water ramp.",
+    video:
+      "Optional: the layer the water refracts — an image, a clip, a fluid. The caustics dance on it and the ripples bend it. Empty = the palette floor.",
+    scale:
+      "Wavelength of the dominant waves — small is fine ripples, large is broad slow swells (they really travel slower: deep-water dispersion).",
+    steepness:
+      "Wave slope — the realism knob. Low is glassy calm, high is lively chop. Wire energy here and the water stirs with the music.",
+    depth:
+      "How deep the pool is: focuses the caustic filaments, strengthens the refraction and deepens the blue-green absorption tint.",
+    speed:
+      "Time multiplier on the whole surface (dispersion preserved — big and small waves keep their relative speeds).",
+    direction:
+      "The mean travel direction of the wave fan, in degrees (a couple of components always reflect back off the pool walls).",
     caustics: "Brightness of the focused-light filament network on the floor.",
-    chroma: "Chromatic dispersion: red/blue fringes on the caustic filaments and refraction edges, like real water splits light.",
+    chroma:
+      "Chromatic dispersion: red/blue fringes on the caustic filaments and refraction edges, like real water splits light.",
     shine: "Sun glints on the surface — tight sparkles on wave facets that align with the sun.",
     opacity: "Layer opacity over everything beneath it.",
   },
@@ -98,44 +115,62 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     palette: "The bolt/glow colour scheme (electric blue / violet / white-hot / ember).",
     color: "Optional: wire a color card here to override the palette bolt colour.",
     strike: "Fires a bolt each time this rises past its midpoint — wire an onset or beat signal.",
-    positions: "Optional: wire a points card here and each strike picks one of its points as origin (an animate-points card moves them over the clip).",
-    origin_x: "Where the bolt starts, horizontally (0 = left edge, 1 = right). Modulate it and each strike lands somewhere new.",
-    origin_y: "Where the bolt starts, vertically (0 = top). Ignored when a points card is wired into positions.",
-    direction: "The bolt's overall travel direction in degrees (90 = downward). The discharge grows toward this heading.",
+    positions:
+      "Optional: wire a points card here and each strike picks one of its points as origin (an animate-points card moves them over the clip).",
+    origin_x:
+      "Where the bolt starts, horizontally (0 = left edge, 1 = right). Modulate it and each strike lands somewhere new.",
+    origin_y:
+      "Where the bolt starts, vertically (0 = top). Ignored when a points card is wired into positions.",
+    direction:
+      "The bolt's overall travel direction in degrees (90 = downward). The discharge grows toward this heading.",
     length: "How far the bolt reaches, as a fraction of the frame diagonal.",
-    branchiness: "The discharge's branching density — 0 is a near-bare channel, 1 is a full Lichtenberg tree of forks.",
+    branchiness:
+      "The discharge's branching density — 0 is a near-bare channel, 1 is a full Lichtenberg tree of forks.",
     thickness: "Core channel width in pixels — branches taper thinner from it.",
     glow: "Strength of the atmospheric halo around the channel (the core always burns white-hot).",
-    flicker: "Restrikes: how many times the SAME channel re-flashes (without its branches) at ~50 ms — the real lightning flicker.",
-    flash: "Sky illumination around the origin, pulsing with each stroke — cloud-scatter, not a flat veil.",
-    afterglow: "The continuing-current ember: how long a faint channel glow persists after the strokes.",
+    flicker:
+      "Restrikes: how many times the SAME channel re-flashes (without its branches) at ~50 ms — the real lightning flicker.",
+    flash:
+      "Sky illumination around the origin, pulsing with each stroke — cloud-scatter, not a flat veil.",
+    afterglow:
+      "The continuing-current ember: how long a faint channel glow persists after the strokes.",
     opacity: "Layer opacity over everything beneath it.",
   },
   fire: {
-    palette: "The flame ramp — `flame` is the physical blackbody locus (dim red → orange → white-hot); the others recolour the same heat.",
-    color: "Optional: wire a color card here to override the palette. A gradient card supplies the whole heat ramp.",
-    positions: "Optional: wire a points card here to light one flame per point — close flames lean into each other and merge, like real fires.",
+    palette:
+      "The flame ramp — `flame` is the physical blackbody locus (dim red → orange → white-hot); the others recolour the same heat.",
+    color:
+      "Optional: wire a color card here to override the palette. A gradient card supplies the whole heat ramp.",
+    positions:
+      "Optional: wire a points card here to light one flame per point — close flames lean into each other and merge, like real fires.",
     origin_x: "The flame's base, horizontally (0..1). Wire an LFO and the flame glides.",
     origin_y: "The flame's base, vertically (0 = top, 1 = bottom).",
-    direction: "Which way the flame rises (270 = up). It literally rotates gravity for this field — a sideways torch streams sideways.",
-    intensity: "Heat injected at the base — the size and violence of the blaze. Wire energy for a breathing fire.",
+    direction:
+      "Which way the flame rises (270 = up). It literally rotates gravity for this field — a sideways torch streams sideways.",
+    intensity:
+      "Heat injected at the base — the size and violence of the blaze. Wire energy for a breathing fire.",
     width: "Radius of the emitting base — narrow is a candle/torch, wide is a wall of flame.",
-    cooling: "How fast the gas cools (quartic, like real radiation) — the flame-height knob: high cooling = short lively flame.",
+    cooling:
+      "How fast the gas cools (quartic, like real radiation) — the flame-height knob: high cooling = short lively flame.",
     turbulence: "Vorticity confinement in the hot column — the licking, curling tongues.",
-    flicker: "Slow organic breathing of the emission (~4 Hz smoothed noise) — never per-frame jitter.",
+    flicker:
+      "Slow organic breathing of the emission (~4 Hz smoothed noise) — never per-frame jitter.",
     expansion: "Combustion expansion at the base — fuller, rounder flames.",
     glow: "Bloom radius around the hot regions.",
     opacity: "Layer opacity over everything beneath it.",
   },
   aurora: {
-    palette: "Colour by ALTITUDE in the curtain, like the real emission lines: purple fringe at the bottom edge, oxygen green above, red at the top.",
+    palette:
+      "Colour by ALTITUDE in the curtain, like the real emission lines: purple fringe at the bottom edge, oxygen green above, red at the top.",
     color: "Optional: wire a color card here to override the altitude ramp.",
     position_y: "Where the curtain's bright lower edge sits in the sky (0 = top of frame).",
     height: "How far the rays extend above the lower edge — the curtain's vertical reach.",
     bands: "How many arcs hang across the sky.",
     sway: "Amplitude of the arcs' slow folding — how far the curtain snakes.",
-    drift: "Horizontal glide of the whole curtain. Real quiet arcs barely move — keep it low for calm.",
-    shimmer: "How fast individual rays bloom and die (their positions never slide — only intensities crossfade, like the real ~1 s oxygen glow).",
+    drift:
+      "Horizontal glide of the whole curtain. Real quiet arcs barely move — keep it low for calm.",
+    shimmer:
+      "How fast individual rays bloom and die (their positions never slide — only intensities crossfade, like the real ~1 s oxygen glow).",
     rays: "Density of the vertical rays inside the curtain.",
     brightness: "Overall intensity. Wire a tonal / harmonic signal so the pads light the sky.",
     opacity: "Layer opacity over everything beneath it.",
@@ -143,29 +178,38 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
   rain: {
     palette: "The surface tint when no video is wired (the lit liquid).",
     color: "Optional: wire a color card here to override the surface tint.",
-    video: "Optional: the layer at the bottom of the liquid — the rings refract and bend it. Empty = the palette surface.",
-    positions: "Optional: wire a points card here and the drops fall on those spots (fixed drips whose ring trains interfere) instead of everywhere.",
+    video:
+      "Optional: the layer at the bottom of the liquid — the rings refract and bend it. Empty = the palette surface.",
+    positions:
+      "Optional: wire a points card here and the drops fall on those spots (fixed drips whose ring trains interfere) instead of everywhere.",
     density: "How many drops fall per second. Wire an energy signal so it pours on the loud parts.",
     drop_size: "Size of each impact — bigger drops throw wider, taller rings.",
-    ripple_speed: "How fast the rings race outward (fine ripples always lead the main ring — capillary dispersion).",
-    decay: "How long rings survive — high keeps them crossing the whole frame and interfering with each other.",
+    ripple_speed:
+      "How fast the rings race outward (fine ripples always lead the main ring — capillary dispersion).",
+    decay:
+      "How long rings survive — high keeps them crossing the whole frame and interfering with each other.",
     distort: "How strongly the surface bends the layer beneath (refraction magnitude).",
     shine: "Specular glints on the ring slopes.",
     opacity: "Layer opacity over everything beneath it.",
   },
   clouds: {
-    palette: "The lighting ramp (sky / nebula / ink / dust) — sunlit cumulus or a saturated nebula.",
-    color: "Optional: wire a color card here to override the palette. A gradient card supplies the whole ramp.",
+    palette:
+      "The lighting ramp (sky / nebula / ink / dust) — sunlit cumulus or a saturated nebula.",
+    color:
+      "Optional: wire a color card here to override the palette. A gradient card supplies the whole ramp.",
     coverage: "How much of the sky the clouds fill — from a few puffs to an overcast lid.",
     scale: "Cloud mass size — low is small puffs, high is towering billows.",
     softness: "Edge feathering — crisp cauliflower rims versus misty veils.",
-    drift: "How fast the clouds travel (each detail scale drifts at its own speed, so they morph rather than slide).",
+    drift:
+      "How fast the clouds travel (each detail scale drifts at its own speed, so they morph rather than slide).",
     direction: "The wind direction the clouds drift along, in degrees.",
     turbulence: "Domain-warp churn — how roiled and eroded the masses are. Wire flux here.",
-    light_angle: "Where the sun sits, in degrees — the masses self-shadow away from it and rims blaze on its side.",
+    light_angle:
+      "Where the sun sits, in degrees — the masses self-shadow away from it and rims blaze on its side.",
     shading: "Depth of the self-shadowing (the Beer-Lambert march toward the sun).",
     silver: "Silver-lining strength: thin rims flare around the sun's position.",
-    brightness: "Overall lighting level. Wire an energy signal to make the sky glow with the music.",
+    brightness:
+      "Overall lighting level. Wire an energy signal to make the sky glow with the music.",
     opacity: "Layer opacity over everything beneath it.",
   },
   transform: {
@@ -178,17 +222,21 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     pan_y: "Slide the video vertically, as a fraction of the frame height.",
   },
   stylize: {
-    model: "Which local diffusion model to use: SD-Turbo is a fast draft (a few seconds per frame) — iterate with it. Z-Image is HD and slow (~30s per frame, so a clip takes tens of minutes): it must generate at a higher resolution — any lower and it paints blobs instead of subjects. Switch to it once the draft looks right.",
-    inpaint: "Off = repaint the whole frame (img2img). On = confine the repaint to the input's shape (leaves the black background untouched).",
+    model:
+      "Which local diffusion model to use: SD-Turbo is a fast draft (a few seconds per frame) — iterate with it. Z-Image is HD and slow (~30s per frame, so a clip takes tens of minutes): it must generate at a higher resolution — any lower and it paints blobs instead of subjects. Switch to it once the draft looks right.",
+    inpaint:
+      "Off = repaint the whole frame (img2img). On = confine the repaint to the input's shape (leaves the black background untouched).",
     prompt: "The look to paint the video into — e.g. flowers, molten lava, storm clouds.",
-    strength: "How far the AI reinvents the input — the generation always STARTS from the input, so it keeps its layout (a fluid's black background stays black). With SD-Turbo the strength is near-binary: 1.0 fully restyles to the prompt (real flowers/lava, prompt colours) — this is the default; below ~0.9 it keeps the input's own colours (a subtle blend). Z-Image (HD) blends gradually: 1.0 restyles hardest, ~0.85 keeps more of the fluid's form. Modulatable — wire a signal to drive it.",
+    strength:
+      "How far the AI reinvents the input — the generation always STARTS from the input, so it keeps its layout (a fluid's black background stays black). With SD-Turbo the strength is near-binary: 1.0 fully restyles to the prompt (real flowers/lava, prompt colours) — this is the default; below ~0.9 it keeps the input's own colours (a subtle blend). Z-Image (HD) blends gradually: 1.0 restyles hardest, ~0.85 keeps more of the fluid's form. Modulatable — wire a signal to drive it.",
   },
   extract: {
     kind: "What structure to pull from the video: canny = hard edges (real-time); soft = a softened edge map; density = the input's own brightness — the best 'volume' control for a fluid; depth = a depth map from a model (for real 3D footage, not fluids — downloads on first use). Feed the result into AI Stylize's control input.",
   },
   echo: {
     mode: "What the trail remembers. ghost = translucent afterimages of every change — the classic echo on real footage, whatever the contrast. bright = only bright-on-dark content trails, at full brightness (comet tails for fluids; black stays black). dark = the mirror: dark subjects on a bright scene drag solid shadow trails.",
-    length: "How long ghosts linger — the trail's half-life in seconds (0 = off). Wire this to a signal and the trails stretch on every hit.",
+    length:
+      "How long ghosts linger — the trail's half-life in seconds (0 = off). Wire this to a signal and the trails stretch on every hit.",
     amount: "Dry ↔ trail mix: 0 = the untouched video, 1 = full ghosting.",
   },
   colorgrade: {
@@ -197,8 +245,10 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     colorA: "The duotone shadow colour — what the darkest parts of the video become.",
     colorB: "The duotone highlight / neon glow colour. A color card wired into tint overrides it.",
     tint: "Wire a color card here to drive the grade colour. A gradient card with its position bound to a signal sweeps the colour with the music.",
-    intensity: "Dry ↔ graded mix (neon: how strong the glow halo is). Wire a signal to fade the grade in and out.",
-    shift: "A per-mode colour shift: rolls the thermal colormap, moves the duotone midpoint (darker↔brighter split), or rotates the neon glow's hue. Wire a signal to animate it.",
+    intensity:
+      "Dry ↔ graded mix (neon: how strong the glow halo is). Wire a signal to fade the grade in and out.",
+    shift:
+      "A per-mode colour shift: rolls the thermal colormap, moves the duotone midpoint (darker↔brighter split), or rotates the neon glow's hue. Wire a signal to animate it.",
   },
   pattern: {
     layout: "Arrangement of the points: circle, ring, grid, line, spiral or scatter.",
@@ -247,17 +297,22 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
   gate: {
     in: "The 0..1 value to gate \u2014 wire a signal / LFO / noise / math here.",
     threshold: "The level the gate switches around: input above \u2192 1, below \u2192 0.",
-    hysteresis: "Dead band centred on the threshold \u2014 wider = harder for a hovering signal to flicker the gate.",
-    minGap: "Minimum seconds between spikes: a rising edge closer than this to the last kept one is dropped. Caps the spike RATE by time (0 = off).",
-    divide: "Keep only every Nth spike (1/N). 1/1 passes all, 1/4 passes every fourth \u2014 a divider off the input's own rate.",
+    hysteresis:
+      "Dead band centred on the threshold \u2014 wider = harder for a hovering signal to flicker the gate.",
+    minGap:
+      "Minimum seconds between spikes: a rising edge closer than this to the last kept one is dropped. Caps the spike RATE by time (0 = off).",
+    divide:
+      "Keep only every Nth spike (1/N). 1/1 passes all, 1/4 passes every fourth \u2014 a divider off the input's own rate.",
     invert: "Flip the output: 1 while the input is BELOW the threshold.",
   },
   change: {
     in: "The 0..1 value to watch — wire a signal (energy, chroma…) / LFO / math here.",
     gain: "Scale on the change rate. A curve sweeping 0→1 in one second reads ≈1.0 at gain 1 — raise it to catch subtler movement.",
     attack: "How fast the output reacts when change starts, in ms. Keep it low for sharp response.",
-    release: "How long the bump lingers after the change stops, in ms. Slow enough that a downstream gate sees ONE clean pulse per transition.",
-    direction: "both = any movement; rise = only when the signal climbs; fall = only when it drops.",
+    release:
+      "How long the bump lingers after the change stops, in ms. Slow enough that a downstream gate sees ONE clean pulse per transition.",
+    direction:
+      "both = any movement; rise = only when the signal climbs; fall = only when it drops.",
   },
   math: {
     input:
@@ -282,7 +337,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     hysteresis:
       "Dead band under the threshold — the trigger must fall below it before it can cut again (no machine-gunning).",
     inputs:
-      "One video per slot, played in order — slot 1 from the segment start, each next slot from its cut. ×N makes a slot swallow N cuts (its video plays through N gate intervals). Set each clip's in-point on its video card (🎞); the row shows the slot's start – end window in segment seconds. A card feeding a slot can feed nothing else — duplicate it if needed.",
+      "One video per slot, played in order — slot 1 from the segment start, each next slot from its cut. ×N makes a slot swallow N cuts (its video plays through N gate intervals). Set each clip's in-point on its video card (🎞); the row shows the slot's start – end window in segment seconds. A card feeding a slot can feed nothing else — duplicate it if needed. + fill builds the whole rig at once: it adds the slots the cut count needs, then drops an empty video card on each unwired slot, already wired — you only have to drop a clip on each.",
   },
   scope: {
     in: "The value to monitor — it passes straight through, unchanged.",
