@@ -56,14 +56,25 @@ def start(run) -> str:
             "url": None,
             "error": None,
             "phase": None,
+            "segment": None,
             "cancel": cancel,
             "updated": time.time(),
         }
         _prune_locked()
 
-    def _progress(done=None, total=None, preview_url=None, *, phase: str | None = None) -> None:
-        # `on_progress(phase="audio")` announces a step WITHOUT touching the frame
-        # counters or the preview url — otherwise naming a phase would rewind the bar.
+    def _progress(
+        done=None,
+        total=None,
+        preview_url=None,
+        *,
+        phase: str | None = None,
+        segment: str | None = None,
+    ) -> None:
+        # `on_progress(phase="audio")` / `segment="2/4 · verse"` announce a step WITHOUT
+        # touching the frame counters or the preview url — otherwise naming one would
+        # rewind the bar. The song export publishes progress once per SEGMENT, so it can
+        # sit visibly still for minutes; `segment` is what says it is still working, and
+        # on what, without pretending the bar moves.
         with _LOCK:
             j = _JOBS.get(rid)
             if not j:
@@ -71,6 +82,8 @@ def start(run) -> str:
             j["updated"] = time.time()
             if phase is not None:
                 j["phase"] = phase
+            if segment is not None:
+                j["segment"] = segment
             if done is not None:
                 j.update(frames_done=done, total=total, preview_url=preview_url)
 
@@ -125,5 +138,14 @@ def get(render_id: str) -> dict | None:
             return None
         return {
             k: j[k]
-            for k in ("state", "frames_done", "total", "preview_url", "url", "error", "phase")
+            for k in (
+                "state",
+                "frames_done",
+                "total",
+                "preview_url",
+                "url",
+                "error",
+                "phase",
+                "segment",
+            )
         }

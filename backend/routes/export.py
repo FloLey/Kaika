@@ -326,6 +326,13 @@ def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cance
         def progress(done, total, preview_url=None):
             on_progress(done, total, preview_url, phase="render")
 
+        # Which segment is being rendered, published WITHOUT frame numbers: song progress
+        # only lands once per segment, so the counter sits still for minutes and this is
+        # what keeps the UI honest meanwhile. The HD-segment job above has no equivalent —
+        # it renders exactly one segment.
+        def on_segment(i, n, label):
+            on_progress(segment=f"{i}/{n}" + (f" · {label}" if label else ""))
+
         url = song_render.render_song(
             job_id,
             segments,
@@ -333,6 +340,7 @@ def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cance
             export,
             stem_audio_path,
             on_progress=progress,
+            on_segment=on_segment,
             should_cancel=should_cancel,
         )
         if url:

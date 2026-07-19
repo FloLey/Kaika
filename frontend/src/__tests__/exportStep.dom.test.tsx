@@ -1,17 +1,69 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, waitFor } from "@testing-library/react";
 import ExportStep from "../components/export/ExportStep";
 import { EXPORT_DEFAULTS } from "../lib/export";
 import type { OutputSettings, Segment } from "../lib/types";
 
 // No stored render in sessionStorage → no api call fires on mount; still stub the
 // module so an accidental call can't hit the network.
+const getExportStatus = vi.fn();
 vi.mock("../lib/api", () => ({
-  getExportStatus: vi.fn(),
+  getExportStatus: (...a: unknown[]) => getExportStatus(...a),
   startExport: vi.fn(),
   cancelExport: vi.fn(),
 }));
+
+// A whole-song export publishes frame progress once per SEGMENT, so the counter sits on
+// the same number for minutes and then leaps — read, reasonably, as "stuck at 13s".
+// Naming the segment is what makes that wait legible. Mounted for real (a stored render
+// id makes the hook resume-poll) rather than re-implementing the label here: a test that
+// copies the formatting would stay green while the screen said nothing.
+describe("ExportStep — the wait says which segment it is on", () => {
+  const mount = async (status: Record<string, unknown>) => {
+    sessionStorage.setItem("export-render:j1", "rid-1");
+    getExportStatus.mockReset();
+    getExportStatus.mockResolvedValue({
+      state: "running",
+      frames_done: 402,
+      total: 6753,
+      preview_url: null,
+      url: null,
+      error: null,
+      ...status,
+    });
+    const r = render(
+      <ExportStep
+        job="j1"
+        segments={[]}
+        exportSettings={{ ...EXPORT_DEFAULTS, width: 1080, height: 1920, fps: 30 }}
+        setExportSettings={() => {}}
+        output={canvas(1080, 1920)}
+        onBack={() => {}}
+      />
+    );
+    await waitFor(() => expect(getExportStatus).toHaveBeenCalled());
+    return r;
+  };
+
+  it("names the segment next to the frame counter", async () => {
+    const { findByText } = await mount({ segment: "2/4 · verse" });
+    expect(await findByText(/segment 2\/4 · verse/)).toBeTruthy();
+  });
+
+  it("names it even before the first frame lands", async () => {
+    const { findByText } = await mount({ segment: "1/4 · intro", frames_done: 0, total: 0 });
+    expect(await findByText(/rendering segment 1\/4 · intro/)).toBeTruthy();
+  });
+
+  it("says nothing extra on a render with no segment field", async () => {
+    // Scoped to the progress LABEL — "segment" appears elsewhere in the stage (the
+    // per-segment checklist), so a bare /segment/ would match that instead.
+    const { findByText, queryByText } = await mount({});
+    expect(await findByText("rendering 13s / 225s")).toBeTruthy();
+    expect(queryByText(/rendering .*· segment/)).toBeNull();
+  });
+});
 
 const canvas = (w: number, h: number): OutputSettings => ({
   width: w,

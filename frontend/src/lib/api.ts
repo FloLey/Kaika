@@ -89,6 +89,10 @@ export interface RenderStatus {
   // "assets" (HD image/stylize regeneration), "render", "audio" (muxing). Lets a
   // long HD job explain why it's still at 0% instead of looking hung.
   phase?: string | null;
+  // "2/4 · verse" — which segment a WHOLE-SONG export is on. Its frame counter only
+  // advances once per segment (one long jump each), so this is what tells you it is
+  // working rather than hung. Absent on single-segment renders.
+  segment?: string | null;
 }
 
 // The historical per-endpoint names, kept as aliases for existing importers.

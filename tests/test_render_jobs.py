@@ -139,3 +139,42 @@ def test_prune_drops_the_oldest_finished_jobs_only(monkeypatch):
     assert "j1" in left, "pruning evicted a RUNNING job"
     assert "j0" not in left, "pruning kept the oldest finished job"
     assert len(left) == 3
+
+
+def test_naming_a_segment_does_not_rewind_the_progress_bar():
+    """`on_progress(segment="2/4 · verse")` names the segment being rendered WITHOUT
+    touching the frame counters — the same contract as `phase`.
+
+    The song export publishes frame progress once per SEGMENT, so the counter sits still
+    for minutes and then leaps a whole segment (402 → 3564 on a real song, read as
+    "stuck at 13s"). The segment name is what says it is still working, and on what — so
+    it must never be the thing that makes the bar move backwards.
+    """
+    release = threading.Event()
+
+    def run(on_progress, should_cancel):
+        on_progress(7, 10, "/fluid/partial.mp4")
+        on_progress(segment="2/4 · verse")
+        release.wait(5.0)
+        return "/fluid/done.mp4"
+
+    rid = render_jobs.start(run)
+    assert _await(lambda: render_jobs.get(rid)["segment"] == "2/4 · verse")
+    j = render_jobs.get(rid)
+    assert (j["frames_done"], j["total"], j["preview_url"]) == (7, 10, "/fluid/partial.mp4")
+    release.set()
+
+
+def test_segment_reaches_the_wire():
+    """A field missing from `get()`'s whitelist never reaches the client — that tuple IS
+    the wire contract, so pin the new key rather than trusting the dict."""
+    release = threading.Event()
+
+    def run(on_progress, should_cancel):
+        on_progress(segment="1/3 · intro")
+        release.wait(5.0)
+        return "/fluid/done.mp4"
+
+    rid = render_jobs.start(run)
+    assert _await(lambda: render_jobs.get(rid).get("segment") == "1/3 · intro")
+    release.set()

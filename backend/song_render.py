@@ -170,18 +170,27 @@ def build_plan(
     }
 
 
-def iter_song_windows(ctx: dict, should_cancel=None):
+def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
     """Yield `(a, b, styled_window)` per segment — the continuous render. The K persistent
     `FluidSim` fields carry across yields (that's the whole point): entering a segment
     only swaps the injected rules. `styled_window` is flattened RGB `[win, gh, gw, 3]`.
     Stops early (returns) if `should_cancel()` before a segment. Pure/no I/O, so tests can
-    concatenate the windows and assert continuity without ffmpeg."""
+    concatenate the windows and assert continuity without ffmpeg.
+
+    `on_segment(index, count, label)` fires as each segment BEGINS — the only moment that
+    knows it. Progress is otherwise published once per segment (one `yield` here), so the
+    frame counter sits still for minutes and then leaps a whole segment; this is what
+    tells the UI it is still working, and on what. Optional, so the generator stays pure
+    for the tests that just concatenate its windows."""
     dye_layout, gh, gw = ctx["dye_layout"], ctx["gh"], ctx["gw"]
     fields_sim: dict = {}  # layer number -> persistent FluidSim (carries across segments)
     done = 0
-    for dag, oid, fields, window in ctx["plan"]:
+    for k, (dag, oid, fields, window) in enumerate(ctx["plan"]):
         if should_cancel and should_cancel():
             return
+        if on_segment:
+            seg = dag.segment or {}
+            on_segment(k + 1, len(ctx["plan"]), str(seg.get("label") or seg.get("id") or ""))
         # Build this segment's per-field injector against the field's GLOBAL dye layout,
         # and lazily create each persistent field the first time its layer is used.
         injectors = []  # (node_id, layer_number, LayerInjector)
@@ -229,10 +238,17 @@ def render_song(
     stem_audio_path,
     *,
     on_progress=None,
+    on_segment=None,
     should_cancel=None,
 ) -> str | None:
     """Render the whole song to one continuous HD mp4 (video + muxed audio) and return
     its URL. `segments` each carry `graph`, `start`, `end`, `signals`, `finalOutputId`.
+    `on_segment(index, count, label)` fires as each segment starts — frame progress lands
+    only once per segment (one window per yield), so the counter can sit still for minutes
+    and then leap; this is the signal that says it is still working, and on what. It is a
+    SEPARATE callback rather than a kwarg on `on_progress`, which is a shared 3-arg
+    contract several callers satisfy with a plain lambda.
+
     See the module docstring for the continuous-field model. Cached by content hash;
     cancellation between segments returns None."""
     out_path = paths.ANIM_DIR / f"song_{_export_hash(job_id, segments, lyric_lines, export)}.mp4"
@@ -259,7 +275,7 @@ def render_song(
         silent = scratch / "video.mp4"
         enc = fluid.StreamEncoder(silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"])
         try:
-            for _a, b, styled in iter_song_windows(ctx, should_cancel):
+            for _a, b, styled in iter_song_windows(ctx, should_cancel, on_segment=on_segment):
                 enc.write(styled)  # opens ffmpeg on the first window
                 if on_progress:
                     on_progress(b, ctx["total"], f"/fluid/stream/{render_id}/video.mp4?n={b}")

@@ -168,3 +168,32 @@ def test_build_plan_rejects_unmarked_segment():
     ]  # no finalOutputId
     with pytest.raises(ValueError):
         SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+
+
+def test_each_segment_announces_itself_before_it_is_rendered():
+    """`on_segment(i, n, label)` fires as a segment BEGINS — the only moment that knows it.
+
+    The song render yields once per segment, so the frame counter sits still for minutes
+    and then leaps a whole segment; a user reasonably read that as "stuck at 13s". The
+    announcement has to come BEFORE the work, not with the yield, or it would arrive only
+    once the long wait is already over.
+    """
+    segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 2.0, _fluid_out(0.3))]
+    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    seen = []
+    windows = 0
+    for _a, _b, _w in SR.iter_song_windows(ctx, on_segment=lambda *a: seen.append((a, windows))):
+        windows += 1
+    # both segments named, numbered 1..n with the count, and each announced BEFORE its
+    # window was produced (windows still 0 for the first, 1 for the second)
+    assert [a[0] for a, _ in seen] == [1, 2]
+    assert {a[1] for a, _ in seen} == {2}
+    assert [w for _, w in seen] == [0, 1]
+    assert [a[2] for a, _ in seen] == ["s1", "s2"]  # falls back to the id when unlabelled
+
+
+def test_the_generator_stays_usable_without_the_callback():
+    """It's optional — the tests that just concatenate windows must not have to care."""
+    segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6))]
+    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    assert len(list(SR.iter_song_windows(ctx))) == 1

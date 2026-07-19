@@ -7,6 +7,7 @@ import { useRenderJob } from "../../lib/useRenderJob";
 import { usePreservePlayback } from "../animation/nodes/usePreservePlayback";
 import type { ExportSettings } from "../../lib/export";
 import type { OutputSettings, Segment } from "../../lib/types";
+import Info from "../../ui/Info";
 
 interface ExportStepProps {
   job?: string;
@@ -69,7 +70,8 @@ export default function ExportStep({
   const storeKey = job ? `export-render:${job}` : null;
   // Poll/persist/resume/cancel — shared with the Output card's HD render, which
   // follows the same long-lived-job contract (never cancels on unmount).
-  const { busy, error, progress, videoUrl, finalUrl, start, cancel } = useRenderJob(storeKey);
+  const { busy, error, progress, segment, videoUrl, finalUrl, start, cancel } =
+    useRenderJob(storeKey);
   // Keep the playhead as the growing preview swaps <video> src (same hook the card
   // previews use).
   const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl);
@@ -88,9 +90,15 @@ export default function ExportStep({
   }
 
   const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  // The frame counter only moves once a segment finishes — a long song sits on the same
+  // number for minutes, which reads as "stuck". Naming the segment being worked on is
+  // what makes the wait legible; the bar itself still jumps.
+  const segLabel = segment ? ` · segment ${segment}` : "";
   const renderLabel = progress
-    ? `rendering ${Math.round(progress.done / fps)}s / ${Math.round(progress.total / fps)}s`
-    : "starting…";
+    ? `rendering ${Math.round(progress.done / fps)}s / ${Math.round(progress.total / fps)}s${segLabel}`
+    : segment
+      ? `rendering segment ${segment}`
+      : "starting…";
   const aspect = aspectOf(exportSettings);
 
   return (
@@ -107,6 +115,10 @@ export default function ExportStep({
           {/* HD render settings */}
           <div className="out-field">
             <span className="out-label">size</span>
+            <Info
+              text="The master's pixel dimensions. Every segment renders at this size, so it also sets how much work the export is — doubling it roughly quadruples the render time."
+              section="export"
+            />
             <div className="out-size">
               <input
                 type="number"
@@ -145,6 +157,10 @@ export default function ExportStep({
 
           <div className="out-field">
             <span className="out-label">fps</span>
+            <Info
+              text="Frames per second of the exported video. The simulation advances per frame, so a higher fps is both smoother and proportionally slower to render."
+              section="export"
+            />
             <input
               type="number"
               className="hz-input"
@@ -162,6 +178,10 @@ export default function ExportStep({
 
           <div className="out-field">
             <span className="out-label">detail / grid</span>
+            <Info
+              text="How fine the fluid simulation grid is. Higher means more detail in the swirls and a slower render; it does not change the output size. A graph with no simulation ignores it and renders at native resolution."
+              section="export"
+            />
             <input
               type="number"
               className="hz-input"
@@ -183,6 +203,10 @@ export default function ExportStep({
 
           <div className="out-field">
             <span className="out-label">HD image size</span>
+            <Info
+              text="The resolution generated images are re-made at for the master. The editor previews use a smaller, faster size; this is what the final export bakes in."
+              section="animation-output-hd"
+            />
             <input
               type="number"
               className="hz-input"
@@ -207,6 +231,10 @@ export default function ExportStep({
 
           <div className="out-field">
             <span className="out-label">audio</span>
+            <Info
+              text="Which audio track is muxed into the master: the original mix, or the vocals-removed instrumental mixed from the separated stems."
+              section="export"
+            />
             <select
               className="anim-select"
               value={exportSettings.audioMode}

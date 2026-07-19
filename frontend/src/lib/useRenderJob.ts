@@ -19,6 +19,7 @@ export interface RenderJobState {
   error: string;
   progress: { done: number; total: number } | null;
   phase: string | null;
+  segment: string | null; // "2/4 · verse" — whole-song exports only
   videoUrl: string; // the growing preview while running, the finished file when done
   finalUrl: string; // set only once the render completed (enables download)
 }
@@ -32,6 +33,7 @@ export function useRenderJob(storeKey: string | null) {
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [phase, setPhase] = useState<string | null>(null);
+  const [segment, setSegment] = useState<string | null>(null);
   const activeRender = useRef<string | null>(null); // render_id we're polling
   const mounted = useRef(true); // false after unmount → stop touching state (never cancels)
 
@@ -48,6 +50,7 @@ export function useRenderJob(storeKey: string | null) {
           if (!mounted.current || activeRender.current !== renderId) return; // left / superseded
           if (st.total) setProgress({ done: st.frames_done, total: st.total });
           if (st.phase !== undefined) setPhase(st.phase);
+          if (st.segment !== undefined) setSegment(st.segment);
           if (st.state === "running") {
             if (st.preview_url) setVideoUrl(st.preview_url); // grows block by block
             await new Promise((r) => setTimeout(r, POLL_MS));
@@ -77,6 +80,7 @@ export function useRenderJob(storeKey: string | null) {
             setBusy(false);
             setProgress(null);
             setPhase(null);
+            setSegment(null);
           }
         }
       }
@@ -104,6 +108,7 @@ export function useRenderJob(storeKey: string | null) {
       setError("");
       setProgress(null);
       setPhase(null);
+      setSegment(null);
       if (opts?.reset !== false) {
         setVideoUrl("");
         setFinalUrl("");
@@ -132,5 +137,5 @@ export function useRenderJob(storeKey: string | null) {
     setPhase(null);
   }, [storeKey]);
 
-  return { busy, error, progress, phase, videoUrl, finalUrl, start, cancel, setError };
+  return { busy, error, progress, phase, segment, videoUrl, finalUrl, start, cancel, setError };
 }
