@@ -72,9 +72,33 @@ _DERIVED_SUFFIXES = (_THUMB_SUFFIX, _PROXY_SUFFIX)
 # Excerpt cuts are `<sha>-clip-<start>-<dur>.mp4`; matched by prefix, not suffix.
 _CLIP_INFIX = "-clip-"
 _PROXY_HEIGHT = 360
+_THUMB_WIDTH = 240
+_PROXY_TIMEOUT = 900  # a 4K phone clip transcodes in ~40s; this is the pathological case
+_CLIP_TIMEOUT = 180
+_THUMB_TIMEOUT = 30
 _PROXY_SLOTS = threading.Semaphore(2)  # cap concurrent transcodes (they're CPU-heavy)
 _proxy_pending: set[str] = set()
 _proxy_lock = threading.Lock()
+
+
+def _ffmpeg_atomic(args: list, dest: Path, timeout: int) -> bool:
+    """Run ffmpeg writing to a temp file, then rename into `dest`. The three derived-file
+    makers (thumb / proxy / clip excerpt) all need the same dance: a reader must never see
+    a half-written file, and a failed run must leave nothing behind. `args` is everything
+    between `ffmpeg` and the destination path."""
+    tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp{dest.suffix}")
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", *args, str(tmp)], capture_output=True, timeout=timeout
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        tmp.unlink(missing_ok=True)
+        return False
+    if proc.returncode == 0 and tmp.exists() and tmp.stat().st_size:
+        os.replace(tmp, dest)
+        return True
+    tmp.unlink(missing_ok=True)
+    return False
 
 
 def _proxy_path(src: Path) -> Path:
@@ -98,19 +122,10 @@ def _make_video_proxy(src: Path) -> bool:
         return True
     scale = f"scale=-2:{_PROXY_HEIGHT}"
     for codec, rate in (("h264_videotoolbox", ["-b:v", "600k"]), ("libx264", ["-crf", "30"])):
-        tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp.mp4")
-        try:
-            proc = subprocess.run(
-                ["ffmpeg", "-v", "error", "-y", "-i", str(src), "-vf", scale,
-                 "-c:v", codec, *rate, "-an", "-movflags", "+faststart", str(tmp)],
-                capture_output=True, timeout=900,
-            )  # fmt: skip
-        except (OSError, subprocess.TimeoutExpired):
-            return False
-        if proc.returncode == 0 and tmp.exists() and tmp.stat().st_size:
-            os.replace(tmp, dest)  # atomic: readers never see a half-written proxy
+        args = ["-i", str(src), "-vf", scale, "-c:v", codec, *rate, "-an",
+                "-movflags", "+faststart"]  # fmt: skip
+        if _ffmpeg_atomic(args, dest, _PROXY_TIMEOUT):
             return True
-        tmp.unlink(missing_ok=True)
     return False
 
 
@@ -133,6 +148,16 @@ def _ensure_proxy_async(src: Path) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
+def _video_duration(path: Path) -> float:
+    """Seconds, or 0.0 if ffprobe can't tell (a still, a broken file, no ffmpeg)."""
+    from ..sources import _video_meta
+
+    try:
+        return float(_video_meta(str(path))[0] or 0.0)
+    except Exception:  # noqa: BLE001 — metadata is a nicety, never a failed upload
+        return 0.0
+
+
 def _clip_name(asset_id: str, start: float, dur: float) -> str:
     return f"{asset_id}-clip-{start:.1f}-{dur:.1f}.mp4"
 
@@ -141,21 +166,10 @@ def _make_clip_excerpt(src: Path, dest: Path, start: float, dur: float) -> bool:
     """Cut `[start, start+dur]` out of `src` at preview height, into `dest`. Cheap: the
     source is normally the already-360p proxy, so this is a short re-encode of a few
     seconds. Atomic write — a reader never sees a partial file."""
-    tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp.mp4")
-    try:
-        proc = subprocess.run(
-            ["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}",
-             "-i", str(src), "-vf", f"scale=-2:{_PROXY_HEIGHT}", "-c:v", "libx264",
-             "-preset", "veryfast", "-crf", "30", "-an", "-movflags", "+faststart", str(tmp)],
-            capture_output=True, timeout=180,
-        )  # fmt: skip
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    if proc.returncode == 0 and tmp.exists() and tmp.stat().st_size:
-        os.replace(tmp, dest)
-        return True
-    tmp.unlink(missing_ok=True)
-    return False
+    args = ["-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(src),
+            "-vf", f"scale=-2:{_PROXY_HEIGHT}", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "30", "-an", "-movflags", "+faststart"]  # fmt: skip
+    return _ffmpeg_atomic(args, dest, _CLIP_TIMEOUT)
 
 
 @bp.get("/asset-clip/<job_id>/<asset_id>")
@@ -256,18 +270,10 @@ def _make_video_thumb(src: Path) -> bool:
     dest = src.with_name(src.stem + _THUMB_SUFFIX)
     if dest.exists():
         return True
-    for ss in ("0.3", "0"):
-        try:
-            proc = subprocess.run(
-                ["ffmpeg", "-v", "error", "-y", "-ss", ss, "-i", str(src),
-                 "-frames:v", "1", "-vf", "scale=240:-2", str(dest)],
-                capture_output=True, timeout=30,
-            )  # fmt: skip
-        except (OSError, subprocess.TimeoutExpired):
-            break
-        if proc.returncode == 0 and dest.exists() and dest.stat().st_size:
+    for ss in ("0.3", "0"):  # ultra-short clips have no frame at 0.3s
+        args = ["-ss", ss, "-i", str(src), "-frames:v", "1", "-vf", f"scale={_THUMB_WIDTH}:-2"]
+        if _ffmpeg_atomic(args, dest, _THUMB_TIMEOUT):
             return True
-    dest.unlink(missing_ok=True)
     return False
 
 
@@ -326,6 +332,13 @@ def _store_asset(
         "name": filename,
         "addedAt": int(time.time()),
     }
+    if kind == "video":
+        # The montage card needs each clip's duration to flag a slot its clip can't fill.
+        # It used to measure that in the browser by opening the ORIGINAL file — a gigabyte
+        # per card. ffprobe already told us here.
+        duration = _video_duration(dest)
+        if duration:
+            asset["duration"] = round(duration, 3)
     if folder:
         asset["folder"] = folder
     if register:

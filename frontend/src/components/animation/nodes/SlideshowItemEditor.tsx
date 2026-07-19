@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { videoPreviewSrc } from "../../../lib/assetPreview";
+import { videoScrubSrc } from "../../../lib/assetPreview";
 
 // The video in-point mini-editor: a small popover with a scrubbable <video> and a range
 // slider. Shared by the slideshow's video items AND the video card's `start` (🎞) —
@@ -45,7 +45,7 @@ export default function SlideshowItemEditor({
         </div>
         <video
           ref={videoRef}
-          src={videoPreviewSrc(url)}
+          src={videoScrubSrc(url)}
           muted
           playsInline
           preload="metadata"

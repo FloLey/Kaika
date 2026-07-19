@@ -18,8 +18,6 @@ import {
   videoSource,
 } from "../../../lib/graphModel";
 import { riseFrames } from "../../../lib/imageCount";
-import { useVideoDurations } from "../../../lib/videoDuration";
-import { videoPreviewSrc } from "../../../lib/assetPreview";
 import type { NodeProps } from "./nodeProps";
 import type { Graph, MontageData, VideoData } from "../../../lib/types";
 
@@ -39,10 +37,7 @@ function upstreamVideoCard(
       if (!d.assetUrl) return null;
       const sp = d.ports?.speed?.binding;
       return {
-        // The PREVIEW copy: we only need the duration (the transcode preserves it),
-        // and opening the raw file just to read its metadata pulled a gigabyte per
-        // card — the very stall this whole preview path exists to avoid.
-        url: videoPreviewSrc(d.assetUrl),
+        url: d.assetUrl,
         start: d.start || 0,
         loop: d.loop !== false,
         // A wired speed varies per frame — assume 1 rather than guess (we'd rather
@@ -146,14 +141,20 @@ export default function MontageNode({
   // the clip (loop on) or freezes its last frame (loop off) — either way you want to
   // know, and by how much.
   const clips = useMemo(
-    () => inputs.map((s) => upstreamVideoCard(graph, graph ? videoSource(graph, node.id, s.id) : null)),
+    () =>
+      inputs.map((s) => upstreamVideoCard(graph, graph ? videoSource(graph, node.id, s.id) : null)),
     [inputs, graph, node.id]
   );
-  const clipUrls = useMemo(
-    () => [...new Set(clips.filter(Boolean).map((c) => c!.url))].sort(),
-    [clips]
-  );
-  const durations = useVideoDurations(clipUrls);
+  // Durations come from the ASSET RECORD (the backend ffprobes each video on upload).
+  // They used to be measured in the browser by opening every clip — a gigabyte per card,
+  // the very stall this preview path exists to avoid.
+  const durations = useMemo(() => {
+    const byUrl: Record<string, number> = {};
+    for (const a of ctx?.assets || []) {
+      if (a.duration) byUrl[a.url] = a.duration;
+    }
+    return byUrl;
+  }, [ctx?.assets]);
 
   // `{ short: seconds missing, avail, needed }` when the clip falls short, else null.
   const shortfall = (i: number, w: number | null) => {
@@ -231,9 +232,7 @@ export default function MontageNode({
                     title={
                       `clip too short: only ${s.avail.toFixed(1)}s left from its in-point ` +
                       `for a ${s.needed.toFixed(1)}s slot (${s.short.toFixed(1)}s missing) — ` +
-                      (s.loop
-                        ? "it loops back to the in-point"
-                        : "it freezes on its last frame") +
+                      (s.loop ? "it loops back to the in-point" : "it freezes on its last frame") +
                       ". Move the in-point earlier (🎞 on the video card), turn the slot's ×N " +
                       "down, or cut more often."
                     }

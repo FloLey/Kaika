@@ -1,41 +1,46 @@
-// Preview sources for video assets.
+// How a video asset is DISPLAYED in the editor.
 //
-// A card preview must never stream the RAW asset: a phone clip is routinely ~1 GB of
-// 4K, and several <video> elements pulling that at once stall the tab (the cards load
-// one by one and then sit frozen). `/asset-proxy/<job>/<sha>` serves a 360p copy —
-// ~100× smaller — falling back to the original until the backend has transcoded it,
-// so this is always safe to use and simply gets lighter. The RENDER always reads the
-// original; this is display only.
+// A card preview must never stream the raw asset: a phone clip is routinely ~1 GB of 4K,
+// and several <video> elements pulling that at once stall the tab. Three modes, one path
+// parse, one rule each:
+//
+//   thumb  — a poster frame (`<sha>-thumb.jpg`). Anything that only needs to be SEEN:
+//            the library grid, a compact card body.
+//   clip   — the seconds the preview actually plays, cut server-side (~57 KB). Anything
+//            that PLAYS on its own clock: card previews, montage inputs.
+//   scrub  — the full 360p proxy, seekable. Only where the user drags through the whole
+//            clip: the crop pad and the in-point picker.
+//
+// The RENDER always reads the original; this is display only.
 
-// `/assets/<job>/<sha>.<ext>` -> `/asset-proxy/<job>/<sha>`. Anything else (a blob:
-// url, an already-proxied url, a foreign path) passes through untouched.
-export function videoPreviewSrc(url: string | undefined | null): string {
-  if (!url) return "";
-  const m = /^\/assets\/([^/]+)\/([^/.]+)\.[^/.]+$/.exec(url);
-  return m ? `/asset-proxy/${m[1]}/${m[2]}` : url;
-}
+const ASSET_URL = /^\/assets\/([^/]+)\/([^/.]+)\.[^/.]+$/;
 
-// `/assets/<job>/<sha>.<ext>` -> its server-side poster frame `<sha>-thumb.jpg`.
-// Used wherever a video only needs to be SEEN, not played: the library grid and the
-// compact card previews. A playing <video> per card is what a compact canvas can't
-// afford — 20 of them re-request their file continuously.
-export function videoThumbSrc(url: string | undefined | null): string {
-  return url ? url.replace(/\.[^.]+$/, "-thumb.jpg") : "";
-}
-
-// The EXCERPT a preview actually plays: `dur` seconds from `start`, cut and cached
-// server-side (`/asset-clip`). A few hundred KB, so a canvas full of cards can each
-// play their real moving picture. The file already begins AT the in-point, so a
-// consumer must not offset into it again.
 export const PREVIEW_EXCERPT_SECONDS = 8;
 
-export function videoClipSrc(
-  url: string | undefined | null,
-  start = 0,
-  dur = PREVIEW_EXCERPT_SECONDS
-): string {
-  if (!url) return "";
-  const m = /^\/assets\/([^/]+)\/([^/.]+)\.[^/.]+$/.exec(url);
-  if (!m) return url;
-  return `/asset-clip/${m[1]}/${m[2]}?start=${Math.max(0, start).toFixed(1)}&dur=${dur.toFixed(1)}`;
+export interface PreviewOpts {
+  mode: "thumb" | "clip" | "scrub";
+  /** `clip` only: where the excerpt starts in the source, seconds. */
+  start?: number;
+  /** `clip` only: how many seconds to cut. */
+  dur?: number;
 }
+
+/** The URL to display `url` with. A non-asset url (blob:, foreign path) passes through. */
+export function assetSrc(url: string | undefined | null, opts: PreviewOpts): string {
+  if (!url) return "";
+  const m = ASSET_URL.exec(url);
+  if (!m) return url;
+  const [, job, sha] = m;
+  if (opts.mode === "thumb") return url.replace(/\.[^.]+$/, "-thumb.jpg");
+  if (opts.mode === "scrub") return `/asset-proxy/${job}/${sha}`;
+  const start = Math.max(0, opts.start ?? 0).toFixed(1);
+  const dur = (opts.dur ?? PREVIEW_EXCERPT_SECONDS).toFixed(1);
+  return `/asset-clip/${job}/${sha}?start=${start}&dur=${dur}`;
+}
+
+export const videoThumbSrc = (url: string | undefined | null): string =>
+  assetSrc(url, { mode: "thumb" });
+export const videoClipSrc = (url: string | undefined | null, start = 0, dur?: number): string =>
+  assetSrc(url, { mode: "clip", start, dur });
+export const videoScrubSrc = (url: string | undefined | null): string =>
+  assetSrc(url, { mode: "scrub" });

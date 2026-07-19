@@ -316,6 +316,21 @@ export default function BoxPad({
   // (a scrub / loop wrap). Seeking every frame would flush the decoder and stutter, so we
   // never do that. While paused we seek once to the frame under the playhead. Timing
   // mirrors the backend approximately — the render is authoritative.
+  // Depend on the preview's FIELDS, never on the object. Depending on `videoPreview`
+  // itself meant any caller building it inline (the common case) tore this engine down —
+  // listeners, watchdog, rAF loop — and rebuilt it on EVERY parent render, which made
+  // each <video> re-request its file; a canvas of 20 clips did that ~27 times each and
+  // stalled the tab. The two callers grew hand-written memos with different dep lists to
+  // work around it; with the deps here, callers need no memo at all.
+  const vpSrc = videoPreview?.src;
+  const vpFit = videoPreview?.fit;
+  const vpSync = videoPreview?.sync;
+  const vpStart = videoPreview?.start;
+  const vpSpeed = videoPreview?.speed;
+  const vpLoop = videoPreview?.loop;
+  const vpSegStart = videoPreview?.segStart;
+  const vpPlaying = videoPreview?.playing;
+  const vpClock = videoPreview?.clock;
   useEffect(() => {
     const v = videoRef.current;
     const vp = videoPreview;
@@ -380,7 +395,9 @@ export default function BoxPad({
       cancelAnimationFrame(raf);
       v.pause();
     };
-  }, [videoPreview]);
+    // `videoPreview` is read inside but deliberately NOT a dep — see the comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vpSrc, vpFit, vpSync, vpStart, vpSpeed, vpLoop, vpSegStart, vpPlaying, vpClock]);
 
   const pct = (v: number) => `${v * 100}%`;
   return (

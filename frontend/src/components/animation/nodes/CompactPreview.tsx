@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import ValuePreview from "./ValuePreview";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
@@ -102,24 +101,12 @@ const NOOP_BOX = () => {};
 // on a canvas of 20 clips that alone re-requested the files ~50 times each.
 function LayerCompactPreview({ node, aspect }: { node: GraphNode; aspect: string }) {
   const d = node.data as ImageData | VideoData;
-  const v = d as VideoData;
   const isVideo = node.type === "video";
-  // Video: the server-cut EXCERPT, looping (a few hundred KB — the card really plays).
-  // Image: itself. Both memoized so BoxPad's playback effect doesn't tear the element
-  // down and back up on every render.
-  const videoPreview = useMemo(
-    () => (isVideo ? buildCompactVideoPreview(v) : undefined),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isVideo, v.assetUrl, v.start, v.fit, v.crop_x, v.crop_y, v.crop_w, v.crop_h]
-  );
-  const imagePreview = useMemo(
-    () => (isVideo ? undefined : buildImagePreview(d)),
-    [isVideo, d]
-  );
-  const box = useMemo(
-    () => ({ x: d.box_x, y: d.box_y, w: d.box_w, h: d.box_h }),
-    [d.box_x, d.box_y, d.box_w, d.box_h]
-  );
+  // Built inline — BoxPad keys its playback engine on the preview's fields, so these
+  // objects being fresh each render is free (no memo, no stale dep list to maintain).
+  const videoPreview = isVideo ? buildCompactVideoPreview(d as VideoData) : undefined;
+  const imagePreview = isVideo ? undefined : buildImagePreview(d);
+  const box = { x: d.box_x, y: d.box_y, w: d.box_w, h: d.box_h };
   return (
     <BoxPad
       box={box}

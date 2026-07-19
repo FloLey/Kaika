@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ChangeEvent } from "react";
 import AssetLayerCard from "./AssetLayerCard";
 import CropPad from "./CropPad";
@@ -8,7 +8,6 @@ import ArgInfo from "./ArgInfo";
 import { argHelp } from "../../../lib/paramHelp";
 import { VIDEO_PARAMS } from "../../../lib/nodeParams";
 import { useNodeData } from "./useNodeData";
-import { feedsMontage } from "../../../lib/graphModel";
 import { buildVideoPreview } from "./boxPreview";
 import type { NodeProps } from "./nodeProps";
 import type { VideoData } from "../../../lib/types";
@@ -86,38 +85,10 @@ export default function VideoNode(props: NodeProps) {
   const d = node.data as VideoData;
   const set = useNodeData<VideoData>(node, onGraphChange);
   const [pickOpen, setPickOpen] = useState(false); // the scrubbable in-point picker
-  // Feeding a montage changes how this clip is timed (and previewed) — re-memo
-  // the preview when that wiring changes.
-  const inMontage = feedsMontage(ctx?.graph, node.id);
 
-  // The live clip preview inside the BoxPad (shared builder — identical in the settings
-  // window). Memo keys on the fields it reads.
-  const speedBinding = d.ports?.speed?.binding;
-  const previewSpeed = speedBinding?.kind === "const" ? Number(speedBinding.value) : 1;
-  const clock = ctx?.groupClock;
-  const playing = !!ctx?.groupPlaying;
-  const segStart = ctx?.segStart ?? 0;
-  const videoPreview = useMemo(
-    () => buildVideoPreview(d, ctx, node.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      d.assetUrl,
-      d.fit,
-      d.sync,
-      d.start,
-      previewSpeed,
-      d.loop,
-      segStart,
-      clock,
-      playing,
-      d.crop_x,
-      d.crop_y,
-      d.crop_w,
-      d.crop_h,
-      node.id,
-      inMontage,
-    ]
-  );
+  // Built inline: BoxPad depends on the preview's FIELDS, so a fresh object per render
+  // costs nothing (it used to need a hand-maintained memo to avoid restarting playback).
+  const videoPreview = buildVideoPreview(d, ctx, node.id);
 
   return (
     <AssetLayerCard

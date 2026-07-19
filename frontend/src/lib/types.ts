@@ -425,6 +425,7 @@ export interface Asset {
   name: string; // original filename / display name
   addedAt: number; // unix seconds
   folder?: string; // relative display path ("May 2026/venise") — the library groups by it
+  duration?: number; // videos: seconds, ffprobed on upload (the montage's slot warning)
 }
 
 // ---- the discriminated node union --------------------------------------------

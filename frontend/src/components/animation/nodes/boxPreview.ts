@@ -1,4 +1,4 @@
-import { videoClipSrc, videoPreviewSrc } from "../../../lib/assetPreview";
+import { videoClipSrc } from "../../../lib/assetPreview";
 import { feedsMontage } from "../../../lib/graphModel";
 import type { NodeCtx } from "./nodeProps";
 import type { BoxImagePreview, BoxVideoPreview } from "./BoxPad";
@@ -41,7 +41,7 @@ export function buildVideoPreview(
   }
   return {
     // The lightweight preview copy — never the raw 4K asset (see lib/assetPreview).
-    src: videoPreviewSrc(d.assetUrl),
+    src: videoClipSrc(d.assetUrl, d.start),
     fit: d.fit,
     sync: d.sync,
     start: d.start,

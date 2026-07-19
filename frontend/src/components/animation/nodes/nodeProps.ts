@@ -2,7 +2,7 @@
 // card components can import it without a cycle (registry.ts imports the cards).
 
 import type { PointerEvent, RefObject } from "react";
-import type { Graph, GraphNode, OutputSettings, Segment, Signal } from "../../../lib/types";
+import type { Asset, Graph, GraphNode, OutputSettings, Segment, Signal } from "../../../lib/types";
 import type { ExportSettings } from "../../../lib/export";
 
 // A ref callback the canvas hands each port so it can measure the port's centre.
@@ -40,6 +40,10 @@ export interface NodeCtx {
   // produce before the user commits to a minutes-long render.
   exportSettings?: ExportSettings;
   signals?: SignalDef[];
+  // The project's asset library. Cards read metadata from it (the montage's per-slot
+  // "clip too short" warning needs each video's duration) instead of measuring in the
+  // browser — probing a 1 GB source per card is what stalled the editor.
+  assets?: Asset[];
   lyricLines?: unknown[]; // aligned lyric lines [{t0,t1,text}] for the lyrics card
   lyricsKey?: string; // JSON of lyricLines, serialized once for the outputs' render keys
   onSaveLyricLines?: (lines: unknown[]) => Promise<void>; // persist edited line text (keeps timings)

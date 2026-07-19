@@ -82,6 +82,7 @@ interface GraphEditorOpts {
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
   exportSettings?: NodeCtx["exportSettings"];
+  assets?: NodeCtx["assets"];
   lyricLines?: unknown[];
   onSaveLyricLines?: NodeCtx["onSaveLyricLines"];
   groupClock?: NodeCtx["groupClock"];
@@ -91,7 +92,7 @@ interface GraphEditorOpts {
 }
 
 export function useGraphEditor(opts: GraphEditorOpts) {
-  const { segment, stems, job, output, exportSettings, lyricLines, onSaveLyricLines, groupClock, groupPlaying, commitGraph, setFinalOutput } = opts;
+  const { segment, stems, job, output, exportSettings, assets, lyricLines, onSaveLyricLines, groupClock, groupPlaying, commitGraph, setFinalOutput } = opts;
 
   // A stable graph object: segment.graph when present, else a fresh empty graph.
   // normalizeGraph migrates older saves so every fluid node carries the current
@@ -415,6 +416,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       job,
       output,
       exportSettings,
+      assets,
       signals: segment.signals,
       lyricLines,
       onSaveLyricLines,
@@ -436,6 +438,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       job,
       output,
       exportSettings,
+      assets,
       lyricLines,
       onSaveLyricLines,
       lyricsKey,

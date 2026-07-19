@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Segment } from "./lib/types";
+import type { Asset, Segment } from "./lib/types";
 import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
 import UploadStep from "./components/upload/UploadStep";
@@ -28,6 +28,9 @@ export default function App() {
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState(0);
   const [originalSpec, setOriginalSpec] = useState("");
+  // The project's asset library — cards read clip metadata from it (the montage's
+  // per-slot duration warning) instead of probing the source files in the browser.
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [stems, setStems] = useState<
     Record<string, { sr?: number; spectrogram?: string; audio?: string }>
   >({});
@@ -203,6 +206,7 @@ export default function App() {
       setTitle(p.title || "");
       setDuration(p.duration || 0);
       setStems(p.stems || {});
+      setAssets(p.assets || []);
       setOriginalSpec(p.stems?.original?.spectrogram || "");
       setVocalEnvelope(p.vocal_envelope || []);
       setLyricLines(p.lyric_lines || []);
@@ -366,6 +370,7 @@ export default function App() {
           output={output}
           setOutput={setOutput}
           exportSettings={exportSettings}
+          assets={assets}
           lyricLines={lyricLines}
           onSaveLyricLines={saveLyricLines}
           audioMode={exportSettings.audioMode}
