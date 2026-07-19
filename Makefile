@@ -1,7 +1,7 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
 .PHONY: dev restart db-up db-down install rerender-spectrograms seed-playground export-playground \
-	test test-backend test-frontend lint build clean-cache gc-cache gen-params \
-	format coverage
+	test test-backend test-strict test-frontend lint typecheck build clean-cache \
+	gc-cache gen-params format coverage
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
 # `make dev` runs flask + vite under one `trap 'kill 0'`, so killing the backend by
@@ -46,17 +46,32 @@ export-playground:
 	.venv/bin/python -m backend.seed_card_demo export
 
 # ---- quality gates (mirror CI) ---------------------------------------------
+# These really do mirror .github/workflows/ci.yml now. They did not before: `lint`
+# ran ruff + eslint only, while CI also ran black --check, tsc and prettier --check,
+# so a commit could pass `make lint` and fail CI on formatting or types.
 test: test-backend test-frontend
 
 test-backend:
 	.venv/bin/python -m pytest -q
+
+# What CI runs: no silent dependency skips. Use plain `test-backend` on a machine
+# that is deliberately missing ffmpeg/torch/Postgres.
+test-strict:
+	.venv/bin/python -m pytest -q --strict-deps
 
 test-frontend:
 	cd frontend && npm run test
 
 lint:
 	.venv/bin/ruff check backend tests
+	.venv/bin/black --check backend tests
 	cd frontend && npm run lint
+	cd frontend && npm run typecheck
+	cd frontend && npm run format:check
+
+# Types only — the fast inner-loop check while editing .ts/.tsx.
+typecheck:
+	cd frontend && npm run typecheck
 
 # One-time / occasional auto-format (Black for Python, Prettier for the frontend).
 # Land the first bulk run as its OWN commit and add its SHA to .git-blame-ignore-revs.
@@ -64,8 +79,12 @@ format:
 	.venv/bin/black backend tests
 	cd frontend && npm run format
 
+# `--cov` alone is enough: pyproject's [tool.coverage.run] already sets source=["backend"].
+# This used to carry a `|| pytest --cov=backend` fallback, which was dead for its stated
+# purpose and actively harmful: any FAILING TEST tripped the `||` and re-ran the whole
+# suite, with the first run's output (the actual failure) sent to /dev/null.
 coverage:
-	.venv/bin/python -m pytest --cov 2>/dev/null || .venv/bin/python -m pytest --cov=backend
+	.venv/bin/python -m pytest --cov
 	cd frontend && npm run coverage
 
 build:

@@ -8,6 +8,23 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # `backend.db` defaults its DSN to postgresql://demucs:demucs@localhost:5432/demucs
+    # (db.py:22) — the same credentials docker-compose uses locally — so matching them
+    # here means the `live_db` fixture connects with no env wiring at all.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: demucs
+          POSTGRES_PASSWORD: demucs
+          POSTGRES_DB: demucs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U demucs -d demucs"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,17 +33,27 @@ jobs:
           cache: pip
       # ruff is static — no runtime deps needed, so lint fast first.
       - name: Install lint/test tooling
-        run: pip install ruff==0.15.19 black==26.5.1 pytest==9.1.1 pytest-cov
+        run: pip install ruff==0.15.19 black==26.5.1 pytest==9.1.1 pytest-cov==7.1.0
       - name: Ruff
         run: ruff check backend tests
       - name: Black (format check)
         run: black --check backend tests
-      # The pure-logic test suite needs these runtime deps (audio/sim libs); the
-      # heavy ML stack (torch/demucs/whisper) is only used by routes, not tests.
+      # torch is a top-level import of backend/media.py, so importing backend.app —
+      # and therefore EVERY route test — needs it. Without it those tests skipped
+      # silently and CI was green on a third of the suite it never ran. The CPU wheel
+      # index keeps it to ~200 MB; the rest of the ML stack (demucs/whisper/diffusers/
+      # cv2) is imported lazily and genuinely isn't needed here.
+      - name: Install torch (CPU wheel)
+        run: pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cpu
+      # Everything else backend/ imports at module scope. Derived by walking the AST
+      # for col_offset==0 imports, so it is the full set, not a guess.
       - name: Install test runtime deps
-        run: pip install numpy scipy librosa matplotlib soundfile flask "psycopg[binary]"
-      - name: Pytest (+ coverage)
-        run: pytest --cov=backend
+        run: pip install numpy scipy librosa matplotlib soundfile flask "psycopg[binary]" pillow
+      # --strict-deps turns "skipped for a missing dependency" into a failure
+      # (conftest.py's pytest_terminal_summary). This machine is supposed to have
+      # everything, so a skip here is a provisioning bug, not an acceptable outcome.
+      - name: Pytest (+ coverage, no silent skips)
+        run: pytest --cov=backend --strict-deps
       - name: Param spec is in sync (codegen no-diff)
         run: python -m backend.gen_fluid_params --check
 

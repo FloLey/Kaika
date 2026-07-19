@@ -25,5 +25,11 @@ omit = ["backend/rerender_spectrograms.py"]
 
 [tool.coverage.report]
 show_missing = true
-# The high-value pure-logic modules; heavy IO modules (app/segment/jobs) are
-# covered more thinly until their integration tests land.
+# A ratchet, not a target. Measured 75% on the full suite (2026-07-19); 70 leaves
+# room for a normal feature commit while still failing loudly if a large uncovered
+# surface lands at once. Raise it when a coverage step banks real ground — the
+# thin modules today are segment.py (13%), render_jobs.py (25%), llm.py (28%),
+# imagegen.py (23%) and routes/export.py (30%).
+# This replaces a comment that described an include/fail_under setting nobody had
+# written, so "coverage is a gate" was true in prose only.
+fail_under = 70

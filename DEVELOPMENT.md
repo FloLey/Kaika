@@ -17,7 +17,9 @@ Quality gates (mirror CI):
 
 ```bash
 make test            # pytest + vitest
-make lint            # ruff + eslint
+make test-strict     # what CI runs: --strict-deps, so a missing dep FAILS instead of skipping
+make lint            # ruff + black --check + eslint + tsc + prettier --check
+make typecheck       # tsc --noEmit only (fast inner loop while editing .tsx)
 make build           # vite production build
 make coverage        # pytest --cov + vitest --coverage
 make format          # Black (python) + Prettier (frontend) — see "Formatting"

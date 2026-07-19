@@ -185,13 +185,15 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
 
 ```sh
 .venv/bin/python -m pip install -r requirements-dev.txt   # ruff + pytest + tools
-make test     # pytest + vitest          make lint      # ruff + eslint
+make test     # pytest + vitest          make lint      # ruff + black + eslint + tsc + prettier
 make build    # vite production build     make coverage  # pytest --cov + vitest --coverage
 make format   # Black + Prettier (run once, as its own commit)
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint + tests + build + the param-spec no-diff
-check on every push/PR. For the architecture map and the add-a-param / add-a-node
+check on every push/PR. The backend job provisions Postgres and CPU torch and runs
+`pytest --strict-deps`, so a test that would have skipped for a missing dependency
+fails the build instead — `make test-strict` is the same check locally. For the architecture map and the add-a-param / add-a-node
 checklists, see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 A **Logs panel** (right-side drawer) shows the live backend + browser log stream for

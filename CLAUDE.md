@@ -22,7 +22,8 @@ whole-song HD export. Flask JSON API (`:5000`) + React/Vite (`:5173`) + Postgres
 ```bash
 make dev                 # Postgres (Docker) + Flask :5000 + Vite :5173 (HMR)
 make test                # pytest + vitest   (test-backend / test-frontend for one side)
-make lint                # ruff + eslint;  npx tsc --noEmit in frontend/ for types
+make lint                # everything CI gates on: ruff + black + eslint + tsc + prettier
+make typecheck           # tsc --noEmit only, for the fast inner loop
 make gen-params          # regenerate frontend/src/lib/fluidParams.js from backend specs
 make seed-playground     # rebuild the Playground project in the DB
 make export-playground   # capture the live Playground into playground_pipelines.json

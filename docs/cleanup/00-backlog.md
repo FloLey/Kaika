@@ -1,4 +1,27 @@
-# Cleanup backlog
+# Cleanup backlog (wave 1)
+
+> **Status, reconciled 2026-07-19.** This file is the *original* backlog and is kept as
+> written — the analysis below is still the best statement of why this work exists. What
+> changed is that most of it shipped. Wave 2 (`README.md`, steps `02`–`15`) picks up what
+> did not.
+>
+> | Step | State | Where it stands |
+> |---|---|---|
+> | 0 — Safety net | **done** | `tests/helpers.py`, `assert_moves`, `--strict-deps`, the `isolated_paths` leak guard. Expanded by [`01-safety-net.md`](01-safety-net.md). |
+> | 1 — Video preview | **done** | `lib/videoDuration.ts` deleted; one display contract. |
+> | 2 — Split large modules | **partial** | `routes/uploads.py` split (740 → 282 + `assets.py` 424 + `imagegen.py` 88 + `jobs_routes.py` 39). **Still open:** `graph_render.py` is **2090** (the doc's 2047 has grown) and `sources.py` is **1376**. → [`10`](10-backend-big-functions.md) shrinks the functions; the file split remains unclaimed. |
+> | 3 — Double render path | **partial** | `_whole_from_block` exists and 7 cards use it. **8 still hand-maintained** → [`07`](07-one-handler-per-card.md), which is blocked on the decoder leak [`06`](06-drain-the-dag.md) found. |
+> | 4 — Hand-mirrored logic | **partial** | `VIDEO_PRODUCERS` moved to `graph_common`, killing the circular import. **Codegen never happened** → [`08`](08-codegen-the-mirrored-tables.md). |
+> | 4b — Frontend drift | **partial** | `lib/modPreview.ts` and `api.renderGraph`'s siblings gone. **`Docs.tsx` is still 1521 lines** → [`13`](13-frontend-splits.md); remaining dead symbols → [`11`](11-frontend-types.md). |
+> | 5 — Config/housekeeping | **partial** | `docs/render-versions.md` exists, `make restart` landed, `cache_gc` no longer imports a route. **`_Dag` alias + ~18 dead re-exports remain** → [`09`](09-backend-shims-and-duplicates.md). |
+> | 6 — Playground and docs | **open** | Doc drift is worse than recorded here → [`14`](14-docs-tell-the-truth.md). |
+>
+> The "487 pytest + 252 vitest" figures below are the wave-1 baseline; the suite is now
+> **547 pytest + 287 vitest**, and as of step [`02`](02-ci-runs-the-suite.md) CI actually
+> runs all of it.
+
+---
+
 
 Why this exists: in one week the full suite (487 pytest + 252 vitest) stayed **green**
 while (a) a real segment rendered **79 frozen frames out of 80** and (b) the editor took
