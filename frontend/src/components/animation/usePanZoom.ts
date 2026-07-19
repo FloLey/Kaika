@@ -53,7 +53,10 @@ export default function usePanZoom(
 ) {
   const clamp = useCallback(
     (s: number) => {
-      const lo = Math.max(FLOOR_SCALE, Math.min(MIN_SCALE, getMinScale ? getMinScale() : MIN_SCALE));
+      const lo = Math.max(
+        FLOOR_SCALE,
+        Math.min(MIN_SCALE, getMinScale ? getMinScale() : MIN_SCALE)
+      );
       return Math.max(lo, Math.min(MAX_SCALE, s));
     },
     [getMinScale]

@@ -263,7 +263,9 @@ export default function SlideshowNode({
           <select
             className="anim-select"
             value={d.fit}
-            onChange={(e: ChangeEvent<HTMLSelectElement>) => set({ fit: e.target.value as LayerFit })}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              set({ fit: e.target.value as LayerFit })
+            }
           >
             {FITS.map((o) => (
               <option key={o} value={o}>

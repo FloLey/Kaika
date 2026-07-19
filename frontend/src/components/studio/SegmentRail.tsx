@@ -113,7 +113,11 @@ export default function SegmentRail({
           />
         </>
       )}
-      <button className="iconbtn sm" title={grouped ? "Hide cards" : "Hide segments"} onClick={onCollapse}>
+      <button
+        className="iconbtn sm"
+        title={grouped ? "Hide cards" : "Hide segments"}
+        onClick={onCollapse}
+      >
         ‹
       </button>
     </div>

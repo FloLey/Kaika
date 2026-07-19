@@ -33,7 +33,10 @@ const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math",
 
 // ---- colour helpers (mirror ColorNode's swatch math; kept tiny, as in CompactPreview) ----
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const hex2 = (v: number) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0");
+const hex2 = (v: number) =>
+  Math.round(clamp01(v) * 255)
+    .toString(16)
+    .padStart(2, "0");
 const constVal = (d: ColorData, key: string, def: number) => {
   const b = d.ports?.[key]?.binding;
   return b && b.kind === "const" ? b.value : def;
@@ -88,9 +91,15 @@ export default function SettingsVisual({ node, ctx, accent }: Props) {
         <div className="sv-color" style={{ background: (node.data as BackdropData).color }} />
       );
     case "points":
-      return wrap("fill", <PointsPad points={(node.data as PointsData).points || []} aspect={aspect} />);
+      return wrap(
+        "fill",
+        <PointsPad points={(node.data as PointsData).points || []} aspect={aspect} />
+      );
     case "pattern":
-      return wrap("fill", <PointsPad points={patternPoints(node.data as PatternData)} aspect={aspect} />);
+      return wrap(
+        "fill",
+        <PointsPad points={patternPoints(node.data as PatternData)} aspect={aspect} />
+      );
     case "animate-points":
     case "merge-points":
       return wrap("fill", <ResolvedPointsPreview node={node} ctx={ctx} />);

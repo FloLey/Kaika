@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { LABELS, LABEL_COLOR, hydrateSegments, serializeSegments, copyLayout } from "../lib/segments";
+import {
+  LABELS,
+  LABEL_COLOR,
+  hydrateSegments,
+  serializeSegments,
+  copyLayout,
+} from "../lib/segments";
 import type { RawSegment } from "../lib/segments";
 import type { Graph, Segment, Signal } from "../lib/types";
 
@@ -117,7 +123,10 @@ describe("copyLayout (copy cards to the next segment)", () => {
     (g.nodes.find((n) => n.type === "signal")!.data as { signalId: string }).signalId;
 
   it("rewires the copied signal card onto the target's matching band (no duplicate)", () => {
-    const out = copyLayout(seg("A", [sig("s-src")], graphWith("s-src")), seg("B", [sig("s-tgt")], null));
+    const out = copyLayout(
+      seg("A", [sig("s-src")], graphWith("s-src")),
+      seg("B", [sig("s-tgt")], null)
+    );
     expect(out.signals).toHaveLength(1); // matched the existing band, added nothing
     expect(sigId(out.graph!)).toBe("s-tgt"); // points at THIS segment's signal, not the source's
     expect(out.graph!.nodes.some((n) => n.type === "fluid")).toBe(true); // layout carried over

@@ -10,7 +10,14 @@ import type { BackdropData } from "../../../lib/types";
 // Backdrop source: a full-frame solid-colour fill, output as a video layer. Wire it into
 // the BOTTOM input of a stack combine to get a non-black background in the final render.
 // The colour is a static swatch; `opacity` is the only modulatable port.
-export default function BackdropNode({ node, selected, helpers, onGraphChange, onDetach, onDelete }: NodeProps) {
+export default function BackdropNode({
+  node,
+  selected,
+  helpers,
+  onGraphChange,
+  onDetach,
+  onDelete,
+}: NodeProps) {
   const d = node.data as BackdropData;
   const set = useNodeData<BackdropData>(node, onGraphChange);
 

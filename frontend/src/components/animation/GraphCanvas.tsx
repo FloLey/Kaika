@@ -148,7 +148,6 @@ export default function GraphCanvas({
     applyView,
   } = usePanZoom(graph, onViewChange, rootRef, getMinScale);
 
-
   const replaceSel = useCallback(
     (id: string | null) => onSelectionChange?.(id == null ? new Set() : new Set([id])),
     [onSelectionChange]
@@ -603,8 +602,7 @@ export default function GraphCanvas({
   // Live drag offsets for the grabbed selection (graph state is untouched mid-drag;
   // dragRef mutates per pointermove and each move tick()s, so this stays current).
   const liveDrag = dragRef.current;
-  const dragIds =
-    liveDrag && liveDrag.moved ? new Set(liveDrag.items.map((i) => i.id)) : null;
+  const dragIds = liveDrag && liveDrag.moved ? new Set(liveDrag.items.map((i) => i.id)) : null;
 
   return (
     <div
@@ -680,7 +678,12 @@ export default function GraphCanvas({
               if (el) {
                 nodeEls.current.set(node.id, el);
                 portEls.current.set(key, el);
-                portMeta.current.set(key, { nodeId: node.id, portId: LOOSE_PORT, kind: "in", flow: "value" });
+                portMeta.current.set(key, {
+                  nodeId: node.id,
+                  portId: LOOSE_PORT,
+                  kind: "in",
+                  flow: "value",
+                });
               } else {
                 nodeEls.current.delete(node.id);
                 portEls.current.delete(key);

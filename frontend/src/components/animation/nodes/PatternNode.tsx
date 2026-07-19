@@ -17,7 +17,14 @@ import type { PatternData, PatternLayout } from "../../../lib/types";
 // to emit one source per generated point. One `out` points port. v1 = static layout.
 const LAYOUTS: PatternLayout[] = ["circle", "ring", "grid", "line", "spiral", "scatter"];
 
-export default function PatternNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function PatternNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as PatternData;
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
   const pts = useMemo(() => patternPoints(d), [d]);
@@ -50,7 +57,9 @@ export default function PatternNode({ node, selected, helpers, ctx, onGraphChang
         <select
           className="anim-select"
           value={d.layout}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => set({ layout: e.target.value as PatternLayout })}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+            set({ layout: e.target.value as PatternLayout })
+          }
         >
           {LAYOUTS.map((l) => (
             <option key={l} value={l}>

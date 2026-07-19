@@ -37,7 +37,8 @@ export default function ExportStep({
   onBack,
   onOpenSegment,
 }: ExportStepProps) {
-  const set = (patch: Partial<ExportSettings>) => setExportSettings({ ...exportSettings, ...patch });
+  const set = (patch: Partial<ExportSettings>) =>
+    setExportSettings({ ...exportSettings, ...patch });
   const clampDim = (v: number) => Math.max(16, Math.min(4096, Math.round(v || 0)));
 
   // The export aspect is LOCKED to the studio canvas (output settings): the flow's
@@ -152,7 +153,9 @@ export default function ExportStep({
               step={1}
               value={exportSettings.fps}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                set({ fps: Math.max(1, Math.min(120, Math.round(parseFloat(e.target.value) || 0))) })
+                set({
+                  fps: Math.max(1, Math.min(120, Math.round(parseFloat(e.target.value) || 0))),
+                })
               }
             />
           </div>
@@ -168,7 +171,10 @@ export default function ExportStep({
               value={exportSettings.gridCells}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 set({
-                  gridCells: Math.max(16, Math.min(1024, Math.round(parseFloat(e.target.value) || 0))),
+                  gridCells: Math.max(
+                    16,
+                    Math.min(1024, Math.round(parseFloat(e.target.value) || 0))
+                  ),
                 })
               }
             />
@@ -186,13 +192,16 @@ export default function ExportStep({
               value={exportSettings.imageSize}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 set({
-                  imageSize: Math.max(256, Math.min(1024, Math.round(parseFloat(e.target.value) || 0))),
+                  imageSize: Math.max(
+                    256,
+                    Math.min(1024, Math.round(parseFloat(e.target.value) || 0))
+                  ),
                 })
               }
             />
             <span className="export-hint">
-              Image-gen cards regenerate in HD at export — long edge (px), scaled to your
-              aspect. Higher = sharper but much slower.
+              Image-gen cards regenerate in HD at export — long edge (px), scaled to your aspect.
+              Higher = sharper but much slower.
             </span>
           </div>
 
@@ -216,9 +225,7 @@ export default function ExportStep({
           {/* per-segment readiness checklist */}
           <div className="export-checklist">
             <div className="export-checklist-head">SEGMENTS</div>
-            {segments.length === 0 && (
-              <div className="export-hint">no segments to export</div>
-            )}
+            {segments.length === 0 && <div className="export-hint">no segments to export</div>}
             {segments.map((s) => {
               const marked = !!s.finalOutputId;
               // An unmarked row is the ONLY thing standing between you and Generate, so
@@ -246,7 +253,13 @@ export default function ExportStep({
                   ? "Open this segment in the studio and mark a final output (★ on an output card)"
                   : "no final output — mark one in the editor (★ on an output card)";
               return jumpable ? (
-                <button key={s.id} type="button" className={cls} title={title} onClick={() => onOpenSegment(s.id)}>
+                <button
+                  key={s.id}
+                  type="button"
+                  className={cls}
+                  title={title}
+                  onClick={() => onOpenSegment(s.id)}
+                >
                   {inner}
                 </button>
               ) : (
@@ -278,7 +291,8 @@ export default function ExportStep({
             )}
             {!ready && segments.length > 0 && (
               <span className="export-hint">
-                {unmarked.length} segment{unmarked.length === 1 ? "" : "s"} still need a final output
+                {unmarked.length} segment{unmarked.length === 1 ? "" : "s"} still need a final
+                output
               </span>
             )}
           </div>

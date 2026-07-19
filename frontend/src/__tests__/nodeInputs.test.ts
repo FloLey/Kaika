@@ -68,7 +68,9 @@ describe("cardInputs", () => {
 
   it("lists only the colour params relevant to the current mode", () => {
     const keys = (mode: string) =>
-      cardInputs(node("c", "color", { mode, ports: {} })).inputs.map((i) => i.portId).sort();
+      cardInputs(node("c", "color", { mode, ports: {} }))
+        .inputs.map((i) => i.portId)
+        .sort();
     expect(keys("swatch")).toEqual(["intensity", "opacity"]);
     expect(keys("rgb")).toEqual(["b", "g", "intensity", "opacity", "r"]);
     expect(keys("gradient")).toEqual(["intensity", "opacity", "position"]);
@@ -76,7 +78,9 @@ describe("cardInputs", () => {
 
   it("tags dynamic rows with a constant helpKey", () => {
     expect(cardInputs(node("m", "math", { inputs: ["p1"] })).inputs[0].helpKey).toBe("input");
-    expect(cardInputs(node("c", "combine", { inputs: [{ id: "s1" }] })).inputs[0].helpKey).toBe("layer");
+    expect(cardInputs(node("c", "combine", { inputs: [{ id: "s1" }] })).inputs[0].helpKey).toBe(
+      "layer"
+    );
   });
 });
 
@@ -109,7 +113,11 @@ describe("defaultCardName", () => {
 
     // "<title> 2" was deleted; next is max(1,3)+1 = 4, NOT count+1.
     const g = {
-      nodes: [named("a", "fluid", `${title} 1`), named("b", "fluid", `${title} 3`), node("c", "lfo")],
+      nodes: [
+        named("a", "fluid", `${title} 1`),
+        named("b", "fluid", `${title} 3`),
+        node("c", "lfo"),
+      ],
       edges: [],
     } as unknown as Graph;
     expect(defaultCardName(g, "fluid")).toBe(`${title} 4`);
@@ -140,8 +148,12 @@ describe("inputSource / partitionSources (compact wiring)", () => {
 
   it("inputSource reads a param binding and an edge target", () => {
     const { graph, f } = mk();
-    expect(inputSource(f, graph, { portId: "force", flow: "value", label: "", kind: "param" })).toBe("b");
-    expect(inputSource(f, graph, { portId: "positions", flow: "points", label: "", kind: "edge" })).toBeNull();
+    expect(
+      inputSource(f, graph, { portId: "force", flow: "value", label: "", kind: "param" })
+    ).toBe("b");
+    expect(
+      inputSource(f, graph, { portId: "positions", flow: "points", label: "", kind: "edge" })
+    ).toBeNull();
   });
 
   it("splits sources into loose / assigned / other, each exactly once", () => {

@@ -198,35 +198,35 @@ export default function NodeSettingsModal({
           </div>
         ) : (
           <>
-        <div className="node-settings-main">
-          {ctx.graph && (
-            <InputPicker
-              node={node}
-              graph={ctx.graph}
-              signals={ctx.signals}
-              onGraphChange={onGraphChange}
-            />
-          )}
-          {!NO_CARD.has(node.type) && (
-            <MinimizeContext.Provider value={modalCtx}>
-              <Card
-                node={node}
-                selected={false}
-                helpers={STUB_HELPERS}
-                ctx={cardCtx}
-                onGraphChange={onGraphChange}
-                onDetach={onDetach}
-                onDelete={undefined}
-              />
-            </MinimizeContext.Provider>
-          )}
-        </div>
+            <div className="node-settings-main">
+              {ctx.graph && (
+                <InputPicker
+                  node={node}
+                  graph={ctx.graph}
+                  signals={ctx.signals}
+                  onGraphChange={onGraphChange}
+                />
+              )}
+              {!NO_CARD.has(node.type) && (
+                <MinimizeContext.Provider value={modalCtx}>
+                  <Card
+                    node={node}
+                    selected={false}
+                    helpers={STUB_HELPERS}
+                    ctx={cardCtx}
+                    onGraphChange={onGraphChange}
+                    onDetach={onDetach}
+                    onDelete={undefined}
+                  />
+                </MinimizeContext.Provider>
+              )}
+            </div>
 
-        {!singleCol && (
-          <div className="node-settings-visual">
-            <SettingsVisual node={node} ctx={ctx} accent={accent} />
-          </div>
-        )}
+            {!singleCol && (
+              <div className="node-settings-visual">
+                <SettingsVisual node={node} ctx={ctx} accent={accent} />
+              </div>
+            )}
           </>
         )}
       </div>

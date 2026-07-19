@@ -67,11 +67,7 @@ export default function CombineNode({
       {/* Live composite preview — every on-screen composite streams (no selection
           needed); the global 2-slot queue in useStreamRender staggers renders so the
           pool never floods, and each holds its looping frame once rendered. */}
-      <StreamPreview
-        node={node}
-        ctx={ctx}
-        aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
-      />
+      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
       <div className="anim-combine-modes">
         <button
           className={"anim-mode-btn" + (mode === "merge" ? " on" : "")}
@@ -142,7 +138,10 @@ export default function CombineNode({
 
       {/* Cross-segment continuity layer (data.layer): outputs sharing a layer number
           carry their composed simulation across segment cuts in the final export. */}
-      <label className="ctl ctl-num anim-layer" title="cross-segment continuity — same layer number carries the composed simulation across segment cuts in the final export">
+      <label
+        className="ctl ctl-num anim-layer"
+        title="cross-segment continuity — same layer number carries the composed simulation across segment cuts in the final export"
+      >
         <span className="ctl-label">layer</span>
         <input
           type="number"

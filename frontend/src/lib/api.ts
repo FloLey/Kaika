@@ -131,7 +131,11 @@ async function jsonOrThrow<T = unknown>(res: Response): Promise<T> {
 // body (POST unless overridden) / plain GET, and parse the JSON response through
 // jsonOrThrow. Endpoints with a different shape (FormData, DELETE, raw 404
 // handling) still call fetch + jsonOrThrow directly.
-async function postJson<T>(url: string, body: unknown, method: "POST" | "PUT" = "POST"): Promise<T> {
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  method: "POST" | "PUT" = "POST"
+): Promise<T> {
   return jsonOrThrow<T>(
     await fetch(url, {
       method,
@@ -286,7 +290,6 @@ export async function resolvePoints(params: {
 }): Promise<{ points: [number, number][] }> {
   return postJson<{ points: [number, number][] }>("/resolve-points", params);
 }
-
 
 // Render an animation graph for one segment. The segment's signal defs ride in
 // the request (Issue 1A) so the backend can resolve `signal` node references.

@@ -127,7 +127,12 @@ export default function NodeFrame({
   compact = false,
   children,
 }: NodeFrameProps) {
-  const { minimized: minSet, toggle, mode, rename } = useContext(MinimizeContext) as {
+  const {
+    minimized: minSet,
+    toggle,
+    mode,
+    rename,
+  } = useContext(MinimizeContext) as {
     minimized?: Set<string>;
     toggle?: (id: string) => void;
     mode?: "detailed" | "compact";

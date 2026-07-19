@@ -72,7 +72,15 @@ function useFonts(): FontOption[] {
   return fonts;
 }
 
-export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange, onDetach, onDelete }: NodeProps) {
+export default function LyricsNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDetach,
+  onDelete,
+}: NodeProps) {
   const d = node.data as LyricsData;
   const fonts = useFonts();
   const set = useNodeData<LyricsData>(node, onGraphChange);
@@ -95,7 +103,9 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
       <select
         className="anim-select"
         value={d[key] as string}
-        onChange={(e: ChangeEvent<HTMLSelectElement>) => set({ [key]: e.target.value } as Partial<LyricsData>)}
+        onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+          set({ [key]: e.target.value } as Partial<LyricsData>)
+        }
       >
         {opts.map((o) => (
           <option key={o} value={o}>
@@ -134,7 +144,17 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
       playing: !!ctx?.groupPlaying,
       time0: ctx?.segStart ?? 0,
     }),
-    [getText, idleText, family, d.align, d.outline, d.outlineWidth, ctx?.groupClock, ctx?.groupPlaying, ctx?.segStart]
+    [
+      getText,
+      idleText,
+      family,
+      d.align,
+      d.outline,
+      d.outlineWidth,
+      ctx?.groupClock,
+      ctx?.groupPlaying,
+      ctx?.segStart,
+    ]
   );
 
   return (
@@ -162,7 +182,9 @@ export default function LyricsNode({ node, selected, helpers, ctx, onGraphChange
       <StreamPreview node={node} ctx={ctx} aspect={aspect} />
       <div className="anim-fx-hint anim-lyrics-lines">
         <span>
-          {lineCount > 0 ? `${lineCount} aligned line${lineCount === 1 ? "" : "s"} for this track` : "no aligned lyrics for this track"}
+          {lineCount > 0
+            ? `${lineCount} aligned line${lineCount === 1 ? "" : "s"} for this track`
+            : "no aligned lyrics for this track"}
         </span>
         {ctx?.onSaveLyricLines && lineCount > 0 && (
           <button

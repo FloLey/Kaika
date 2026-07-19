@@ -12,7 +12,14 @@ import type { GateData } from "../../../lib/types";
 // threshold − hysteresis/2 — a signal hovering at the threshold can't flicker).
 // The binary signal drives on/off-style ports anywhere: an imagegen trigger, a
 // fluid's emit, a lyrics opacity… Input `in` (value) → `out` (value).
-export default function GateNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function GateNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as GateData;
   const set = useNodeData<GateData>(node, onGraphChange);
 

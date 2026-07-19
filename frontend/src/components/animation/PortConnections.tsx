@@ -17,7 +17,12 @@ interface PortConnectionsProps {
 // assigns that wire to the port (a real binding — the gray line turns solid).
 // Clearing an assigned port demotes its wire back to loose instead of deleting
 // it, so re-routing a source between ports never loses the connection.
-export default function PortConnections({ node, graph, signals, onGraphChange }: PortConnectionsProps) {
+export default function PortConnections({
+  node,
+  graph,
+  signals,
+  onGraphChange,
+}: PortConnectionsProps) {
   const params = nodeParams(node.type);
   const loose = (graph.edges || []).filter((e) => e.target === node.id && isLooseEdge(e));
   if (!params.length || !(loose.length || params.length)) return null;
@@ -33,7 +38,9 @@ export default function PortConnections({ node, graph, signals, onGraphChange }:
   };
 
   // Current source per port (a {kind:"node"} binding), for the "connected" info row.
-  const ports = (node.data as { ports?: Record<string, { binding?: { kind?: string; nodeId?: string } }> }).ports || {};
+  const ports =
+    (node.data as { ports?: Record<string, { binding?: { kind?: string; nodeId?: string } }> })
+      .ports || {};
   const boundTo = (key: string): string | null => {
     const b = ports[key]?.binding;
     return b && b.kind === "node" && b.nodeId ? b.nodeId : null;
@@ -67,11 +74,7 @@ export default function PortConnections({ node, graph, signals, onGraphChange }:
         return (
           <label className="port-connections-row" key={p.key}>
             <span className="port-connections-label">{p.label}</span>
-            <select
-              className="anim-select"
-              value={bound ? "__bound" : ""}
-              onChange={onPick(p.key)}
-            >
+            <select className="anim-select" value={bound ? "__bound" : ""} onChange={onPick(p.key)}>
               <option value="">{bound ? "— unwire (park the line) —" : "— not wired —"}</option>
               {loose.length > 0 && (
                 <optgroup label="not connected">

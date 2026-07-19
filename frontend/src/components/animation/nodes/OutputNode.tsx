@@ -20,7 +20,14 @@ import { jobIdOf, type NodeProps } from "./nodeProps";
 // The video's frame is slaved to the SHARED segment clock (ctx.groupClock =
 // Studio's refAudio) so it plays and scrubs in lock-step with the segment audio and
 // the signal pulse pads. Shows not-rendered / rendering / error states.
-export default function OutputNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function OutputNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const {
     graph,
     segment,
@@ -219,7 +226,11 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
           section="animation-output-hd"
         />
         {hd.finalUrl && !hd.busy && (
-          <button className="anim-hd-view" onClick={() => setHdOpen(true)} title="open the HD render">
+          <button
+            className="anim-hd-view"
+            onClick={() => setHdOpen(true)}
+            title="open the HD render"
+          >
             ⤢ view HD
           </button>
         )}

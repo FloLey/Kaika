@@ -207,11 +207,7 @@ export default function BoxPad({
       for (const ln of lines) {
         const lw = g.measureText(ln).width;
         const x =
-          align === "left"
-            ? bx + sw
-            : align === "right"
-              ? bx + bw - lw - sw
-              : bx + (bw - lw) / 2;
+          align === "left" ? bx + sw : align === "right" ? bx + bw - lw - sw : bx + (bw - lw) / 2;
         if (sw > 0) {
           g.lineWidth = 2 * sw;
           g.strokeStyle = "#000";
@@ -463,7 +459,8 @@ export default function BoxPad({
         )}
       </div>
       <div className="anim-box-readout">
-        x {view.x.toFixed(2)} · y {view.y.toFixed(2)} · w {view.w.toFixed(2)} · h {view.h.toFixed(2)}
+        x {view.x.toFixed(2)} · y {view.y.toFixed(2)} · w {view.w.toFixed(2)} · h{" "}
+        {view.h.toFixed(2)}
       </div>
     </div>
   );

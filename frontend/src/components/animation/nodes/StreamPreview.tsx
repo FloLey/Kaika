@@ -22,14 +22,38 @@ interface Props {
 // the block-streamed <video>, slaved to the shared segment clock when playing and
 // looping on its own when idle — the same behaviour the Output card has, factored out.
 // Streams whenever on-screen (the slot queue staggers a graph full of sims).
-export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = false, active = true }: Props) {
-  const { graph, segment, job, signals, lyricLines, lyricsKey, groupClock, groupPlaying, segStart = 0, output } = ctx || {};
+export default function StreamPreview({
+  node,
+  ctx,
+  aspect = "1 / 1",
+  compact = false,
+  active = true,
+}: Props) {
+  const {
+    graph,
+    segment,
+    job,
+    signals,
+    lyricLines,
+    lyricsKey,
+    groupClock,
+    groupPlaying,
+    segStart = 0,
+    output,
+  } = ctx || {};
   const fps = (output as { fps?: number } | undefined)?.fps || 24;
   // This node's subgraph render key (same hash the Output card uses, for any producer).
   const renderKey = useMemo(
     () =>
       graph
-        ? outputHash(graph, node.id, job as string | undefined, segment?.start, segment?.end, signals) +
+        ? outputHash(
+            graph,
+            node.id,
+            job as string | undefined,
+            segment?.start,
+            segment?.end,
+            signals
+          ) +
           JSON.stringify(output || {}) +
           `|ly:${lyricsKey ?? JSON.stringify(lyricLines || [])}`
         : "",
@@ -54,7 +78,10 @@ export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = f
   // Only stream what the backend would accept: a half-wired producer (combine with
   // no input, dangling binding…) holds its last frame instead of posting a render
   // that can only 400 — mid-wiring stays quiet.
-  const renderable = useMemo(() => (graph ? nodeRenderable(graph, node.id) : false), [graph, node.id]);
+  const renderable = useMemo(
+    () => (graph ? nodeRenderable(graph, node.id) : false),
+    [graph, node.id]
+  );
   // The settings window renders ONE preview in its right column (via CompactPreview) and
   // sets ctx.previewInPanel on the ctx it hands the card, so the card's own inline preview
   // suppresses itself — no double image, and no second render stream for the same node.

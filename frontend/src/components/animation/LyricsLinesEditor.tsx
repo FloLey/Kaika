@@ -84,15 +84,17 @@ export default function LyricsLinesEditor({ lines, onSave, onClose }: Props) {
     <>
       <p className="lyrics-editor-hint">
         Edit the words and the start/end time of each line. Times are <code>m:ss.cc</code>{" "}
-        (minutes:seconds, e.g. <code>1:04.20</code>). Tip: for rewritten lyrics, upload the
-        original words first so Whisper times them, then swap in your words here.
+        (minutes:seconds, e.g. <code>1:04.20</code>). Tip: for rewritten lyrics, upload the original
+        words first so Whisper times them, then swap in your words here.
       </p>
       <div className="lyrics-editor-list">
         {draft.map((r, i) => (
           <div className="lyrics-editor-row" key={i}>
             <span
               className="lyrics-editor-flag"
-              title={r.aligned === false ? "interpolated timing (not heard)" : "aligned to the vocal"}
+              title={
+                r.aligned === false ? "interpolated timing (not heard)" : "aligned to the vocal"
+              }
             >
               {r.aligned === false ? "≈" : "●"}
             </span>

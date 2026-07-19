@@ -56,7 +56,9 @@ export default function AssetLayerCard({
   const d = node.data as ImageData; // VideoData extends ImageData — the shared fields
   const set = useNodeData<ImageData>(node, onGraphChange);
 
-  const { busy, err, onFile, fromYoutube, jobId } = useAssetUpload(ctx, (url) => set({ assetUrl: url }));
+  const { busy, err, onFile, fromYoutube, jobId } = useAssetUpload(ctx, (url) =>
+    set({ assetUrl: url })
+  );
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
   const [libOpen, setLibOpen] = useState(false);
 
@@ -113,7 +115,9 @@ export default function AssetLayerCard({
           <select
             className="anim-select"
             value={d.fit}
-            onChange={(e: ChangeEvent<HTMLSelectElement>) => set({ fit: e.target.value as LayerFit })}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              set({ fit: e.target.value as LayerFit })
+            }
           >
             {FITS.map((o) => (
               <option key={o} value={o}>

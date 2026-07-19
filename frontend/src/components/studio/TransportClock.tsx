@@ -13,7 +13,12 @@ interface TransportClockProps {
 // re-renders on the playhead's ~4×/s timeupdate ticks. It subscribes to the playback
 // hook's external clock store so the heavy siblings (SignalCards, AnimationCanvas)
 // stay untouched during playback.
-export default function TransportClock({ subscribe, getClockT, segLen, seek }: TransportClockProps) {
+export default function TransportClock({
+  subscribe,
+  getClockT,
+  segLen,
+  seek,
+}: TransportClockProps) {
   const clockT = useSyncExternalStore(subscribe, getClockT);
   return (
     <>

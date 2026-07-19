@@ -48,7 +48,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     setProbe({ state: "busy", msg: "probing…" });
     try {
       const h: RemoteHealth = await testRemote(settings.inference.url, settings.inference.token);
-      setProbe({ state: "ok", msg: `${h.device} · ${h.gpu} · torch ${h.torch} · ${h.latency_ms} ms` });
+      setProbe({
+        state: "ok",
+        msg: `${h.device} · ${h.gpu} · torch ${h.torch} · ${h.latency_ms} ms`,
+      });
     } catch (e) {
       setProbe({ state: "err", msg: e instanceof Error ? e.message : "unreachable" });
     }
@@ -95,7 +98,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     checked={inf.enabled}
                     onChange={(e) => patch({ enabled: e.target.checked })}
                   />
-                  <span>{inf.enabled ? "on — ops below run remotely" : "off — everything runs locally"}</span>
+                  <span>
+                    {inf.enabled ? "on — ops below run remotely" : "off — everything runs locally"}
+                  </span>
                 </label>
               </div>
 
@@ -131,7 +136,11 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               <div className="out-field">
                 <span className="out-label">&nbsp;</span>
                 <div className="settings-test">
-                  <button className="btn sm" onClick={onTest} disabled={probe.state === "busy" || !inf.url.trim()}>
+                  <button
+                    className="btn sm"
+                    onClick={onTest}
+                    disabled={probe.state === "busy" || !inf.url.trim()}
+                  >
                     test connection
                   </button>
                   {probe.state !== "idle" && (
@@ -165,9 +174,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
               {saveErr && <div className="anim-asset-err">save failed: {saveErr}</div>}
               <div className="settings-note">
-                Fluid simulation, stem separation and rendering always run locally. If the server
-                is unreachable, a generation fails with a clear error — nothing silently falls
-                back to a slow local run.
+                Fluid simulation, stem separation and rendering always run locally. If the server is
+                unreachable, a generation fails with a clear error — nothing silently falls back to
+                a slow local run.
               </div>
             </>
           )}

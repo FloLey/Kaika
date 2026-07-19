@@ -100,11 +100,7 @@ export default function FluidNode({
       {/* Live sim preview — every on-screen sim streams (no selection needed); the
           global 2-slot queue in useStreamRender staggers renders so the pool never
           floods, and each holds its looping frame once rendered. */}
-      <StreamPreview
-        node={node}
-        ctx={ctx}
-        aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"}
-      />
+      <StreamPreview node={node} ctx={ctx} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} />
       {/* Source positions: a labelled `points` input. Wire a points card here to put
           a source at each drawn point (otherwise a single source at the centre). */}
       <div className="anim-pos-row">
@@ -165,7 +161,10 @@ export default function FluidNode({
             {s.wrap === false ? "open edges" : ""}
           </div>
         )}
-        <label className="ctl ctl-num anim-layer" title="cross-segment continuity — outputs sharing a layer number carry their simulation across segment cuts in the final export">
+        <label
+          className="ctl ctl-num anim-layer"
+          title="cross-segment continuity — outputs sharing a layer number carry their simulation across segment cuts in the final export"
+        >
           <span className="ctl-label">layer</span>
           <input
             type="number"

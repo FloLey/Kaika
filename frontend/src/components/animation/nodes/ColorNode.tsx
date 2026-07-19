@@ -17,7 +17,10 @@ const LEVELS = COLOR_PARAMS.filter((p) => p.key === "intensity" || p.key === "op
 const POSITION = COLOR_PARAMS.find((p) => p.key === "position")!;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const hex2 = (v: number) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0");
+const hex2 = (v: number) =>
+  Math.round(clamp01(v) * 255)
+    .toString(16)
+    .padStart(2, "0");
 const toHex = (r: number, g: number, b: number) => `#${hex2(r)}${hex2(g)}${hex2(b)}`;
 const fromHex = (h: string): [number, number, number] => {
   const n = parseInt(h.slice(1), 16);
@@ -25,7 +28,14 @@ const fromHex = (h: string): [number, number, number] => {
 };
 const def = (k: string) => COLOR_PARAMS.find((p) => p.key === k)?.def ?? 0;
 
-export default function ColorNode({ node, selected, helpers, onGraphChange, onDetach, onDelete }: NodeProps) {
+export default function ColorNode({
+  node,
+  selected,
+  helpers,
+  onGraphChange,
+  onDetach,
+  onDelete,
+}: NodeProps) {
   const d = node.data as ColorData;
   const detach = (key: string) => onDetach?.(node.id, key);
   const patch = useNodeData<ColorData>(node, onGraphChange);
@@ -96,7 +106,9 @@ export default function ColorNode({ node, selected, helpers, onGraphChange, onDe
           <select
             className="anim-select"
             value={d.mode}
-            onChange={(e: ChangeEvent<HTMLSelectElement>) => patch({ mode: e.target.value as ColorMode })}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              patch({ mode: e.target.value as ColorMode })
+            }
           >
             {MODES.map((m) => (
               <option key={m} value={m}>
@@ -123,7 +135,10 @@ export default function ColorNode({ node, selected, helpers, onGraphChange, onDe
 
       {d.mode === "gradient" && (
         <div className="anim-gradient">
-          <div className="anim-gradient-bar" style={{ "--grad": `linear-gradient(90deg, ${gradientCss})` } as CSSProperties} />
+          <div
+            className="anim-gradient-bar"
+            style={{ "--grad": `linear-gradient(90deg, ${gradientCss})` } as CSSProperties}
+          />
           {stops.map((s, i) => (
             <div className="anim-gradient-stop" key={i}>
               <input

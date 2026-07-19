@@ -92,7 +92,12 @@ export function useStreamRender(
   renderKey: string,
   active: boolean,
   opts: { lane?: RenderLane } = {}
-): { videoUrl: string; busy: boolean; error: string; progress: { done: number; total: number } | null } {
+): {
+  videoUrl: string;
+  busy: boolean;
+  error: string;
+  progress: { done: number; total: number } | null;
+} {
   const lane = opts.lane ?? "preview";
   const { graph, segment, job, output, lyricLines, groupClock } = ctx || {};
   const [videoUrl, setVideoUrl] = useState("");

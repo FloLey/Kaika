@@ -61,12 +61,17 @@ export const VIDEO_TYPES = new Set([
 function ResolvedPointsPreview({ node, ctx }: { node: GraphNode; ctx: NodeCtx }) {
   const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
-  return <PointsPad points={points} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} compact />;
+  return (
+    <PointsPad points={points} aspect={ctx?.output ? aspectOf(ctx.output) : "1 / 1"} compact />
+  );
 }
 
 // ---- colour helpers (mirrors ColorNode's swatch math, kept tiny) ----------------
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const hex2 = (v: number) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0");
+const hex2 = (v: number) =>
+  Math.round(clamp01(v) * 255)
+    .toString(16)
+    .padStart(2, "0");
 const constVal = (d: ColorData, key: string, def: number) => {
   const b = d.ports?.[key]?.binding;
   return b && b.kind === "const" ? b.value : def;
@@ -160,7 +165,9 @@ export default function CompactPreview({ node, ctx, accent }: CompactPreviewProp
           <span className="anim-compact-count">×{urls.length}</span>
         </span>
       ) : (
-        <span className="anim-compact-hint">{n ? `${n} prompt${n === 1 ? "" : "s"}` : "no prompts"}</span>
+        <span className="anim-compact-hint">
+          {n ? `${n} prompt${n === 1 ? "" : "s"}` : "no prompts"}
+        </span>
       );
     }
     case "points":

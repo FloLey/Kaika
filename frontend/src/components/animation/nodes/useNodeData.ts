@@ -12,7 +12,8 @@ export function useNodeData<T>(
   onGraphChange: (updater: (g: Graph) => Graph) => void
 ): (patch: Partial<T>) => void {
   return useCallback(
-    (patch: Partial<T>) => onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>)),
+    (patch: Partial<T>) =>
+      onGraphChange((g) => patchNodeData(g, node.id, patch as Record<string, unknown>)),
     [node.id, onGraphChange]
   );
 }

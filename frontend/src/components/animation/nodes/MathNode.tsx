@@ -20,7 +20,14 @@ const OPS: { op: MathOp; label: string }[] = [
   { op: "mix", label: "≈ mix" },
 ];
 
-export default function MathNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function MathNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as MathData;
   const inputs = d.inputs || [];
 

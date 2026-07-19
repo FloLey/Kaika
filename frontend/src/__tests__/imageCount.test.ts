@@ -32,11 +32,7 @@ describe("fitPrompts", () => {
   });
 
   it("never deletes a typed prompt (keeps more than needed)", () => {
-    expect(fitPrompts(["a rose", "a tree", "the sea"], 2)).toEqual([
-      "a rose",
-      "a tree",
-      "the sea",
-    ]);
+    expect(fitPrompts(["a rose", "a tree", "the sea"], 2)).toEqual(["a rose", "a tree", "the sea"]);
   });
 
   it("keeps a typed trailing prompt even with an empty gap before it", () => {

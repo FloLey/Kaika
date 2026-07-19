@@ -76,7 +76,8 @@ describe("playground_pipelines.json is cleanly arranged", () => {
     const bad: string[] = [];
     for (const d of DEMOS) {
       for (const n of d.graph.nodes) {
-        if (!Number.isInteger(n.x) || !Number.isInteger(n.y)) bad.push(`${d.label}/${n.id} fractional`);
+        if (!Number.isInteger(n.x) || !Number.isInteger(n.y))
+          bad.push(`${d.label}/${n.id} fractional`);
         if (n.x < 0 || n.y < 0) bad.push(`${d.label}/${n.id} negative (${n.x},${n.y})`);
       }
     }

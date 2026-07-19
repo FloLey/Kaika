@@ -88,14 +88,27 @@ describe("streaming render", () => {
     await expect(
       startStreamRender({ job_id: "j", segment: {}, graph: {}, output_id: "o1" })
     ).resolves.toEqual({ render_id: "abc123" });
-    expect(fetchMock).toHaveBeenCalledWith("/animate/stream", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/animate/stream",
+      expect.objectContaining({ method: "POST" })
+    );
   });
 
   it("polls a render's status", async () => {
     mockFetchOnce(
-      json({ state: "running", frames_done: 24, total: 72, preview_url: "/fluid/stream/x/preview_0000.mp4", url: null, error: null })
+      json({
+        state: "running",
+        frames_done: 24,
+        total: 72,
+        preview_url: "/fluid/stream/x/preview_0000.mp4",
+        url: null,
+        error: null,
+      })
     );
-    await expect(getStreamStatus("abc123")).resolves.toMatchObject({ state: "running", frames_done: 24 });
+    await expect(getStreamStatus("abc123")).resolves.toMatchObject({
+      state: "running",
+      frames_done: 24,
+    });
   });
 
   it("cancels without throwing even when the request fails", async () => {

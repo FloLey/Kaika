@@ -15,7 +15,8 @@ export default function ImagegenGallery({ urls }: { urls: string[] }) {
     if (open === null) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(null);
-      else if (e.key === "ArrowLeft") setOpen((i) => (i === null ? i : (i - 1 + urls.length) % urls.length));
+      else if (e.key === "ArrowLeft")
+        setOpen((i) => (i === null ? i : (i - 1 + urls.length) % urls.length));
       else if (e.key === "ArrowRight") setOpen((i) => (i === null ? i : (i + 1) % urls.length));
     };
     window.addEventListener("keydown", onKey);
@@ -24,7 +25,8 @@ export default function ImagegenGallery({ urls }: { urls: string[] }) {
 
   if (!has) return <span className="anim-compact-hint">no images yet</span>;
 
-  const step = (delta: number) => setOpen((i) => (i === null ? i : (i + delta + urls.length) % urls.length));
+  const step = (delta: number) =>
+    setOpen((i) => (i === null ? i : (i + delta + urls.length) % urls.length));
 
   return (
     <>

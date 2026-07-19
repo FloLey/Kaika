@@ -27,7 +27,14 @@ const MODELS: { id: string; label: string }[] = [
 // into a Slideshow card's `images` input. An optional value `in` accepts a gate's
 // output — the card counts the gate's pulses and auto-sizes its prompt list so there's
 // one image per gate switch (see the Slideshow's rising-edge advance).
-export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function ImagegenNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as ImagegenData;
   const set = useNodeData<ImagegenData>(node, onGraphChange);
   const prompts = d.prompts?.length ? d.prompts : [""];
@@ -49,8 +56,7 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
   // source's contributing subgraph — refetch on any UPSTREAM change but NOT on this
   // card's own prompt/seed edits (and no O(graph) stringify per render).
   const srcId = ctx?.graph ? videoSource(ctx.graph, node.id, "in") : null;
-  const depKey =
-    srcId && ctx?.graph ? upstreamKey(ctx.graph, srcId, ctx?.segment?.signals) : "";
+  const depKey = srcId && ctx?.graph ? upstreamKey(ctx.graph, srcId, ctx?.segment?.signals) : "";
   const { curve } = useResolvedCurve(srcId ? ctx : undefined, srcId ?? "", depKey);
   const needed = srcId && curve.length ? countRises(curve) + 1 : null;
 
@@ -107,7 +113,12 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
       const trimmed = visiblePrompts.map((p) => p.trim());
       const toGen = trimmed.filter(Boolean);
       const { job_id } = await generateImage(jobId, toGen, d.seed, model);
-      const result = await pollJob<{ assets: Asset[] }>(job_id, undefined, 1000, pollAbort.current.signal);
+      const result = await pollJob<{ assets: Asset[] }>(
+        job_id,
+        undefined,
+        1000,
+        pollAbort.current.signal
+      );
       const urls = (result.assets || []).map((a) => a.url);
       // Scatter the results back to their PROMPT INDICES so assetUrls[i] is prompt i's
       // image (empty rows get ""), then re-append the hidden rows' images so they stay.
@@ -132,7 +143,12 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
     try {
       const freshSeed = Math.floor(Math.random() * 9999) + 1;
       const { job_id } = await generateImage(jobId, [text], freshSeed, model);
-      const result = await pollJob<{ assets: Asset[] }>(job_id, undefined, 1000, pollAbort.current.signal);
+      const result = await pollJob<{ assets: Asset[] }>(
+        job_id,
+        undefined,
+        1000,
+        pollAbort.current.signal
+      );
       const url = result.assets?.[0]?.url;
       if (url) {
         const next = [...generated];
@@ -254,7 +270,9 @@ export default function ImagegenNode({ node, selected, helpers, ctx, onGraphChan
               step={1}
               value={d.seed}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                set({ seed: Math.max(1, Math.min(9999, Math.round(parseFloat(e.target.value) || 1))) })
+                set({
+                  seed: Math.max(1, Math.min(9999, Math.round(parseFloat(e.target.value) || 1))),
+                })
               }
             />
             <ArgInfo type="imagegen" k="seed" />

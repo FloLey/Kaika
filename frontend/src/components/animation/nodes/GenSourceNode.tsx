@@ -28,12 +28,24 @@ export function makeGenSourceNode(cfg: {
   videoIn?: string; // tooltip for the optional refracted video input
   positionsIn?: string; // tooltip for the optional points-card input
 }) {
-  function GenSourceNode({ node, selected, helpers, ctx, onGraphChange, onDetach, onDelete }: NodeProps) {
+  function GenSourceNode({
+    node,
+    selected,
+    helpers,
+    ctx,
+    onGraphChange,
+    onDetach,
+    onDelete,
+  }: NodeProps) {
     const d = node.data as GenData;
     const set = useNodeData<GenData>(node, onGraphChange);
     const colorWired = !!(ctx?.graph && videoSource(ctx.graph, node.id, "color"));
     const videoWired = !!(cfg.videoIn && ctx?.graph && videoSource(ctx.graph, node.id, "video"));
-    const posWired = !!(cfg.positionsIn && ctx?.graph && videoSource(ctx.graph, node.id, "positions"));
+    const posWired = !!(
+      cfg.positionsIn &&
+      ctx?.graph &&
+      videoSource(ctx.graph, node.id, "positions")
+    );
 
     return (
       <NodeFrame
@@ -103,7 +115,9 @@ export function makeGenSourceNode(cfg: {
           <div className="anim-pos-row">
             <span className="anim-pos-label">video</span>
             <ArgInfo type={cfg.type} k="video" />
-            <span className="anim-pos-count">{videoWired ? "refracting input" : "palette floor"}</span>
+            <span className="anim-pos-count">
+              {videoWired ? "refracting input" : "palette floor"}
+            </span>
           </div>
         )}
 

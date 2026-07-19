@@ -50,8 +50,10 @@ export default function UploadStep({ onSubmit }: { onSubmit: (data: UploadSubmit
           </div>
           {youtubeUrl.trim() && (
             <div className="yt-range">
-              <span className="yt-range-label"
-                title="Only this part of the video is downloaded (not the whole file). Leave empty for the full track.">
+              <span
+                className="yt-range-label"
+                title="Only this part of the video is downloaded (not the whole file). Leave empty for the full track."
+              >
                 clip (optional)
               </span>
               <input

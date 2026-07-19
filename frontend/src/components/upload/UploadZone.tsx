@@ -29,8 +29,8 @@ export default function UploadZone({ onFile }: { onFile: (f: File) => void }) {
       <div className="ico">♫</div>
       <div className="big">Drop a track or video to separate</div>
       <div className="small">
-        audio (MP3 · WAV · FLAC · OGG · M4A) or video (MP4 · MOV · WEBM) — the video is kept
-        as a project asset&nbsp;&nbsp;(drag &amp; drop or click)
+        audio (MP3 · WAV · FLAC · OGG · M4A) or video (MP4 · MOV · WEBM) — the video is kept as a
+        project asset&nbsp;&nbsp;(drag &amp; drop or click)
       </div>
       <input
         ref={input}

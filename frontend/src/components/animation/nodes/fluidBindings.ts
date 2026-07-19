@@ -21,7 +21,10 @@ function patchBinding(nodeId: string, key: string, patch: Record<string, unknown
         ...n,
         data: {
           ...n.data,
-          ports: { ...ports, [key]: { ...port, binding: { ...port.binding, ...patch } as Binding } },
+          ports: {
+            ...ports,
+            [key]: { ...port, binding: { ...port.binding, ...patch } as Binding },
+          },
         },
       } as GraphNode;
     }),
@@ -57,21 +60,28 @@ export function clampRangeEdit(
 }
 
 // Patch the fluid node's static params (color, toggles…).
-export const patchStatic = (nodeId: string, patch: Record<string, unknown>): Updater =>
+export const patchStatic =
+  (nodeId: string, patch: Record<string, unknown>): Updater =>
   (g) => ({
     ...g,
     nodes: g.nodes.map((n) =>
       n.id === nodeId && n.type === "fluid"
-        ? ({ ...n, data: { ...n.data, static: { ...(n as FluidNode).data.static, ...patch } } } as GraphNode)
+        ? ({
+            ...n,
+            data: { ...n.data, static: { ...(n as FluidNode).data.static, ...patch } },
+          } as GraphNode)
         : n
     ),
   });
 
 // Set the fluid node's cross-segment continuity layer (data.layer, not a static param).
-export const setFluidLayer = (nodeId: string, layer: number): Updater =>
+export const setFluidLayer =
+  (nodeId: string, layer: number): Updater =>
   (g) => ({
     ...g,
     nodes: g.nodes.map((n) =>
-      n.id === nodeId && n.type === "fluid" ? ({ ...n, data: { ...n.data, layer } } as GraphNode) : n
+      n.id === nodeId && n.type === "fluid"
+        ? ({ ...n, data: { ...n.data, layer } } as GraphNode)
+        : n
     ),
   });

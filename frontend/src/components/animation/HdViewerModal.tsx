@@ -34,11 +34,7 @@ export default function HdViewerModal({ url, settings, streaming, onClose }: HdV
     : "";
 
   return createPortal(
-    <div
-      className="anim-modal-scrim"
-      onPointerDown={onClose}
-      onWheel={(e) => e.stopPropagation()}
-    >
+    <div className="anim-modal-scrim" onPointerDown={onClose} onWheel={(e) => e.stopPropagation()}>
       <div
         className="anim-modal hd-viewer"
         role="dialog"

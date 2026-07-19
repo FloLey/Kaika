@@ -15,7 +15,14 @@ import type { LfoData, LfoShape } from "../../../lib/types";
 // REAL resolved curve (from the backend), so it matches a Scope and the render exactly.
 const SHAPES: LfoShape[] = ["sine", "triangle", "saw", "square"];
 
-export default function LfoNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function LfoNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as LfoData;
   const set = useNodeData<LfoData>(node, onGraphChange);
 

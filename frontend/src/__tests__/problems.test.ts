@@ -67,7 +67,10 @@ describe("problemsFor", () => {
       data: { shape: "sine", rateMode: "cycles", rate: 4, phase: 0, duty: 0.5 },
     };
     const probs = problemsFor(
-      g([fluid, lfo], [{ id: "e1", source: "l1", sourcePort: "out", target: fluid.id, targetPort: "force" }])
+      g(
+        [fluid, lfo],
+        [{ id: "e1", source: "l1", sourcePort: "out", target: fluid.id, targetPort: "force" }]
+      )
     );
     expect(probs).toHaveLength(1);
     expect(probs[0].message).toContain("flattened");

@@ -8,7 +8,7 @@ const TAU = Math.PI * 2;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 function mulberry32(seed: number): () => number {
-  let a = (seed | 0) || 1;
+  let a = seed | 0 || 1;
   return () => {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
@@ -41,7 +41,10 @@ export function patternPoints(d: PatternData): [number, number][] {
     const ext = radius || 0.4;
     for (let i = 0; i < count; i++) {
       const t = count > 1 ? i / (count - 1) - 0.5 : 0;
-      out.push([clamp01(cx + Math.cos(rot) * t * ext * 2), clamp01(cy + Math.sin(rot) * t * ext * 2)]);
+      out.push([
+        clamp01(cx + Math.cos(rot) * t * ext * 2),
+        clamp01(cy + Math.sin(rot) * t * ext * 2),
+      ]);
     }
   } else if (d.layout === "spiral") {
     const turns = 3;

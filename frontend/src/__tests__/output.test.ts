@@ -15,9 +15,15 @@ describe("output ratio helpers", () => {
 
   it("fitToRatio snaps a size onto a ratio, keeping the longer edge", () => {
     // portrait export -> landscape canvas (16:9): keep the 1920 long edge
-    expect(fitToRatio({ width: 1080, height: 1920 }, 16 / 9)).toEqual({ width: 1920, height: 1080 });
+    expect(fitToRatio({ width: 1080, height: 1920 }, 16 / 9)).toEqual({
+      width: 1920,
+      height: 1080,
+    });
     // landscape export -> portrait canvas (9:16)
-    expect(fitToRatio({ width: 1920, height: 1080 }, 9 / 16)).toEqual({ width: 1080, height: 1920 });
+    expect(fitToRatio({ width: 1920, height: 1080 }, 9 / 16)).toEqual({
+      width: 1080,
+      height: 1920,
+    });
     // square canvas
     expect(fitToRatio({ width: 1000, height: 2000 }, 1)).toEqual({ width: 2000, height: 2000 });
   });

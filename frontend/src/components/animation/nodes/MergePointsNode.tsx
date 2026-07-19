@@ -10,7 +10,14 @@ import type { MergePointsData } from "../../../lib/types";
 // cards → one fluid's positions). Inputs are ordered points-edge slots targeted by
 // port id — the backend (`_resolve_points`) resolves each and appends them (capped at
 // the emitter limit). One `out` points port. The preview is the REAL merged scatter.
-export default function MergePointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function MergePointsNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as MergePointsData;
   const inputs = d.inputs || [];
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";

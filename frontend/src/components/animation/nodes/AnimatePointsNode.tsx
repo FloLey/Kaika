@@ -19,7 +19,14 @@ import type { AnimatePointsData, AnimatePointsMode } from "../../../lib/types";
 // emission gate. Both are part of the render. Input `in` (points) → `out` (points).
 const MODES: AnimatePointsMode[] = ["orbit", "drift", "chase"];
 
-export default function AnimatePointsNode({ node, selected, helpers, ctx, onGraphChange, onDelete }: NodeProps) {
+export default function AnimatePointsNode({
+  node,
+  selected,
+  helpers,
+  ctx,
+  onGraphChange,
+  onDelete,
+}: NodeProps) {
   const d = node.data as AnimatePointsData;
   const set = useNodeData<AnimatePointsData>(node, onGraphChange);
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
@@ -63,7 +70,9 @@ export default function AnimatePointsNode({ node, selected, helpers, ctx, onGrap
         <select
           className="anim-select"
           value={d.mode}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => set({ mode: e.target.value as AnimatePointsMode })}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+            set({ mode: e.target.value as AnimatePointsMode })
+          }
         >
           {MODES.map((m) => (
             <option key={m} value={m}>

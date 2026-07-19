@@ -48,7 +48,9 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
     if (!src) return srcId;
     if (src.name) return src.name;
     if (src.type === "signal") {
-      const sig = (signals || []).find((s) => s.id === (src.data as { signalId?: string }).signalId);
+      const sig = (signals || []).find(
+        (s) => s.id === (src.data as { signalId?: string }).signalId
+      );
       return `signal · ${sig?.name || (src.data as { label?: string }).label || srcId}`;
     }
     return `${chromeFor(src.type).title} · ${srcId.slice(-4)}`;
