@@ -186,6 +186,28 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
   endpoints. `409 {error, render_id}` when an HD render (segment or whole-song)
   is already running: they share one slot so they can't starve each other.
 
+### The rest of the surface
+
+Grouped by what they serve, so the list above stays about the main pipeline.
+
+- **Signals & previews** — `POST /extract` (a stem+band → a shaped 0..1 curve),
+  `POST /resolve` (a modulator chain → its resolved curve, for the Scope card),
+  `POST /resolve-points` (a points pipeline → its emitter positions),
+  `POST /fluid` (the Playground's standalone fluid render).
+- **AI cards** — `POST /generate-image/<job>` (Image gen; async, poll `/jobs/<id>`),
+  `POST /stylize/<job>` (AI Stylize's diffusion restyle).
+- **Remote inference** — `GET|PUT|POST /settings` (the stored config),
+  `POST /settings/test-remote` (the ⚙ panel's *test connection*).
+- **Playground** — `POST /playground` (build/open it),
+  `POST /playground/export` (capture the live one into the committed fixture).
+- **Derived media** — `GET /asset-proxy/<job>/<id>` (seekable 360p for card
+  previews) and `GET /asset-clip/<job>/<id>?start&dur` (the few seconds a preview
+  actually plays — the reason a 20-card segment doesn't pull gigabytes).
+- **Serving & diagnostics** — `GET /fonts` (the lyrics card's list),
+  `GET /logs?since=<seq>` (the incremental backend log feed behind the Logs
+  panel; it must never log anything itself, or each poll would feed the next).
+
+
 ## Tests & linting
 
 ```sh

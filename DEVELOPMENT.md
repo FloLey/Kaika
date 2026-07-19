@@ -25,7 +25,7 @@ make coverage        # pytest --cov + vitest --coverage
 make format          # Black (python) + Prettier (frontend) — see "Formatting"
 make clean-cache     # drop rendered clips + raw-frame cache
 make gc-cache        # reachability sweep (what saved projects no longer use)
-make gen-params      # regenerate frontend/src/lib/fluidParams.js from the backend specs
+make gen-params      # regenerate the frontend's generated files from the backend specs
 ```
 
 ## Architecture
@@ -46,9 +46,10 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
 ```
 
 - **Backend** (`backend/`, Flask :5000, pure JSON API):
-  - `app.py` — creates the app + registers the blueprints in `backend/routes/`
-    (`uploads`, `animation`, `export`, `projects`, `serving` — absolute URLs, no
-    prefixes) and kicks the startup cache GC.
+  - `app.py` — creates the app + registers the ten blueprints in `backend/routes/`
+    (`uploads`, `assets`, `imagegen`, `stylize`, `jobs_routes`, `animation`,
+    `export`, `projects`, `settings`, `serving` — absolute URLs, no prefixes) and
+    kicks the startup cache GC.
   - `graph.py` — a thin **facade** over the graph package: `graph_common.py`
     (shared lookups + `composite`), `graph_validate.py` (`validate` → HTTP 400),
     `graph_hash.py` (`output_hash`, `RENDER_VERSION`), `graph_modulators.py`
@@ -57,8 +58,9 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
     `render_stream`). Import from `backend.graph`; implement in the submodules.
   - `fluid.py` — the stable-fluids sim (FFT Poisson solve), per-dye-layer advection
     (per-component wrap), tonemap, the mp4 encoders, resumable `FluidClip`.
-  - `sources.py` — non-fluid video layers (lyrics/image/video/backdrop) + the
-    persistent `VideoClip` block decoder.
+  - `sources.py` — every non-fluid video layer: lyrics, image, slideshow, video,
+    backdrop and the six generative simulations (waves / lightning / fire /
+    aurora / rain / clouds) + the persistent `VideoClip` block decoder.
   - `animation_params.py` — **the** param specs (`FLUID_PARAM_SPEC`,
     `COLOR_PARAM_SPEC`, `SOURCE_PARAM_SPEC`); the executor views and the generated
     frontend `fluidParams.js` all derive from them.
@@ -78,7 +80,7 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
   - `lib/fluidParams.js` — **generated** from the backend specs (do not hand-edit);
     `lib/nodeParams.ts` is the registry every card reads.
   - `components/animation/` — the node-graph editor (`GraphCanvas`, `nodes/*` —
-    22 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
+    34 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
   - `components/studio/` — the studio shell, signal cards, transport.
   - `components/assets/`, `components/export/` — asset library, final export.
 
@@ -87,7 +89,10 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
 The backend param specs are the single source of truth; everything else derives
 or asserts. Three spec families live in `backend/animation_params.py`:
 `FLUID_PARAM_SPEC` (the fluid card), `COLOR_PARAM_SPEC` (the dye card), and
-`SOURCE_PARAM_SPEC` (per source card: lyrics / image / video / backdrop).
+`SOURCE_PARAM_SPEC` (per card, 16 of them: the source cards lyrics / image /
+slideshow / video / montage / backdrop, the six generative sims waves /
+lightning / fire / aurora / rain / clouds, and the FX cards transform / echo /
+colorgrade / stylize).
 
 1. Add an entry to the right spec in `backend/animation_params.py`
    (`label`/`min`/`max`/`step`/`default`/`fmt`; fluid rows also carry

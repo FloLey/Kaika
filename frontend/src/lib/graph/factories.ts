@@ -146,7 +146,7 @@ export function fluidNode(x: number, y: number): FluidNode {
 //  v25: the video card gains a SOURCE CROP (`crop_x/y/w/h`, fractions of the source
 //       frame, default full-frame) — pick which part of a clip gets fitted into the
 //       box. The schema table stamps the defaults on old saves; no migration step.
-//  v26: the generative cards became physical SIMULATIONS (specs/generative-cards):
+//  v26: the generative cards became physical SIMULATIONS (docs/generative-cards):
 //       new port sets (renames — coercePorts re-defaults them), aurora/rain/clouds
 //       join DATA_SCHEMAS (previously uncoerced), and normalize prunes edges into
 //       renamed gen-card ports (was fluid-only) so no dangling param edges survive.

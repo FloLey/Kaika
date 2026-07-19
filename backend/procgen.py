@@ -2,7 +2,7 @@
 lightning / aurora / rain / clouds).
 
 Each card is a *physical* simulation, not dressed-up noise; this module holds the
-reusable physics/rendering kit (specs/generative-cards-v2/):
+reusable physics/rendering kit (docs/generative-cards/):
 
 - 2-D fractal value noise (`fbm2d`) — still the base texture for aurora rays and
   cloud density (it wraps, so it scrolls forever);

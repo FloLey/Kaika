@@ -83,10 +83,12 @@ data/               gitignored working data (uploads, stems, caches, assets)
 | `uploads.py` | `/upload`, `/segment` — the song pipeline only |
 | `assets.py` | `/upload-asset/<job>`, `GET/DELETE /assets/<job>[/<id>]`, `/asset-from-youtube/<job>`, and the DERIVED preview files: `/asset-proxy/…` (seekable 360p) and `/asset-clip/…?start&dur` (the seconds a preview plays) |
 | `imagegen.py` | `/generate-image/<job>` |
+| `stylize.py` | `/stylize/<job>` — the AI Stylize card's diffusion restyle |
 | `jobs_routes.py` | `/jobs/<id>`, `/logs` |
-| `animation.py` | `/extract`, `/resolve`, `/fluid`, `/animate`, `/animate/stream` (+ status/cancel) |
-| `export.py` | `/export/stream`, `/export/segment` (+ shared status/cancel) |
-| `projects.py` | `/projects`, `/projects/<id>` GET/PUT/DELETE, `/playground` |
+| `animation.py` | `/extract`, `/resolve`, `/resolve-points`, `/fluid`, `/animate`, `/animate/stream` (+ status/cancel) |
+| `export.py` | `/export/stream`, `/export/segment`, `/export/segment/cached` (+ shared status/cancel) |
+| `projects.py` | `/projects`, `/projects/<id>` GET/PUT/DELETE, `/playground`, `/playground/export` |
+| `settings.py` | `/settings` GET/PUT/POST, `/settings/test-remote` — remote-inference config |
 | `serving.py` | `/`, `/fonts`, `/fluid/<name>`, `/fluid/stream/...`, `/audio/...`, `/assets/<job>/<name>`, `/spectrogram/...` |
 
 ### The graph executor (`graph_*.py`)
@@ -429,6 +431,16 @@ deployment model changes:
 - In-app user guide — every screen and control (`/?doc=`, source
   `frontend/src/components/Docs.tsx`).
 - [`specs/`](specs/) — the design records for each feature wave
-  (create-animation → hardening → polish → playground-cards). **Historical**:
-  they document *why* things are shaped this way, not what's next.
+  (create-animation → hardening → improvement-batch → look-fx → polish →
+  playground-cards). **Historical**: they document *why* things are shaped this
+  way, not what's next.
+- [`docs/cleanup/`](docs/cleanup/) — the code-quality backlog, one file per step.
+  Each records what was deliberately NOT done and why, which is usually the more
+  useful half.
+- [`docs/generative-cards/`](docs/generative-cards/) — **mixed, unlike `specs/`**:
+  `01`–`06` are shipped design records (waves, lightning, fire, aurora, rain,
+  clouds); `07`–`27` are unbuilt proposals. Treat it as a card backlog.
+- [`docs/ai-stylize/`](docs/ai-stylize/) — the AI Stylize / Image gen wave.
+- [`docs/render-versions.md`](docs/render-versions.md) — the `RENDER_VERSION`
+  changelog: what each bump changed and why it had to invalidate the cache.
 - [`docs/history/`](docs/history/) — archived review backlog + old TODOs.

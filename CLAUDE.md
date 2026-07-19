@@ -13,8 +13,12 @@ whole-song HD export. Flask JSON API (`:5000`) + React/Vite (`:5173`) + Postgres
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **Start here** — pipeline, module layout, caches, codegen contract, invariants |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Dev workflow + checklists: add a param, add a node card |
 | [`README.md`](README.md) | Setup, run, API surface, storage |
-| `frontend/src/components/Docs.tsx` | The in-app **user guide** (`/?doc=<section>`); every "?" in the UI deep-links into it — update it when user-facing behavior changes (a test guards its anchors) |
+| `frontend/src/components/docs/` | The in-app **user guide** (`/?doc=<section>`), one file per section behind a thin `Docs.tsx`; every "?" in the UI deep-links into it — update it when user-facing behavior changes (a test guards its anchors) |
 | [`specs/`](specs/) | Historical design records per feature wave — the *why*, not a roadmap |
+| [`docs/cleanup/`](docs/cleanup/) | The code-quality backlog: one file per step, with what was deliberately **not** done and why |
+| [`docs/generative-cards/`](docs/generative-cards/) | **Mixed**: `01`–`06` are shipped design records (waves…clouds); `07`–`27` are UNBUILT proposals — a card backlog, not history |
+| [`docs/ai-stylize/`](docs/ai-stylize/) | Design records for the AI Stylize / Image gen wave |
+| [`docs/render-versions.md`](docs/render-versions.md) | The `RENDER_VERSION` changelog — why each bump invalidated the cache |
 | [`docs/history/`](docs/history/) | Archived review backlog + old TODOs |
 
 ## Commands
