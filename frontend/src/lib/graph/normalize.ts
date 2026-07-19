@@ -8,7 +8,13 @@ import { FLUID_PARAM_KEYS } from "../fluidParams.js";
 import { slideshowKind } from "../imageCount";
 import { NODE_PARAMS } from "../nodeParams";
 import { FLUID_PARAMS, coercePorts, mkInputId, mkSlotId } from "./core";
-import { COLOR_STOPS_DEFAULT, COMBINE_MEDIUM, GRAPH_VERSION, combineSlot } from "./factories";
+import {
+  COLOR_STOPS_DEFAULT,
+  COMBINE_MEDIUM,
+  GRAPH_VERSION,
+  combineSlot,
+  montageSlot,
+} from "./factories";
 import type {
   Binding,
   ColorData,
@@ -32,12 +38,14 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "fluid",
   "points",
   "combine",
+  "montage",
   "output",
   "math",
   "lfo",
   "noise",
   "shaper",
   "gate",
+  "change",
   "scope",
   "pattern",
   "animate-points",
@@ -64,19 +72,33 @@ const KNOWN_NODE_TYPES = new Set<string>([
 
 // ---- field coercers (the schema-table vocabulary) ------------------------------
 type Coerce = (v: unknown) => unknown;
-const num = (def: number): Coerce => (v) => (typeof v === "number" ? v : def);
-const str = (def: string): Coerce => (v) => (typeof v === "string" ? v : def);
-const orDefault = (def: string): Coerce => (v) => v || def; // truthy passes (legacy semantics)
+const num =
+  (def: number): Coerce =>
+  (v) =>
+    typeof v === "number" ? v : def;
+const str =
+  (def: string): Coerce =>
+  (v) =>
+    typeof v === "string" ? v : def;
+const orDefault =
+  (def: string): Coerce =>
+  (v) =>
+    v || def; // truthy passes (legacy semantics)
 const bool: Coerce = (v) => !!v;
 const boolDefaultTrue: Coerce = (v) => v !== false;
-const oneOf = (values: string[], def: string): Coerce => (v) =>
-  values.includes(v as string) ? v : def;
-const hexColor = (def: string): Coerce => (v) =>
-  /^#[0-9a-fA-F]{6}$/.test((v as string) || "") ? v : def;
-const intClamp = (lo: number, hi: number, def: number): Coerce => (v) =>
-  typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : def;
-const idList: Coerce = (v) =>
-  Array.isArray(v) && v.length ? v : [mkInputId(), mkInputId()];
+const oneOf =
+  (values: string[], def: string): Coerce =>
+  (v) =>
+    values.includes(v as string) ? v : def;
+const hexColor =
+  (def: string): Coerce =>
+  (v) =>
+    /^#[0-9a-fA-F]{6}$/.test((v as string) || "") ? v : def;
+const intClamp =
+  (lo: number, hi: number, def: number): Coerce =>
+  (v) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : def;
+const idList: Coerce = (v) => (Array.isArray(v) && v.length ? v : [mkInputId(), mkInputId()]);
 const strList: Coerce = (v) =>
   Array.isArray(v) ? v.filter((u): u is string => typeof u === "string") : [];
 // A slideshow's own items: [{url, kind, start?}]. Drops malformed rows; re-infers a
@@ -86,7 +108,9 @@ const strList: Coerce = (v) =>
 const slideItems: Coerce = (v) =>
   Array.isArray(v)
     ? v
-        .filter((it): it is { url: string } => !!it && typeof (it as { url?: unknown }).url === "string")
+        .filter(
+          (it): it is { url: string } => !!it && typeof (it as { url?: unknown }).url === "string"
+        )
         .map((it) => {
           const r = it as { url: string; kind?: unknown; start?: unknown };
           const kind = r.kind === "image" || r.kind === "video" ? r.kind : slideshowKind(r.url);
@@ -97,8 +121,25 @@ const slideItems: Coerce = (v) =>
           return item;
         })
     : [];
-const portsFor = (type: string): Coerce => (v) =>
-  coercePorts(type, v as Record<string, FluidPort> | undefined);
+const portsFor =
+  (type: string): Coerce =>
+  (v) =>
+    coercePorts(type, v as Record<string, FluidPort> | undefined);
+// Montage slots: ordered {id, span?} anchors (a video edge targets a slot by its id).
+// Keep saved ids (edges point at them); drop malformed rows; seed two empty slots.
+// `span` (cuts the slot swallows) survives only when a whole number ≥ 2 — a span of 1
+// stays ABSENT so untouched graphs keep their exact shape (and output hash).
+const montageSlots: Coerce = (v) =>
+  Array.isArray(v) && v.length
+    ? v.map((s) => {
+        const r = s as { id?: string; span?: unknown };
+        const span =
+          typeof r.span === "number" && Number.isFinite(r.span) && Math.round(r.span) >= 2
+            ? Math.min(16, Math.round(r.span))
+            : undefined;
+        return span ? { id: r.id || mkSlotId(), span } : { id: r.id || mkSlotId() };
+      })
+    : [montageSlot(), montageSlot()];
 
 // One row per node type whose data is a flat field bag: field -> coercer. A saved
 // field passes through when valid, else the default; unknown saved fields are
@@ -145,6 +186,12 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
   },
   "merge-points": { inputs: idList },
   gate: { threshold: num(0.5), hysteresis: num(0.1), minGap: num(0), divide: num(1), invert: bool },
+  change: {
+    gain: num(1),
+    attack: num(5),
+    release: num(400),
+    direction: oneOf(["both", "rise", "fall"], "both"),
+  },
   lyrics: {
     font: str("inter"),
     align: orDefault("center"),
@@ -193,6 +240,12 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     threshold: num(0.5),
     hysteresis: num(0.1),
     ports: portsFor("slideshow"),
+  },
+  montage: {
+    inputs: montageSlots,
+    threshold: num(0.5),
+    hysteresis: num(0.1),
+    ports: portsFor("montage"),
   },
   imagegen: {
     prompts: (v) => (Array.isArray(v) && v.length ? v.filter((x) => typeof x === "string") : [""]),
@@ -398,7 +451,10 @@ export function normalizeGraph(graph: Graph): Graph {
   for (const t of ["waves", "lightning", "fire", "aurora", "rain", "clouds"]) {
     genValid[t] = new Set([
       ...(NODE_PARAMS[t] || []).map((p) => p.key),
-      "positions", "color", "video", "__in",
+      "positions",
+      "color",
+      "video",
+      "__in",
     ]);
   }
   const nodeById = new Map(nodes.map((n) => [n.id, n]));

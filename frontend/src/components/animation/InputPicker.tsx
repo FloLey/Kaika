@@ -148,7 +148,10 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
               </>
             )}
             {dropdown}
-            {dynamic && (
+            {/* ✕ removes a DYNAMIC row (math/merge inputs, combine layers, montage
+                slots) — edge rows only, so a card mixing params + a dynamic group
+                (montage) doesn't grow a ✕ on its param rows. */}
+            {dynamic && input.kind === "edge" && (
               <button
                 type="button"
                 className="iconbtn"

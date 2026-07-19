@@ -11,8 +11,10 @@ import { videoSource, isLooseEdge } from "../../lib/graphModel";
 import {
   addCombineInput,
   addInputPort,
+  addMontageInput,
   removeCombineInput,
   removeInputPort,
+  removeMontageInput,
 } from "../../lib/graph/mutations";
 
 export interface InputDesc {
@@ -61,6 +63,7 @@ export function cardInputs(node: GraphNode): CardInputs {
   switch (node.type) {
     case "gate":
     case "shaper":
+    case "change":
     case "scope":
       return { inputs: [{ portId: "in", flow: "value", label: "input", kind: "edge" }] };
     case "imagegen":
@@ -99,6 +102,23 @@ export function cardInputs(node: GraphNode): CardInputs {
           helpKey: "layer",
         })),
         dynamic: { label: "layer", add: addCombineInput, remove: removeCombineInput },
+      };
+    case "montage":
+      // Params (trigger/opacity) + one video row per slot. Slot rows are the dynamic
+      // group; the ✕ in the picker only renders on edge rows, so the params keep theirs
+      // off (removeMontageInput on a param key would be a no-op anyway).
+      return {
+        inputs: [
+          ...params,
+          ...((node.data as { inputs: { id: string }[] }).inputs || []).map((s, i) => ({
+            portId: s.id,
+            flow: "video" as PortFlow,
+            label: `slot ${i + 1}`,
+            kind: "edge" as const,
+            helpKey: "inputs",
+          })),
+        ],
+        dynamic: { label: "slot", add: addMontageInput, remove: removeMontageInput },
       };
     case "color":
       return { inputs: colorParamInputs(node) };

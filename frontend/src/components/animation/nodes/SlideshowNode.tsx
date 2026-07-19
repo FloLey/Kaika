@@ -13,6 +13,7 @@ import { dp2, FITS } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { SLIDESHOW_PARAMS } from "../../../lib/nodeParams";
 import { upstreamKey } from "../../../lib/graphModel";
+import { videoPreviewSrc } from "../../../lib/assetPreview";
 import { slideshowItems, slideshowKind } from "../../../lib/imageCount";
 import AssetLibrary from "../../assets/AssetLibrary";
 import SlideshowItemEditor from "./SlideshowItemEditor";
@@ -172,7 +173,13 @@ export default function SlideshowNode({
                 onClick={isOwn && isVideo ? () => setEditIdx(i) : undefined}
               >
                 {isVideo ? (
-                  <video src={it.url} muted playsInline preload="metadata" draggable={false} />
+                  <video
+                    src={videoPreviewSrc(it.url)}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    draggable={false}
+                  />
                 ) : (
                   <img src={it.url} alt="" draggable={false} />
                 )}

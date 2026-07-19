@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { videoPreviewSrc } from "../../../lib/assetPreview";
 
 // The video in-point mini-editor: a small popover with a scrubbable <video> and a range
-// slider. Since a slideshow video plays for as long as the trigger keeps it visible, the
-// only per-video choice is WHERE the extract starts — this picks that `start` (seconds)
-// visually. Pure frontend: the served .mp4 scrubs client-side, no backend preview. The
-// chosen time is committed on close (onCommit) so we don't thrash node data while dragging.
+// slider. Shared by the slideshow's video items AND the video card's `start` (🎞) —
+// in both, the display duration is decided elsewhere (the trigger / the montage's gate),
+// so the only per-video choice is WHERE the extract starts — this picks that `start`
+// (seconds) visually. Pure frontend: the served .mp4 scrubs client-side, no backend
+// preview. The chosen time is committed on close (onCommit) so we don't thrash node
+// data while dragging.
 export default function SlideshowItemEditor({
   url,
   start,
@@ -42,7 +45,7 @@ export default function SlideshowItemEditor({
         </div>
         <video
           ref={videoRef}
-          src={url}
+          src={videoPreviewSrc(url)}
           muted
           playsInline
           preload="metadata"

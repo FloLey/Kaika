@@ -95,6 +95,58 @@ def validate(graph: dict, output_id: str | None = None) -> None:
             if not slot.get("id"):
                 raise ValueError(f"combine '{cb['id']}' has an input slot with no id")
 
+    # Montage: every input slot carries an id, and each slot's upstream chain is
+    # EXCLUSIVE to that slot. Block streaming memoizes ONE producer per node and the
+    # montage pulls it with slot-local frame ranges (graph_render._montage_block), so
+    # a card feeding a montage slot AND any other consumer would receive conflicting
+    # ranges — reject with a clear message instead of corrupting a stateful sim
+    # mid-stream. (Value bindings are exempt: curves resolve purely, full-segment.)
+    montages = _nodes_of(graph, "montage")
+    for mg in montages:
+        for slot in mg.get("data", {}).get("inputs", []):
+            if not slot.get("id"):
+                raise ValueError(f"montage '{mg['id']}' has an input slot with no id")
+    if montages:
+        producers = _video_producers()
+        # Video-flow edges: a video producer's output is only ever consumed as video,
+        # so any non-loose edge whose SOURCE is a producer-typed node qualifies.
+        vid_edges = [
+            e
+            for e in graph.get("edges", [])
+            if e.get("targetPort") != LOOSE_PORT
+            and nodes.get(e.get("source"), {}).get("type") in producers
+        ]
+        back: dict[str, list[str]] = {}
+        for e in vid_edges:
+            back.setdefault(e["target"], []).append(e["source"])
+        for mg in montages:
+            for slot in mg.get("data", {}).get("inputs", []):
+                src = _video_source(graph, mg["id"], slot.get("id"))
+                if src is None:
+                    continue
+                closure: set = set()
+                stack = [src]
+                while stack:
+                    n = stack.pop()
+                    if n not in closure:
+                        closure.add(n)
+                        stack.extend(back.get(n, ()))
+                for e in vid_edges:
+                    if e.get("source") not in closure:
+                        continue
+                    is_slot_edge = (
+                        e["source"] == src
+                        and e.get("target") == mg["id"]
+                        and e.get("targetPort") == slot.get("id")
+                    )
+                    if not is_slot_edge and e.get("target") not in closure:
+                        bad = nodes.get(e["source"], {}).get("type", "?")
+                        raise ValueError(
+                            f"the '{bad}' card feeding a montage slot also feeds another "
+                            f"consumer — a montage re-times its inputs, so each slot's "
+                            f"chain must be exclusive to it; duplicate the card instead"
+                        )
+
     # A merge combine's inputs must resolve to fluid emitters — a composited video
     # (a layered combine, or a video source like lyrics) has no single emitter set.
     for cb in _nodes_of(graph, "combine"):
@@ -134,4 +186,3 @@ def _has_cycle(adj: dict[str, list[str]]) -> bool:
         return False
 
     return any(color[n] == WHITE and visit(n) for n in adj)
-

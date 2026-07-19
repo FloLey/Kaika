@@ -1,6 +1,9 @@
+import { useMemo } from "react";
 import ValuePreview from "./ValuePreview";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
+import BoxPad from "./BoxPad";
+import { buildCompactVideoPreview, buildImagePreview } from "./boxPreview";
 import { useResolvedPoints } from "./useResolvedPoints";
 import { patternPoints } from "../../../lib/pointsGen";
 import { aspectOf } from "../../../lib/output";
@@ -9,17 +12,19 @@ import type {
   BackdropData,
   ColorData,
   GraphNode,
+  ImageData,
   ImagegenData,
   PatternData,
   PointsData,
+  VideoData,
 } from "../../../lib/types";
 
 // The live preview inside a CompactCard's body — one glance at what the card produces,
-// switched on node.type: value cards pulse, points cards scatter, and every VIDEO producer
-// (fluid, combine, transform, image, video, slideshow, lyrics) streams its REAL rendered
-// output — the same block-render the Output card uses — so the card shows exactly what it
-// puts out. Output never compacts (its body IS the render). Heavy previews are
-// viewport-gated inside.
+// switched on node.type: value cards pulse, points cards scatter, plain asset layers
+// (image / video) draw client-side through a read-only BoxPad, and every OTHER video
+// producer (fluid, combine, montage, slideshow, lyrics, the sims and FX) streams its REAL
+// rendered output — the same block-render the Output card uses. Output never compacts (its
+// body IS the render). Heavy previews are viewport-gated inside.
 
 // Value cards preview their REAL resolved 0..1 output (same `/resolve` the Scope and
 // full cards use) as a pulsing pad — so a compact signal reads as "alive" and can't
@@ -34,6 +39,7 @@ const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math",
 export const VIDEO_TYPES = new Set([
   "fluid",
   "combine",
+  "montage",
   "transform",
   "stylize",
   "extract",
@@ -84,11 +90,61 @@ interface CompactPreviewProps {
   accent: string;
 }
 
+// A display-only BoxPad never commits a box, but the prop is required.
+const NOOP_BOX = () => {};
+
+// Plain asset layers (image / video) preview through the SAME read-only BoxPad the full
+// card uses: identical picture (the clip in its box, cropped), for free. Streaming them
+// instead would mean one server render of the whole segment PER CARD.
+//
+// Its own component because the preview object MUST be memoized: a fresh object every
+// render re-runs BoxPad's playback effect, which tears the <video> down and back up —
+// on a canvas of 20 clips that alone re-requested the files ~50 times each.
+function LayerCompactPreview({ node, aspect }: { node: GraphNode; aspect: string }) {
+  const d = node.data as ImageData | VideoData;
+  const v = d as VideoData;
+  const isVideo = node.type === "video";
+  // Video: the server-cut EXCERPT, looping (a few hundred KB — the card really plays).
+  // Image: itself. Both memoized so BoxPad's playback effect doesn't tear the element
+  // down and back up on every render.
+  const videoPreview = useMemo(
+    () => (isVideo ? buildCompactVideoPreview(v) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isVideo, v.assetUrl, v.start, v.fit, v.crop_x, v.crop_y, v.crop_w, v.crop_h]
+  );
+  const imagePreview = useMemo(
+    () => (isVideo ? undefined : buildImagePreview(d)),
+    [isVideo, d]
+  );
+  const box = useMemo(
+    () => ({ x: d.box_x, y: d.box_y, w: d.box_w, h: d.box_h }),
+    [d.box_x, d.box_y, d.box_w, d.box_h]
+  );
+  return (
+    <BoxPad
+      box={box}
+      aspect={aspect}
+      onChange={NOOP_BOX}
+      readOnly
+      videoPreview={videoPreview}
+      imagePreview={imagePreview}
+    />
+  );
+}
+
 export default function CompactPreview({ node, ctx, accent }: CompactPreviewProps) {
   if (VALUE_TYPES.has(node.type)) {
     return <ValuePreview node={node} ctx={ctx} color={accent} compact />;
   }
   const aspect = ctx?.output ? aspectOf(ctx.output) : "1 / 1";
+  // Plain asset layers (image / video) preview CLIENT-SIDE, through the same read-only
+  // BoxPad the full card uses — identical picture (the clip placed in its box, cropped),
+  // for free. Streaming them would mean ONE SERVER RENDER OF THE WHOLE SEGMENT PER CARD:
+  // a montage's worth of clips on a compact canvas queued dozens of segment encodes two
+  // at a time, which is what made such a canvas take minutes to settle.
+  if (node.type === "video" || node.type === "image") {
+    return <LayerCompactPreview node={node} aspect={aspect} />;
+  }
   if (VIDEO_TYPES.has(node.type)) {
     return <StreamPreview node={node} ctx={ctx} aspect={aspect} compact />;
   }

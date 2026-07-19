@@ -28,7 +28,19 @@ from .graph_common import LOOSE_PORT, _nodes_of
 #       heat field riding the fluid solver, aurora = Chapman-layer curtains,
 #       clouds = Beer-Lambert-lit density; new port sets; gen cards can feed a
 #       merge combine (shared field). Same graphs render entirely differently.
-RENDER_VERSION = 8
+#   v9: the montage card — a trigger-driven video switcher (slot k's input re-timed
+#       to start at cut k, last input holds). A pure addition, bumped by house rule.
+#  v10: the change card — a value modulator emitting its input's smoothed |derivative|
+#       (units/sec), for gating on musical CHANGE. A pure addition, house rule.
+#  v11: sim-free graphs (pure video/image/montage layers, stack combines) render at
+#       the output's NATIVE resolution (short side capped at 540) instead of the
+#       coarse simulation grid — clip previews stop looking like mush. Same graphs
+#       now produce different (bigger) frames, so old cached clips must invalidate.
+#  v12: a video card feeding a MONTAGE slot ignores the `sync="song"` pre-roll — the
+#       montage already re-times its inputs (local frame 0 = the cut), so the pre-roll
+#       seeked past the end of any clip shorter than the segment's song offset and
+#       rendered a frozen last frame for the whole slot.
+RENDER_VERSION = 12
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
@@ -47,9 +59,37 @@ _SIGNAL_HASH_FIELDS = (
 )
 
 
-def _node_for_hash(node: dict) -> dict:
-    """A node stripped of transient/layout fields (x/y/view) for hashing."""
+# Cards whose `data.inputs` is a list of wired SLOTS ({id, …}); an unwired slot is
+# invisible to the render, so it must be invisible to the hash too.
+_SLOT_CARDS = ("montage", "combine")
+
+
+def _wired_ports(graph: dict) -> set:
+    """Every `(target_id, targetPort)` an edge actually feeds (loose wires excluded)."""
+    return {
+        (e.get("target"), e.get("targetPort"))
+        for e in graph.get("edges", [])
+        if e.get("targetPort") != LOOSE_PORT
+    }
+
+
+def _node_for_hash(node: dict, wired: set | None = None) -> dict:
+    """A node stripped of transient/layout fields (x/y/view) for hashing.
+
+    Slot cards (montage / combine) additionally drop their UNWIRED slots: the render
+    already skips them (`_montage_srcs` / `_combine_video` filter on `_video_source`),
+    so an empty slot cannot change a single frame — hashing it re-rendered a
+    byte-identical clip on every `+ slot`. Wired slots keep their full shape (id,
+    span, opacity), so order and per-slot settings still bust the cache."""
     data = node.get("data", {})
+    if wired is not None and node.get("type") in _SLOT_CARDS:
+        inputs = data.get("inputs")
+        if isinstance(inputs, list):
+            kept = [
+                s for s in inputs if isinstance(s, dict) and (node.get("id"), s.get("id")) in wired
+            ]
+            if len(kept) != len(inputs):
+                data = {**data, "inputs": kept}
     return {"id": node.get("id"), "type": node.get("type"), "data": data}
 
 
@@ -106,13 +146,14 @@ def output_hash(
     nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
     sub_nodes = [nodes[i] for i in sorted(contributing) if i in nodes]
     signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
+    wired = _wired_ports(graph)  # hoisted: one pass over the edges, not one per node
     payload = {
         "render_version": RENDER_VERSION,
         "job_id": job_id,
         "output_id": output_id,
         "start": float(segment.get("start", 0.0)),
         "end": float(segment.get("end", 0.0)),
-        "nodes": [_node_for_hash(n) for n in sub_nodes],
+        "nodes": [_node_for_hash(n, wired) for n in sub_nodes],
         "edges": [
             e
             for e in graph.get("edges", [])

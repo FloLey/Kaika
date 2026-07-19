@@ -22,8 +22,16 @@ OUT = {"width": 96, "height": 128, "quality": "draft", "fps": 24, "background": 
 
 
 def _fluid(nid, color, pos):
-    ports = {k: {"binding": {"kind": "const", "value": v}} for k, v in
-             [("r", color[0]), ("g", color[1]), ("b", color[2]), ("force", 42), ("emit", 0.4)]}
+    ports = {
+        k: {"binding": {"kind": "const", "value": v}}
+        for k, v in [
+            ("r", color[0]),
+            ("g", color[1]),
+            ("b", color[2]),
+            ("force", 42),
+            ("emit", 0.4),
+        ]
+    }
     return {"id": nid, "type": "fluid", "data": {"static": {"points": [pos]}, "ports": ports}}
 
 
@@ -33,17 +41,30 @@ def _edge(s, t, tp):
 
 def _project(job_id):
     """A project with one segment: fluid -> lyrics-stacked -> two output nodes."""
-    graph = {"version": 1, "nodes": [
-        _fluid("f1", (0.3, 0.7, 1.0), [0.5, 0.5]),
-        {"id": "ly", "type": "lyrics", "data": {"position": "bottom", "ports": {}}},
-        {"id": "cb", "type": "combine", "data": {"mode": "stack",
-         "inputs": [{"id": "s0", "opacity": 1.0}, {"id": "s1", "opacity": 1.0}], "medium": {}}},
-        {"id": "oA", "type": "output", "data": {}},
-        {"id": "oB", "type": "output", "data": {}},
-    ], "edges": [
-        _edge("ly", "cb", "s0"), _edge("f1", "cb", "s1"),
-        _edge("cb", "oA", "video"), _edge("cb", "oB", "video"),
-    ]}
+    graph = {
+        "version": 1,
+        "nodes": [
+            _fluid("f1", (0.3, 0.7, 1.0), [0.5, 0.5]),
+            {"id": "ly", "type": "lyrics", "data": {"position": "bottom", "ports": {}}},
+            {
+                "id": "cb",
+                "type": "combine",
+                "data": {
+                    "mode": "stack",
+                    "inputs": [{"id": "s0", "opacity": 1.0}, {"id": "s1", "opacity": 1.0}],
+                    "medium": {},
+                },
+            },
+            {"id": "oA", "type": "output", "data": {}},
+            {"id": "oB", "type": "output", "data": {}},
+        ],
+        "edges": [
+            _edge("ly", "cb", "s0"),
+            _edge("f1", "cb", "s1"),
+            _edge("cb", "oA", "video"),
+            _edge("cb", "oB", "video"),
+        ],
+    }
     segment = {"id": "seg-0", "start": 0.0, "end": 2.0, "signals": [], "graph": graph}
     return {"job_id": job_id, "data": {"output": OUT, "segments": [segment]}}
 
@@ -82,12 +103,13 @@ def test_sweep_keeps_reachable_and_recent_deletes_the_rest(wired):
     _, _, tmp = wired
     fluid_dir = tmp / "fluid"
     reachable = next(iter(cache_gc.reachable_hashes()))
-    keep = fluid_dir / f"{reachable}.mp4"          # referenced by the project
-    recent = fluid_dir / "deadbeefdeadbeef.mp4"    # junk, but just rendered
-    stale = fluid_dir / "0123456789abcdef.mp4"     # junk, old
+    keep = fluid_dir / f"{reachable}.mp4"  # referenced by the project
+    recent = fluid_dir / "deadbeefdeadbeef.mp4"  # junk, but just rendered
+    stale = fluid_dir / "0123456789abcdef.mp4"  # junk, old
     for p in (keep, recent, stale):
         p.write_bytes(b"x")
     import os
+
     old = cache_gc.KEEP_RECENT_SEC + 3600
     os.utime(stale, (os.stat(stale).st_atime, os.stat(stale).st_mtime - old))
 
@@ -100,12 +122,13 @@ def test_sweep_reaps_unreferenced_assets(wired):
     proj, _, tmp = wired
     assets_dir = tmp / "assets"
     proj["data"]["assets"] = [{"url": "/assets/proj1/pic.png"}]
-    referenced = assets_dir / "proj1" / "pic.png"   # in the project's asset library
-    orphan = assets_dir / "junk" / "old.png"        # no project references it
+    referenced = assets_dir / "proj1" / "pic.png"  # in the project's asset library
+    orphan = assets_dir / "junk" / "old.png"  # no project references it
     for p in (referenced, orphan):
         p.parent.mkdir(exist_ok=True)
         p.write_bytes(b"x")
     import os
+
     old = cache_gc.KEEP_RECENT_SEC + 3600
     for p in (referenced, orphan):
         os.utime(p, (os.stat(p).st_atime, os.stat(p).st_mtime - old))
@@ -142,6 +165,35 @@ def test_sweep_keeps_recorded_song_exports(wired):
     assert export.exists() and not junk.exists()
 
 
+def test_sweep_keeps_recorded_segment_hd_renders(wired):
+    # A single-segment HD render (the Output card's "HD" button) records BOTH its
+    # silent clip and its audio-muxed sibling under `segment_exports`. Neither hash is
+    # recomputable — the render uses the CLIENT's graph (possibly unsaved) and swaps HD
+    # assets in memory — so the record is the only thing standing between a
+    # multi-minute render and the sweep.
+    _, _, tmp = wired
+    analysis = tmp / "analysis" / "proj1.json"
+    data = json.loads(analysis.read_text())
+    data["segment_exports"] = ["abc123abc123abc1", "hd-abc123abc123abc1-orig"]
+    analysis.write_text(json.dumps(data))
+
+    fluid_dir = tmp / "fluid"
+    silent = fluid_dir / "abc123abc123abc1.mp4"
+    muxed = fluid_dir / "hd-abc123abc123abc1-orig.mp4"
+    junk = fluid_dir / "ffffffffffffffff.mp4"  # an old unrecorded clip -> reaped
+    for p in (silent, muxed, junk):
+        p.write_bytes(b"x")
+    import os
+
+    old = cache_gc.KEEP_RECENT_SEC + 3600
+    for p in (silent, muxed, junk):
+        os.utime(p, (os.stat(p).st_atime, os.stat(p).st_mtime - old))
+
+    removed = cache_gc.sweep()
+    assert removed == 1
+    assert silent.exists() and muxed.exists() and not junk.exists()
+
+
 def test_reachable_recomputes_song_export_hash_when_final_outputs_marked(wired):
     # With every segment carrying a finalOutputId, the sweep can recompute the export
     # stem straight from the saved state (exact when no imagegen HD regen happened).
@@ -151,9 +203,7 @@ def test_reachable_recomputes_song_export_hash_when_final_outputs_marked(wired):
     proj, lines, _ = wired
     seg = proj["data"]["segments"][0]
     seg["finalOutputId"] = "oA"
-    expected = "song_" + song_render._export_hash(
-        "proj1", [seg], lines, {**_EXPORT_DEFAULTS}
-    )
+    expected = "song_" + song_render._export_hash("proj1", [seg], lines, {**_EXPORT_DEFAULTS})
     assert expected in cache_gc.reachable_hashes()
 
 
@@ -162,6 +212,7 @@ def test_sweep_bails_when_db_unavailable(wired, monkeypatch):
     stale = tmp / "fluid" / "0123456789abcdef.mp4"
     stale.write_bytes(b"x")
     import os
+
     os.utime(stale, (0, 0))  # ancient
 
     def boom():

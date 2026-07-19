@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import AssetLayerCard from "./AssetLayerCard";
 import CropPad from "./CropPad";
+import SlideshowItemEditor from "./SlideshowItemEditor";
 import { Toggle } from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
 import { argHelp } from "../../../lib/paramHelp";
 import { VIDEO_PARAMS } from "../../../lib/nodeParams";
 import { useNodeData } from "./useNodeData";
+import { feedsMontage } from "../../../lib/graphModel";
 import { buildVideoPreview } from "./boxPreview";
 import type { NodeProps } from "./nodeProps";
 import type { VideoData } from "../../../lib/types";
@@ -83,6 +85,10 @@ export default function VideoNode(props: NodeProps) {
   const { node, ctx, onGraphChange } = props;
   const d = node.data as VideoData;
   const set = useNodeData<VideoData>(node, onGraphChange);
+  const [pickOpen, setPickOpen] = useState(false); // the scrubbable in-point picker
+  // Feeding a montage changes how this clip is timed (and previewed) — re-memo
+  // the preview when that wiring changes.
+  const inMontage = feedsMontage(ctx?.graph, node.id);
 
   // The live clip preview inside the BoxPad (shared builder — identical in the settings
   // window). Memo keys on the fields it reads.
@@ -92,10 +98,25 @@ export default function VideoNode(props: NodeProps) {
   const playing = !!ctx?.groupPlaying;
   const segStart = ctx?.segStart ?? 0;
   const videoPreview = useMemo(
-    () => buildVideoPreview(d, ctx),
+    () => buildVideoPreview(d, ctx, node.id),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [d.assetUrl, d.fit, d.sync, d.start, previewSpeed, d.loop, segStart, clock, playing,
-     d.crop_x, d.crop_y, d.crop_w, d.crop_h]
+    [
+      d.assetUrl,
+      d.fit,
+      d.sync,
+      d.start,
+      previewSpeed,
+      d.loop,
+      segStart,
+      clock,
+      playing,
+      d.crop_x,
+      d.crop_y,
+      d.crop_w,
+      d.crop_h,
+      node.id,
+      inMontage,
+    ]
   );
 
   return (
@@ -143,8 +164,30 @@ export default function VideoNode(props: NodeProps) {
                 set({ start: parseFloat(e.target.value) || 0 })
               }
             />
+            {d.assetUrl && (
+              <button
+                className="iconbtn no-drag"
+                title="pick the in-point by scrubbing the clip"
+                onClick={() => setPickOpen(true)}
+              >
+                🎞
+              </button>
+            )}
           </label>
-          <Toggle label="loop" value={d.loop} onChange={(v) => set({ loop: v })} {...argHelp("video", "loop")} />
+          {pickOpen && d.assetUrl && (
+            <SlideshowItemEditor
+              url={d.assetUrl}
+              start={d.start || 0}
+              onCommit={(start) => set({ start })}
+              onClose={() => setPickOpen(false)}
+            />
+          )}
+          <Toggle
+            label="loop"
+            value={d.loop}
+            onChange={(v) => set({ loop: v })}
+            {...argHelp("video", "loop")}
+          />
         </>
       }
       afterBox={

@@ -166,6 +166,15 @@ export interface GateData {
   invert: boolean; // flip the output (1 while BELOW the threshold)
 }
 
+// Derivative detector: how fast the input is CHANGING (units/second, smoothed) — feed
+// a gate to trigger on musical change (verse→chorus, drops) rather than on level.
+export interface ChangeData {
+  gain: number; // scale on the change rate (a 0→1 sweep over 1s reads ≈1.0 before gain)
+  attack: number; // ms — how fast the output reacts to a burst of change
+  release: number; // ms — how long the bump lingers (slow, so a gate sees one clean pulse)
+  direction: "both" | "rise" | "fall"; // |Δ|, rises only, or falls only
+}
+
 // A pure monitor: shows its input value (sparkline + pulse pad) and passes it through.
 export interface ScopeData {
   label?: string;
@@ -376,6 +385,27 @@ export interface SlideshowData {
   hysteresis: number; // dead band so a hovering trigger can't machine-gun images
   ports: Record<string, FluidPort>;
 }
+// One montage input slot — its id is the targetPort the slot's video edge wires to
+// (combine-slot convention). All per-clip data (in-point, crop, speed…) lives on the
+// upstream card. `span` is how many trigger cuts the slot swallows (default 1; a ×2
+// slot plays through two gate intervals) — kept ABSENT at 1 so untouched graphs
+// hash identically.
+export interface MontageSlot {
+  id: string;
+  span?: number;
+}
+// The montage switcher (video récap use-case): N wired video inputs, cut in ORDER by
+// the `trigger` port — each rising edge past the built-in hysteresis threshold starts
+// the NEXT slot, whose input is RE-TIMED to begin at the cut (an upstream video card's
+// in-point lands exactly on the beat). Rises beyond the input count are ignored: the
+// last input holds to the segment end. Each slot's upstream chain must be exclusive
+// to it (block streaming re-times the producer — validate enforces this).
+export interface MontageData {
+  inputs: MontageSlot[];
+  threshold: number; // trigger level the built-in gate switches around
+  hysteresis: number; // dead band so a hovering trigger can't machine-gun cuts
+  ports: Record<string, FluidPort>;
+}
 // The image GENERATOR: one prompt per image, generated locally (seeded) into a list
 // of content-addressed assets. Not a video producer — its `images` output wires into
 // a Slideshow card's `images` input.
@@ -394,6 +424,7 @@ export interface Asset {
   kind: "image" | "video";
   name: string; // original filename / display name
   addedAt: number; // unix seconds
+  folder?: string; // relative display path ("May 2026/venise") — the library groups by it
 }
 
 // ---- the discriminated node union --------------------------------------------
@@ -453,6 +484,10 @@ export interface GateNode extends NodeBase {
   type: "gate";
   data: GateData;
 }
+export interface ChangeNode extends NodeBase {
+  type: "change";
+  data: ChangeData;
+}
 export interface ScopeNode extends NodeBase {
   type: "scope";
   data: ScopeData;
@@ -488,6 +523,10 @@ export interface VideoNode extends NodeBase {
 export interface SlideshowNode extends NodeBase {
   type: "slideshow";
   data: SlideshowData;
+}
+export interface MontageNode extends NodeBase {
+  type: "montage";
+  data: MontageData;
 }
 export interface ImagegenNode extends NodeBase {
   type: "imagegen";
@@ -564,6 +603,7 @@ export type GraphNode =
   | NoiseNode
   | ShaperNode
   | GateNode
+  | ChangeNode
   | ScopeNode
   | PatternNode
   | AnimatePointsNode
@@ -573,6 +613,7 @@ export type GraphNode =
   | ImageNode
   | VideoNode
   | SlideshowNode
+  | MontageNode
   | ImagegenNode
   | BackdropNode
   | WavesNode

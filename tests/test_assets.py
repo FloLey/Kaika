@@ -24,9 +24,7 @@ from backend import db  # noqa: E402
 
 def _mk_project(job):
     db.delete_project(job)
-    db.create_project(
-        job, title="t", source="s", duration=1.0, fmin=20, has_lyrics=False, stems={}
-    )
+    db.create_project(job, title="t", source="s", duration=1.0, fmin=20, has_lyrics=False, stems={})
 
 
 # --------------------------------------------------------------------------- #
@@ -97,6 +95,93 @@ def test_upload_asset_persists_lists_and_deletes(live_db, client, tmp_path, monk
         db.delete_project(job)
 
 
+def test_upload_asset_keeps_folder_metadata(live_db, client, tmp_path, monkeypatch):
+    """A folder upload sends each file's relative directory as `folder`; it rides the
+    asset dict (sanitized) so the library can group by it. Files stay content-addressed
+    flat on disk — the folder is display metadata only."""
+    from backend.routes import uploads
+
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    job = "a4a4a4a4"
+    _mk_project(job)
+    try:
+        buf = io.BytesIO()
+        Image.new("RGB", (8, 8), (9, 9, 9)).save(buf, "PNG")
+        buf.seek(0)
+        r = client.post(
+            f"/upload-asset/{job}",
+            data={"file": (buf, "clip.png"), "folder": " May 2026//../venise\\day1 "},
+            content_type="multipart/form-data",
+        )
+        assert r.status_code == 200
+        asset = r.get_json()
+        # empty / "." / ".." segments dropped, backslashes split, whitespace trimmed
+        assert asset["folder"] == "May 2026/venise/day1"
+        assert client.get(f"/assets/{job}").get_json()[0]["folder"] == "May 2026/venise/day1"
+        # …and the file still lands flat, content-addressed (no folder on disk)
+        assert (assets_dir / job / f"{asset['id']}.png").exists()
+    finally:
+        db.delete_project(job)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_video_upload_generates_a_thumbnail_and_delete_removes_it(
+    live_db, client, tmp_path, monkeypatch
+):
+    """A video asset gets a server-side `<sha>-thumb.jpg` on upload (the library grid
+    shows it as a plain <img> — a grid of live <video> decoders froze the tab), and
+    deleting the asset unlinks the thumb with it."""
+    from backend.routes import uploads
+
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    job = "a5a5a5a5"
+    _mk_project(job)
+    try:
+        clip = tmp_path / "clip.mp4"
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+             "-i", "testsrc=size=64x64:rate=10:duration=1", "-pix_fmt", "yuv420p", str(clip)],
+            check=True,
+        )  # fmt: skip
+        with clip.open("rb") as f:
+            r = client.post(
+                f"/upload-asset/{job}",
+                data={"file": (f, "clip.mp4")},
+                content_type="multipart/form-data",
+            )
+        assert r.status_code == 200
+        asset = r.get_json()
+        thumb = assets_dir / job / f"{asset['id']}-thumb.jpg"
+        assert thumb.exists() and thumb.stat().st_size > 0
+        assert client.delete(f"/assets/{job}/{asset['id']}").status_code == 200
+        assert not thumb.exists()  # the thumb dies with its asset
+    finally:
+        db.delete_project(job)
+
+
+def test_gc_keeps_a_thumb_alive_with_its_base_file(monkeypatch, tmp_path):
+    """The sweep never references thumbs directly (projects don't) — a thumb survives
+    exactly as long as its base video is reachable."""
+    from backend import cache_gc
+
+    monkeypatch.setattr(cache_gc, "ASSETS_DIR", tmp_path)
+    d = tmp_path / "job1"
+    d.mkdir()
+    (d / "aaaa.mp4").write_bytes(b"x")
+    (d / "aaaa-thumb.jpg").write_bytes(b"x")
+    (d / "bbbb-thumb.jpg").write_bytes(b"x")  # orphan — its base is gone
+    proj = {"job_id": "job1", "data": {"assets": [{"url": "/assets/job1/aaaa.mp4"}]}}
+    monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
+    monkeypatch.setattr(cache_gc, "_last_run", 0.0)
+    cache_gc.sweep(keep_recent_sec=0, now=9e9)
+    assert (d / "aaaa.mp4").exists() and (d / "aaaa-thumb.jpg").exists()
+    assert not (d / "bbbb-thumb.jpg").exists()
+
+
 def test_upload_asset_rejects_unknown_extension(live_db, client, tmp_path, monkeypatch):
     from backend.routes import uploads
 
@@ -131,8 +216,16 @@ def test_hyphenated_hd_asset_serves_and_deletes(live_db, client, tmp_path, monke
     (assets_dir / job).mkdir(parents=True)
     f = assets_dir / job / f"{asset_id}.png"
     Image.new("RGB", (4, 4), (9, 9, 9)).save(f, "PNG")
-    db.add_asset(job, {"id": asset_id, "url": f"/assets/{job}/{f.name}", "kind": "image",
-                       "name": f.name, "addedAt": 1})
+    db.add_asset(
+        job,
+        {
+            "id": asset_id,
+            "url": f"/assets/{job}/{f.name}",
+            "kind": "image",
+            "name": f.name,
+            "addedAt": 1,
+        },
+    )
     try:
         assert client.get(f"/assets/{job}/{f.name}").status_code == 200
         assert client.delete(f"/assets/{job}/{asset_id}").status_code == 200
@@ -223,9 +316,24 @@ def test_video_upload_splits_audio_and_keeps_video(live_db, tmp_path, monkeypatc
     job_dir.mkdir()
     vid = job_dir / "original.mp4"
     real_run(
-        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=32x32:d=1",
-         "-f", "lavfi", "-i", "sine=frequency=200:duration=1", "-shortest",
-         "-pix_fmt", "yuv420p", str(vid)],
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:s=32x32:d=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=200:duration=1",
+            "-shortest",
+            "-pix_fmt",
+            "yuv420p",
+            str(vid),
+        ],
         check=True,
     )
     try:
@@ -250,10 +358,15 @@ def test_video_upload_splits_audio_and_keeps_video(live_db, tmp_path, monkeypatc
 def test_cache_gc_keeps_library_asset_with_no_node(monkeypatch):
     from backend import cache_gc
 
-    proj = {"job_id": "p2", "data": {
-        "assets": [{"id": "z", "url": "/assets/p2/z.mp4", "kind": "video", "name": "z", "addedAt": 1}],
-        "segments": [{"graph": {"nodes": [{"type": "fluid", "data": {}}]}}],
-    }}
+    proj = {
+        "job_id": "p2",
+        "data": {
+            "assets": [
+                {"id": "z", "url": "/assets/p2/z.mp4", "kind": "video", "name": "z", "addedAt": 1}
+            ],
+            "segments": [{"graph": {"nodes": [{"type": "fluid", "data": {}}]}}],
+        },
+    }
     monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
     assert "z.mp4" in {p.name for p in cache_gc.reachable_assets()}
 
@@ -275,3 +388,64 @@ def test_project_delete_removes_asset_dir(live_db, client, tmp_path, monkeypatch
     r = client.delete(f"/projects/{job}")
     assert r.status_code == 200
     assert not (assets_dir / job).exists()
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_asset_proxy_serves_the_original_then_the_proxy(live_db, client, tmp_path, monkeypatch):
+    """`/asset-proxy` never breaks a preview: it serves the ORIGINAL while the 360p
+    copy is still being made (so a fresh clip previews immediately), and the proxy
+    once it lands — which is what stops several 4K phone clips from stalling the tab."""
+    from backend.routes import uploads
+
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    job = "a6a6a6a6"
+    d = assets_dir / job
+    d.mkdir()
+    src = d / "abc123.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+         "-i", "testsrc=size=640x480:rate=10:duration=1", "-pix_fmt", "yuv420p", str(src)],
+        check=True,
+    )  # fmt: skip
+
+    # No proxy yet -> the original is served (and a transcode is kicked off).
+    calls = []
+    monkeypatch.setattr(uploads, "_ensure_proxy_async", lambda p: calls.append(p))
+    r = client.get(f"/asset-proxy/{job}/abc123")
+    assert r.status_code == 200 and calls == [src]
+
+    # Once generated, the proxy is served instead. What matters is that it's been
+    # DOWNSCALED to 360p (on a real 4K phone clip that's ~100× fewer bytes; this
+    # synthetic 640x480 source is already tiny, so file size proves nothing).
+    assert uploads._make_video_proxy(src)
+    proxy = d / "abc123-proxy.mp4"
+    assert proxy.exists()
+    height = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=height", "-of", "csv=p=0", str(proxy)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+    assert height == "360"
+    r2 = client.get(f"/asset-proxy/{job}/abc123")
+    assert r2.status_code == 200
+    assert int(r2.headers["Content-Length"]) == proxy.stat().st_size
+
+    # A derived companion is never mistaken for the original asset…
+    assert uploads._asset_base_file(job, "abc123") == src
+    # …and delete reaps it with its base file.
+    _mk_project(job)
+    try:
+        assert client.delete(f"/assets/{job}/abc123").status_code == 200
+        assert not proxy.exists() and not src.exists()
+    finally:
+        db.delete_project(job)
+
+
+def test_asset_proxy_rejects_unknown_and_unsafe_ids(client, tmp_path, monkeypatch):
+    from backend.routes import uploads
+
+    monkeypatch.setattr(uploads, "ASSETS_DIR", tmp_path)
+    assert client.get("/asset-proxy/a7a7a7a7/nope").status_code == 404
+    assert client.get("/asset-proxy/a7a7a7a7/-evil").status_code == 400

@@ -133,6 +133,7 @@ export default function BoxPad({
   preview,
   videoPreview,
   imagePreview,
+  readOnly,
 }: {
   box: Box;
   aspect: string;
@@ -140,6 +141,9 @@ export default function BoxPad({
   preview?: BoxPreview;
   videoPreview?: BoxVideoPreview;
   imagePreview?: BoxImagePreview;
+  // Display only: no drag rectangle, no handles. Lets a compact card reuse this exact
+  // layout (box + source crop) as its preview instead of paying for a server render.
+  readOnly?: boolean;
 }) {
   const padRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -423,21 +427,23 @@ export default function BoxPad({
             />
           </div>
         )}
-        <div
-          className="anim-box-rect"
-          style={{ left: pct(view.x), top: pct(view.y), width: pct(view.w), height: pct(view.h) }}
-          onPointerDown={onBodyDown}
-          title="drag to move"
-        >
-          {CORNERS.map((c) => (
-            <span
-              key={c}
-              className={`anim-box-handle ${c}`}
-              onPointerDown={(e) => onHandleDown(c, e)}
-              title="drag to resize"
-            />
-          ))}
-        </div>
+        {!readOnly && (
+          <div
+            className="anim-box-rect"
+            style={{ left: pct(view.x), top: pct(view.y), width: pct(view.w), height: pct(view.h) }}
+            onPointerDown={onBodyDown}
+            title="drag to move"
+          >
+            {CORNERS.map((c) => (
+              <span
+                key={c}
+                className={`anim-box-handle ${c}`}
+                onPointerDown={(e) => onHandleDown(c, e)}
+                title="drag to resize"
+              />
+            ))}
+          </div>
+        )}
       </div>
       <div className="anim-box-readout">
         x {view.x.toFixed(2)} · y {view.y.toFixed(2)} · w {view.w.toFixed(2)} · h {view.h.toFixed(2)}

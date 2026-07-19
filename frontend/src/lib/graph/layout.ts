@@ -36,6 +36,8 @@ const DETAILED_SIZES: Record<string, CardSize> = {
   imagegen: { w: 230, h: 360 },
   backdrop: { w: 230, h: 180 },
   combine: { w: 230, h: 260 },
+  // preview + summary + slot rows + two statics + two param rows
+  montage: { w: 230, h: 320 },
   // combine's body plus a mode select, a hint, two statics and four param rows
   transform: { w: 230, h: 300 },
   // preview + mode select + hint + two param rows
@@ -64,7 +66,10 @@ const penY = (a: LayoutRect, b: LayoutRect) => Math.min(a.y + a.h, b.y + b.h) - 
 // their relative order (left card goes further left, etc.). Iterating pair sweeps
 // converges fast for canvas-sized graphs (n is tens, not thousands). Returns a
 // position for every id; inputs that never collided keep their exact coordinates.
-export function resolveOverlaps(rects: LayoutRect[], gap = 16): Map<string, { x: number; y: number }> {
+export function resolveOverlaps(
+  rects: LayoutRect[],
+  gap = 16
+): Map<string, { x: number; y: number }> {
   const pos = rects.map((r) => ({ ...r }));
   for (let iter = 0; iter < 80; iter++) {
     let any = false;

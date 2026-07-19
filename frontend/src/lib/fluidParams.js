@@ -51,6 +51,10 @@ export const SOURCE_PARAMS = {
     { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
     { key: "speed", label: "speed", min: 0, max: 4, step: 0.05, def: 1, group: "src", fmt: fmtFixed(2) },
   ],
+  "montage": [
+    { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+    { key: "trigger", label: "trigger", min: 0, max: 1, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
+  ],
   "backdrop": [
     { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
   ],

@@ -24,6 +24,9 @@ import type {
   CombineNode,
   CombineSlot,
   FluidNode,
+  MontageNode,
+  MontageSlot,
+  ChangeNode,
   GateNode,
   Graph,
   ImageNode,
@@ -149,7 +152,12 @@ export function fluidNode(x: number, y: number): FluidNode {
 //       renamed gen-card ports (was fluid-only) so no dangling param edges survive.
 //       waves/rain gain an optional `video` input; fire/lightning/rain a `positions`
 //       input — both additive (edges, not data).
-export const GRAPH_VERSION = 26;
+//  v27: ADDED the montage card — a trigger-driven video switcher: N wired slot inputs
+//       (combine-slot convention) cut in order on the trigger's rising edges, each
+//       input re-timed to start at its cut. Pure addition — no migration.
+//  v28: ADDED the change card — a value modulator emitting its input's smoothed
+//       |derivative| (units/sec), for gating on musical change. Pure addition.
+export const GRAPH_VERSION = 28;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -240,6 +248,15 @@ export function gateNode(x: number, y: number): GateNode {
     data: { threshold: 0.5, hysteresis: 0.1, minGap: 0, divide: 1, invert: false },
   };
 }
+export function changeNode(x: number, y: number): ChangeNode {
+  return {
+    id: mkNodeId(),
+    type: "change",
+    x,
+    y,
+    data: { gain: 1, attack: 5, release: 400, direction: "both" },
+  };
+}
 export function scopeNode(x: number, y: number): ScopeNode {
   return { id: mkNodeId(), type: "scope", x, y, data: {} };
 }
@@ -290,7 +307,11 @@ export function colorNode(x: number, y: number): ColorNode {
     type: "color",
     x,
     y,
-    data: { mode: "swatch", stops: COLOR_STOPS_DEFAULT.map((s) => ({ ...s })), ports: coercePorts("color", undefined) },
+    data: {
+      mode: "swatch",
+      stops: COLOR_STOPS_DEFAULT.map((s) => ({ ...s })),
+      ports: coercePorts("color", undefined),
+    },
   };
 }
 
@@ -380,6 +401,27 @@ export function slideshowNode(x: number, y: number): SlideshowNode {
     },
   };
 }
+// ---- montage node ------------------------------------------------------------
+// The rhythm-driven video switcher: ordered slot inputs (a video edge targets a slot
+// by its id, combine-style), cut in sequence by the `trigger` port's rising edges.
+// All per-clip data lives on the upstream cards; the slot is just an ordered anchor.
+export const montageSlot = (): MontageSlot => ({ id: mkSlotId() });
+
+export function montageNode(x: number, y: number): MontageNode {
+  return {
+    id: mkNodeId(),
+    type: "montage",
+    x,
+    y,
+    data: {
+      inputs: [montageSlot(), montageSlot()],
+      threshold: 0.5,
+      hysteresis: 0.1,
+      ports: coercePorts("montage", undefined),
+    },
+  };
+}
+
 export function imagegenNode(x: number, y: number): ImagegenNode {
   return {
     id: mkNodeId(),

@@ -20,10 +20,12 @@ export const DOC_SECTION_IDS = [
   "animation-generators",
   "animation-fx",
   "animation-combine",
+  "animation-montage",
   "animation-transform",
   "animation-lookfx",
   "animation-stylize",
   "animation-output",
+  "animation-output-hd",
   "export",
   "settings-remote",
   "fluid-lab",
@@ -750,6 +752,19 @@ export default function Docs({ section }: { section?: string }) {
             <em>invert</em> flips it.
           </li>
           <li>
+            <strong>Change</strong> — measures how fast its input is <strong>moving</strong>: the
+            output is the signal's rate of change (per second), smoothed with a fast{" "}
+            <em>attack</em> and a slow <em>release</em> so a burst of movement becomes one clean
+            bump. Where the gate asks «is the signal high?», change asks «is it{" "}
+            <em>changing</em>?» — wire <em>signal → change → gate → montage trigger</em> and the{" "}
+            <a href="#animation-montage">montage</a> cuts on musical transitions (verse→chorus,
+            drops; on a <em>chroma</em> signal, chord changes) instead of on level.{" "}
+            <em>direction</em> picks any movement, rises only, or falls only; <em>gain</em> scales
+            the sensitivity. (For raw audio busy-ness, the <em>flux</em> and <em>onset</em> signal
+            features measure spectral change directly — change generalises the idea to any curve
+            in the graph.)
+          </li>
+          <li>
             <strong>Scope</strong> — a monitor: wire any value into it (an lfo, signal, noise,
             math…) and it shows that value on a live sparkline + pulse pad, exactly like the signal
             card. It <em>passes the value straight through</em>, so you can splice it inline
@@ -905,6 +920,14 @@ export default function Docs({ section }: { section?: string }) {
             library automatically.
           </li>
           <li>
+            <strong>Whole folders.</strong> The library's <strong>📁 upload folder</strong> button
+            imports every image/video inside a folder you pick (subfolders included) and{" "}
+            <strong>keeps the folder structure</strong>: the grid groups assets under their
+            relative path (e.g. <em>May 2026/venise</em>). Perfect for a month of clips headed
+            into a <a href="#animation-montage">Montage</a>. Non-media files are skipped; files
+            upload one by one with a progress count.
+          </li>
+          <li>
             <strong>Deleting.</strong> Remove an asset from the library manager (🗑). Cards that
             still reference it will render an empty (transparent) layer, so delete freely — the
             worst case is a see-through spot where the picture was.
@@ -1025,6 +1048,46 @@ export default function Docs({ section }: { section?: string }) {
           port) — so you can preview a stream and also feed it into a combine. (A <em>layered</em>{" "}
           combine can't feed a <em>merge</em> — a stacked video has no single source to merge — the
           card will tell you.)
+        </p>
+
+        <h3 id="animation-montage">Montage — cutting clips to the beat</h3>
+        <p>
+          The <strong>montage</strong> card (Compositing) is made for recap videos: a pile of
+          little clips cut to a song's rhythm. It holds N ordered <strong>slots</strong>, each fed
+          by a <a href="#animation-sources">Video</a> card (with any FX in between). The{" "}
+          <strong>trigger</strong> port decides the cuts: each rising edge past the threshold
+          switches to the next slot, and that slot's input is{" "}
+          <strong>re-timed to start at the cut</strong> — so the clip begins exactly at its
+          in-point, on the beat. Slot 1 plays from the segment start; when the cuts run out of
+          inputs, the <strong>last input holds</strong> to the end of the segment. A slot's{" "}
+          <strong>×N</strong> button makes it swallow N cuts — its video plays through N gate
+          intervals before the montage moves on, so one longer clip can cover two beats while
+          the rest keep cutting fast.
+        </p>
+        <p>
+          The musical wiring: add a <strong>signal</strong> card (beat, or a drum onset), feed it
+          through a <a href="#animation-modulators">gate</a> — its <em>divide</em> keeps every Nth
+          pulse, so <em>divide 4</em> cuts every fourth beat — and wire the gate into the
+          montage's <em>trigger</em>. To cut on musical <em>transitions</em> instead of a steady
+          beat, insert a <strong>change</strong> card before the gate (signal → change → gate):
+          the gate then fires when the music <em>shifts</em>, not when it's merely loud. Each slot
+          row shows its <strong>start – end window</strong> in segment seconds (computed from the
+          trigger), so you can read the timeline straight off the card. Pick <em>where</em> each
+          clip starts with the 🎞 in-point picker on its video card; the montage takes care of
+          the length.
+        </p>
+        <p>
+          Each slot's clip always starts at <strong>its in-point</strong> when the cut lands —
+          a video card's <em>sync</em> setting is ignored inside a montage, since the montage
+          owns the timing (otherwise a clip shorter than the segment's position in the song
+          would sit frozen on its last frame). Its preview on the card free-runs for the same
+          reason.
+        </p>
+        <p>
+          One rule: a card feeding a montage slot can't <em>also</em> feed something else (another
+          slot, a combine, an output) — the montage restarts its inputs' clocks, so a shared card
+          would be pulled two ways. Duplicate the card instead; the editor tells you when this
+          happens.
         </p>
 
         <h3 id="animation-transform">Transform — warping the video</h3>
@@ -1189,6 +1252,37 @@ export default function Docs({ section }: { section?: string }) {
           per-segment <em>previews</em>; the final track renders in HD from the{" "}
           <a href="#export">export stage</a>.
         </div>
+
+        <h3 id="animation-output-hd">See one segment in HD</h3>
+        <p>
+          The clip on an output card is a <em>draft</em> — small, and simulated on the coarse
+          grid the quality preset picks, so it stays responsive while you edit. To judge how a
+          segment will really look, hit <strong>⬛ HD</strong> on the output card: it renders that
+          one segment at <strong>exactly the final export's settings</strong> (size, fps,
+          detail, and HD-regenerated Image-gen / AI-Stylize assets), muxes in the segment's audio,
+          and opens it full screen with playback controls and a download link. What you see is what
+          the master will contain for that segment — no need to export the whole track to find out.
+        </p>
+        <ul>
+          <li>
+            Change the settings in the <a href="#export">export stage</a> — the HD button always
+            follows them, so there's one place to tune quality and no way for the two to disagree.
+          </li>
+          <li>
+            It's a real HD render: <strong>minutes</strong>, not seconds. Progress shows the phase
+            (preparing assets → rendering → adding audio); the button cancels it. Leaving the
+            segment (or the Studio) does <em>not</em> cancel — come back and it's still going.
+          </li>
+          <li>
+            Only <strong>one</strong> HD render runs at a time, whether it's a segment or the full
+            export — they'd otherwise starve each other and every card preview. Starting a second
+            one tells you which is already running.
+          </li>
+          <li>
+            The HD clip is cached separately from the card's draft, so rendering in HD never
+            disturbs the preview you were working with.
+          </li>
+        </ul>
       </section>
 
       <section id="export">

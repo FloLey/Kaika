@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { videoPreviewSrc } from "../../../lib/assetPreview";
 import { CORNERS, useBoxEdit, type Box } from "./BoxPad";
 
 // The video card's SOURCE-crop editor: the whole (uncropped) clip fills the pad at the
@@ -32,7 +33,7 @@ export default function CropPad({
       >
         <video
           className="anim-box-video anim-crop-src"
-          src={src}
+          src={videoPreviewSrc(src)}
           onLoadedMetadata={(e) => {
             const v = e.currentTarget;
             if (v.videoWidth && v.videoHeight) setAspect(`${v.videoWidth} / ${v.videoHeight}`);

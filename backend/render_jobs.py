@@ -43,7 +43,11 @@ def _prune_locked() -> None:
 def start(run) -> str:
     """Submit `run(on_progress, should_cancel) -> url` to the pool; return a render_id
     to poll. `run` should call `on_progress(frames_done, total, preview_url)` per
-    block and check `should_cancel()` between blocks (both are wired to this job)."""
+    block and check `should_cancel()` between blocks (both are wired to this job).
+
+    A job that does slow work OUTSIDE the frame loop (the HD segment export regenerates
+    images/stylize, then muxes audio) can name the current step with the optional
+    `phase=` kwarg, so the UI shows why it's sitting at 0% instead of looking hung."""
     rid = uuid.uuid4().hex[:16]
     cancel = threading.Event()
     with _LOCK:
@@ -54,18 +58,30 @@ def start(run) -> str:
             "preview_url": None,
             "url": None,
             "error": None,
+            "phase": None,
             "cancel": cancel,
             "updated": time.time(),
         }
         _prune_locked()
 
-    def _progress(done: int, total: int, preview_url: str | None) -> None:
+    def _progress(done=None, total=None, preview_url=None, *, phase: str | None = None) -> None:
+        # `on_progress(phase="audio")` announces a step WITHOUT touching the frame
+        # counters or the preview url — otherwise naming a phase would rewind the bar.
         with _LOCK:
             j = _JOBS.get(rid)
-            if j:
-                j.update(frames_done=done, total=total, preview_url=preview_url, updated=time.time())
+            if not j:
+                return
+            j["updated"] = time.time()
+            if phase is not None:
+                j["phase"] = phase
+            if done is not None:
+                j.update(frames_done=done, total=total, preview_url=preview_url)
 
     def _run() -> None:
+        # Render duration is the single most useful number when the editor feels slow
+        # (a card's preview IS a segment render), so every job reports how long it
+        # took, how many frames it produced, and how many were queued behind it.
+        t0 = time.perf_counter()
         try:
             url = run(_progress, cancel.is_set)
             state = "cancelled" if cancel.is_set() else "done"
@@ -73,6 +89,16 @@ def start(run) -> str:
                 j = _JOBS.get(rid)
                 if j:
                     j.update(state=state, url=url, updated=time.time())
+                    frames = j.get("frames_done") or 0
+                running = sum(1 for x in _JOBS.values() if x.get("state") == "running")
+            _log.info(
+                "render %s %s in %.1fs (%d frames, %d still running)",
+                rid,
+                state,
+                time.perf_counter() - t0,
+                frames,
+                running,
+            )
         except Exception as e:  # noqa: BLE001
             _log.error("render job %s failed", rid, exc_info=e)
             with _LOCK:
@@ -100,4 +126,7 @@ def get(render_id: str) -> dict | None:
         j = _JOBS.get(render_id)
         if not j:
             return None
-        return {k: j[k] for k in ("state", "frames_done", "total", "preview_url", "url", "error")}
+        return {
+            k: j[k]
+            for k in ("state", "frames_done", "total", "preview_url", "url", "error", "phase")
+        }

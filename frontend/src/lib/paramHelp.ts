@@ -70,7 +70,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",
     crop: "Select which part of the SOURCE clip is used: drag a corner to cut a region out of the frame, drag the rectangle to move it. Only that region gets fitted into the box — pick the part that matters when the clip is too wide/tall for the format.",
     fit: "cover = fill the box, cropping overflow; contain = fit inside, letterboxed; stretch = distort to the box.",
-    sync: "song = the playhead follows the whole song's clock; segment = it restarts at this segment.",
+    sync: "song = the playhead follows the whole song's clock; segment = it restarts at this segment. Ignored when the card feeds a Montage — the montage restarts the clip at its in-point on each cut.",
     start: "Start offset into the source clip, in seconds.",
     speed: "Playback rate — 1 = normal, 2 = twice as fast, 0.5 = half speed.",
     loop: "Loop the clip if it's shorter than the window instead of freezing on its last frame.",
@@ -252,6 +252,13 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     divide: "Keep only every Nth spike (1/N). 1/1 passes all, 1/4 passes every fourth \u2014 a divider off the input's own rate.",
     invert: "Flip the output: 1 while the input is BELOW the threshold.",
   },
+  change: {
+    in: "The 0..1 value to watch — wire a signal (energy, chroma…) / LFO / math here.",
+    gain: "Scale on the change rate. A curve sweeping 0→1 in one second reads ≈1.0 at gain 1 — raise it to catch subtler movement.",
+    attack: "How fast the output reacts when change starts, in ms. Keep it low for sharp response.",
+    release: "How long the bump lingers after the change stops, in ms. Slow enough that a downstream gate sees ONE clean pulse per transition.",
+    direction: "both = any movement; rise = only when the signal climbs; fall = only when it drops.",
+  },
   math: {
     input:
       "A 0..1 value to fold in — wire a signal / LFO / noise / gate here. Slot order matters for subtract/mix; assign a source to a slot in the settings window to move it there (it leaves any other slot) — swap operands without rewiring.",
@@ -266,6 +273,16 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     velocity_dissipation: "Shared medium: how fast motion settles in the merged simulation.",
     viscosity: "Shared medium: thickness of the merged fluid.",
     vorticity: "Shared medium: swirl added back into the merged fluid.",
+  },
+  montage: {
+    trigger:
+      "Each RISING edge of this signal past the threshold CUTS to the next slot's video, restarted from its in-point. Wire signal → gate (use divide for every Nth beat) → here for musical cuts.",
+    opacity: "Layer transparency — wire a signal to fade the montage with the music.",
+    threshold: "The trigger level that counts as a cut: rising past it starts the next slot.",
+    hysteresis:
+      "Dead band under the threshold — the trigger must fall below it before it can cut again (no machine-gunning).",
+    inputs:
+      "One video per slot, played in order — slot 1 from the segment start, each next slot from its cut. ×N makes a slot swallow N cuts (its video plays through N gate intervals). Set each clip's in-point on its video card (🎞); the row shows the slot's start – end window in segment seconds. A card feeding a slot can feed nothing else — duplicate it if needed.",
   },
   scope: {
     in: "The value to monitor — it passes straight through, unchanged.",
@@ -302,10 +319,12 @@ export const ARG_SECTION: Record<string, string> = {
   math: "animation-modulators",
   shaper: "animation-modulators",
   gate: "animation-modulators",
+  change: "animation-modulators",
   scope: "animation-modulators",
   "merge-points": "animation-points",
   output: "animation-output",
   combine: "animation-combine",
+  montage: "animation-montage",
   transform: "animation-transform",
   stylize: "animation-stylize",
   extract: "animation-stylize",

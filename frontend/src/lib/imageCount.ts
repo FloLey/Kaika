@@ -29,9 +29,10 @@ export function slideshowItems(graph: Graph | null | undefined, node: GraphNode)
   const gen = genId ? graph.nodes.find((n) => n.id === genId) : null;
   if (!gen || gen.type !== "imagegen") return own;
   const d = gen.data as ImagegenData;
-  const urls = d.activeCount != null
-    ? (d.assetUrls || []).slice(0, Math.max(0, d.activeCount))
-    : d.assetUrls || [];
+  const urls =
+    d.activeCount != null
+      ? (d.assetUrls || []).slice(0, Math.max(0, d.activeCount))
+      : d.assetUrls || [];
   const gens: SlideshowItem[] = urls.filter(Boolean).map((url) => ({ url, kind: "image" }));
   return [...own, ...gens];
 }
@@ -42,26 +43,30 @@ export function slideshowUrls(graph: Graph | null | undefined, node: GraphNode):
   return slideshowItems(graph, node).map((it) => it.url);
 }
 
-// Count rising edges of a 0..1 `curve` — a 0→1 crossing of the threshold with a
-// small dead band, matching the slideshow's default hysteresis so the counts agree.
-// A curve that STARTS high isn't a switch (frame 0 already shows image 0), mirroring
-// `_slideshow_index` (backend) and the SlideshowNode switch counter.
-export function countRises(curve: number[], threshold = 0.5, hysteresis = 0.1): number {
+// Frame index of each rising edge of a 0..1 `curve` — a 0→1 crossing of the
+// threshold with a small dead band, matching the slideshow/montage's built-in
+// hysteresis so the counts agree. A curve that STARTS high isn't a rise (frame 0
+// already shows item/slot 0), mirroring `_slideshow_index` / `_montage_starts`
+// (backend). The montage card uses the frame positions to show per-slot durations.
+export function riseFrames(curve: number[], threshold = 0.5, hysteresis = 0.1): number[] {
   const hi = Math.min(1, threshold + hysteresis / 2);
   const lo = Math.max(0, threshold - hysteresis / 2);
   let state = 0;
-  let rises = 0;
-  let first = true;
-  for (const v of curve) {
+  const rises: number[] = [];
+  curve.forEach((v, i) => {
     if (state === 0 && v >= hi) {
       state = 1;
-      if (!first) rises += 1;
+      if (i > 0) rises.push(i);
     } else if (state === 1 && v < lo) {
       state = 0;
     }
-    first = false;
-  }
+  });
   return rises;
+}
+
+// Count of rising edges (the Image gen / slideshow "switches N×" counter).
+export function countRises(curve: number[], threshold = 0.5, hysteresis = 0.1): number {
+  return riseFrames(curve, threshold, hysteresis).length;
 }
 
 // Non-destructively resize a prompt list to `needed` rows:

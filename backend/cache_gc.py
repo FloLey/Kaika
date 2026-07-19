@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import os
 import time
 
@@ -69,30 +70,33 @@ def _hashes_from(row: dict, job_id: str) -> set[str]:
 
 
 def _song_export_stems(row: dict, job_id: str, lines: list) -> set[str]:
-    """The `song_<hash>` stems of this project's whole-song HD exports — these took
-    minutes (plus HD image regeneration) and must never be reaped as junk. Two
+    """The HD-export stems of this project — whole-song masters (`song_<hash>`) AND
+    single-segment HD renders (`<hash>` + its muxed `hd-…` sibling). These took
+    minutes (plus HD asset regeneration) and must never be reaped as junk. Two
     sources, both kept:
 
     - the stems RECORDED at export time (routes/export._record_export) — always
-      exact: the HD regen swaps imagegen assetUrls in memory only, so the rendered
-      hash cannot be recomputed from the saved project;
-    - a best-effort RECOMPUTE from the saved state (exact whenever no imagegen card
-      was regenerated), which covers exports finished before the recording existed.
+      exact, and for a segment render the ONLY possible source: the HD regen swaps
+      assetUrls in memory only, and the graph rendered may never have been saved;
+    - a best-effort RECOMPUTE of the whole-song hash from the saved state (exact
+      whenever no imagegen card was regenerated), which covers exports finished
+      before the recording existed.
     """
     from . import song_render  # lazy: keeps `python -m backend.cache_gc` startup light
-    from .routes.export import _EXPORT_DEFAULTS  # the route's defaults ARE hash inputs
 
     stems: set[str] = set()
     p = ANALYSIS_DIR / f"{job_id}.json"
     if p.exists():
         try:
-            stems |= {str(s) for s in json.loads(p.read_text()).get("song_exports", []) or []}
+            analysis = json.loads(p.read_text())
+            for key in ("song_exports", "segment_exports"):
+                stems |= {str(s) for s in analysis.get(key, []) or []}
         except (OSError, ValueError):
             pass
     data = row.get("data") or {}
     segments = data.get("segments") or []
     if segments and all(s.get("finalOutputId") for s in segments):
-        export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
+        export = {**song_render.EXPORT_DEFAULTS, **(data.get("export") or {})}
         try:
             stems.add("song_" + song_render._export_hash(job_id, segments, lines, export))
         except Exception as e:  # noqa: BLE001 — a bad segment must not sink the sweep
@@ -192,9 +196,18 @@ def sweep(*, keep_recent_sec: int = KEEP_RECENT_SEC, now: float | None = None) -
             continue
 
     # Reap image/video assets no saved project references (recency protects fresh
-    # uploads for an unsaved edit), then drop any per-job dirs left empty.
+    # uploads for an unsaved edit), then drop any per-job dirs left empty. A video's
+    # server-side companions (`<sha>-thumb.jpg` for the library grid, `<sha>-proxy.mp4`
+    # for card previews — routes/uploads.py) are never referenced by a project itself:
+    # they live and die with their base file.
+    kept_stems = {(p.parent, p.stem) for p in keep_assets}
     for p in ASSETS_DIR.glob("*/*"):
         if p in keep_assets:
+            continue
+        # `<sha>-thumb.jpg` / `<sha>-proxy.mp4` / `<sha>-clip-<t>-<d>.mp4`: all keyed
+        # off their base file's stem, none referenced by a project.
+        base = re.split(r"-(?:thumb|proxy|clip)\b", p.name, maxsplit=1)[0]
+        if base != p.name and (p.parent, base) in kept_stems:
             continue
         try:
             if p.stat().st_mtime > cutoff:

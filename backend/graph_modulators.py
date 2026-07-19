@@ -34,7 +34,11 @@ def _sample_gradient(stops: list, pos):
     ts = np.array([float(x.get("t", 0.0)) for x in s], np.float32)
     cols = np.array([fluid._hex_rgb(x.get("color", "#000000")) for x in s], np.float32)
     p = np.clip(pos, 0.0, 1.0)
-    return (np.interp(p, ts, cols[:, 0]), np.interp(p, ts, cols[:, 1]), np.interp(p, ts, cols[:, 2]))
+    return (
+        np.interp(p, ts, cols[:, 0]),
+        np.interp(p, ts, cols[:, 1]),
+        np.interp(p, ts, cols[:, 2]),
+    )
 
 
 def _resolve_node_color(graph: dict, node: dict, port: str, nodes: dict, resolve_source) -> dict:
@@ -200,6 +204,28 @@ def _shaper_curve(base: np.ndarray, data: dict, fps: int) -> np.ndarray:
     return np.clip(lo + (hi - lo) * y, 0.0, 1.0).astype(np.float32)
 
 
+def _change_curve(base: np.ndarray, data: dict, fps: int) -> np.ndarray:
+    """A change node -> how fast its input is CHANGING, as a 0..1 curve: the per-frame
+    derivative in units/second (`direction` keeps |Δ|, rises only, or falls only),
+    smoothed through the studio's asymmetric envelope follower (fast `attack`, slow
+    `release` — so a burst of movement becomes one clean bump a downstream gate can
+    trigger on), then scaled by `gain`. A curve sweeping 0→1 in one second reads ≈1.0
+    before gain, so gain 1 is a sane default for musical material."""
+    base = np.clip(np.asarray(base, np.float32), 0.0, 1.0)
+    d = np.diff(base, prepend=base[:1]) * float(fps or 1)
+    direction = data.get("direction", "both")
+    if direction == "rise":
+        d = np.maximum(d, 0.0)
+    elif direction == "fall":
+        d = np.maximum(-d, 0.0)
+    else:
+        d = np.abs(d)
+    env = signals._follower(
+        d, float(data.get("attack", 5.0)), float(data.get("release", 400.0)), fps or 1
+    )
+    return np.clip(float(data.get("gain", 1.0)) * env, 0.0, 1.0).astype(np.float32)
+
+
 def _math_combine(curves: list, op: str, mix: float, nframes: int) -> np.ndarray:
     """Fold value curves with `op` (elementwise), clamp 0..1. `mix` crossfades the
     first two inputs for op "mix"; missing inputs are flat 0."""
@@ -284,7 +310,9 @@ def _gate_curve(base: np.ndarray, data: dict, fps: float | None = None) -> np.nd
     return out
 
 
-def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals_by_id, stem_audio_path):
+def _make_value_resolver(
+    graph, nodes, job_id, start, end, nframes, fps, signals_by_id, stem_audio_path
+):
     """A memoized value resolver: `node_id` -> 0..1 curve (length nframes),
     type-dispatched (signal / lfo / noise / shaper / math) and recursing through value
     inputs. A zeros placeholder is seeded before recursing so a (validate-rejected)
@@ -315,6 +343,10 @@ def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals
             src = _video_source(graph, node_id, "in")
             base = resolve_source(src) if src else np.zeros(nframes, np.float32)
             out = _gate_curve(base, data, fps)
+        elif t == "change":
+            src = _video_source(graph, node_id, "in")
+            base = resolve_source(src) if src else np.zeros(nframes, np.float32)
+            out = _change_curve(base, data, fps)
         elif t == "scope":
             # a pure monitor: passes its input value through unchanged.
             src = _video_source(graph, node_id, "in")
@@ -324,7 +356,9 @@ def _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals
             for pid in data.get("inputs", []):
                 src = _video_source(graph, node_id, pid)
                 ins.append(resolve_source(src) if src else np.zeros(nframes, np.float32))
-            out = _math_combine(ins, data.get("op", "multiply"), float(data.get("mix", 0.5)), nframes)
+            out = _math_combine(
+                ins, data.get("op", "multiply"), float(data.get("mix", 0.5)), nframes
+            )
         else:
             out = np.zeros(nframes, np.float32)
         cache[node_id] = out
@@ -341,7 +375,9 @@ def resolve_node_curve(job_id, segment, graph, node_id, stem_audio_path, fps: in
     nframes = max(1, round((end - start) * fps))
     nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
     signals_by_id = {s["id"]: s for s in segment.get("signals", []) if "id" in s}
-    resolve = _make_value_resolver(graph, nodes, job_id, start, end, nframes, fps, signals_by_id, stem_audio_path)
+    resolve = _make_value_resolver(
+        graph, nodes, job_id, start, end, nframes, fps, signals_by_id, stem_audio_path
+    )
     curve = resolve(node_id) if node_id in nodes else np.zeros(nframes, np.float32)
     times = np.arange(nframes, dtype=np.float32) / float(fps) + start
     return {
@@ -349,6 +385,7 @@ def resolve_node_curve(job_id, segment, graph, node_id, stem_audio_path, fps: in
         "times": [round(float(t), 3) for t in times],
         "fps": fps,
     }
+
 
 # --------------------------------------------------------------------------- #
 # Points cards (spec 02): parametric layouts + transforms -> emitter source specs
@@ -392,7 +429,9 @@ def _pattern_points(data: dict) -> list:
         for i in range(count):
             t = i / (count - 1) if count > 1 else 0.0
             ang = rot + t * 3 * 2 * np.pi
-            out.append((_clamp01(cx + np.cos(ang) * radius * t), _clamp01(cy + np.sin(ang) * radius * t)))
+            out.append(
+                (_clamp01(cx + np.cos(ang) * radius * t), _clamp01(cy + np.sin(ang) * radius * t))
+            )
     elif layout == "scatter":
         rng = np.random.default_rng(int(data.get("seed", 1)))
         for _ in range(count):
@@ -438,10 +477,11 @@ def _animate_point_specs(specs: list, data: dict) -> list:
         else:  # orbit
             start = np.arctan2(by - 0.5, bx - 0.5)
             path = [
-                [_clamp01(0.5 + np.cos(start + (k / 16) * 2 * np.pi) * amount),
-                 _clamp01(0.5 + np.sin(start + (k / 16) * 2 * np.pi) * amount)]
+                [
+                    _clamp01(0.5 + np.cos(start + (k / 16) * 2 * np.pi) * amount),
+                    _clamp01(0.5 + np.sin(start + (k / 16) * 2 * np.pi) * amount),
+                ]
                 for k in range(16)
             ]
             out.append({"points": path, "path_speed": rate, "path_closed": True})
     return out[:_POINT_CAP]
-

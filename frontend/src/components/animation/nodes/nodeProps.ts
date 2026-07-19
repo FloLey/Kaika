@@ -3,6 +3,7 @@
 
 import type { PointerEvent, RefObject } from "react";
 import type { Graph, GraphNode, OutputSettings, Segment, Signal } from "../../../lib/types";
+import type { ExportSettings } from "../../../lib/export";
 
 // A ref callback the canvas hands each port so it can measure the port's centre.
 export type PortRef = (
@@ -34,6 +35,10 @@ export interface NodeCtx {
   stems?: Record<string, unknown>;
   job?: unknown;
   output?: OutputSettings | null;
+  // The project's FINAL-EXPORT settings (size/fps/detail/audio). The Output card's
+  // HD render uses exactly these — surfaced so the button can say what it will
+  // produce before the user commits to a minutes-long render.
+  exportSettings?: ExportSettings;
   signals?: SignalDef[];
   lyricLines?: unknown[]; // aligned lyric lines [{t0,t1,text}] for the lyrics card
   lyricsKey?: string; // JSON of lyricLines, serialized once for the outputs' render keys

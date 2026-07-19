@@ -248,6 +248,22 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
             "fmt": "dp2",
         },
     ],
+    # The montage switcher (N wired video slots -> one video): each rising edge of
+    # `trigger` past the card's built-in hysteresis threshold cuts to the NEXT slot
+    # (see graph_render._montage_*). Not a source (it has video inputs) but its
+    # ports resolve exactly like one, so it shares this table.
+    "montage": [
+        _opacity_spec(),
+        {
+            "key": "trigger",
+            "label": "trigger",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01,
+            "default": 0.0,
+            "fmt": "dp2",
+        },
+    ],
     "backdrop": [_opacity_spec()],
     # The `transform` video-FX card (video -> video): an affine warp of the incoming
     # frames, plus mirror / kaleidoscope folds. Not a source (it has a video input),

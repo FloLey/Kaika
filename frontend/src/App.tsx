@@ -365,6 +365,7 @@ export default function App() {
           job={job ?? undefined}
           output={output}
           setOutput={setOutput}
+          exportSettings={exportSettings}
           lyricLines={lyricLines}
           onSaveLyricLines={saveLyricLines}
           audioMode={exportSettings.audioMode}

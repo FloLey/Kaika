@@ -13,7 +13,10 @@ pillow==12.2.0
 soundfile==0.14.0
 mlx-whisper==0.4.3; platform_system == "Darwin" and platform_machine == "arm64"
 faster-whisper==1.2.1
-yt-dlp==2026.6.9
+# YouTube breaks old versions constantly (403s on the direct stream URLs that
+# --download-sections hands to ffmpeg) — keep this fresh; `pip install -U yt-dlp`
+# is the first fix to try on any YouTube download error.
+yt-dlp>=2026.7.4
 psycopg[binary]==3.3.4
 # Local image generation (the Image gen / AI Stylize cards). Imported lazily —
 # the app runs fine without them; generation just reports it's unavailable.

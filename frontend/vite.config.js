@@ -25,6 +25,8 @@ export default defineConfig({
       "/audio": "http://127.0.0.1:5000",
       "/spectrogram": "http://127.0.0.1:5000",
       "/assets": "http://127.0.0.1:5000",
+      "/asset-proxy": "http://127.0.0.1:5000",
+      "/asset-clip": "http://127.0.0.1:5000",
       "/asset-from-youtube": "http://127.0.0.1:5000",
       "/generate-image": "http://127.0.0.1:5000",
       "/stylize": "http://127.0.0.1:5000",

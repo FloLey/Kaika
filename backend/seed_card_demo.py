@@ -42,6 +42,8 @@ SAMPLE_IMAGE_URL = f"/assets/{JOB_ID}/sample.png"
 SAMPLE_VIDEO_URL = f"/assets/{JOB_ID}/sample.mp4"
 # Two more gradient stills so the Image gen card's demo has a slideshow to cycle.
 SAMPLE_SLIDES = [SAMPLE_IMAGE_URL, f"/assets/{JOB_ID}/sample2.png", f"/assets/{JOB_ID}/sample3.png"]
+# Three short clips in unmistakably different palettes so the Montage card's cuts read.
+SAMPLE_CLIPS = [f"/assets/{JOB_ID}/clip{i}.mp4" for i in (1, 2, 3)]
 
 
 def write_sample_assets() -> None:
@@ -65,28 +67,37 @@ def write_sample_assets() -> None:
             t = ((xx / w) + (yy / h)) / 2.0
             arr = np.stack(mix(t), -1)
             Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8), "RGB").save(png)
-    mp4 = d / "sample.mp4"
-    if not mp4.exists():
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-v",
-                "error",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "gradients=s=640x360:d=4:speed=0.08:c0=0xB84A74:c1=0x34808A:c2=0xF2C14E",
-                "-r",
-                "24",
-                "-pix_fmt",
-                "yuv420p",
-                "-movflags",
-                "+faststart",
-                str(mp4),
-            ],
-            check=False,
-        )
+    # The Video demo's clip, plus three montage clips in unmistakably different
+    # palettes (one per SAMPLE_CLIPS entry) so each cut is obvious in the demo.
+    clips = [
+        ("sample.mp4", "c0=0xB84A74:c1=0x34808A:c2=0xF2C14E"),
+        ("clip1.mp4", "c0=0xE4572E:c1=0xF3A712:c2=0xA8C686"),
+        ("clip2.mp4", "c0=0x17BEBB:c1=0x2E282A:c2=0x76B5C5"),
+        ("clip3.mp4", "c0=0x9B5DE5:c1=0xF15BB5:c2=0x00BBF9"),
+    ]
+    for name, palette in clips:
+        mp4 = d / name
+        if not mp4.exists():
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-v",
+                    "error",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    f"gradients=s=640x360:d=4:speed=0.08:{palette}",
+                    "-r",
+                    "24",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-movflags",
+                    "+faststart",
+                    str(mp4),
+                ],
+                check=False,
+            )
 
 
 # --------------------------------------------------------------------------- #

@@ -35,6 +35,39 @@ from .graph_render import Dag
 
 log = logging.getLogger("kaika.export")
 
+# Sensible HD defaults when a project hasn't set export settings yet: portrait 1080x1920,
+# 30fps, a grid finer than the 'high' preset (144) for a crisp master, and a 1024px
+# long edge for the HD regeneration of Image-gen cards. Lives here (not in `routes/`)
+# so the routes AND `cache_gc` can read it without importing a blueprint. These values
+# are `_export_hash` inputs — changing one invalidates every cached master.
+EXPORT_DEFAULTS = {"width": 1080, "height": 1920, "fps": 30, "gridCells": 216, "imageSize": 1024}
+
+
+def output_from_export(export: dict) -> dict:
+    """Export settings -> the `output` dict the render engine takes.
+
+    THE lockstep anchor between the two HD paths: the whole-song export
+    (`build_plan`) and the single-segment HD export (`routes/export.segment`)
+    both go through here, so a segment's HD preview can't drift from what the
+    final master will contain (a test pins the equivalence)."""
+    return {
+        "width": int(export.get("width", 1080)),
+        "height": int(export.get("height", 1920)),
+        "fps": int(export.get("fps", 24)),
+        "gridCells": int(export.get("gridCells", 144)),
+    }
+
+
+def export_audio_path(job_id: str, export: dict, stem_audio_path):
+    """The audio file an export muxes, or None. `audioMode` "instrumental" takes
+    the vocals-removed mix (karaoke covers); anything else — or a failure to build
+    the instrumental — falls back to the original."""
+    want = export.get("audioMode", "original")
+    audio = stem_audio_path(job_id, want) if want == "instrumental" else None
+    if audio is None:
+        audio = stem_audio_path(job_id, "original")
+    return audio
+
 
 def _export_hash(job_id, segments, lyric_lines, export) -> str:
     """Content key for a whole-song export (so an identical re-export is a cache hit).
@@ -47,8 +80,13 @@ def _export_hash(job_id, segments, lyric_lines, export) -> str:
         "export": export,
         "lyrics": lyric_lines,
         "segments": [
-            {"start": s.get("start"), "end": s.get("end"), "final": s.get("finalOutputId"),
-             "signals": s.get("signals"), "graph": s.get("graph")}
+            {
+                "start": s.get("start"),
+                "end": s.get("end"),
+                "final": s.get("finalOutputId"),
+                "signals": s.get("signals"),
+                "graph": s.get("graph"),
+            }
             for s in segments
         ],
     }
@@ -56,12 +94,24 @@ def _export_hash(job_id, segments, lyric_lines, export) -> str:
     return hashlib.sha1(blob).hexdigest()[:16]
 
 
-def _mux_audio(video: "object", audio: "object", out_path: "object") -> None:
+def _mux_audio(
+    video: "object", audio: "object", out_path: "object", *, start: float = 0.0, duration=None
+) -> None:
     """Combine the silent `video` with `audio` into `out_path` (video stream-copied,
-    audio re-encoded to AAC, trimmed to the shorter of the two)."""
+    audio re-encoded to AAC, trimmed to the shorter of the two).
+
+    `start`/`duration` take a SLICE of the audio — the single-segment HD export
+    muxes just that segment's window. They seek the AUDIO input only (input-side
+    `-ss`, so it's a fast keyframe seek, and the video keeps its own timeline);
+    with neither, the command is byte-identical to the whole-song one."""
+    a_in = []
+    if start:
+        a_in += ["-ss", f"{float(start):.3f}"]
+    if duration is not None:
+        a_in += ["-t", f"{float(duration):.3f}"]
     cmd = [
         "ffmpeg", "-y", "-v", "error",
-        "-i", str(video), "-i", str(audio),
+        "-i", str(video), *a_in, "-i", str(audio),
         "-map", "0:v:0", "-map", "1:a:0",
         "-c:v", "copy", "-c:a", "aac", "-shortest",
         "-movflags", "+faststart", str(out_path),
@@ -71,16 +121,16 @@ def _mux_audio(video: "object", audio: "object", out_path: "object") -> None:
         raise RuntimeError(proc.stderr.decode(errors="replace")[-2000:])
 
 
-def build_plan(job_id: str, segments: list, lyric_lines: list, export: dict, stem_audio_path) -> dict:
+def build_plan(
+    job_id: str, segments: list, lyric_lines: list, export: dict, stem_audio_path
+) -> dict:
     """Resolve every segment's DAG + final-output fields ONCE (signal extraction happens
     here) and the per-layer dye layout — the UNION of edge-modes across every segment
     that feeds a layer, so a persistent field's dye layers cover them all. Returns the
     render context consumed by `iter_song_windows`. Raises if a segment is unmarked."""
-    fps = int(export.get("fps", 24))
-    w, h = int(export.get("width", 1080)), int(export.get("height", 1920))
-    cells = int(export.get("gridCells", 144))
-    gh, gw = fluid.grid_for(w, h, cells)
-    out_dict = {"width": w, "height": h, "fps": fps, "gridCells": cells}
+    out_dict = output_from_export(export)  # the shared export->output contract
+    fps, w, h = out_dict["fps"], out_dict["width"], out_dict["height"]
+    gh, gw = fluid.grid_from_output(out_dict)
     plan: list = []  # per segment: (dag, output_id, [field...], window_len)
     layer_sources: dict = {}  # layer number -> accumulated source dicts (for dye layout)
     total = 0
@@ -98,9 +148,19 @@ def build_plan(job_id: str, segments: list, lyric_lines: list, export: dict, ste
             )
         plan.append((dag, oid, fields, window))
         total += window
-    dye_layout = {n: fluid._dye_layout(srcs) for n, srcs in layer_sources.items()}  # n -> (modes, wrap)
-    return {"plan": plan, "dye_layout": dye_layout, "total": total, "gh": gh, "gw": gw,
-            "fps": fps, "w": w, "h": h}
+    dye_layout = {
+        n: fluid._dye_layout(srcs) for n, srcs in layer_sources.items()
+    }  # n -> (modes, wrap)
+    return {
+        "plan": plan,
+        "dye_layout": dye_layout,
+        "total": total,
+        "gh": gh,
+        "gw": gw,
+        "fps": fps,
+        "w": w,
+        "h": h,
+    }
 
 
 def iter_song_windows(ctx: dict, should_cancel=None):
@@ -123,12 +183,14 @@ def iter_song_windows(ctx: dict, should_cancel=None):
             inj = fluid.LayerInjector(f["params"], modes)
             if f["layer"] not in fields_sim:
                 fields_sim[f["layer"]] = fluid.FluidSim(
-                    gh, gw,
+                    gh,
+                    gw,
                     dissipation=inj.medium0("dissipation"),
                     vel_dissipation=inj.medium0("velocity_dissipation"),
                     viscosity=inj.medium0("viscosity"),
                     vorticity=inj.medium0("vorticity"),
-                    wrap=vel_wrap, dye_modes=modes,
+                    wrap=vel_wrap,
+                    dye_modes=modes,
                 )
             injectors.append((f["node_id"], f["layer"], inj))
 
@@ -191,12 +253,7 @@ def render_song(
         if should_cancel and should_cancel():  # iter stopped early -> cancelled
             return None
         enc.finalize()
-        # audioMode "instrumental" muxes the vocals-removed mix (karaoke covers);
-        # fall back to the original if the instrumental can't be built.
-        want = export.get("audioMode", "original")
-        audio = stem_audio_path(job_id, want) if want == "instrumental" else None
-        if audio is None:
-            audio = stem_audio_path(job_id, "original")
+        audio = export_audio_path(job_id, export, stem_audio_path)
         if audio is not None:
             _mux_audio(silent, audio, out_path)
         else:  # no audio available — ship the silent video

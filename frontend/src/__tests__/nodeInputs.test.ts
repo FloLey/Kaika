@@ -46,6 +46,16 @@ describe("cardInputs", () => {
     expect(c.dynamic?.label).toBe("layer");
   });
 
+  it("gives montage its params PLUS one video row per slot, with add/remove", () => {
+    const m = cardInputs(node("m", "montage", { inputs: [{ id: "s1" }, { id: "s2" }] }));
+    const slots = m.inputs.filter((i) => i.kind === "edge");
+    expect(slots.map((i) => i.portId)).toEqual(["s1", "s2"]);
+    expect(slots.every((i) => i.flow === "video" && i.helpKey === "inputs")).toBe(true);
+    // the trigger/opacity params ride along so the settings window edits everything
+    expect(m.inputs.some((i) => i.kind === "param" && i.portId === "trigger")).toBe(true);
+    expect(m.dynamic?.label).toBe("slot");
+  });
+
   it("has no inputs for pure sources (signal/lfo/noise)", () => {
     expect(cardInputs(node("s", "signal")).inputs).toEqual([]);
     expect(cardInputs(node("l", "lfo")).inputs).toEqual([]);

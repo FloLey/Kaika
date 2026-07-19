@@ -28,6 +28,9 @@ export const LYRICS_PARAMS: FluidParam[] = SOURCE_PARAMS.lyrics;
 export const IMAGE_PARAMS: FluidParam[] = SOURCE_PARAMS.image;
 export const SLIDESHOW_PARAMS: FluidParam[] = SOURCE_PARAMS.slideshow;
 export const VIDEO_PARAMS: FluidParam[] = SOURCE_PARAMS.video;
+// The montage switcher (N wired video slots): `trigger` cuts to the next slot on
+// each rising edge past the card's built-in hysteresis threshold.
+export const MONTAGE_PARAMS: FluidParam[] = SOURCE_PARAMS.montage;
 export const BACKDROP_PARAMS: FluidParam[] = SOURCE_PARAMS.backdrop;
 // Generative source cards: behavioural ports only — colour is a static `palette`
 // preset + an optional wired `color` card override (both static data, not ports).
@@ -54,6 +57,7 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   image: IMAGE_PARAMS,
   slideshow: SLIDESHOW_PARAMS,
   video: VIDEO_PARAMS,
+  montage: MONTAGE_PARAMS,
   backdrop: BACKDROP_PARAMS,
   waves: WAVES_PARAMS,
   lightning: LIGHTNING_PARAMS,

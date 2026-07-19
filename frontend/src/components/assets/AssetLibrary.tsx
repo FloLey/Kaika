@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { portalTarget } from "../../lib/portalTarget";
 import type { ChangeEvent } from "react";
 import { listAssets, uploadAsset, deleteAsset, assetFromYoutube, pollJob } from "../../lib/api";
+import { videoThumbSrc } from "../../lib/assetPreview";
 import type { Asset } from "../../lib/types";
 
 interface AssetLibraryProps {
@@ -12,14 +13,57 @@ interface AssetLibraryProps {
   onClose: () => void;
 }
 
+// Mirror of backend `paths.ASSET_EXTS` — a folder upload filters to these client-side
+// (everything else in the folder — .DS_Store, sidecars, raw files — is skipped quietly).
+const FOLDER_EXTS: Record<string, "image" | "video"> = {
+  png: "image", jpg: "image", jpeg: "image", webp: "image",
+  mp4: "video", mov: "video", webm: "video", m4v: "video",
+};
+const extKind = (name: string): "image" | "video" | null =>
+  FOLDER_EXTS[name.split(".").pop()?.toLowerCase() || ""] ?? null;
+
+// Group a (possibly kind-filtered) asset list by `folder` for display: loose assets
+// (no folder) first, then each folder's assets under its path, folders sorted. WITHIN
+// a folder, items sort by NAME (numeric-aware) — phone clips encode their shot time
+// in the filename (PXL_20260503_2036…), so name order IS chronological order; the
+// library's raw insertion order scrambles on a deduping re-upload (re-registering an
+// existing file moves it to the end of `data.assets`). Loose assets keep insertion
+// order (upload history), as before folders existed.
+export function groupByFolder(assets: Asset[]): { folder: string; items: Asset[] }[] {
+  const groups = new Map<string, Asset[]>();
+  for (const a of assets) {
+    const key = a.folder || "";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(a);
+  }
+  const folders = [...groups.keys()].filter(Boolean).sort((x, y) => x.localeCompare(y));
+  const out: { folder: string; items: Asset[] }[] = [];
+  if (groups.has("")) out.push({ folder: "", items: groups.get("")! });
+  const byName = (x: Asset, y: Asset) =>
+    (x.name || "").localeCompare(y.name || "", undefined, { numeric: true });
+  for (const f of folders) out.push({ folder: f, items: [...groups.get(f)!].sort(byName) });
+  return out;
+}
+
+// The thumb <img> with a placeholder fallback while the backfill hasn't produced the
+// file yet (or ffmpeg couldn't) — never a live <video>.
+function VideoThumb({ a }: { a: Asset }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return <div className="asset-lib-thumb-fallback">🎞</div>;
+  return <img src={videoThumbSrc(a.url)} alt={a.name} draggable={false} onError={() => setBroken(true)} />;
+}
+
 // The per-project asset library modal. In MANAGER mode (no `onPick`, opened from the
 // Studio toolbar) it browses/uploads/deletes the project's `data.assets`. In PICKER mode
 // (an Image/Video card passes `onPick` + its `kind`) a click returns the chosen asset.
-// A YouTube URL row imports a video asset (async). Rendered through a portal to <body> so
-// the fixed-position scrim isn't clipped by the pan/zoomed graph canvas it may open from.
+// A YouTube URL row imports a video asset (async); a 📁 folder upload imports every
+// image/video inside a picked folder, keeping its structure as per-asset `folder`
+// metadata the grid groups by. Rendered through a portal to <body> so the fixed-position
+// scrim isn't clipped by the pan/zoomed graph canvas it may open from.
 export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibraryProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [yt, setYt] = useState("");
   const [ytStart, setYtStart] = useState("");
@@ -69,6 +113,45 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
     } finally {
       setBusy(false);
     }
+  };
+
+  // Folder upload: every image/video under the picked folder, one upload per file, its
+  // relative directory (webkitRelativePath minus the filename) kept as `folder`. Files
+  // upload sequentially — a month of phone clips would flood the server in parallel —
+  // with a k/n progress readout; failures are counted, not fatal (the rest still land).
+  const onFolder = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length || !jobId) return;
+    const wanted = files.filter((f) => {
+      const k = extKind(f.name);
+      return k !== null && (!kind || k === kind) && !f.name.startsWith(".");
+    });
+    if (!wanted.length) {
+      setErr("no images or videos found in that folder");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    setProgress({ done: 0, total: wanted.length });
+    let failed = 0;
+    let lastErr = "";
+    for (const f of wanted) {
+      const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+      const folder = rel.split("/").slice(0, -1).join("/");
+      try {
+        await uploadAsset(jobId, f, folder);
+      } catch (ex) {
+        failed += 1;
+        lastErr = ex instanceof Error ? ex.message : "upload failed";
+      }
+      if (closedRef.current) return; // modal closed mid-batch — stop quietly
+      setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+    }
+    if (failed) setErr(`${failed} of ${wanted.length} files failed — ${lastErr}`);
+    setProgress(null);
+    setBusy(false);
+    await refresh();
   };
 
   const onImportYoutube = async () => {
@@ -127,7 +210,22 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
                 disabled={busy}
                 hidden
               />
-              {busy ? "uploading…" : "＋ upload"}
+              {busy && !progress ? "uploading…" : "＋ upload"}
+            </label>
+            <label
+              className={"btn sm" + (busy ? " on" : "")}
+              title="Upload every image/video inside a folder — its structure is kept"
+            >
+              {/* webkitdirectory isn't in React's input typing; the spread smuggles it. */}
+              <input
+                type="file"
+                multiple
+                onChange={onFolder}
+                disabled={busy}
+                hidden
+                {...({ webkitdirectory: "" } as Record<string, string>)}
+              />
+              {progress ? `${progress.done}/${progress.total}…` : "📁 upload folder"}
             </label>
             {kind !== "image" && (
               <div className="asset-lib-yt">
@@ -178,36 +276,41 @@ export default function AssetLibrary({ jobId, kind, onPick, onClose }: AssetLibr
               {jobId ? "no assets yet — upload one above" : "no project"}
             </div>
           ) : (
-            <div className="asset-lib-grid">
-              {shown.map((a) => (
-                <div
-                  key={a.id}
-                  className={"asset-lib-item" + (onPick ? " pickable" : "")}
-                  title={a.name}
-                  onClick={onPick ? () => onPick(a) : undefined}
-                >
-                  <div className="asset-lib-thumb">
-                    {a.kind === "video" ? (
-                      <video src={a.url} muted loop playsInline preload="metadata" />
-                    ) : (
-                      <img src={a.url} alt={a.name} draggable={false} />
-                    )}
-                    <span className="asset-lib-kind">{a.kind === "video" ? "🎞" : "🖼"}</span>
-                  </div>
-                  <span className="asset-lib-name">{a.name}</span>
-                  <button
-                    className="asset-lib-del iconbtn"
-                    title="Delete asset"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemove(a);
-                    }}
-                  >
-                    ✕
-                  </button>
+            groupByFolder(shown).map(({ folder, items }) => (
+              <div key={folder || "·root·"}>
+                {folder && <div className="asset-lib-folder">📁 {folder}</div>}
+                <div className="asset-lib-grid">
+                  {items.map((a) => (
+                    <div
+                      key={a.id}
+                      className={"asset-lib-item" + (onPick ? " pickable" : "")}
+                      title={folder ? `${folder}/${a.name}` : a.name}
+                      onClick={onPick ? () => onPick(a) : undefined}
+                    >
+                      <div className="asset-lib-thumb">
+                        {a.kind === "video" ? (
+                          <VideoThumb a={a} />
+                        ) : (
+                          <img src={a.url} alt={a.name} draggable={false} />
+                        )}
+                        <span className="asset-lib-kind">{a.kind === "video" ? "🎞" : "🖼"}</span>
+                      </div>
+                      <span className="asset-lib-name">{a.name}</span>
+                      <button
+                        className="asset-lib-del iconbtn"
+                        title="Delete asset"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemove(a);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
         </div>
       </div>

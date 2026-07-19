@@ -3,7 +3,14 @@
 // backend stays authoritative; this gates obviously-broken graphs client-side.
 
 import { VIDEO_FX, VIDEO_PRODUCERS, isLooseEdge, portsOf, videoSource } from "./core";
-import type { CombineNode, Graph, GraphEdge, GraphNode, ValidationResult } from "../types";
+import type {
+  CombineNode,
+  Graph,
+  GraphEdge,
+  GraphNode,
+  MontageNode,
+  ValidationResult,
+} from "../types";
 
 // Whether `nodeId` resolves to fluid emitter(s) for a merge (no stack upstream).
 function isEmitterSource(
@@ -32,6 +39,43 @@ function isEmitterSource(
   return false;
 }
 
+// Montage slot exclusivity (mirrors backend graph_validate): block streaming
+// re-times each slot's producer with slot-local frame ranges, so a card feeding a
+// montage slot must feed NOTHING else — its whole upstream video chain included.
+// Value bindings are exempt (curves resolve purely, full-segment).
+function montageSlotsExclusive(
+  graph: Graph,
+  mg: MontageNode,
+  byId: Map<string, GraphNode>
+): boolean {
+  // Video-flow edges: a video producer's output is only ever consumed as video.
+  const vidEdges = (graph.edges || []).filter(
+    (e) => !isLooseEdge(e) && VIDEO_PRODUCERS.has(byId.get(e.source)?.type ?? "")
+  );
+  const back = new Map<string, string[]>();
+  for (const e of vidEdges) {
+    if (!back.has(e.target)) back.set(e.target, []);
+    back.get(e.target)!.push(e.source);
+  }
+  for (const slot of mg.data.inputs || []) {
+    const src = videoSource(graph, mg.id, slot.id);
+    if (src == null) continue;
+    const closure = new Set<string>();
+    const stack = [src];
+    while (stack.length) {
+      const n = stack.pop()!;
+      if (closure.has(n)) continue;
+      closure.add(n);
+      for (const s of back.get(n) || []) stack.push(s);
+    }
+    for (const e of vidEdges) {
+      if (!closure.has(e.source)) continue;
+      const isSlotEdge = e.source === src && e.target === mg.id && e.targetPort === slot.id;
+      if (!isSlotEdge && !closure.has(e.target)) return false;
+    }
+  }
+  return true;
+}
 
 // ---- validation (01 §3.7) ----------------------------------------------------
 
@@ -89,6 +133,12 @@ function contributingComplete(graph: Graph, rootId: string): boolean {
           if (src != null && !isEmitterSource(graph, src, byId)) return false;
         }
       }
+    } else if (n.type === "montage") {
+      // At least one wired slot, and every slot's chain exclusive to it — the
+      // backend 400s on a shared chain, so don't stream one.
+      const wired = (n.data.inputs || []).some((s) => videoSource(graph, nid, s.id) != null);
+      if (!wired) return false;
+      if (!montageSlotsExclusive(graph, n, byId)) return false;
     } else if (n.type === "output" && nid !== rootId) {
       if (videoSource(graph, nid, "video") == null) return false;
     } else if (VIDEO_FX.has(n.type)) {
@@ -170,8 +220,25 @@ export function validate(graph: Graph): ValidationResult {
     }
   }
 
+  // 2c. each montage slot's upstream chain is exclusive to it (mirrors backend —
+  //     block streaming re-times the producer, a second consumer would conflict).
+  for (const mg of nodes.filter((x): x is MontageNode => x.type === "montage")) {
+    if (!montageSlotsExclusive(graph, mg, byId)) {
+      return {
+        ok: false,
+        error:
+          "a card feeding a montage slot also feeds another consumer — duplicate the card instead",
+      };
+    }
+  }
+
   // 3. no cycles (still assert acyclic for forward-compat).
-  if (hasCycle(nodes, (graph.edges || []).filter((e) => !isLooseEdge(e)))) {
+  if (
+    hasCycle(
+      nodes,
+      (graph.edges || []).filter((e) => !isLooseEdge(e))
+    )
+  ) {
     return { ok: false, error: "graph has a cycle" };
   }
 

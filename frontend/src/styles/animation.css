@@ -791,6 +791,88 @@
   border-color: transparent;
 }
 
+/* HD render row on the output card: the trigger + its "?" + the view button. */
+.anim-hd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.anim-hd-btn {
+  flex: 1;
+  padding: 4px 8px;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.anim-hd-btn:hover:not(:disabled) {
+  color: var(--courant);
+  border-color: var(--courant);
+}
+.anim-hd-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.anim-hd-btn.busy {
+  color: var(--courant);
+  border-color: var(--courant);
+}
+.anim-hd-view {
+  padding: 4px 8px;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--courant);
+  background: transparent;
+  border: 1px solid var(--courant);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+/* The full-screen HD viewer (HdViewerModal): a big video with real controls. */
+.anim-modal.hd-viewer {
+  width: min(92vw, 1100px);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.hd-viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hd-viewer-title {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.hd-viewer-specs {
+  flex: 1;
+  font: 400 11px/1 var(--mono);
+  color: var(--muted);
+}
+.hd-viewer-video {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: var(--hd-aspect, 9 / 16);
+  max-height: 74vh;
+  margin: 0 auto;
+  background: #000;
+  border-radius: 8px;
+}
+.hd-viewer-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* compact "layer" numeric control on fluid / combine cards. */
 .ctl-num {
   display: flex;
@@ -1919,6 +2001,33 @@
   flex: none;
   margin-left: auto;
 }
+/* The montage's per-slot span cycler (×1 → ×2 … — cuts the slot swallows). */
+.anim-montage-span {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  padding: 2px 4px;
+}
+.anim-montage-span.on {
+  color: var(--fx);
+}
+/* The montage's "this clip can't fill its slot" flag (⚠ −1.2s). */
+.anim-montage-short {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  color: var(--danger, #d9534f);
+  white-space: nowrap;
+  cursor: help;
+}
+/* The montage's per-slot duration read-off ("2.8s", "unwired", "unused"). */
+.anim-montage-dur {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .anim-combine-add {
   align-self: flex-start;
   margin-top: 2px;
@@ -2423,6 +2532,16 @@
   min-width: 200px;
   margin-bottom: 0;
 }
+/* Placeholder while a video's server-side thumb isn't generated yet (or failed). */
+.asset-lib-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 28px;
+  opacity: 0.5;
+}
 .asset-lib-empty {
   padding: 28px 8px;
   text-align: center;
@@ -2433,6 +2552,15 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 10px;
+}
+/* Folder-upload group header: the relative path a batch of assets was uploaded under. */
+.asset-lib-folder {
+  margin: 12px 0 6px;
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 4px;
 }
 .asset-lib-item {
   position: relative;

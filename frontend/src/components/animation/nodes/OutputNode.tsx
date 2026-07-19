@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import NodeSettingsModal from "../NodeSettingsModal";
+import HdViewerModal from "../HdViewerModal";
+import Info from "../../../ui/Info";
+import * as api from "../../../lib/api";
 import { outputHash, outputRenderable } from "../../../lib/graphModel";
 import { aspectOf } from "../../../lib/output";
+import { useRenderJob } from "../../../lib/useRenderJob";
 import { usePreservePlayback } from "./usePreservePlayback";
 import { useStreamRender } from "./useStreamRender";
 import { useSyncedPlayback } from "./useSyncedPlayback";
-import type { NodeProps } from "./nodeProps";
+import { jobIdOf, type NodeProps } from "./nodeProps";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered
 // clip. Each output node renders ITS OWN pipeline (the fluid wired into it, N per
@@ -22,6 +26,7 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
     segment,
     job,
     output,
+    exportSettings,
     signals,
     lyricLines,
     lyricsKey,
@@ -95,6 +100,58 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
   // never compacts, so this is its way into the modal.
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // ── HD render of THIS segment ─────────────────────────────────────────────
+  // The card's clip is a draft (the project's quality preset) at thumbnail size.
+  // "HD" renders the same pipeline at the FINAL EXPORT's settings — same size,
+  // fps, detail and audio the master will use — and opens it full screen. It's a
+  // long job, so it uses the export's render-job contract: it survives navigating
+  // away and is only stopped by an explicit cancel.
+  const jobId = jobIdOf(job);
+  const hdKey = jobId && segment?.id ? `hd-render:${jobId}:${segment.id}:${node.id}` : null;
+  const hd = useRenderJob(hdKey);
+  const [hdOpen, setHdOpen] = useState(false);
+  const hdSpecs = exportSettings
+    ? `${exportSettings.width}×${exportSettings.height} · ${exportSettings.fps} fps · detail ${exportSettings.gridCells}`
+    : "the final export's settings";
+
+  function startHd() {
+    if (!jobId || !graph || !segment) return;
+    setHdOpen(false);
+    hd.start(() =>
+      api.startSegmentHdRender({
+        job_id: jobId,
+        // The graph travels in the body: autosave is debounced, so the saved copy
+        // can lag what's on screen and HD must render exactly what's visible.
+        segment: {
+          id: segment.id,
+          start: segment.start,
+          end: segment.end,
+          signals: segment.signals,
+          finalOutputId,
+          lyric_lines: lyricLines,
+        },
+        graph,
+        output_id: node.id,
+      })
+    );
+  }
+
+  // Open the viewer by itself once the render lands (the whole point is to look at it).
+  const hdFinal = hd.finalUrl;
+  useEffect(() => {
+    if (hdFinal) setHdOpen(true);
+  }, [hdFinal]);
+
+  const hdLabel = hd.busy
+    ? hd.phase === "assets"
+      ? "HD · preparing assets…"
+      : hd.phase === "audio"
+        ? "HD · adding audio…"
+        : hd.progress
+          ? `HD · ${Math.round((hd.progress.done / Math.max(1, hd.progress.total)) * 100)}%`
+          : "HD · starting…"
+    : "⬛ HD";
+
   return (
     <NodeFrame
       node={node}
@@ -140,6 +197,31 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
           {isFinal ? "★ final" : "☆ mark final"}
         </button>
       )}
+      {/* Render THIS segment at the final export's quality and watch it full screen. */}
+      <div className="anim-hd-row">
+        <button
+          className={"anim-hd-btn" + (hd.busy ? " busy" : "")}
+          disabled={!renderable || !jobId}
+          onClick={hd.busy ? hd.cancel : startHd}
+          title={
+            hd.busy
+              ? "cancel the HD render"
+              : `Render this segment at ${hdSpecs} and watch it full screen`
+          }
+        >
+          {hd.busy ? `${hdLabel} · cancel` : hdLabel}
+        </button>
+        <Info
+          text={`Renders this segment at the FINAL EXPORT's settings (${hdSpecs}), with the segment's audio, and opens it full screen — what the master will actually look like.`}
+          section="animation-output-hd"
+        />
+        {hd.finalUrl && !hd.busy && (
+          <button className="anim-hd-view" onClick={() => setHdOpen(true)} title="open the HD render">
+            ⤢ view HD
+          </button>
+        )}
+      </div>
+      {hd.error && <div className="anim-output-err">{hd.error}</div>}
       <div
         className="anim-output-well anim-output-well-open"
         style={{ "--out-aspect": aspect } as CSSProperties}
@@ -188,6 +270,14 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
           ctx={ctx}
           onGraphChange={onGraphChange}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {hdOpen && (hd.finalUrl || hd.videoUrl) && (
+        <HdViewerModal
+          url={hd.finalUrl || hd.videoUrl}
+          settings={exportSettings}
+          streaming={!hd.finalUrl}
+          onClose={() => setHdOpen(false)}
         />
       )}
     </NodeFrame>

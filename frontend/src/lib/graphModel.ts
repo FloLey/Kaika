@@ -10,12 +10,23 @@
 //   graph/hash       outputHash — the per-output render-POST gate (§3.6)
 //   graph/layout     de-overlap / tighten passes for the per-view card positions
 
-export { mkNodeId, mkEdgeId, LOOSE_PORT, isLooseEdge, VIDEO_SOURCES, VIDEO_PRODUCERS, videoSource } from "./graph/core";
+export {
+  mkNodeId,
+  mkEdgeId,
+  LOOSE_PORT,
+  isLooseEdge,
+  VIDEO_SOURCES,
+  VIDEO_PRODUCERS,
+  videoSource,
+  feedsMontage,
+} from "./graph/core";
 export {
   GRAPH_VERSION,
   COLOR_STOPS_DEFAULT,
   emptyGraph,
   combineSlot,
+  montageSlot,
+  montageNode,
   signalNode,
   outputNode,
   fluidNode,
@@ -26,6 +37,7 @@ export {
   noiseNode,
   shaperNode,
   gateNode,
+  changeNode,
   scopeNode,
   patternNode,
   animatePointsNode,
@@ -59,6 +71,9 @@ export {
   connectVideo,
   addCombineInput,
   removeCombineInput,
+  addMontageInput,
+  removeMontageInput,
+  setMontageSlotSpan,
   setCombineMode,
   setCombineOpacity,
   setCombineMedium,

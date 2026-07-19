@@ -13,12 +13,14 @@ import SignalNode from "./SignalNode";
 import FluidNode from "./FluidNode";
 import OutputNode from "./OutputNode";
 import CombineNode from "./CombineNode";
+import MontageNode from "./MontageNode";
 import PointsNode from "./PointsNode";
 import MathNode from "./MathNode";
 import LfoNode from "./LfoNode";
 import NoiseNode from "./NoiseNode";
 import ShaperNode from "./ShaperNode";
 import GateNode from "./GateNode";
+import ChangeNode from "./ChangeNode";
 import ImagegenNode from "./ImagegenNode";
 import SlideshowNode from "./SlideshowNode";
 import ScopeNode from "./ScopeNode";
@@ -45,12 +47,14 @@ import {
   fluidNode,
   outputNode,
   combineNode,
+  montageNode,
   pointsNode,
   mathNode,
   lfoNode,
   noiseNode,
   shaperNode,
   gateNode,
+  changeNode,
   scopeNode,
   patternNode,
   animatePointsNode,
@@ -180,6 +184,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "compositing",
       help: "Composes several video streams: merge = their sources share one sim and interact; layered = stacked with per-input opacity.",
       io: { in: "2+ video", out: "video" },
+    },
+  },
+  montage: {
+    type: "montage",
+    Component: MontageNode,
+    chrome: { title: "montage", accent: "var(--fx)", outFlow: "video" },
+    factory: montageNode,
+    palette: {
+      label: "Montage",
+      title: "Cut between video inputs on the music's rhythm",
+      order: 3.2,
+      category: "compositing",
+      help: "A rhythm-driven switcher: each rising edge of the trigger cuts to the NEXT slot's video, re-timed to start at the cut. Wire signal → gate → trigger for beat-locked cuts; the last input holds to the end.",
+      io: { in: "trigger + N video", out: "video" },
     },
   },
   transform: {
@@ -333,6 +351,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "modulators",
       help: "Any value in \u2192 a clean 0/1 square out. Arms above the threshold, releases below it minus the hysteresis band, so a hovering signal can't flicker. Drives triggers and on/off ports.",
       io: { in: "1 signal", out: "0/1 signal" },
+    },
+  },
+  change: {
+    type: "change",
+    Component: ChangeNode,
+    chrome: { title: "change", accent: "var(--mod)", outFlow: "value" },
+    factory: changeNode,
+    palette: {
+      label: "Change",
+      title: "How fast a signal is changing (smoothed derivative)",
+      order: 13.6,
+      category: "modulators",
+      help: "Any value in → its rate of CHANGE out (units/second, smoothed). Where the gate asks «is it high?», change asks «is it moving?» — feed a Gate to cut a Montage on musical transitions instead of level.",
+      io: { in: "1 signal", out: "change rate" },
     },
   },
   scope: {

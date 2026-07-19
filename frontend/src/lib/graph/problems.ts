@@ -25,6 +25,7 @@ export interface GraphProblem {
 const NEEDS_VALUE_IN: Record<string, string> = {
   gate: "gate",
   shaper: "shaper",
+  change: "change",
   math: "math",
 };
 
@@ -33,7 +34,10 @@ interface SegmentLike {
   finalOutputId?: string;
 }
 
-export function problemsFor(graph: Graph | null | undefined, segment?: SegmentLike): GraphProblem[] {
+export function problemsFor(
+  graph: Graph | null | undefined,
+  segment?: SegmentLike
+): GraphProblem[] {
   if (!graph || !Array.isArray(graph.nodes)) return [];
   const out: GraphProblem[] = [];
   const wiredTargets = new Set(
@@ -68,6 +72,29 @@ export function problemsFor(graph: Graph | null | undefined, segment?: SegmentLi
     // 3. an output with no video input can't render.
     if (n.type === "output" && !videoInput(graph, n.id)) {
       out.push({ nodeId: n.id, message: "output has no input — wire a video producer into it" });
+    }
+
+    // 3b. montage dead wiring: no video inputs -> can't render; an unwired trigger
+    // resolves to a constant 0 -> no cuts, only the first input ever plays.
+    if (n.type === "montage") {
+      const wired = (n.data.inputs || []).some((s) =>
+        (graph.edges || []).some(
+          (e) => e.target === n.id && e.targetPort === s.id && e.targetPort !== LOOSE_PORT
+        )
+      );
+      if (!wired) {
+        out.push({
+          nodeId: n.id,
+          message: "montage has no inputs — wire video cards into its slots",
+        });
+      }
+      const trig = ports?.trigger?.binding;
+      if (wired && (!trig || trig.kind !== "node")) {
+        out.push({
+          nodeId: n.id,
+          message: "montage trigger has no signal — it never cuts, only the first input plays",
+        });
+      }
     }
 
     // 4. a signal card whose segment signal was deleted reads flat 0.

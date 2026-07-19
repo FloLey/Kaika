@@ -17,13 +17,15 @@ const EXPECTED_BADGES: Record<string, number> = {
   fluid: 7, // enabled/radial/wrap + source ports (medium group collapsed by default)
   points: 0,
   combine: 5, // mode + 4 medium (merge is the default mode)
-  output: 0,
+  montage: 5, // inputs (slot summary) + threshold + hysteresis + opacity/trigger ports
+  output: 1, // the HD-render button's "?" (the video in/out ports use title tooltips)
   color: 3, // mode + intensity/opacity (swatch default; rgb rows hidden)
   math: 1, // op (mix hidden unless op==="mix")
   lfo: 4, // shape/rateMode/rate/phase (duty hidden unless square)
   noise: 3,
   shaper: 11,
   gate: 5, // threshold/hysteresis/minGap/divide/invert
+  change: 4, // gain/attack/release/direction
   scope: 0,
   pattern: 6, // layout/count/radius/rotation/offsetX/offsetY (seed hidden unless scatter)
   "animate-points": 3, // mode/amount/rate (angle/length/taper are mode-specific)
@@ -75,12 +77,23 @@ const INLINE_ARGS: Record<string, string[]> = {
   lfo: ["shape", "rateMode", "rate", "phase", "duty"],
   noise: ["rate", "octaves", "seed"],
   shaper: [
-    "delay", "wrap", "invert", "attack", "release",
-    "threshold", "gamma", "gain", "offset", "lo", "hi",
+    "delay",
+    "wrap",
+    "invert",
+    "attack",
+    "release",
+    "threshold",
+    "gamma",
+    "gain",
+    "offset",
+    "lo",
+    "hi",
   ],
   "animate-points": ["mode", "amount", "rate", "angle", "count", "fade"],
   math: ["op", "mix"],
+  change: ["gain", "attack", "release", "direction"],
   combine: ["mode", "dissipation", "velocity_dissipation", "viscosity", "vorticity"],
+  montage: ["threshold", "hysteresis", "inputs"],
   imagegen: ["model"],
 };
 
@@ -117,7 +130,9 @@ describe("per-argument help catalog", () => {
         // so the key alone is enough to check membership.
         const { section } = argHelp(type, k);
         expect(section, `${type}.${k} resolved no section`).toBeTruthy();
-        expect(ids.has(section as string), `${type}.${k} → "${section}" is not a doc section`).toBe(true);
+        expect(ids.has(section as string), `${type}.${k} → "${section}" is not a doc section`).toBe(
+          true
+        );
       }
     }
   });
@@ -138,7 +153,9 @@ describe("per-argument help catalog", () => {
       } as unknown as NodeCtx;
       const html = renderToStaticMarkup(renderAnimNode(node, HELPERS, ctx));
       const badges = (html.match(/role="note"/g) || []).length; // one per Info badge
-      expect(badges, `${spec.type} rendered ${badges} '?' badges`).toBe(EXPECTED_BADGES[spec.type] ?? 0);
+      expect(badges, `${spec.type} rendered ${badges} '?' badges`).toBe(
+        EXPECTED_BADGES[spec.type] ?? 0
+      );
     }
   });
 
@@ -149,7 +166,10 @@ describe("per-argument help catalog", () => {
       expect(rendered.has(id), `#${id} is declared in DOC_SECTION_IDS but not rendered`).toBe(true);
     }
     for (const id of rendered) {
-      expect(new Set<string>(DOC_SECTION_IDS).has(id), `#${id} is rendered but missing from DOC_SECTION_IDS`).toBe(true);
+      expect(
+        new Set<string>(DOC_SECTION_IDS).has(id),
+        `#${id} is rendered but missing from DOC_SECTION_IDS`
+      ).toBe(true);
     }
   });
 });

@@ -71,6 +71,7 @@ export const VIDEO_FX = new Set<string>(["transform", "stylize", "extract", "ech
 export const VIDEO_PRODUCERS = new Set<string>([
   "fluid",
   "combine",
+  "montage", // N slot inputs like combine (slot id = targetPort), so not VIDEO_FX
   "output",
   ...VIDEO_SOURCES,
   ...VIDEO_FX,
@@ -80,6 +81,31 @@ export const VIDEO_PRODUCERS = new Set<string>([
 export function videoSource(graph: Graph, targetId: string, targetPort: string): string | null {
   const e = (graph.edges || []).find((x) => x.target === targetId && x.targetPort === targetPort);
   return e ? e.source : null;
+}
+
+// Whether a card's stream ends up in a montage SLOT (directly or through an FX /
+// combine chain). Mirrors backend `_feeds_a_montage`: a montage RE-TIMES its inputs
+// (local frame 0 lands on the cut), so an upstream video card ignores the song clock
+// — both when rendering and when previewing.
+export function feedsMontage(graph: Graph | undefined, nodeId: string): boolean {
+  if (!graph) return false;
+  const downstream = new Map<string, string[]>();
+  for (const e of graph.edges || []) {
+    if (isLooseEdge(e)) continue;
+    if (!downstream.has(e.source)) downstream.set(e.source, []);
+    downstream.get(e.source)!.push(e.target);
+  }
+  const byId = new Map((graph.nodes || []).map((n) => [n.id, n.type]));
+  const seen = new Set([nodeId]);
+  const stack = [...(downstream.get(nodeId) || [])];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (byId.get(id) === "montage") return true;
+    stack.push(...(downstream.get(id) || []));
+  }
+  return false;
 }
 
 // The "loose edge" sentinel targetPort: a wire dropped on a card whose destination

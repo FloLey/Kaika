@@ -172,6 +172,14 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
   the whole-song HD export (its `export.audioMode` picks the muxed audio:
   the original mix or the vocals-removed **instrumental**, mixed lazily from the
   separated stems). Clips serve from `/fluid/<name>.mp4` (Range/seek).
+- `POST /export/segment` — `{job_id, segment, graph, output_id?, hdStylize?}` →
+  renders ONE segment at the project's **export** settings (an Output card's HD
+  button) with the segment's audio slice muxed in. The graph rides in the body
+  (autosave is debounced — HD must render what's on screen); the HD settings come
+  from the saved project, so a segment preview and the master can't disagree.
+  Returns `{render_id}` — poll/cancel through the SAME `/export/stream/<id>`
+  endpoints. `409 {error, render_id}` when an HD render (segment or whole-song)
+  is already running: they share one slot so they can't starve each other.
 
 ## Tests & linting
 

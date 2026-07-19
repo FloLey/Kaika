@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
 import { aspectOf, fitToRatio, ratioLabel } from "../../lib/output";
+import { useRenderJob } from "../../lib/useRenderJob";
 import { usePreservePlayback } from "../animation/nodes/usePreservePlayback";
 import type { ExportSettings } from "../../lib/export";
 import type { OutputSettings, Segment } from "../../lib/types";
@@ -61,118 +62,28 @@ export default function ExportStep({
   }, [canvasRatio]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoUrl, setVideoUrl] = useState(""); // growing preview while running, final file when done
-  const [finalUrl, setFinalUrl] = useState(""); // the finished clip (enables the download link)
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const activeRender = useRef<string | null>(null); // render_id we're polling
-  const mounted = useRef(true); // false after unmount → the poll stops touching state (never cancels)
-  // Keep the playhead as the growing preview swaps <video> src (same hook the card
-  // previews use). The poll loop itself stays local: this stage resumes across
-  // remounts via sessionStorage and never cancels its render, unlike useStreamRender.
-  const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl);
-
   const fps = exportSettings.fps || 30;
   // Persist the in-flight render id so leaving and returning to this stage re-attaches to
   // the SAME backend render instead of losing it (leaving no longer cancels the render).
   const storeKey = job ? `export-render:${job}` : null;
+  // Poll/persist/resume/cancel — shared with the Output card's HD render, which
+  // follows the same long-lived-job contract (never cancels on unmount).
+  const { busy, error, progress, videoUrl, finalUrl, start, cancel } = useRenderJob(storeKey);
+  // Keep the playhead as the growing preview swaps <video> src (same hook the card
+  // previews use).
+  const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl);
 
   // Readiness: every segment needs a marked final output (⚠ otherwise). Generate is
   // disabled until they all do — the backend would 400 anyway, but flag it up front.
   const unmarked = segments.filter((s) => !s.finalOutputId);
   const ready = segments.length > 0 && unmarked.length === 0;
 
-  // Poll a running export into the UI. Shared by generate() (fresh start) and the resume
-  // effect (returning to the stage). Stops updating state once unmounted, but NEVER
-  // cancels the backend render — only the explicit Cancel button does that.
-  const pollRender = useCallback(
-    async (renderId: string) => {
-      activeRender.current = renderId;
-      setBusy(true);
-      setError("");
-      let terminal = false;
-      try {
-        for (;;) {
-          const st = await api.getExportStatus(renderId);
-          if (!mounted.current || activeRender.current !== renderId) return; // left / superseded
-          if (st.total) setProgress({ done: st.frames_done, total: st.total });
-          if (st.state === "running") {
-            if (st.preview_url) setVideoUrl(st.preview_url); // grows block by block
-            await new Promise((r) => setTimeout(r, 500));
-            continue;
-          }
-          terminal = true;
-          if (st.state === "done") {
-            if (st.url) {
-              setVideoUrl(st.url);
-              setFinalUrl(st.url);
-            }
-          } else if (st.state === "error") {
-            throw new Error(st.error || "export failed");
-          }
-          // "gone" (the backend forgot this render_id, e.g. after a dev-server reload)
-          // ends the attempt quietly, same as a stream render — no error banner.
-          break; // done | error | cancelled | gone
-        }
-      } catch (e) {
-        terminal = true; // a failed poll (e.g. the render expired) ends this attempt
-        if (mounted.current) setError((e as Error)?.message || String(e));
-      } finally {
-        if (terminal) {
-          if (storeKey) sessionStorage.removeItem(storeKey);
-          activeRender.current = null;
-          if (mounted.current) {
-            setBusy(false);
-            setProgress(null);
-          }
-        }
-      }
-    },
-    [storeKey]
-  );
-
-  // Resume an in-flight render when returning to the stage (it kept running while away).
-  // If the stored render is already gone, the poll's first fetch clears it.
-  useEffect(() => {
-    mounted.current = true;
-    const pending = storeKey ? sessionStorage.getItem(storeKey) : null;
-    if (pending) pollRender(pending);
-    return () => {
-      mounted.current = false; // stop touching state; the backend render keeps running
-    };
-  }, [storeKey, pollRender]);
-
   // Kick off the full-track export, persist its id (so it survives leaving the stage),
   // then poll it via pollRender. The preview updates as each block lands.
   async function generate() {
-    if (!job || busy) return;
-    setBusy(true);
-    setError("");
-    setVideoUrl("");
-    setFinalUrl("");
-    setProgress(null);
+    if (!job) return;
     resetPlayback(); // a fresh export plays from the top
-    let started;
-    try {
-      started = await api.startExport(job);
-    } catch (e) {
-      setError((e as Error)?.message || String(e));
-      setBusy(false);
-      return;
-    }
-    if (storeKey) sessionStorage.setItem(storeKey, started.render_id);
-    pollRender(started.render_id); // manages busy/progress/preview from here
-  }
-
-  // Explicit cancel: stop the backend render and forget it. This is now the ONLY path
-  // that cancels — leaving the stage keeps the render running.
-  function cancel() {
-    if (activeRender.current) api.cancelExport(activeRender.current);
-    if (storeKey) sessionStorage.removeItem(storeKey);
-    activeRender.current = null;
-    setBusy(false);
-    setProgress(null);
+    start(() => api.startExport(job));
   }
 
   const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;

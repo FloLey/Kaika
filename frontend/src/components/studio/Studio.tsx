@@ -29,6 +29,8 @@ interface StudioProps {
   job?: string;
   output: OutputSettingsT;
   setOutput: (o: OutputSettingsT) => void;
+  // The final-export settings — the Output cards' HD render uses exactly these.
+  exportSettings?: import("../../lib/export").ExportSettings;
   lyricLines?: unknown[];
   onSaveLyricLines?: (lines: unknown[]) => Promise<void>;
   // Which mix the shared transport plays ("instrumental" while building a cover
@@ -55,6 +57,7 @@ export default function Studio({
   job,
   output,
   setOutput,
+  exportSettings,
   lyricLines,
   onSaveLyricLines,
   audioMode,
@@ -381,6 +384,7 @@ export default function Studio({
                 stems={stems}
                 job={job}
                 output={output}
+                exportSettings={exportSettings}
                 lyricLines={lyricLines}
                 onSaveLyricLines={onSaveLyricLines}
                 groupClock={refAudio}

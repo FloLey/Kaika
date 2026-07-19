@@ -66,6 +66,7 @@ export interface Project {
 export interface ExtractResult {
   curve: number[];
   times: number[];
+  fps?: number; // the sampling rate of `curve` (the /resolve default is 30)
 }
 
 export interface RenderResult {
@@ -88,6 +89,10 @@ export interface RenderStatus {
   preview_url: string | null;
   url: string | null;
   error: string | null;
+  // Which step a job is on when the work happens OUTSIDE the frame loop —
+  // "assets" (HD image/stylize regeneration), "render", "audio" (muxing). Lets a
+  // long HD job explain why it's still at 0% instead of looking hung.
+  phase?: string | null;
 }
 
 // The historical per-endpoint names, kept as aliases for existing importers.
@@ -157,10 +162,12 @@ export async function uploadSong(formData: FormData): Promise<JobAck> {
 
 // Upload an image/video file to the project's asset library. Synchronous (no ingestion
 // job) — returns the stored asset (with its served URL) which the Image/Video node stores
-// in `data.assetUrl`, and which the library lists.
-export async function uploadAsset(jobId: string, file: File): Promise<Asset> {
+// in `data.assetUrl`, and which the library lists. `folder` (a relative path, e.g. from a
+// folder upload's webkitRelativePath) is kept as display metadata the library groups by.
+export async function uploadAsset(jobId: string, file: File, folder?: string): Promise<Asset> {
   const form = new FormData();
   form.append("file", file);
+  if (folder) form.append("folder", folder);
   return jsonOrThrow(await fetch(`/upload-asset/${jobId}`, { method: "POST", body: form }));
 }
 
@@ -258,11 +265,14 @@ export async function extractSignal(params: Record<string, unknown>): Promise<Ex
 }
 
 // Resolve one value node's 0..1 curve for a segment+graph — the Scope card's live view.
+// `fps` samples the curve on the caller's timeline (the montage passes the project fps
+// so its frame→seconds conversions match the render); the response echoes it back.
 export async function resolveCurve(params: {
   job_id: string;
   segment: unknown;
   graph: unknown;
   node_id: string;
+  fps?: number;
 }): Promise<ExtractResult> {
   return postJson<ExtractResult>("/resolve", params);
 }
@@ -334,6 +344,22 @@ export async function cancelStreamRender(renderId: string): Promise<void> {
 // a final output (the message lists the missing segment ids).
 export async function startExport(jobId: string): Promise<StreamStartResult> {
   return postJson<StreamStartResult>("/export/stream", { job_id: jobId });
+}
+
+// HD render of ONE segment, at the final export's settings (an Output card's "HD"
+// button). The segment + graph travel in the body — autosave is debounced, so the
+// DB copy can lag what's on screen and this must render exactly what the user sees;
+// the HD settings (size/fps/grid/audio) come from the project's saved export block.
+// Polled and cancelled through the SAME endpoints as the whole-song export.
+// Throws with the backend's message on 409 (an HD render is already running).
+export async function startSegmentHdRender(body: {
+  job_id: string;
+  segment: unknown;
+  graph: unknown;
+  output_id?: string;
+  hdStylize?: boolean;
+}): Promise<StreamStartResult> {
+  return postJson<StreamStartResult>("/export/segment", body);
 }
 
 export async function getExportStatus(renderId: string): Promise<RenderStatus> {

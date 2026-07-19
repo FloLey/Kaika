@@ -3,9 +3,9 @@
 // binding and the edge; removing a node resets any binding that pointed at it.
 
 import { LOOSE_PORT, isLooseEdge, mkEdgeId, mkInputId, portsOf, videoSource } from "./core";
-import { combineSlot } from "./factories";
+import { combineSlot, montageSlot } from "./factories";
 import { nodeParam } from "../nodeParams";
-import type { Binding, CombineMedium, CombineNode, Graph, GraphNode } from "../types";
+import type { Binding, CombineMedium, CombineNode, Graph, GraphNode, MontageNode } from "../types";
 
 // Shallow-merge a patch into a node's `data` (op/knob/param edits on the simple
 // value cards). Generic across node types — the caller passes a typed patch.
@@ -141,6 +141,51 @@ export function setCombineLayer(graph: Graph, combineId: string, layer: number):
   return patchCombine(graph, combineId, (d) => ({ ...d, layer }));
 }
 
+// Montage slots (combine-slot convention: a video edge targets a slot by its id).
+// Removing a slot also drops its edge, keeping the graph clean.
+const patchMontage = (
+  graph: Graph,
+  montageId: string,
+  fn: (d: MontageNode["data"]) => MontageNode["data"]
+): Graph => ({
+  ...graph,
+  nodes: graph.nodes.map((n) =>
+    n.id === montageId && n.type === "montage" ? { ...n, data: fn(n.data) } : n
+  ),
+});
+
+export function addMontageInput(graph: Graph, montageId: string): Graph {
+  return patchMontage(graph, montageId, (d) => ({ ...d, inputs: [...d.inputs, montageSlot()] }));
+}
+// A slot's span = how many trigger cuts it swallows (its video plays that many gate
+// intervals). Stored only when ≥ 2 — span 1 stays absent so an untouched slot keeps
+// its exact persisted shape (and the output hash).
+export function setMontageSlotSpan(
+  graph: Graph,
+  montageId: string,
+  slotId: string,
+  span: number
+): Graph {
+  const clamped = Math.min(16, Math.max(1, Math.round(span)));
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    inputs: d.inputs.map((s) =>
+      s.id === slotId ? (clamped >= 2 ? { id: s.id, span: clamped } : { id: s.id }) : s
+    ),
+  }));
+}
+
+export function removeMontageInput(graph: Graph, montageId: string, slotId: string): Graph {
+  const g = patchMontage(graph, montageId, (d) => ({
+    ...d,
+    inputs: d.inputs.filter((s) => s.id !== slotId),
+  }));
+  return {
+    ...g,
+    edges: g.edges.filter((e) => !(e.target === montageId && e.targetPort === slotId)),
+  };
+}
+
 // ---- wiring (keeps the §3.3 binding<->edge invariant) ------------------------
 
 // Clone-write one port's binding on the target node — connect/disconnect MUST NOT
@@ -210,7 +255,10 @@ export function removeNode(graph: Graph, nodeId: string): Graph {
       for (const [key, port] of Object.entries(srcPorts)) {
         const b = port.binding;
         if (b && b.kind === "node" && b.nodeId === nodeId) {
-          ports[key] = { ...port, binding: { kind: "const", value: nodeParam(n.type, key)?.def ?? 0 } };
+          ports[key] = {
+            ...port,
+            binding: { kind: "const", value: nodeParam(n.type, key)?.def ?? 0 },
+          };
           touched = true;
         } else {
           ports[key] = port;
@@ -245,16 +293,12 @@ export function removeNode(graph: Graph, nodeId: string): Graph {
 //   points flow -> a fluid's `positions` input
 //   value flow  -> the target's ONLY unbound modulatable port (else ambiguous)
 //   color flow  -> the target's only unwired color input (lyrics fill/outline, fluid color)
-export function resolveDropPort(
-  graph: Graph,
-  targetId: string,
-  flow: string
-): string | null {
+export function resolveDropPort(graph: Graph, targetId: string, flow: string): string | null {
   const node = graph.nodes.find((n) => n.id === targetId);
   if (!node) return null;
   if (flow === "video") {
     if (node.type === "output") return videoSource(graph, targetId, "video") ? null : "video";
-    if (node.type === "combine") {
+    if (node.type === "combine" || node.type === "montage") {
       const free = node.data.inputs.find((s) => !videoSource(graph, targetId, s.id));
       return free ? free.id : null;
     }
@@ -313,7 +357,13 @@ export function connectLoose(graph: Graph, sourceId: string, targetId: string): 
     ...graph,
     edges: [
       ...graph.edges,
-      { id: mkEdgeId(), source: sourceId, sourcePort: "out", target: targetId, targetPort: LOOSE_PORT },
+      {
+        id: mkEdgeId(),
+        source: sourceId,
+        sourcePort: "out",
+        target: targetId,
+        targetPort: LOOSE_PORT,
+      },
     ],
   };
 }

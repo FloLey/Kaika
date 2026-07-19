@@ -26,6 +26,7 @@ from .graph_common import (
     _PORT_SPECS,
     FLUID_FPS,
     LEGACY_GRID,
+    LOOSE_PORT,
     _POINT_CAP,
     _field_nodes,
     _fluid_for_output,
@@ -629,12 +630,58 @@ def _combine_emitters_h(dag: "_Dag", node: dict) -> list:
     return out
 
 
+# Node types whose frames are genuinely EXPENSIVE to produce (physics solvers /
+# spectral sims / diffusion) — their presence anywhere in the graph keeps the render
+# on the coarse simulation grid. Everything else (video/image/montage/lyrics/stack
+# compositing/per-frame FX) is decode + numpy, cheap enough for the native grid.
+_HEAVY_TYPES = {"fluid", "waves", "lightning", "fire", "aurora", "rain", "clouds", "stylize"}
+
+# Cap on the native-resolution preview's SHORT side: a full 1080p block stream would
+# hold ~1 GB of frames in flight per producer; 540p stays sharp (≈30× the draft
+# pixel count) at a quarter of that.
+#
+# An `output["nativeShort"]` OVERRIDES this cap and, unlike the plain preview path,
+# takes the native branch even when `gridCells` is set. That combination is exactly
+# the single-segment HD render (`/export/segment`): it carries the export's
+# `gridCells` for sim graphs, but a sim-FREE graph must render at the export's true
+# native size — pinning it to a 216-cell sim grid would make "HD" LOOK WORSE than the
+# 540p preview. The key is opt-in: no preview ever sends it (so no preview's
+# `_grid_dims` or `output_hash` changes), and the whole-song export must never set it
+# — `song_render` pushes every segment into ONE fixed-size encoder.
+_NATIVE_SHORT = 540
+
+
+def _graph_is_light(graph: dict) -> bool:
+    """True when nothing in the graph needs a simulation grid: no heavy producer and
+    no merge combine (a merge shares one physical sim). Whole-graph, not per-target —
+    one render must use ONE frame size, and a mixed segment keeps the sim grid."""
+    for n in graph.get("nodes", []):
+        t = n.get("type")
+        if t in _HEAVY_TYPES:
+            return False
+        if t == "combine" and (n.get("data") or {}).get("mode") != "stack":
+            return False
+    return True
+
+
 def _grid_dims(dag: "_Dag"):
-    """The (gh, gw) frame size for a synthesised source — the project output grid, or
-    the legacy square when no output settings are present."""
-    if dag.output:
-        return fluid.grid_from_output(dag.output)
-    return LEGACY_GRID, LEGACY_GRID
+    """The (gh, gw) frame size for a synthesised source. Normally the project output's
+    SIMULATION grid (quality preset → 64/96/144 short-side cells — sims are expensive);
+    but a graph with nothing to simulate (pure video/image/montage layers) renders at
+    the output's NATIVE resolution, capped at `nativeShort` or _NATIVE_SHORT, so clips
+    stay sharp. An explicit `gridCells` (the HD song export) otherwise wins; no output
+    settings falls back to the legacy square."""
+    if not dag.output:
+        return LEGACY_GRID, LEGACY_GRID
+    native = dag.output.get("nativeShort")
+    if (native or not dag.output.get("gridCells")) and _graph_is_light(dag.graph):
+        w = max(2, int(dag.output.get("width", 1080)))
+        h = max(2, int(dag.output.get("height", 1920)))
+        cap = max(2, int(native or _NATIVE_SHORT))
+        scale = min(1.0, cap / max(1, min(w, h)))
+        # Even dims — the yuv420p encoders require them.
+        return max(2, round(h * scale / 2) * 2), max(2, round(w * scale / 2) * 2)
+    return fluid.grid_from_output(dag.output)
 
 
 def _lyrics_static(d: dict) -> dict:
@@ -702,11 +749,41 @@ def _video_static(d: dict) -> dict:
     }
 
 
-def _video_src0(d: dict, speed_full: np.ndarray, seg_start: float) -> float:
+def _feeds_a_montage(dag: "_Dag", node_id: str) -> bool:
+    """Whether this card's stream ends up in a montage SLOT (directly or through an
+    FX / combine chain). Slot chains are exclusive (validate enforces it), so one
+    forward walk over the video edges is unambiguous."""
+    downstream: dict[str, list[str]] = {}
+    for e in dag.graph.get("edges", []):
+        if e.get("targetPort") != LOOSE_PORT:
+            downstream.setdefault(e.get("source"), []).append(e.get("target"))
+    seen, stack = {node_id}, list(downstream.get(node_id, ()))
+    while stack:
+        nid = stack.pop()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        if dag.nodes.get(nid, {}).get("type") == "montage":
+            return True
+        stack.extend(downstream.get(nid, ()))
+    return False
+
+
+def _video_src0(
+    d: dict, speed_full: np.ndarray, seg_start: float, montage_slot: bool = False
+) -> float:
     """Source time (s) at segment-frame 0: `start` plus, for `sync="song"`, a pre-roll of
     `seg_start` seconds advanced at the initial speed (so a background clip stays roughly
-    phase-continuous across segments). Variable speed is integrated segment-locally."""
-    base_offset = seg_start if d.get("sync", "song") == "song" else 0.0
+    phase-continuous across segments). Variable speed is integrated segment-locally.
+
+    `montage_slot` drops that pre-roll: a montage RE-TIMES its inputs (local frame 0
+    lands on the cut), so the song clock is already accounted for. Keeping it would
+    seek `seg_start` seconds into a clip that only plays for the slot's length — on a
+    30 s phone clip in a segment starting at 1:20, straight past the end, i.e. a
+    frozen last frame for the whole slot. A montage input therefore always starts at
+    its in-point, whatever its `sync`."""
+    song_clock = d.get("sync", "song") == "song" and not montage_slot
+    base_offset = seg_start if song_clock else 0.0
     return float(d.get("start", 0.0)) + base_offset * float(speed_full[0])
 
 
@@ -809,12 +886,119 @@ def _slideshow_video(dag: "_Dag", node: dict) -> np.ndarray:
         clip.close()
 
 
+def _montage_srcs(dag: "_Dag", node: dict) -> list:
+    """The montage's wired slots as `(source_id, span)` pairs, in slot order (unwired
+    slots are skipped, combine-style, so the k-th WIRED input plays the k-th musical
+    slot). `span` (default 1) is how many trigger cuts the slot swallows — a ×2 slot
+    plays through two gate intervals before the montage moves on."""
+    out = []
+    for sl in (node.get("data") or {}).get("inputs", []):
+        s = _video_source(dag.graph, node["id"], sl.get("id"))
+        if s is not None:
+            out.append((s, max(1, int(sl.get("span", 1) or 1))))
+    return out
+
+
+def _montage_starts(trigger: "np.ndarray", spans: list[int], d: dict) -> list[int]:
+    """Absolute start frame of each PLAYED slot. Frame 0 always starts slot 0; each
+    rising edge of the trigger (gated through the card's built-in hysteresis
+    threshold, exactly like the slideshow) is a cut, and slot k swallows `spans[k]`
+    cuts before the next slot starts. Rises beyond the wired slots are IGNORED — as
+    is a slot whose starting cut never arrives — so the last STARTED input HOLDS to
+    the segment end, its clock running on (no restart). Slot k is active on
+    [starts[k], starts[k+1])."""
+    gate = _gate_curve(
+        trigger, {"threshold": d.get("threshold", 0.5), "hysteresis": d.get("hysteresis", 0.1)}
+    )
+    rises = np.nonzero(np.diff(gate) > 0)[0] + 1  # frame index where each cut lands
+    starts = [0]
+    consumed = 0
+    for span in spans[:-1]:  # the last slot never hands over — its span is moot
+        consumed += span
+        if consumed - 1 >= len(rises):
+            break  # not enough cuts left — the slot that just played holds
+        starts.append(int(rises[consumed - 1]))
+    return starts
+
+
+def _to_rgba(frames: np.ndarray) -> np.ndarray:
+    """Normalise a producer's frames to straight-alpha RGBA, compositing-exact.
+
+    Handlers emit either RGBA (video/image/lyrics/slideshow) or 3-channel
+    dye-on-black, which `composite` treats as premultiplied with max-channel
+    brightness as coverage. The montage's output must be ONE uniform format, so
+    3-channel frames become RGBA with `a = max channel` and un-premultiplied rgb
+    (`f / a`) — `composite` then yields the same contribution (`rgb * a == f`)
+    and the same occlusion, so a fluid inside a montage renders identically to
+    the same fluid wired direct."""
+    if frames.shape[-1] == 4:
+        return frames
+    f = frames.astype(np.float32) / 255.0
+    a = f.max(axis=-1, keepdims=True)
+    rgb = np.divide(f, a, out=np.zeros_like(f), where=a > 0)
+    return (np.clip(np.concatenate([rgb, a], axis=-1), 0.0, 1.0) * 255).astype(np.uint8)
+
+
+def _montage_slot_key(dag: "_Dag", src_id: str, gh: int, gw: int) -> str:
+    """Frame-cache key for ONE montage slot, in that slot's LOCAL time.
+
+    The montage re-times every input (local frame 0 lands on the cut), so a slot's
+    frames depend ONLY on its own upstream chain — not on where its cut falls, nor on
+    how long the slot lasts. `output_hash` over that chain already covers its nodes,
+    edges, referenced signals, the segment window, the output settings and
+    RENDER_VERSION; the grid is appended because `_grid_dims` decides it graph-wide
+    (a fluid elsewhere in the graph switches every card to the sim grid).
+
+    So: retiming the trigger reuses EVERY cached slot, and appending a slot renders
+    only the new one — the earlier ones are memcpy'd out of the cache."""
+    h = output_hash(dag.job_id, dag.segment, dag.graph, src_id, dag.output)
+    return f"montage-{h}-{gh}x{gw}"
+
+
+def _montage_video(dag: "_Dag", node: dict) -> np.ndarray:
+    """The montage switcher: slot k shows its input's frames RE-TIMED to start at the
+    cut — input k's local frame 0 lands on `starts[k]`, so an upstream video card
+    (sync=segment, start=S) begins at its in-point exactly on the beat. Note the
+    whole-song export styles each segment through THIS whole-clip path, and montage
+    is deliberately NOT in `_field_nodes`: a fluid upstream re-simulates per segment,
+    which matches the local-clock semantic."""
+    slots = _montage_srcs(dag, node)
+    if not slots:
+        raise ValueError(f"montage '{node['id']}' has no inputs")
+    d = node.get("data", {})
+    params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
+    nframes = max(1, round(dag.duration * dag.fps))
+    gh, gw = _grid_dims(dag)
+    starts = _montage_starts(params["trigger"], [span for _, span in slots], d)
+    bounds = starts + [nframes]
+    out = np.zeros((nframes, gh, gw, 4), np.uint8)
+    for k, r in enumerate(starts):
+        end = bounds[k + 1]
+        if end <= r:
+            continue
+        need, src = end - r, slots[k][0]
+        key = _montage_slot_key(dag, src, gh, gw)
+        cached = fluid_cache.load(key)
+        if cached is not None and cached.shape[1:] == (gh, gw, 4) and len(cached) >= need:
+            out[r:end] = cached[:need]  # unchanged slot — no decode, no simulation
+            continue
+        frames = _to_rgba(dag.video(src))
+        out[r:end] = frames[:need]
+        fluid_cache.store(key, frames)
+    return sources.apply_video_opacity(out, params["opacity"])
+
+
 def _video_video(dag: "_Dag", node: dict) -> np.ndarray:
     gh, gw = _grid_dims(dag)
     nframes = max(1, round(dag.duration * dag.fps))
     d = node.get("data", {})
     params = dag._fx_params(node)  # {opacity, speed} full-segment arrays
-    src0 = _video_src0(d, params["speed"], float(dag.segment.get("start", 0.0)))
+    src0 = _video_src0(
+        d,
+        params["speed"],
+        float(dag.segment.get("start", 0.0)),
+        montage_slot=_feeds_a_montage(dag, node["id"]),
+    )
     return sources.video(
         nframes,
         gh,
@@ -1363,6 +1547,7 @@ _VIDEO_HANDLERS = {
     "lyrics": _lyrics_video,
     "image": _image_video,
     "slideshow": _slideshow_video,
+    "montage": _montage_video,
     "video": _video_video,
     "backdrop": _backdrop_video,
     "transform": _transform_video,
@@ -1518,6 +1703,74 @@ def _slideshow_block(dag: "_Dag", node: dict):
     return produce
 
 
+def _montage_block(dag: "_Dag", node: dict):
+    """Block mirror of `_montage_video`. Each slot's producer is pulled with LOCAL
+    frame ranges (absolute − slot start): slots are sequential and never revisited,
+    so every producer still sees contiguous front-to-back ranges starting at 0 —
+    the FluidClip/echo/rain contract holds. Two costs, both deliberate:
+    - a producer feeding a montage slot must feed NOTHING else (validate enforces
+      it — `_block_producer` memoizes one producer per node, and a second consumer
+      would pull conflicting absolute ranges into the same stateful sim);
+    - an upstream fluid's own raw-frame cache never finalizes under local pulls (that
+      writer commits only when b reaches nframes) — but the montage caches each
+      slot's FINISHED frames itself (`_montage_slot_key`), so the re-simulation
+      happens once, not once per edit."""
+    slots = _montage_srcs(dag, node)
+    if not slots:
+        raise ValueError(f"montage '{node['id']}' has no inputs")
+    d = node.get("data", {})
+    gh, gw = _grid_dims(dag)
+    params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
+    nframes = max(1, round(dag.duration * dag.fps))
+    starts = _montage_starts(params["trigger"], [span for _, span in slots], d)
+    bounds = np.array(starts + [nframes])
+
+    def _slot_producer(src: str, length: int):
+        """`produce_local(a, b) -> RGBA frames` for one slot: served straight from the
+        slot frame cache when it holds enough frames (no decoder, no sim, no upstream
+        producer BUILT at all), else the real producer teed into the cache so the next
+        edit reuses it. The cache is written in local time, so it survives a retimed
+        trigger; only a slot that grew LONGER than its cached run re-renders."""
+        key = _montage_slot_key(dag, src, gh, gw)
+        cached = fluid_cache.load(key)
+        if cached is not None and cached.shape[1:] == (gh, gw, 4) and len(cached) >= length:
+            return lambda a, b: np.ascontiguousarray(cached[a:b])
+        inner = dag._block_producer(src)
+        mm, finalize, discard = fluid_cache.frame_writer(key, (length, gh, gw, 4))
+        if mm is None:  # cache disabled/unopenable — render straight through
+            return lambda a, b: _to_rgba(inner(a, b))
+        dag._closers.append(discard)  # a cancelled stream drops the partial file
+
+        def produce_local(a, b):
+            blk = _to_rgba(inner(a, b))
+            mm[a:b] = blk
+            if b >= length:  # the montage knows each slot's length up front
+                finalize()
+            return blk
+
+        return produce_local
+
+    # Producers only for slots that actually play — no idle FluidClips.
+    producers = [
+        _slot_producer(s, int(bounds[k + 1]) - int(bounds[k]))
+        for k, (s, _) in enumerate(slots[: len(starts)])
+    ]
+
+    def produce(a, b):
+        out = np.zeros((b - a, gh, gw, 4), np.uint8)
+        # A block may straddle one or more cuts: split it per slot bucket.
+        k0 = int(np.searchsorted(bounds, a, side="right")) - 1
+        k1 = int(np.searchsorted(bounds, b - 1, side="right")) - 1
+        for k in range(k0, k1 + 1):
+            s, e = max(a, int(bounds[k])), min(b, int(bounds[k + 1]))
+            if e > s:
+                r = int(bounds[k])
+                out[s - a : e - a] = producers[k](s - r, e - r)  # already RGBA
+        return sources.apply_video_opacity(out, params["opacity"][a:b])
+
+    return produce
+
+
 def _video_block(dag: "_Dag", node: dict):
     gh, gw = _grid_dims(dag)
     d = node.get("data", {})
@@ -1528,7 +1781,12 @@ def _video_block(dag: "_Dag", node: dict):
     # continuous across stream blocks — and hold ONE persistent decoder across them
     # (mirrors the fluid producer's resumable FluidClip) instead of spawning a fresh
     # seek+decode ffmpeg per block. The dag reaps it on stream end/cancel.
-    src_base = _video_src0(d, speed_full, float(dag.segment.get("start", 0.0)))
+    src_base = _video_src0(
+        d,
+        speed_full,
+        float(dag.segment.get("start", 0.0)),
+        montage_slot=_feeds_a_montage(dag, node["id"]),
+    )
     src_t = sources.video_src_times(len(speed_full), dag.fps, src_base, speed_full)
     clip = sources.VideoClip(gh, gw, dag.fps, asset_path=ap, **static)
     dag._closers.append(clip.close)
@@ -1657,6 +1915,7 @@ _BLOCK_HANDLERS = {
     "lyrics": _lyrics_block,
     "image": _image_block,
     "slideshow": _slideshow_block,
+    "montage": _montage_block,
     "video": _video_block,
     "backdrop": _backdrop_block,
     "transform": _transform_block,

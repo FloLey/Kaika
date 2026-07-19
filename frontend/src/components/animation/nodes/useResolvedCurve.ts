@@ -13,10 +13,15 @@ export function useResolvedCurve(
   ctx: NodeCtx | undefined,
   nodeId: string,
   depKey: string
-): { curve: number[]; loading: boolean } {
+): { curve: number[]; fps: number; loading: boolean } {
   const [curve, setCurve] = useState<number[]>([]);
+  // The curve's sampling rate — /resolve echoes back the fps it sampled at. We request
+  // the PROJECT fps so frame indices convert to the same seconds the render uses; the
+  // response value stays authoritative (the montage's window labels read it).
+  const [fps, setFps] = useState(30);
   const [loading, setLoading] = useState(true);
   const seg = ctx?.segment;
+  const outFps = ctx?.output?.fps || 30;
   const segStart = seg?.start ?? 0;
   const segEnd = seg?.end ?? 0;
   const jobId = jobIdOf(ctx?.job);
@@ -42,9 +47,11 @@ export function useResolvedCurve(
         segment: { start: segStart, end: segEnd, signals: signalsRef.current },
         graph: graphRef.current,
         node_id: nodeId,
+        fps: outFps,
       })
         .then((d) => {
           setCurve(d.curve || []);
+          setFps(d.fps || outFps);
           setLoading(false);
         })
         .catch(() => {
@@ -56,7 +63,7 @@ export function useResolvedCurve(
     // Deliberate: refetch on `depKey` (the upstream signature) + window, not on every
     // graph object identity; the refs above keep the posted graph fresh regardless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [depKey, jobId, nodeId, segStart, segEnd]);
+  }, [depKey, jobId, nodeId, segStart, segEnd, outFps]);
 
-  return { curve, loading };
+  return { curve, fps, loading };
 }

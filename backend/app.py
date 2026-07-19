@@ -15,6 +15,7 @@ import logging
 import os
 import shutil
 import threading
+import time
 
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
@@ -29,7 +30,11 @@ log = logging.getLogger("kaika")
 
 # Flask is a pure API. The UI is always the Vite dev server (:5173).
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB upload cap
+# Upload cap. 2 GB (was 200 MB): modern phone clips routinely exceed 200 MB and a
+# folder upload (asset library 📁) sends them one file per request — Flask 413s
+# above this BEFORE the route's own friendlier check runs. Local single-user app:
+# the RAM spike of reading one such file is acceptable.
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
 
 # Ensure the projects table exists. Don't hard-fail import if Postgres is down —
 # the error surfaces clearly on the first request that needs the DB.
@@ -37,6 +42,37 @@ try:
     db.init_schema()
 except db.DBUnavailable as e:
     log.warning("could not init the database (%s). Is Postgres up? " "`docker compose up -d db`", e)
+
+
+# Request timing. Werkzeug's access line says WHAT was requested, never how long it
+# took — so "the editor feels slow" was unanswerable from the log stream alone (it took
+# counting request patterns by hand to find that a compact canvas was queueing one
+# segment render per card). Anything slower than SLOW_REQUEST_MS is logged with its
+# duration, and `?debug_timing=1` (or KAIKA_LOG_TIMING=1) logs EVERY request.
+SLOW_REQUEST_MS = float(os.environ.get("SLOW_REQUEST_MS", "400"))
+_LOG_ALL_TIMING = os.environ.get("KAIKA_LOG_TIMING", "0") != "0"
+
+
+@app.before_request
+def _start_timer():
+    request.environ["kaika.t0"] = time.perf_counter()
+
+
+@app.after_request
+def _log_slow(resp):
+    t0 = request.environ.get("kaika.t0")
+    if t0 is None or request.path == "/logs":  # /logs must never log — it feeds itself
+        return resp
+    ms = (time.perf_counter() - t0) * 1000.0
+    if _LOG_ALL_TIMING or ms >= SLOW_REQUEST_MS:
+        log.info(
+            "%s %s -> %s in %.0f ms",
+            request.method,
+            request.full_path.rstrip("?"),
+            resp.status_code,
+            ms,
+        )
+    return resp
 
 
 # Every error path returns JSON (never Werkzeug's HTML page) so the frontend's

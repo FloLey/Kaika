@@ -38,6 +38,29 @@ def test_fluid_rejects_non_object_body(client):
     assert client.post("/fluid", json=[1, 2]).status_code == 400
 
 
+def test_resolve_honors_the_caller_fps(client):
+    """/resolve samples on the caller's timeline: the montage card passes the project
+    fps so its frame→seconds conversions match the render (a 30fps curve read as 24fps
+    frames showed every window boundary 25% late). Junk fps falls back to 30."""
+    g = {
+        "nodes": [
+            {"id": "l", "type": "lfo", "data": {"shape": "sine", "rateMode": "cycles", "rate": 2}}
+        ],
+        "edges": [],
+    }
+    body = {
+        "job_id": "abcd1234",
+        "segment": {"start": 0.0, "end": 2.0, "signals": []},
+        "graph": g,
+        "node_id": "l",
+    }
+    d30 = client.post("/resolve", json=body).get_json()
+    assert d30["fps"] == 30 and len(d30["curve"]) == 60
+    d24 = client.post("/resolve", json={**body, "fps": 24}).get_json()
+    assert d24["fps"] == 24 and len(d24["curve"]) == 48
+    assert client.post("/resolve", json={**body, "fps": "junk"}).get_json()["fps"] == 30
+
+
 def test_jobs_unknown_is_404(client):
     assert client.get("/jobs/does-not-exist").status_code == 404
 

@@ -95,8 +95,17 @@ def _resolve_endpoint(b, resolver, label: str):
 def resolve_route(b):
     """Resolve one value node's 0..1 curve for the segment+graph (the Scope card's live
     view) -> {curve, times, fps}. No render, no DB — just runs the value resolver, so a
-    dangling `lfo -> scope` works with no output wired."""
-    return _resolve_endpoint(b, graphmod.resolve_node_curve, "resolve")
+    dangling `lfo -> scope` works with no output wired. An optional `fps` (default 30,
+    clamped 1..120) samples the curve on the caller's timeline — the montage card
+    passes the PROJECT fps so its frame indices convert to the same seconds the render
+    uses (a 30fps curve read as 24fps frames showed every time 25% late)."""
+    try:
+        fps = max(1, min(120, int(b.get("fps") or 30)))
+    except (TypeError, ValueError):
+        fps = 30
+    return _resolve_endpoint(
+        b, lambda *args: graphmod.resolve_node_curve(*args, fps=fps), "resolve"
+    )
 
 
 @bp.route("/resolve-points", methods=["POST"])
@@ -186,8 +195,14 @@ def animate_stream(body):
         return error_response(str(e), 400)
     render_id = render_jobs.start(
         lambda on_progress, should_cancel: graphmod.render_stream(
-            job_id, segment, graph, stem_audio_path, output, output_id,
-            on_progress=on_progress, should_cancel=should_cancel,
+            job_id,
+            segment,
+            graph,
+            stem_audio_path,
+            output,
+            output_id,
+            on_progress=on_progress,
+            should_cancel=should_cancel,
         )
     )
     return jsonify({"render_id": render_id})

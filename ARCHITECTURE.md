@@ -36,6 +36,8 @@ simulation.
         │                    block-streamed, cached, cancel-on-edit │
         └──────────────────────────────┬────────────────────────────┘
                                        │  mark one output per segment ★ final
+        /export/segment — ONE segment at the export's settings (the
+        Output card's HD button), audio slice muxed; shares the HD slot with:
         /export/stream — whole-song HD render (song_render.py):
         one continuous sim per layer carries across segment cuts,
         muxed with the original audio
@@ -80,7 +82,7 @@ startup cache sweep. Each blueprint keeps its historical absolute URLs:
 |---|---|
 | `uploads.py` | `/upload`, `/segment`, `/jobs/<id>`, `/logs`, `/upload-asset/<job>`, `/asset-from-youtube/<job>`, `GET/DELETE /assets/<job>[/<id>]` |
 | `animation.py` | `/extract`, `/resolve`, `/fluid`, `/animate`, `/animate/stream` (+ status/cancel) |
-| `export.py` | `/export/stream` (+ status/cancel) |
+| `export.py` | `/export/stream`, `/export/segment` (+ shared status/cancel) |
 | `projects.py` | `/projects`, `/projects/<id>` GET/PUT/DELETE, `/playground` |
 | `serving.py` | `/`, `/fonts`, `/fluid/<name>`, `/fluid/stream/...`, `/audio/...`, `/assets/<job>/<name>`, `/spectrogram/...` |
 
@@ -113,12 +115,26 @@ the implementation lives in five modules:
   sync and streaming paths can't drift, and it's what `validate` keys its
   output-node rules off. The frontend mirror is `nodeRenderable`
   (`lib/graph/validate.ts`) — cards only stream what the backend would accept.
+  It also owns the FRAME SIZE rule (`_grid_dims`): normally the output's coarse
+  simulation grid, but a graph with nothing to simulate renders at native
+  resolution (short side capped at 540 — a full 1080p block stream would hold
+  ~1 GB of frames in flight). `output["nativeShort"]` raises that cap and wins
+  over `gridCells`; only the single-segment HD render sets it, because pinning a
+  sim-free graph to a 216-cell export grid would make "HD" look *worse* than the
+  preview. Previews never send the key, so their sizes — and cache keys — are
+  untouched, and the whole-song export must never set it (one fixed-size encoder
+  spans every segment).
 
 A node graph has three edge flows: **value** (0..1 curves into modulatable
 ports, each mapped through a per-port `[lo, hi]` range), **points** (emitter
 position sets into a fluid's — or fire/lightning/rain's — `positions`, full
 specs so animate-points paths/gates ride along), and **video** (frame streams
-into combines/outputs, including the optional refracted input of waves/rain). Every modulatable port is either a `const` or a
+into combines/montage slots/outputs, including the optional refracted input of
+waves/rain). The **montage** card is the one video consumer that RE-TIMES its
+inputs: slot k's producer is pulled with slot-local frame ranges (its clock
+starts 0 at the cut), so each slot's upstream chain must be **exclusive** to it
+— validate rejects a card feeding a montage slot and anything else (both sides;
+duplicate the card instead). Every modulatable port is either a `const` or a
 `{nodeId, lo, hi}` binding — kept in lockstep with a matching edge (the
 **binding↔edge invariant**, enforced by the frontend mutation helpers).
 
@@ -195,7 +211,14 @@ GPU box can never bounce a request back out.
    `fluid.params_hash(params)` — *physics only* — so a downstream-only edit
    (colour, layer opacity, lyrics tweak) reuses the expensive sim and re-runs
    only the cheap per-frame ops. Memory-mapped for cheap block slicing, with an
-   incremental writer for streaming renders.
+   incremental writer for streaming renders. The **montage** stores its slots
+   here too, under `montage-<slot hash>-<gh>x<gw>` (`_montage_slot_key`): a slot's
+   frames live in its own LOCAL time, so the key covers only that slot's upstream
+   chain (an `output_hash` rooted at the slot's source) plus the frame size —
+   *not* where the cut lands or how long the slot lasts. Appending a slot renders
+   only the new one; retiming the trigger re-renders nothing (a slot that grew
+   *longer* than its cached run is the one exception). Bounded by the same LRU +
+   age caps; the reachability sweep never touches this directory.
 2. **Encoded clips** — `render_cache.py`, `data/fluid/<hash>.mp4`. Keyed by
    `output_hash`; LRU + age caps as a **backstop**.
 3. **The reachability sweep** — `cache_gc.py`, the *primary* cleaner. After each
@@ -208,7 +231,10 @@ GPU box can never bounce a request back out.
    in the analysis cache (`song_exports`) plus a best-effort recompute — the
    recorded stem is required because the export's HD image regeneration swaps
    imagegen assetUrls in memory only, so its hash can't be rebuilt from the saved
-   row.
+   row. Single-segment HD renders (`/export/segment`) record the same way under
+   `segment_exports` (both the silent clip and its `hd-…` muxed sibling, last 10)
+   — for those the record is the ONLY source: they render the client's graph,
+   which may never have been saved.
 
 **The `output_hash` contract**: the cache key covers one output's *contributing*
 sub-DAG (nodes + edges upstream of that output), the referenced signal
@@ -379,6 +405,11 @@ deployment model changes:
   GC then keeps that file alive under the referencing project.
 - **`_gate_curve` is a per-frame Python loop** — O(frames) per gate node per
   export; profile before optimizing.
+- **An upstream sim's OWN raw-frame cache never commits under a montage** — the
+  montage's slot-local pulls stop before `nframes`, so `_sim_blocks` discards the
+  partial file. The montage caches each slot's finished frames itself instead
+  (`_montage_slot_key`, see Caching), so the re-simulation happens once rather
+  than once per edit.
 
 ## Where to read more
 
