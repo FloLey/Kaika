@@ -3,7 +3,6 @@ import {
   FLOW_GAPS,
   estimateCardSize,
   flowLayout,
-  readingOrder,
   resolveOverlaps,
   tighten,
 } from "../lib/graph/layout";
@@ -238,44 +237,5 @@ describe("estimateCardSize", () => {
       estimateCardSize("lfo", "detailed").h
     );
     expect(estimateCardSize("unknown-card", "detailed").w).toBeGreaterThan(0);
-  });
-});
-
-describe("readingOrder (✨ arrange → montage slot order)", () => {
-  const r = (id: string, x: number, y: number) => ({ id, x, y, w: 230, h: 340 });
-
-  it("reads a single column top to bottom", () => {
-    expect(readingOrder([r("b", 100, 400), r("a", 100, 0), r("c", 100, 800)])).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
-  });
-
-  it("reads a grid column by column, left to right", () => {
-    const grid = [
-      r("a", 0, 0),
-      r("b", 0, 400),
-      r("c", 0, 800),
-      r("d", 400, 0),
-      r("e", 400, 400),
-      r("f", 400, 800),
-    ];
-    expect(readingOrder(grid)).toEqual(["a", "b", "c", "d", "e", "f"]);
-  });
-
-  it("keeps a hand-dragged, not-quite-aligned stack in one column", () => {
-    // ±90px of slop on a 230px card stays inside the half-width tolerance.
-    const order = readingOrder([r("a", 100, 0), r("b", 190, 400), r("c", 40, 800)]);
-    expect(order).toEqual(["a", "b", "c"]);
-  });
-
-  it("splits columns once the gap exceeds half a card", () => {
-    expect(readingOrder([r("right", 300, 0), r("left", 0, 500)])).toEqual(["left", "right"]);
-  });
-
-  it("is deterministic when cards sit at the same spot", () => {
-    const same = [r("z", 0, 0), r("a", 0, 0)];
-    expect(readingOrder(same)).toEqual(readingOrder([...same].reverse()));
   });
 });

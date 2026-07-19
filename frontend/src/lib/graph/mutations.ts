@@ -186,39 +186,6 @@ export function removeMontageInput(graph: Graph, montageId: string, slotId: stri
   };
 }
 
-// Give every montage's slots the order its feeder cards appear in on screen, `rank`
-// being a card id → reading-order position map (see `readingOrder` in ./layout).
-// Slot order IS play order (backend `_montage_srcs` plays the k-th wired slot k-th),
-// and until now nothing could permute it: you had to re-target wires one by one. Now
-// you drag the cards into the order you want and ✨ arrange makes the film follow.
-//
-// UNWIRED slots keep their index — their rows stay put under the cursor, and the render
-// skips them anyway. Only the wired slots are redistributed, among the positions wired
-// slots already occupy. Returns the SAME graph object when nothing moves, which is what
-// keeps a repeated arrange from writing history and re-rendering (permuting `inputs`
-// busts the output hash — as it should, the frames genuinely change).
-export function sortMontageSlots(graph: Graph, rank: Map<string, number>): Graph {
-  let changed = false;
-  const nodes = graph.nodes.map((n) => {
-    if (n.type !== "montage") return n;
-    const inputs = n.data.inputs || [];
-    // Each wired slot with its feeder's rank; an unranked feeder (not laid out) sorts
-    // last rather than jumping to the front.
-    const wired = inputs
-      .map((slot, i) => ({ slot, i, src: videoSource(graph, n.id, slot.id) }))
-      .filter((s) => s.src);
-    const order = [...wired].sort(
-      (a, b) => (rank.get(a.src!) ?? Infinity) - (rank.get(b.src!) ?? Infinity) || a.i - b.i
-    );
-    if (order.every((s, k) => s.i === wired[k].i)) return n;
-    const next = [...inputs];
-    wired.forEach((s, k) => (next[s.i] = order[k].slot)); // wired rows swap, gaps stay
-    changed = true;
-    return { ...n, data: { ...n.data, inputs: next } };
-  });
-  return changed ? { ...graph, nodes } : graph;
-}
-
 // Fill a montage: create one empty Video card per unwired slot and wire it in — the
 // inverse of picking clips from the library. Building a 12-cut montage by hand meant
 // "+ slot" eleven times, then twelve rounds of drop-a-card-and-drag-a-wire.

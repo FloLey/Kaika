@@ -19,6 +19,7 @@ export {
   VIDEO_PRODUCERS,
   videoSource,
   feedsMontage,
+  rankedEdges,
 } from "./graph/core";
 export {
   GRAPH_VERSION,
@@ -74,7 +75,6 @@ export {
   addAssetCard,
   addMontageInput,
   fillMontageSlots,
-  sortMontageSlots,
   removeMontageInput,
   setMontageSlotSpan,
   setCombineMode,
@@ -91,14 +91,7 @@ export {
   renameNode,
 } from "./graph/mutations";
 export { normalizeGraph } from "./graph/normalize";
-export {
-  resolveOverlaps,
-  tighten,
-  flowLayout,
-  readingOrder,
-  estimateCardSize,
-  FLOW_GAPS,
-} from "./graph/layout";
+export { resolveOverlaps, tighten, flowLayout, estimateCardSize, FLOW_GAPS } from "./graph/layout";
 export type { LayoutRect, CardSize, FlowGaps } from "./graph/layout";
 export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/validate";
 export { outputHash, upstreamKey } from "./graph/hash";

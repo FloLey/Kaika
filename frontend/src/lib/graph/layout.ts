@@ -56,29 +56,6 @@ export function estimateCardSize(type: string, mode: "detailed" | "compact"): Ca
   return DETAILED_SIZES[type] || DETAILED_DEFAULT;
 }
 
-// Reading order over a set of cards: columns left→right, then top→bottom inside each
-// column. A card joins the current column while its left edge stays within half a card
-// width of the PREVIOUS card's — chaining, so a hand-dragged stack tolerates drift
-// across its whole height and still reads as one column. A real grid can't chain shut:
-// its columns sit a card width plus FLOW_GAPS.x apart, far past the tolerance. Ids
-// break exact ties, so the order is deterministic (two cards at the same spot must not
-// swap between runs).
-//
-// Used by ✨ arrange to give a montage's slots the order you SEE (useGraphEditor).
-export function readingOrder(items: LayoutRect[]): string[] {
-  const byX = [...items].sort((a, b) => a.x - b.x || a.y - b.y || (a.id < b.id ? -1 : 1));
-  const columns: LayoutRect[][] = [];
-  let colX = -Infinity;
-  for (const it of byX) {
-    if (columns.length && it.x - colX <= it.w / 2) columns[columns.length - 1].push(it);
-    else columns.push([it]);
-    colX = it.x; // chain from the previous card, not the column's first
-  }
-  return columns.flatMap((c) =>
-    [...c].sort((a, b) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : 1)).map((r) => r.id)
-  );
-}
-
 // Edge-to-edge overlap of two rects along one axis, in px (negative = separated by
 // that many px). "Too close" means the edge distance is under `gap` on BOTH axes.
 const penX = (a: LayoutRect, b: LayoutRect) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
@@ -137,6 +114,10 @@ export const FLOW_GAPS: Record<"detailed" | "compact", FlowGaps> = {
 interface FlowEdge {
   source: string;
   target: string;
+  // Slot cards (montage / combine) have an ORDERED list of inputs: slot 1 plays first.
+  // The caller passes that index here so the layout can express the order instead of
+  // guessing at it — see `slotRanks` (graph/core).
+  portRank?: number;
 }
 
 // ✨ arrange (v3): a layered flow layout — the standard Sugiyama recipe, greedy and
@@ -162,13 +143,13 @@ export function flowLayout(
   // Dedupe the wires and drop self/unknown endpoints. ALL wires count — video,
   // param and loose "__in" edges alike: each draws a line that can cross.
   const seen = new Set<string>();
-  const links: [string, string][] = [];
+  const links: [string, string, number | undefined][] = [];
   for (const e of edges || []) {
     if (!byId.has(e.source) || !byId.has(e.target) || e.source === e.target) continue;
     const k = `${e.source} ${e.target}`;
     if (!seen.has(k)) {
       seen.add(k);
-      links.push([e.source, e.target]);
+      links.push([e.source, e.target, e.portRank]);
     }
   }
 
@@ -194,11 +175,16 @@ export function flowLayout(
   const meta = new Map<string, { w: number; h: number; y: number }>();
   for (const it of items) meta.set(it.id, { w: it.w, h: it.h, y: it.y });
   const segs: [string, string][] = [];
-  for (const [s, t] of links) {
+  // Per slot card, the rank of each node sitting in the column just BEFORE it — the
+  // feeder itself, or the last dummy of a long wire's corridor. That's the row we get
+  // to order, and ordering it by slot index is what stops the wires from crossing.
+  const feeders = new Map<string, Map<string, number>>();
+  for (const [s, t, rank] of links) {
     const cs = col.get(s)!;
     const ct = col.get(t)!;
     if (ct - cs <= 1) {
       segs.push([s, t]);
+      if (rank != null) (feeders.get(t) ?? feeders.set(t, new Map()).get(t)!).set(s, rank);
       continue;
     }
     const sy = byId.get(s)!.y + byId.get(s)!.h / 2;
@@ -212,6 +198,7 @@ export function flowLayout(
       prev = id;
     }
     segs.push([prev, t]);
+    if (rank != null) (feeders.get(t) ?? feeders.set(t, new Map()).get(t)!).set(prev, rank);
   }
 
   // Group ids (cards + dummies) per column; the initial row order follows the
@@ -301,6 +288,21 @@ export function flowLayout(
       }
     }
     if (!improved) break;
+  }
+
+  // Slot order WINS over the crossing heuristic. A montage's slot 1 plays first, so its
+  // clip belongs at the top: sort each slot card's feeders by slot index, in place among
+  // the rows they already occupy (other cards in the column keep their row). This is the
+  // whole point — cards read 1, 2, 3… down the column and the wires run flat instead of
+  // crossing. The barycenter passes can't know this: they see ports-free edges, and all
+  // of a montage's feeders share one barycenter, so they were being tie-broken by id.
+  for (const rank of feeders.values()) {
+    for (const c of cols) {
+      const rows = c.map((id, i) => ({ id, i })).filter((r) => rank.has(r.id));
+      if (rows.length < 2) continue;
+      const sorted = [...rows].sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+      rows.forEach((r, k) => (c[r.i] = sorted[k].id));
+    }
   }
 
   // Initial y: stack each column centred on a shared axis, gaps.y between rows.

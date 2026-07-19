@@ -1103,11 +1103,10 @@ export default function Docs({ section }: { section?: string }) {
           on its last frame). Its preview on the card free-runs for the same reason.
         </p>
         <p>
-          <strong>Re-ordering the clips.</strong> Slot order is play order, and it follows what you
-          see: drag the video cards into the order you want (top to bottom, and left-hand columns
-          first if you've spread them into a grid), then hit <strong>✨ arrange</strong> — the slots
-          line up on their cards' positions. Empty slots keep their row. Since this genuinely
-          changes the film, the montage re-renders afterwards.
+          <strong>Reading the order off the canvas.</strong> Hit <strong>✨ arrange</strong> and the
+          clips are stacked in slot order, slot 1 at the top, right of their montage — so the column
+          reads exactly as the film plays and no wire crosses another. Arrange is layout only: it
+          never re-orders the slots themselves.
         </p>
         <p>
           One rule: a card feeding a montage slot can't <em>also</em> feed something else (another

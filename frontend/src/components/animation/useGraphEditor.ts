@@ -9,7 +9,7 @@ import {
   disconnect,
   removeNode,
   renameNode,
-  sortMontageSlots,
+  rankedEdges,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
 import type { GraphHistory } from "../../lib/graph/history";
@@ -17,7 +17,6 @@ import {
   FLOW_GAPS,
   estimateCardSize,
   flowLayout,
-  readingOrder,
   resolveOverlaps,
   tighten,
 } from "../../lib/graph/layout";
@@ -304,21 +303,12 @@ export function useGraphEditor(opts: GraphEditorOpts) {
           const s = measured.get(n.id) || estimateCardSize(n.type, mode);
           return { id: n.id, x: n.x, y: n.y, w: s.w, h: s.h };
         });
-        const pos = flowLayout(rects, g.edges, FLOW_GAPS[mode]);
+        const pos = flowLayout(rects, rankedEdges(g), FLOW_GAPS[mode]);
         const nodes = g.nodes.map((n) => {
           const p = pos.get(n.id);
           return p && (p.x !== n.x || p.y !== n.y) ? { ...n, x: p.x, y: p.y } : n;
         });
-        const laid = nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
-        // A montage's slot order becomes the order its feeders now READ on screen, so
-        // arranging the cards is how you re-order the film. Sorted on the FINAL
-        // positions, not the ones you dragged: flowLayout may permute a column to undo
-        // a crossing elsewhere (it breaks barycenter ties by id, layout.ts:246), and
-        // promising an order the layout can then contradict would re-cut the montage on
-        // every click. Reading the result back makes it idempotent by construction.
-        const placed = rects.map((r) => ({ ...r, ...(pos.get(r.id) || {}) }));
-        const rank = new Map(readingOrder(placed).map((id, i) => [id, i]));
-        return sortMontageSlots(laid, rank);
+        return nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
       });
     },
     [applyDisplayUpdater]

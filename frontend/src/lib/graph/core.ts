@@ -4,7 +4,7 @@
 
 import { FLUID_PARAMS as RAW_FLUID_PARAMS } from "../fluidParams.js";
 import { nodeParams } from "../nodeParams";
-import type { FluidPort, Graph, GraphNode } from "../types";
+import type { FluidPort, Graph, GraphEdge, GraphNode } from "../types";
 
 // A node's modulatable-port map, or null if the card type has none. Several card
 // types carry `data.ports` (fluid + the FX cards); this is the structural guard used
@@ -81,6 +81,30 @@ export const VIDEO_PRODUCERS = new Set<string>([
 export function videoSource(graph: Graph, targetId: string, targetPort: string): string | null {
   const e = (graph.edges || []).find((x) => x.target === targetId && x.targetPort === targetPort);
   return e ? e.source : null;
+}
+
+// The graph's edges, each one carrying the SLOT INDEX it feeds when its target is a
+// slot card (montage / combine). Slot order is meaningful — a montage plays slot 1
+// first — and ✨ arrange uses this to stack the feeders in that order rather than
+// wherever crossing-minimisation happens to drop them (`flowLayout`, graph/layout).
+export function rankedEdges(graph: Graph): (GraphEdge & { portRank?: number })[] {
+  const ranks = new Map<string, Map<string, number>>();
+  for (const n of graph.nodes || []) {
+    const inputs = (n.data as { inputs?: unknown }).inputs;
+    if (!Array.isArray(inputs)) continue;
+    const byId = new Map<string, number>();
+    inputs.forEach((s, i) => {
+      if (s && typeof s === "object" && typeof (s as { id?: unknown }).id === "string") {
+        byId.set((s as { id: string }).id, i);
+      }
+    });
+    if (byId.size) ranks.set(n.id, byId);
+  }
+  if (!ranks.size) return graph.edges || [];
+  return (graph.edges || []).map((e) => {
+    const rank = ranks.get(e.target)?.get(e.targetPort);
+    return rank == null ? e : { ...e, portRank: rank };
+  });
 }
 
 // Whether a card's stream ends up in a montage SLOT (directly or through an FX /

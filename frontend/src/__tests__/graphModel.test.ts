@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   addAssetCard,
   fillMontageSlots,
-  sortMontageSlots,
-  readingOrder,
+  rankedEdges,
   flowLayout,
   FLOW_GAPS,
   estimateCardSize,
@@ -1165,107 +1164,71 @@ describe("fillMontageSlots (+ fill on the montage card)", () => {
   });
 });
 
-describe("sortMontageSlots (✨ arrange gives the slots the on-screen order)", () => {
-  // A montage fed by three video cards, slot k ← card k.
+describe("✨ arrange lays a montage's clips out in SLOT order", () => {
+  // A montage fed by 5 video cards, slot k ← card k. `+ fill` wires them in order.
   const rig = () => {
     let g = { ...emptyGraph(), nodes: [montageNode(900, 300)] } as Graph;
-    const mg = g.nodes[0];
-    g = fillMontageSlots(g, mg.id, { cuts: 2 }); // 2 cuts → 3 slots, 3 cards
-    const slots = (g.nodes.find((n) => n.id === mg.id) as MontageNode).data.inputs;
-    const feeders = slots.map((s: { id: string }) => videoSource(g, mg.id, s.id) as string);
-    return { g, mgId: mg.id, slots, feeders };
-  };
-  const playOrder = (g: Graph, mgId: string) =>
-    (g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs
-      .map((s: { id: string }) => videoSource(g, mgId, s.id))
-      .filter(Boolean);
-
-  it("re-orders the slots to follow the feeders' ranking", () => {
-    const { g, mgId, feeders } = rig();
-    const reversed = new Map([...feeders].reverse().map((id, i) => [id, i]));
-    expect(playOrder(sortMontageSlots(g, reversed), mgId)).toEqual([...feeders].reverse());
-  });
-
-  it("returns the SAME graph when the order already matches", () => {
-    const { g, mgId, feeders } = rig();
-    const asIs = new Map(feeders.map((id, i) => [id, i]));
-    expect(sortMontageSlots(g, asIs)).toBe(g); // no history entry, no re-render
-    expect(playOrder(g, mgId)).toEqual(feeders);
-  });
-
-  it("leaves unwired slots at their own row", () => {
-    const { g, mgId, feeders } = rig();
-    // A gap in the middle: unwire slot 2 by dropping its edge.
+    const mgId = g.nodes[0].id;
+    g = fillMontageSlots(g, mgId, { cuts: 4 });
     const slots = (g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs;
-    const gapped = { ...g, edges: g.edges.filter((e) => e.targetPort !== slots[1].id) };
-    const rank = new Map([...feeders].reverse().map((id, i) => [id, i]));
-    const next = sortMontageSlots(gapped, rank);
-    const rows = (next.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs;
-    expect(rows[1].id).toBe(slots[1].id); // the empty row never moved
-    expect(playOrder(next, mgId)).toEqual([feeders[2], feeders[0]]);
-  });
+    const feeders = slots.map((s: { id: string }) => videoSource(g, mgId, s.id) as string);
+    return { g, mgId, feeders };
+  };
+  // Run the real arrange pass and read the cards back top-to-bottom.
+  const arrangeTopDown = (g: Graph, ids: string[]) => {
+    const rects = g.nodes.map((n) => ({
+      id: n.id,
+      x: n.x,
+      y: n.y,
+      ...estimateCardSize(n.type, "detailed"),
+    }));
+    const pos = flowLayout(rects, rankedEdges(g), FLOW_GAPS.detailed);
+    return ids.slice().sort((a, b) => pos.get(a)!.y - pos.get(b)!.y);
+  };
 
-  it("keeps the graph renderable and does not mutate the input", () => {
-    const { g, mgId, feeders } = rig();
-    const before = JSON.stringify(g);
-    const next = sortMontageSlots(g, new Map([...feeders].reverse().map((id, i) => [id, i])));
-    expect(JSON.stringify(g)).toBe(before);
-    expect(() => validate(next)).not.toThrow();
-    expect(next.nodes.find((n) => n.id === mgId)).toBeTruthy();
-  });
-
-  it("follows cards you drag: swapping two cards swaps the play order on arrange", () => {
-    const { g, mgId, feeders } = rig();
-    // Swap the top and bottom feeder cards' y — the gesture this feature is for.
-    const [top, , bottom] = feeders;
-    const yOf = (graph: Graph, id: string) => graph.nodes.find((n) => n.id === id)!.y;
-    const [yTop, yBot] = [yOf(g, top), yOf(g, bottom)];
-    const dragged = {
+  it("stacks the feeders in slot order, whatever their starting positions", () => {
+    const { g, feeders } = rig();
+    // Scatter them: card 1 at the bottom, card 5 at the top — the shuffle that used to
+    // survive the arrange and cross every wire.
+    const scattered = {
       ...g,
-      nodes: g.nodes.map((n) =>
-        n.id === top ? { ...n, y: yBot } : n.id === bottom ? { ...n, y: yTop } : n
-      ),
+      nodes: g.nodes.map((n) => {
+        const k = feeders.indexOf(n.id);
+        return k < 0 ? n : { ...n, y: 5000 - k * 700 };
+      }),
     };
-    const rank = new Map(
-      readingOrder(
-        dragged.nodes.map((n) => ({
-          id: n.id,
-          x: n.x,
-          y: n.y,
-          ...estimateCardSize(n.type, "detailed"),
-        }))
-      ).map((id, i) => [id, i])
-    );
-    expect(playOrder(sortMontageSlots(dragged, rank), mgId)).toEqual([
-      feeders[2],
-      feeders[1],
-      feeders[0],
-    ]);
+    expect(arrangeTopDown(scattered, feeders)).toEqual(feeders);
   });
 
-  it("is idempotent through the real arrange sequence (no re-render on a second click)", () => {
-    // The exact pipeline useGraphEditor.reorganize runs: flowLayout, then sort on the
-    // RESULTING positions. Clicking arrange twice must be a no-op the second time —
-    // otherwise every click would permute the slots and re-cut the montage.
-    const { g, mgId } = rig();
-    const arrange = (graph: Graph): Graph => {
-      const rects = graph.nodes.map((n) => ({
-        id: n.id,
-        x: n.x,
-        y: n.y,
-        ...estimateCardSize(n.type, "detailed"),
-      }));
-      const pos = flowLayout(rects, graph.edges, FLOW_GAPS.detailed);
-      const nodes = graph.nodes.map((n) => ({ ...n, ...(pos.get(n.id) || {}) }));
-      const placed = rects.map((r) => ({ ...r, ...(pos.get(r.id) || {}) }));
-      return sortMontageSlots(
-        { ...graph, nodes },
-        new Map(readingOrder(placed).map((id, i) => [id, i]))
-      );
-    };
-    const once = arrange(g);
-    const twice = arrange(once);
-    expect(playOrder(twice, mgId)).toEqual(playOrder(once, mgId));
-    expect(twice.nodes.map((n) => [n.x, n.y])).toEqual(once.nodes.map((n) => [n.x, n.y]));
+  it("never touches the slot order itself — arrange stays a layout-only action", () => {
+    const { g, mgId, feeders } = rig();
+    const before = (g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs;
+    const rects = g.nodes.map((n) => ({
+      id: n.id,
+      x: n.x,
+      y: n.y,
+      ...estimateCardSize(n.type, "detailed"),
+    }));
+    flowLayout(rects, rankedEdges(g), FLOW_GAPS.detailed);
+    expect((g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs).toBe(before);
+    expect(before.map((s: { id: string }) => videoSource(g, mgId, s.id))).toEqual(feeders);
+  });
+
+  it("rankedEdges tags each slot edge with its index and leaves the rest alone", () => {
+    const { g, mgId, feeders } = rig();
+    const ranked = rankedEdges(g);
+    for (const [i, src] of feeders.entries()) {
+      const e = ranked.find((x) => x.source === src && x.target === mgId);
+      expect(e?.portRank).toBe(i);
+    }
+    // A graph with no slot card gets its edges back untouched (same array).
+    const plain = { ...emptyGraph(), nodes: [videoNode(0, 0)], edges: [] } as Graph;
+    expect(rankedEdges(plain)).toBe(plain.edges);
+  });
+
+  it("is stable: arranging twice lays the cards out identically", () => {
+    const { g, feeders } = rig();
+    const once = arrangeTopDown(g, feeders);
+    expect(arrangeTopDown(g, feeders)).toEqual(once);
   });
 });
