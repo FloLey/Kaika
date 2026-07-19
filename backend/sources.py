@@ -1291,9 +1291,7 @@ class SlideshowClip:
                 lpos = local[grp]
                 src_t = self.starts[int(item)] + self.age[glob[grp]] / float(self.fps)
                 out[lpos] = clip.frames(src_t)  # already placed into the box
-        op = np.asarray(opacity, np.float32).reshape(-1)[:count, None, None]
-        out[..., 3] = np.clip(out[..., 3].astype(np.float32) * op, 0, 255).astype(np.uint8)
-        return out
+        return apply_video_opacity(out, opacity)
 
     def close(self) -> None:
         for c in self.clips:
