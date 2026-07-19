@@ -46,14 +46,7 @@ export default function StreamPreview({
   const renderKey = useMemo(
     () =>
       graph
-        ? outputHash(
-            graph,
-            node.id,
-            job as string | undefined,
-            segment?.start,
-            segment?.end,
-            signals
-          ) +
+        ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals) +
           JSON.stringify(output || {}) +
           `|ly:${lyricsKey ?? JSON.stringify(lyricLines || [])}`
         : "",

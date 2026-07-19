@@ -127,17 +127,7 @@ export default function NodeFrame({
   compact = false,
   children,
 }: NodeFrameProps) {
-  const {
-    minimized: minSet,
-    toggle,
-    mode,
-    rename,
-  } = useContext(MinimizeContext) as {
-    minimized?: Set<string>;
-    toggle?: (id: string) => void;
-    mode?: "detailed" | "compact";
-    rename?: (id: string, name: string) => void;
-  };
+  const { minimized: minSet, toggle, mode, rename } = useContext(MinimizeContext);
   // Inline rename: double-click the title → an <input> seeded with the current name
   // (or the type fallback), committed on Enter/blur, cancelled on Escape. Only when a
   // `rename` handler is present (on-canvas + in the open card; read-only in tests).

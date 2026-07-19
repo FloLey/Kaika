@@ -17,6 +17,16 @@ export interface OutputSettings {
 
 // ---- studio domain: stems, signals, segments ---------------------------------
 // One separated stem's served URLs + sample rate (top of its spectrogram = sr/2).
+/** One aligned lyric line. The shape was documented in a COMMENT on nodeProps'
+ * `lyricLines?: unknown[]` and threaded untyped through six modules; the lyrics card,
+ * the render key and the line editor all index into it. */
+export interface LyricLine {
+  t0: number;
+  t1: number;
+  text: string;
+  aligned?: boolean; // false = interpolated timing, not actually heard
+}
+
 export interface StemInfo {
   sr?: number;
   spectrogram?: string;
@@ -266,36 +276,20 @@ export interface BackdropData {
 // Generative source cards (docs/generative-cards/): synthesise an RGBA layer from
 // scratch, reactive to signal-driven ports. Colour is a static `palette` preset,
 // overridable by a `color` card wired into the "color" input. `seed` varies the noise.
-export interface WavesData {
-  palette: "ocean" | "tropical" | "storm" | "sunset";
+// The six generative simulation cards. Identical shape — a palette, a seed and the
+// modulatable ports — so only the palette union differs; six copies of the same three
+// fields drifted apart the moment one gained a field the others didn't.
+export interface GenSourceData<P extends string> {
+  palette: P;
   seed: number;
   ports: Record<string, FluidPort>;
 }
-export interface LightningData {
-  palette: "electric" | "violet" | "white-hot" | "ember";
-  seed: number;
-  ports: Record<string, FluidPort>;
-}
-export interface FireData {
-  palette: "flame" | "blue-fire" | "green-fire" | "ghost";
-  seed: number;
-  ports: Record<string, FluidPort>;
-}
-export interface AuroraData {
-  palette: "aurora" | "solar" | "ice" | "spectrum";
-  seed: number;
-  ports: Record<string, FluidPort>;
-}
-export interface RainData {
-  palette: "downpour" | "silver" | "neon" | "monsoon";
-  seed: number;
-  ports: Record<string, FluidPort>;
-}
-export interface CloudsData {
-  palette: "sky" | "nebula" | "ink" | "dust";
-  seed: number;
-  ports: Record<string, FluidPort>;
-}
+export type WavesData = GenSourceData<"ocean" | "tropical" | "storm" | "sunset">;
+export type LightningData = GenSourceData<"electric" | "violet" | "white-hot" | "ember">;
+export type FireData = GenSourceData<"flame" | "blue-fire" | "green-fire" | "ghost">;
+export type AuroraData = GenSourceData<"aurora" | "solar" | "ice" | "spectrum">;
+export type RainData = GenSourceData<"downpour" | "silver" | "neon" | "monsoon">;
+export type CloudsData = GenSourceData<"sky" | "nebula" | "ink" | "dust">;
 // The transform video-FX card (video -> video): an affine warp of the incoming frames
 // (zoom/rotate/pan are modulatable ports), optionally folded into a mirror or a
 // kaleidoscope. `wrap` tiles the edges instead of leaving them black.

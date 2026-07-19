@@ -8,7 +8,7 @@ import OutputSettings from "../animation/OutputSettings";
 import AssetLibrary from "../assets/AssetLibrary";
 import { defaultCardName } from "../animation/nodeInputs";
 import { addAssetCard, emptyGraph } from "../../lib/graphModel";
-import type { Asset as AssetT } from "../../lib/types";
+import type { Asset as AssetT, LyricLine } from "../../lib/types";
 import VolumeControl from "./VolumeControl";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
@@ -35,8 +35,8 @@ interface StudioProps {
   // The final-export settings — the Output cards' HD render uses exactly these.
   exportSettings?: import("../../lib/export").ExportSettings;
   assets?: import("../../lib/types").Asset[];
-  lyricLines?: unknown[];
-  onSaveLyricLines?: (lines: unknown[]) => Promise<void>;
+  lyricLines?: LyricLine[];
+  onSaveLyricLines?: (lines: LyricLine[]) => Promise<void>;
   // Which mix the shared transport plays ("instrumental" while building a cover
   // keeps the old vocal from fighting the new words).
   audioMode?: "original" | "instrumental";

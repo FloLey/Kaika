@@ -7,7 +7,7 @@ import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
 import { problemsFor } from "../../lib/graphModel";
 import type { View } from "./usePanZoom";
-import type { Graph, GraphNode, OutputSettings, Segment } from "../../lib/types";
+import type { Graph, GraphNode, LyricLine, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 
 interface AnimationCanvasProps {
@@ -17,7 +17,7 @@ interface AnimationCanvasProps {
   output?: OutputSettings | null;
   exportSettings?: NodeCtx["exportSettings"];
   assets?: NodeCtx["assets"];
-  lyricLines?: unknown[];
+  lyricLines?: LyricLine[];
   onSaveLyricLines?: NodeCtx["onSaveLyricLines"];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;

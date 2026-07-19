@@ -62,14 +62,7 @@ export default function OutputNode({
   const renderKey = useMemo(
     () =>
       graph
-        ? outputHash(
-            graph,
-            node.id,
-            job as string | undefined,
-            segment?.start,
-            segment?.end,
-            signals
-          ) +
+        ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals) +
           JSON.stringify(output || {}) +
           // The backend folds a lyrics card's burned-in text into output_hash, so a
           // change to the aligned lines (which arrive async) must re-trigger the

@@ -17,6 +17,7 @@ import StreamPreview from "./StreamPreview";
 import LyricsEditor from "../LyricsEditor";
 import type { NodeProps } from "./nodeProps";
 import type { LyricsData, LyricsAlign, LyricsCase, LyricsReveal } from "../../../lib/types";
+import type { LyricLine } from "../../../lib/types";
 
 // Lyrics source: burns the segment's ALIGNED lyrics into the frame, timed to the
 // vocal (→ video). No input; the lyric lines ride in from the project (ctx.lyricLines).
@@ -26,11 +27,6 @@ const ALIGNS: LyricsAlign[] = ["left", "center", "right"];
 const CASES: LyricsCase[] = ["none", "upper", "lower"];
 const REVEALS: LyricsReveal[] = ["line", "word"];
 
-interface LyricLine {
-  t0?: number;
-  t1?: number;
-  text?: string;
-}
 const applyCase = (t: string, c: LyricsCase) =>
   c === "upper" ? t.toUpperCase() : c === "lower" ? t.toLowerCase() : t;
 
@@ -121,7 +117,7 @@ export default function LyricsNode({
   // The preview plays the reveal off the shared clock (see BoxPad): `getText(t)` gives the
   // revealed text at song time t; when paused it shows `idleText` (the longest line so the
   // box can be sized safely, else a sample when the track has no lyrics).
-  const lines = useMemo(() => (ctx?.lyricLines || []) as LyricLine[], [ctx?.lyricLines]);
+  const lines = useMemo(() => ctx?.lyricLines || [], [ctx?.lyricLines]);
   const getText = useCallback(
     (t: number) => textAtTime(lines, t, d.reveal, d.case),
     [lines, d.reveal, d.case]

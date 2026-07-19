@@ -84,7 +84,7 @@ describe("SignalNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(SignalNode, {
         ...h(node),
-        ctx: { signals: [signal], segment: seg(0, 8), job: { job_id: "job" } },
+        ctx: { signals: [signal], segment: seg(0, 8), job: "job" },
       })
     );
     expect(html).toContain("signal"); // title
@@ -98,7 +98,7 @@ describe("SignalNode", () => {
     const html = renderToStaticMarkup(
       React.createElement(SignalNode, {
         ...h(node),
-        ctx: { signals: [], segment: seg(0, 8), job: { job_id: "job" } },
+        ctx: { signals: [], segment: seg(0, 8), job: "job" },
       })
     );
     expect(html).toContain("missing signal");

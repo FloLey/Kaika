@@ -2,7 +2,16 @@
 // card components can import it without a cycle (registry.ts imports the cards).
 
 import type { PointerEvent, RefObject } from "react";
-import type { Asset, Graph, GraphNode, OutputSettings, Segment, Signal } from "../../../lib/types";
+import type {
+  Asset,
+  Graph,
+  GraphNode,
+  LyricLine,
+  OutputSettings,
+  Segment,
+  Signal,
+  StemInfo,
+} from "../../../lib/types";
 import type { ExportSettings } from "../../../lib/export";
 
 // A ref callback the canvas hands each port so it can measure the port's centre.
@@ -22,31 +31,27 @@ export interface NodeHelpers {
   selected?: boolean;
 }
 
-// One signal definition as carried in segment.signals. The cards read only a few
-// fields, but it's the same shape the studio edits — so it's the canonical `Signal`.
-export type SignalDef = Signal;
-
 // The editor context assembled by useGraphEditor + Studio, handed to every card.
 // Most fields are optional because individual cards read only what they need (and
 // guard with `ctx?.x`).
 export interface NodeCtx {
   graph?: Graph;
   segment?: Segment;
-  stems?: Record<string, unknown>;
-  job?: unknown;
+  stems?: Record<string, StemInfo>;
+  job?: string;
   output?: OutputSettings | null;
   // The project's FINAL-EXPORT settings (size/fps/detail/audio). The Output card's
   // HD render uses exactly these — surfaced so the button can say what it will
   // produce before the user commits to a minutes-long render.
   exportSettings?: ExportSettings;
-  signals?: SignalDef[];
+  signals?: Signal[];
   // The project's asset library. Cards read metadata from it (the montage's per-slot
   // "clip too short" warning needs each video's duration) instead of measuring in the
   // browser — probing a 1 GB source per card is what stalled the editor.
   assets?: Asset[];
-  lyricLines?: unknown[]; // aligned lyric lines [{t0,t1,text}] for the lyrics card
+  lyricLines?: LyricLine[]; // aligned lyric lines for the lyrics card
   lyricsKey?: string; // JSON of lyricLines, serialized once for the outputs' render keys
-  onSaveLyricLines?: (lines: unknown[]) => Promise<void>; // persist edited line text (keeps timings)
+  onSaveLyricLines?: (lines: LyricLine[]) => Promise<void>; // persist edited text (keeps timings)
   groupClock?: RefObject<HTMLAudioElement | null>;
   groupPlaying?: boolean;
   segStart?: number;
@@ -65,8 +70,10 @@ export interface NodeCtx {
 
 // `ctx.job` is either the bare job id or the loaded project object, depending on the
 // caller — every consumer needs the id, so normalize in one place.
-export const jobIdOf = (job: unknown): string | undefined =>
-  typeof job === "string" ? job : (job as { job_id?: string } | undefined)?.job_id;
+// `ctx.job` is the project id, a plain string (App holds it as `string | null`). This
+// used to be typed `unknown`, which forced a `job as string` cast at every read —
+// including useStreamRender's, which passed the cast value straight to the API.
+export const jobIdOf = (job?: string): string | undefined => job || undefined;
 
 // The props every node card receives.
 export interface NodeProps {

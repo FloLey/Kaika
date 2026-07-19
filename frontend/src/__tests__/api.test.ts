@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+import { emptyGraph } from "../lib/graph/factories";
 import {
   extractSignal,
   getProject,
@@ -86,7 +88,7 @@ describe("streaming render", () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ render_id: "abc123" }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(
-      startStreamRender({ job_id: "j", segment: {}, graph: {}, output_id: "o1" })
+      startStreamRender({ job_id: "j", segment: {}, graph: emptyGraph(), output_id: "o1" })
     ).resolves.toEqual({ render_id: "abc123" });
     expect(fetchMock).toHaveBeenCalledWith(
       "/animate/stream",

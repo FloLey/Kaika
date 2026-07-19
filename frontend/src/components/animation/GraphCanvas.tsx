@@ -587,11 +587,6 @@ export default function GraphCanvas({
   // can skip re-renders during drag/pan/edge ticks.
   const helpers = useMemo(
     () => ({
-      onMove: (id: string, x: number, y: number) =>
-        onGraphChange?.((g) => ({
-          ...g,
-          nodes: g.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)),
-        })),
       portRef,
       startConnect,
       onLayoutChange: tick,

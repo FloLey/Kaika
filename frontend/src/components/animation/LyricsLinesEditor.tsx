@@ -1,15 +1,13 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { fmtTimecode, parseTimecode } from "../../lib/mel";
+import type { LyricLine } from "../../lib/types";
 
-// Loose shape on purpose — lines arrive from ctx.lyricLines (unknown[] at the boundary;
-// the analysis cache guarantees t0/t1/text in practice).
-export interface LyricLine {
-  t0?: number;
-  t1?: number;
-  text?: string;
-  aligned?: boolean;
-}
+// Re-exported for existing importers. The shape now lives in lib/types and mirrors the
+// backend dataclass (segment.LyricLine: t0, t1, text, aligned=True) — it used to be
+// declared loosely here BECAUSE ctx.lyricLines was `unknown[]` at the boundary, and that
+// boundary is now typed.
+export type { LyricLine } from "../../lib/types";
 
 interface Props {
   lines: LyricLine[];

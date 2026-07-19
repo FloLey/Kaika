@@ -22,7 +22,14 @@ import {
 } from "../../lib/graph/layout";
 import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
-import type { Graph, GraphEdge, GraphNode, OutputSettings, Segment } from "../../lib/types";
+import type {
+  Graph,
+  GraphEdge,
+  GraphNode,
+  LyricLine,
+  OutputSettings,
+  Segment,
+} from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
 
 // The animation editor "brain": graph state (normalized from segment.graph), the
@@ -93,7 +100,7 @@ interface GraphEditorOpts {
   output?: OutputSettings | null;
   exportSettings?: NodeCtx["exportSettings"];
   assets?: NodeCtx["assets"];
-  lyricLines?: unknown[];
+  lyricLines?: LyricLine[];
   onSaveLyricLines?: NodeCtx["onSaveLyricLines"];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;

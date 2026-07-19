@@ -6,7 +6,7 @@ import { paletteMenu } from "./nodes/registry";
 import { defaultCardName } from "./nodeInputs";
 import { stemColor } from "../../lib/segments";
 import type { Graph, GraphNode } from "../../lib/types";
-import type { SignalDef } from "./nodes/nodeProps";
+import type { Signal } from "../../lib/types";
 
 // The add-node toolbar: a bar across the top of the animation panel. One button PER
 // category (Sources / Modulators / Generators / Compositing / Output, in data-flow
@@ -14,7 +14,7 @@ import type { SignalDef } from "./nodes/nodeProps";
 // it at the canvas center. The Signal entry has no factory — it opens the segment's
 // signal picker instead. ⚙ output opens the project render settings.
 interface PaletteProps {
-  signals?: SignalDef[];
+  signals?: Signal[];
   centerGraph?: () => { x: number; y: number };
   onOpenOutput?: () => void;
   isFullscreen?: boolean;
@@ -121,7 +121,7 @@ export default function Palette({
       return { ...g, nodes: [...g.nodes, { ...node, name: defaultCardName(g, node.type) }] };
     });
 
-  const addSignal = (signal: SignalDef) => {
+  const addSignal = (signal: Signal) => {
     onGraphChange((g) => {
       const { x, y } = where();
       return { ...g, nodes: [...g.nodes, signalNode(signal, x, y)] };

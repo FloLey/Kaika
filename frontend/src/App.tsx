@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Asset, Segment } from "./lib/types";
+import type { Asset, LyricLine, Segment } from "./lib/types";
 import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
 import UploadStep from "./components/upload/UploadStep";
@@ -39,7 +39,7 @@ export default function App() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [vocalEnvelope, setVocalEnvelope] = useState<number[]>([]);
   const [envelopeTimes, setEnvelopeTimes] = useState<number[]>([]);
-  const [lyricLines, setLyricLines] = useState<unknown[]>([]);
+  const [lyricLines, setLyricLines] = useState<LyricLine[]>([]);
   const [activeSegId, setActiveSegId] = useState<string | null>(null);
   // Project-wide animation output settings (size/quality/fps/background).
   const [output, setOutput] = useState(OUTPUT_DEFAULTS);
@@ -101,7 +101,7 @@ export default function App() {
   // card preview, render keys) picks the new words up immediately. Joins the same
   // save chain so it can't interleave with an in-flight autosave.
   const saveLyricLines = useCallback(
-    async (lines: unknown[]) => {
+    async (lines: LyricLine[]) => {
       if (!job) return;
       const base = { step, segments: serializeSegments(segments), output, export: exportSettings };
       // `exclusive`: this payload carries lyric_lines the autosave payload lacks, so it

@@ -4,7 +4,7 @@
 
 import * as logbus from "./logbus";
 import type { BackendPayload } from "./logbus";
-import type { Asset, Graph, OutputSettings, StemInfo } from "./types";
+import type { Asset, Graph, LyricLine, OutputSettings, StemInfo } from "./types";
 import type { ExportSettings } from "./export";
 import type { RawSegment } from "./segments";
 
@@ -26,7 +26,7 @@ export interface SegmentProposal {
   segments: RawSegment[];
   vocal_envelope?: number[];
   envelope_times?: number[];
-  lyric_lines?: unknown[];
+  lyric_lines?: LyricLine[];
   duration?: number;
 }
 
@@ -60,17 +60,13 @@ export interface Project {
   assets?: Asset[];
   vocal_envelope?: number[];
   envelope_times?: number[];
-  lyric_lines?: unknown[];
+  lyric_lines?: LyricLine[];
 }
 
 export interface ExtractResult {
   curve: number[];
   times: number[];
   fps?: number; // the sampling rate of `curve` (the /resolve default is 30)
-}
-
-export interface RenderResult {
-  url: string;
 }
 
 export interface StreamStartResult {
@@ -291,34 +287,17 @@ export async function resolvePoints(params: {
   return postJson<{ points: [number, number][] }>("/resolve-points", params);
 }
 
-// Render an animation graph for one segment. The segment's signal defs ride in
-// the request (Issue 1A) so the backend can resolve `signal` node references.
-export async function renderGraph({
-  job_id,
-  segment,
-  graph,
-  output,
-  output_id,
-}: {
-  job_id: string;
-  segment: unknown;
-  graph: Graph | unknown;
-  output?: unknown;
-  output_id?: unknown;
-}): Promise<RenderResult> {
-  return postJson<RenderResult>("/animate", { job_id, segment, graph, output, output_id });
-}
-
-// Progressive render: start a background block render and poll it. Renders the same
-// clip as `renderGraph` but front-to-back in ~5s blocks, so the first seconds show
-// in ~1/10th the time and the preview grows. The frontend cancels the previous
-// render on every edit (see cancelStreamRender), so abandoned renders stop early.
+// Progressive render: start a background block render and poll it. Produces the same
+// clip the old one-shot `/animate` client did, but front-to-back in ~5s blocks, so the
+// first seconds show in ~1/10th the time and the preview grows. The frontend cancels the
+// previous render on every edit (see cancelStreamRender), so abandoned renders stop early.
+// This superseded `renderGraph`, which sat unused until cleanup step 11 removed it.
 export async function startStreamRender(body: {
   job_id: string;
   segment: unknown;
-  graph: Graph | unknown;
+  graph: Graph;
   output?: unknown;
-  output_id?: unknown;
+  output_id?: string;
 }): Promise<StreamStartResult> {
   return postJson<StreamStartResult>("/animate/stream", body);
 }

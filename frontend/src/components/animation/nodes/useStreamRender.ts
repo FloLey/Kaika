@@ -156,7 +156,7 @@ export function useStreamRender(
       if (activeRender.current) api.cancelStreamRender(activeRender.current);
       try {
         const { render_id } = await api.startStreamRender({
-          job_id: job as string,
+          job_id: job,
           segment: {
             start: segment?.start,
             end: segment?.end,

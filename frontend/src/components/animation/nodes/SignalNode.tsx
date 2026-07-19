@@ -26,10 +26,10 @@ export default function SignalNode({ node, selected, helpers, ctx, onDelete }: N
   const segStart = segment?.start ?? 0;
   const segEnd = segment?.end ?? 0;
   const winLen = Math.max(0.001, segEnd - segStart);
-  // `ctx.job` is the job_id string (AnimationCanvas passes the project's `job`, a
-  // string). Tolerate an object form too, in case a caller passes the richer record.
-  const jobRec = job as string | { job_id?: string; jobId?: string } | undefined;
-  const jobId = typeof jobRec === "string" ? jobRec : jobRec?.job_id || jobRec?.jobId;
+  // `ctx.job` IS the job_id string — AnimationCanvas passes the project's `job`, which
+  // App holds as `string | null`. The old object-form fallback was defensive against a
+  // caller that never existed, and it cost a cast at every read.
+  const jobId = job;
 
   const [curve, setCurve] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
