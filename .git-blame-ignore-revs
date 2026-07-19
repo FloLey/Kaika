@@ -6,3 +6,6 @@
 
 # Reformat: Black + Prettier (no logic change) — spec 04
 2dcc2c5c07679500b677f63632000ce435c437c6
+
+# Reformat: Prettier sweep the stricter `make lint` exposed (no logic change)
+c41ec229f7b34f98fb240c463e36369ec65a3c1d
