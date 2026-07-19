@@ -101,6 +101,44 @@ statements, `lightning` C901 14 / 58 statements.
 
 ---
 
+---
+
+## Outcome (2026-07-19) — two items deliberately not done
+
+**Done:** `_p()` (10a, −488 lines, codegen-verified byte-identical), the `validate`
+split (10b, each of the six checks verified individually gated), and
+`SlideshowClip` → `apply_video_opacity` (10c).
+
+**Not done, and why — both are judgement calls made after reading the code:**
+
+**`imagegen.stylize_frames` split.** `imagegen.py` sits at **23% coverage**. Splitting
+170 lines of diffusion orchestration with essentially no tests is precisely what this
+plan's own rule forbids — step 04 exists because "refactor first, test later" is how a
+rule fails open. This needs a step-04-style test pass on `imagegen` *first*, and that is
+a larger piece of work than the split it would enable. Deferred rather than risked.
+
+**`sources.py` gen-sim scaffold.** The estimate here was wrong. On reading `waves`,
+`aurora`, `lightning`, `rain` and `clouds` side by side, the shared preamble is smaller
+than the audit claimed: `sim_dims` takes different arguments per card (`cap=384` for
+aurora), `_clock` reads a different param name per card (`speed` vs `drift`), and only
+`waves` does per-layer RNG setup. What a `_gen_frames(...)` scaffold would actually
+absorb is the `out` allocation, the loop, `idx = frame_offset + i` and the final
+`_rgba` — roughly 4 lines × 5 functions.
+
+The stated payoff was "enforce the `frame_offset` contract in one place instead of five".
+That argument is weaker than it looked: `test_card_impact`'s whole-vs-streamed parity
+check *is* a `frame_offset` test — a wrong offset is exactly what makes a streamed render
+differ from a whole one, for every gen-sim card. The contract is already enforced, by a
+test, and rewriting five physics renderers to save ~20 lines is not a good trade against
+that. **Re-open only if a third gen-sim card is added**, where the copy count starts to
+justify the abstraction.
+
+**`_apply_opacity` vs `apply_video_opacity`** were listed as duplicates by the audit and
+are not: one broadcasts a static layer to N frames, the other scales an existing stack in
+place. They share one clip expression. Merging them was rejected — see 10c.
+
+---
+
 ## Acceptance criteria
 
 1. **`_p()`**: `make gen-params` produces a byte-identical `fluidParams.js`, and
