@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { nodeRenderable, outputHash } from "../../../lib/graphModel";
+import { nodeRenderable } from "../../../lib/graphModel";
 import { usePreservePlayback } from "./usePreservePlayback";
 import { forgetRender, useStreamRender } from "./useStreamRender";
 import { useSyncedPlayback } from "./useSyncedPlayback";
 import type { NodeCtx } from "./nodeProps";
 import type { GraphNode } from "../../../lib/types";
+import { useRenderKey } from "./useRenderKey";
 
 interface Props {
   node: GraphNode;
@@ -29,29 +30,10 @@ export default function StreamPreview({
   compact = false,
   active = true,
 }: Props) {
-  const {
-    graph,
-    segment,
-    job,
-    signals,
-    lyricLines,
-    lyricsKey,
-    groupClock,
-    groupPlaying,
-    segStart = 0,
-    output,
-  } = ctx || {};
+  const { graph, groupClock, groupPlaying, segStart = 0, output } = ctx || {};
   const fps = (output as { fps?: number } | undefined)?.fps || 24;
   // This node's subgraph render key (same hash the Output card uses, for any producer).
-  const renderKey = useMemo(
-    () =>
-      graph
-        ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals) +
-          JSON.stringify(output || {}) +
-          `|ly:${lyricsKey ?? JSON.stringify(lyricLines || [])}`
-        : "",
-    [graph, node.id, job, segment?.start, segment?.end, signals, output, lyricsKey, lyricLines]
-  );
+  const renderKey = useRenderKey(ctx, node.id);
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [visible, setVisible] = useState(true);
@@ -89,6 +71,9 @@ export default function StreamPreview({
   // Restore-on-reload only while the transport is stopped: when it's playing,
   // useSyncedPlayback owns currentTime (it has the real clock) and a second writer
   // would race its drift correction.
+  // Note: unlike OutputNode this does NOT reset the playhead when renderKey changes.
+  // Deliberate — a card preview is ambient, and restarting twenty of them on every edit
+  // would make the canvas twitch. See the matching comment in OutputNode.
   usePreservePlayback(videoRef, videoUrl, !groupPlaying);
   useSyncedPlayback(videoRef, videoUrl, groupPlaying, groupClock, segStart);
 

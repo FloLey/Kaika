@@ -5,13 +5,14 @@ import NodeSettingsModal from "../NodeSettingsModal";
 import HdViewerModal from "../HdViewerModal";
 import Info from "../../../ui/Info";
 import * as api from "../../../lib/api";
-import { outputHash, outputRenderable } from "../../../lib/graphModel";
+import { outputRenderable } from "../../../lib/graphModel";
 import { aspectOf } from "../../../lib/output";
 import { useRenderJob } from "../../../lib/useRenderJob";
 import { usePreservePlayback } from "./usePreservePlayback";
 import { forgetRender, useStreamRender } from "./useStreamRender";
 import { useSyncedPlayback } from "./useSyncedPlayback";
 import { jobIdOf, type NodeProps } from "./nodeProps";
+import { useRenderKey } from "./useRenderKey";
 
 // The render sink (01 §3.1 output). One `in` video port; the body is the rendered
 // clip. Each output node renders ITS OWN pipeline (the fluid wired into it, N per
@@ -34,9 +35,7 @@ export default function OutputNode({
     job,
     output,
     exportSettings,
-    signals,
     lyricLines,
-    lyricsKey,
     groupClock,
     groupPlaying,
     segStart = 0,
@@ -59,18 +58,7 @@ export default function OutputNode({
     () => (graph ? outputRenderable(graph, node.id) : false),
     [graph, node.id]
   );
-  const renderKey = useMemo(
-    () =>
-      graph
-        ? outputHash(graph, node.id, job, segment?.start, segment?.end, signals) +
-          JSON.stringify(output || {}) +
-          // The backend folds a lyrics card's burned-in text into output_hash, so a
-          // change to the aligned lines (which arrive async) must re-trigger the
-          // render. The editor serializes them ONCE (ctx.lyricsKey) for all outputs.
-          `|ly:${lyricsKey ?? JSON.stringify(lyricLines || [])}`
-        : "",
-    [graph, node.id, job, segment?.start, segment?.end, signals, output, lyricsKey, lyricLines]
-  );
+  const renderKey = useRenderKey(ctx, node.id);
 
   // Auto-render this output (debounced, block-streamed, cancel-on-edit) — the same
   // machinery the fluid/combine card previews use, but in its OWN lane: an output is
@@ -83,7 +71,12 @@ export default function OutputNode({
   // useSyncedPlayback owns currentTime (it has the real clock) and a second writer
   // would race its drift correction.
   const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl, !groupPlaying);
-  // A fresh edit restarts the preview from the top.
+  // A fresh edit restarts the preview from the top. StreamPreview deliberately does
+  // NOT do this, and the difference is the point: an output is the one clip the user is
+  // watching, so a new render should play from the start — whereas restarting every card
+  // preview on the canvas on every edit would make the whole editor twitch. Both share
+  // `useRenderKey`, so they agree on WHEN a render is stale; they differ only on what to
+  // do about the playhead.
   useEffect(() => {
     resetPlayback();
   }, [renderKey, resetPlayback]);
