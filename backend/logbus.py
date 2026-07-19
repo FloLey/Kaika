@@ -62,11 +62,6 @@ def since(seq: int) -> tuple[list[dict], int]:
         return [e for e in _BUF if e["seq"] > seq], head
 
 
-def head_seq() -> int:
-    with _LOCK:
-        return _SEQ
-
-
 class RingBufferHandler(logging.Handler):
     """Mirror every emitted record into the ring buffer.
 

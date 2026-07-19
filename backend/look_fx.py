@@ -14,13 +14,6 @@ from __future__ import annotations
 import numpy as np
 
 
-def rng_for_frame(seed: int, t_abs: int) -> np.random.Generator:
-    """Deterministic per-frame RNG (PLAN §3): a frame's randomness depends only on
-    (seed, absolute frame index), so renders are reproducible, cache-stable, and
-    identical whether the frame arrives via the whole-clip or the block path."""
-    return np.random.default_rng(np.random.SeedSequence([int(seed), int(t_abs)]))
-
-
 def echo_scan(
     frames: np.ndarray,
     acc: np.ndarray | None,

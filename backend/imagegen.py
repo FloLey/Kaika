@@ -73,11 +73,6 @@ _pipes: dict[str, object] = {}  # lazy per-model singletons — loading takes GB
 _infer_lock = threading.Lock()
 
 
-def model_label(model: str) -> str:
-    """Human label for a model id (falls back to the id itself)."""
-    return (MODELS.get(model) or {}).get("label", model)
-
-
 def _spec(model: str) -> dict:
     spec = MODELS.get(model)
     if spec is None:

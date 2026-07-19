@@ -832,19 +832,6 @@ def _video_src0(
     return float(d.get("start", 0.0)) + base_offset * float(speed_full[0])
 
 
-def _image_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    nframes = max(1, round(dag.duration * dag.fps))
-    return sources.image(
-        nframes,
-        gh,
-        gw,
-        asset_path=_asset_path(dag, node),
-        **_box_static(node.get("data", {})),
-        **dag._fx_params(node),
-    )
-
-
 def _slideshow_kind(url: str) -> str:
     """Infer an item's kind from its URL extension (mirrors the frontend `slideshowKind`
     and `paths.ASSET_EXTS`). Only a fallback — the card sets `kind` at add-time; legacy
@@ -1056,12 +1043,6 @@ def _video_video(dag: "_Dag", node: dict) -> np.ndarray:
     )
 
 
-def _backdrop_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    nframes = max(1, round(dag.duration * dag.fps))
-    return sources.backdrop(nframes, gh, gw, **dag._backdrop_params(node))
-
-
 # ── Generative source cards (waves / lightning / fire) ────────────────────────
 # Each mirrors the backdrop pattern: `_fx_params` resolves the modulatable ports;
 # the colour comes from a static `data.palette` preset or, if a `color` card is
@@ -1140,22 +1121,6 @@ def _gen_layer(dag: "_Dag", node: dict, fallback: str) -> dict:
 
 def _flatten_rgb(clip: np.ndarray) -> np.ndarray:
     return fluid.flatten(clip) if clip.shape[-1] == 4 else clip
-
-
-def _gen_base(dag: "_Dag", node: dict):
-    """The optional `video` input a waves/rain card refracts (whole-clip path):
-    upstream frames flattened to RGB (the pool floor / liquid bed), or None —
-    then the card renders onto its palette (standalone use, Playground demos)."""
-    src = _video_source(dag.graph, node["id"], "video")
-    return _flatten_rgb(dag.video(src)) if src is not None else None
-
-
-def _waves_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    n = max(1, round(dag.duration * dag.fps))
-    return sources.waves(
-        n, gh, gw, dag.fps, [_gen_layer(dag, node, "ocean")], base=_gen_base(dag, node)
-    )
 
 
 def _waves_block(dag: "_Dag", node: dict):
@@ -1254,12 +1219,6 @@ def _fire_block(dag: "_Dag", node: dict):
     return _sim_blocks(dag, _fire_params(dag, node))
 
 
-def _lightning_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    n = max(1, round(dag.duration * dag.fps))
-    return sources.lightning(n, gh, gw, dag.fps, [_gen_layer(dag, node, "electric")])
-
-
 def _lightning_block(dag: "_Dag", node: dict):
     # Ports stay FULL-length (the strike schedule is absolute-frame-keyed); the
     # bolt cache carries each strike's DBM geometry + glow stacks across blocks
@@ -1274,12 +1233,6 @@ def _lightning_block(dag: "_Dag", node: dict):
     return produce
 
 
-def _aurora_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    n = max(1, round(dag.duration * dag.fps))
-    return sources.aurora(n, gh, gw, dag.fps, [_gen_layer(dag, node, "aurora")])
-
-
 def _aurora_block(dag: "_Dag", node: dict):
     gh, gw = _grid_dims(dag)
     layers = [_gen_layer(dag, node, "aurora")]  # full-length (drift integrates)
@@ -1288,15 +1241,6 @@ def _aurora_block(dag: "_Dag", node: dict):
         return sources.aurora(b - a, gh, gw, dag.fps, layers, frame_offset=a)
 
     return produce
-
-
-def _rain_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    n = max(1, round(dag.duration * dag.fps))
-    frames, _ = sources.rain(
-        n, gh, gw, dag.fps, [_gen_layer(dag, node, "downpour")], base=_gen_base(dag, node)
-    )
-    return frames
 
 
 def _rain_block(dag: "_Dag", node: dict):
@@ -1322,12 +1266,6 @@ def _rain_block(dag: "_Dag", node: dict):
         return frames
 
     return produce
-
-
-def _clouds_video(dag: "_Dag", node: dict) -> np.ndarray:
-    gh, gw = _grid_dims(dag)
-    n = max(1, round(dag.duration * dag.fps))
-    return sources.clouds(n, gh, gw, dag.fps, [_gen_layer(dag, node, "sky")])
 
 
 def _clouds_block(dag: "_Dag", node: dict):
