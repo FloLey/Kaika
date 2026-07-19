@@ -3,6 +3,7 @@ import type { MutableRefObject, PointerEvent as RPointerEvent, ReactNode } from 
 import usePanZoom, { fitView } from "./usePanZoom";
 import type { View } from "./usePanZoom";
 import { portKey, centerInContainer, edgePath, canConnect, connectIssue } from "./ports";
+import { useWindowPointer } from "./useWindowPointer";
 import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
 import type { NodeHelpers } from "./nodes/nodeProps";
 
@@ -309,9 +310,9 @@ export default function GraphCanvas({
     [onSelectionChange, toggleSel]
   );
 
-  useEffect(() => {
-    if (!drag) return undefined;
-    const move = (e: PointerEvent) => {
+  useWindowPointer(
+    !!drag,
+    (e) => {
       const d = dragRef.current;
       if (!d) return;
       const dx = (e.clientX - d.startX) / scaleRef.current;
@@ -320,8 +321,8 @@ export default function GraphCanvas({
       d.dx = dx;
       d.dy = dy;
       tick(); // re-render the wrappers/edges only — no graph commit while dragging
-    };
-    const up = () => {
+    },
+    () => {
       const d = dragRef.current;
       if (d && d.moved) {
         // Commit the final positions in ONE graph update.
@@ -337,14 +338,8 @@ export default function GraphCanvas({
       // A plain click (no drag) on a node inside a group collapses to just that node.
       if (d && !d.moved && d.wasGroup) onSelectionChange?.(new Set([d.clickedId]));
       setDrag(null);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [drag, onGraphChange, onSelectionChange, tick]);
+    }
+  );
 
   // --- connecting (drag from an out port to an in port) ----------------------
   interface Wire {
@@ -393,10 +388,10 @@ export default function GraphCanvas({
   );
 
   // Track the cursor and highlight an eligible in-port under it.
-  useEffect(() => {
-    if (!wire) return undefined;
-    const root = rootRef.current;
-    const move = (e: PointerEvent) => {
+  useWindowPointer(
+    !!wire,
+    (e) => {
+      const root = rootRef.current;
       if (!root) return;
       const rect = root.getBoundingClientRect();
       const x2 = e.clientX - rect.left;
@@ -413,8 +408,8 @@ export default function GraphCanvas({
         if (meta && canConnect(wireRef.current?.source, meta)) target = meta;
       }
       setWire((w) => (w ? { ...w, x2, y2, target } : w));
-    };
-    const up = (e: PointerEvent) => {
+    },
+    (e) => {
       const w = wireRef.current;
       if (w && w.target) {
         onConnect?.(w.source.nodeId, w.source.portId, w.target.nodeId, w.target.portId);
@@ -443,14 +438,8 @@ export default function GraphCanvas({
         if (issue) showHint(issue);
       }
       setWire(null);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [wire, onConnect, onCardDrop, showHint]);
+    }
+  );
 
   // --- marquee (shift-drag the background to box-select cards) ---------------
   interface Marquee {
@@ -472,15 +461,15 @@ export default function GraphCanvas({
     setMarquee({ x0: x, y0: y, x1: x, y1: y });
   }, []);
 
-  useEffect(() => {
-    if (!marquee) return undefined;
-    const root = rootRef.current;
-    const move = (e: PointerEvent) => {
+  useWindowPointer(
+    !!marquee,
+    (e) => {
+      const root = rootRef.current;
       if (!root) return;
       const rect = root.getBoundingClientRect();
       setMarquee((m) => (m ? { ...m, x1: e.clientX - rect.left, y1: e.clientY - rect.top } : m));
-    };
-    const up = () => {
+    },
+    () => {
       const m = marqueeRef.current;
       if (m) {
         // Box corners -> graph space, then AABB-overlap each node's rendered rect.
@@ -496,14 +485,8 @@ export default function GraphCanvas({
         onSelectionChange?.(hits);
       }
       setMarquee(null);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [marquee, screenToGraph, onSelectionChange]);
+    }
+  );
 
   // --- background interactions (pan + clear selection) -----------------------
   const bgPointerDown = useCallback(
@@ -591,7 +574,7 @@ export default function GraphCanvas({
       startConnect,
       onLayoutChange: tick,
     }),
-    [onGraphChange, portRef, startConnect, tick]
+    [portRef, startConnect, tick]
   );
 
   // Live drag offsets for the grabbed selection (graph state is untouched mid-drag;
