@@ -31,6 +31,9 @@ import type { NodeCtx } from "./nodes/nodeProps";
 // fullscreen, layout). This is the seam to grow — new editor features (undo, node
 // templates, …) add here without threading props through the component tree.
 
+// Exported for tests (cleanup step 05): this is identity-preserving logic whose
+// failure mode is invisible — a broken WeakMap round-trip just makes every card
+// re-render, and a broken mode switch scrambles a layout the user arranged.
 // ---- per-view positions (v20) --------------------------------------------------
 // `x/y` is the DETAILED position (canonical), `cx/cy` the COMPACT one. In compact
 // mode the canvas is handed a DISPLAY graph whose x/y are the compact coords, and
@@ -38,7 +41,7 @@ import type { NodeCtx } from "./nodes/nodeProps";
 // position-agnostic. The WeakMap keeps display-node identity stable per real node,
 // so React.memo'd cards skip re-renders exactly as they do in detailed mode.
 const displayCache = new WeakMap<GraphNode, GraphNode>();
-function displayNode(n: GraphNode): GraphNode {
+export function displayNode(n: GraphNode): GraphNode {
   const dx = n.cx ?? n.x;
   const dy = n.cy ?? n.y;
   if (dx === n.x && dy === n.y) return n;
@@ -49,7 +52,7 @@ function displayNode(n: GraphNode): GraphNode {
   }
   return d;
 }
-function toDisplay(g: Graph): Graph {
+export function toDisplay(g: Graph): Graph {
   const nodes = g.nodes.map(displayNode);
   return nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
 }
@@ -63,7 +66,7 @@ function toDisplay(g: Graph): Graph {
 //    compact layout only moves where cards would collide.
 //  → detailed: de-overlap x/y — exactly the compact-built-pipeline fix; a clean
 //    detailed layout is untouched (resolveOverlaps is a no-op without collisions).
-function layoutForMode(nodes: GraphNode[], mode: "detailed" | "compact"): GraphNode[] {
+export function layoutForMode(nodes: GraphNode[], mode: "detailed" | "compact"): GraphNode[] {
   if (nodes.length < 2) return nodes;
   const rects: LayoutRect[] = nodes.map((n) => {
     const s = estimateCardSize(n.type, mode);
