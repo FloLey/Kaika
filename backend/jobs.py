@@ -24,11 +24,12 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from . import paths
+from .config import MAX_JOB_RECORDS
 
 _POOL = ThreadPoolExecutor(max_workers=int(os.environ.get("JOB_WORKERS", "1")))
 _LOCK = threading.Lock()
 _JOBS: dict[str, dict] = {}
-_MAX_JOBS = 64  # prune finished jobs beyond this (most-recently-updated kept)
+_MAX_JOBS = MAX_JOB_RECORDS  # prune finished jobs beyond this (most-recent kept)
 _log = logging.getLogger("kaika.jobs")
 
 RESTART_ERROR = "the server restarted mid-job (a backend file changed) — run it again"

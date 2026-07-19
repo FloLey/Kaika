@@ -21,6 +21,7 @@ from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 from . import db
+from .config import ASSET_MAX_BYTES
 from . import logbus
 from .media import DEVICE
 from .routes import all_blueprints
@@ -30,11 +31,9 @@ log = logging.getLogger("kaika")
 
 # Flask is a pure API. The UI is always the Vite dev server (:5173).
 app = Flask(__name__)
-# Upload cap. 2 GB (was 200 MB): modern phone clips routinely exceed 200 MB and a
-# folder upload (asset library 📁) sends them one file per request — Flask 413s
-# above this BEFORE the route's own friendlier check runs. Local single-user app:
-# the RAM spike of reading one such file is acceptable.
-app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
+# Flask's hard ceiling and the asset route's friendlier check are the SAME number
+# (config.ASSET_MAX_BYTES) — declared twice, they drifted: only one was env-backed.
+app.config["MAX_CONTENT_LENGTH"] = ASSET_MAX_BYTES
 
 # Ensure the projects table exists. Don't hard-fail import if Postgres is down —
 # the error surfaces clearly on the first request that needs the DB.

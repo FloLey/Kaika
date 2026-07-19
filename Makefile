@@ -1,9 +1,16 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
-.PHONY: dev db-up db-down install rerender-spectrograms seed-playground export-playground \
+.PHONY: dev restart db-up db-down install rerender-spectrograms seed-playground export-playground \
 	test test-backend test-frontend lint build clean-cache gc-cache gen-params \
 	format coverage
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
+# `make dev` runs flask + vite under one `trap 'kill 0'`, so killing the backend by
+# hand kills VITE TOO (they share a process group). Use `make restart` to bounce both
+# cleanly — reaching for pkill on the python process silently takes the UI down with it.
+restart:
+	-@pkill -f "backend.app" 2>/dev/null; pkill -f "node.*vite" 2>/dev/null; sleep 2
+	@$(MAKE) dev
+
 dev: db-up
 	@echo "waiting for postgres…"
 	@until docker compose exec -T db pg_isready -U demucs -d demucs >/dev/null 2>&1; do sleep 1; done

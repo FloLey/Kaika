@@ -15,6 +15,8 @@ import os
 import threading
 import time
 import uuid
+
+from .config import MAX_JOB_RECORDS
 from concurrent.futures import ThreadPoolExecutor
 
 # Enough workers that the output-node streams AND the per-card fluid/combine sim
@@ -25,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 _POOL = ThreadPoolExecutor(max_workers=int(os.environ.get("RENDER_WORKERS", "4")))
 _LOCK = threading.Lock()
 _JOBS: dict[str, dict] = {}
-_MAX_JOBS = 64  # prune finished jobs beyond this (most-recently-updated kept)
+_MAX_JOBS = MAX_JOB_RECORDS  # prune finished jobs beyond this (most-recent kept)
 _log = logging.getLogger("kaika.render")
 
 

@@ -54,7 +54,7 @@ Postgres.
 
 ```
 backend/            Flask API + the render engine
-  routes/           five blueprints (absolute URLs, no prefixes)
+  routes/           ten blueprints (absolute URLs, no prefixes)
   graph.py          ← 87-line facade; the executor lives in graph_*.py
   fluid.py          the fluid simulation (+ fire mode) + encoders
   sources.py        non-fluid video layers (lyrics/image/video/backdrop + sim cards)
@@ -75,12 +75,15 @@ data/               gitignored working data (uploads, stems, caches, assets)
 
 ### Routes (`backend/routes/`)
 
-`app.py` only creates the app, registers the five blueprints, and kicks a
-startup cache sweep. Each blueprint keeps its historical absolute URLs:
+`app.py` only creates the app, registers the blueprints, times slow requests, and
+(as the dev server, not on import) kicks a startup cache sweep. Each blueprint keeps its historical absolute URLs:
 
 | Blueprint | Routes |
 |---|---|
-| `uploads.py` | `/upload`, `/segment`, `/jobs/<id>`, `/logs`, `/upload-asset/<job>`, `/asset-from-youtube/<job>`, `GET/DELETE /assets/<job>[/<id>]` |
+| `uploads.py` | `/upload`, `/segment` — the song pipeline only |
+| `assets.py` | `/upload-asset/<job>`, `GET/DELETE /assets/<job>[/<id>]`, `/asset-from-youtube/<job>`, and the DERIVED preview files: `/asset-proxy/…` (seekable 360p) and `/asset-clip/…?start&dur` (the seconds a preview plays) |
+| `imagegen.py` | `/generate-image/<job>` |
+| `jobs_routes.py` | `/jobs/<id>`, `/logs` |
 | `animation.py` | `/extract`, `/resolve`, `/fluid`, `/animate`, `/animate/stream` (+ status/cancel) |
 | `export.py` | `/export/stream`, `/export/segment` (+ shared status/cancel) |
 | `projects.py` | `/projects`, `/projects/<id>` GET/PUT/DELETE, `/playground` |
@@ -92,7 +95,11 @@ startup cache sweep. Each blueprint keeps its historical absolute URLs:
 the implementation lives in five modules:
 
 - **`graph_common.py`** — shared constants + edge/node lookups + `composite`
-  (the alpha-over stack). The leaf module; everything imports from here.
+  (the alpha-over stack) + `VIDEO_PRODUCERS` (which card types produce video).
+  The leaf module; everything imports from here. The producer set lives here rather
+  than in the render dispatch table so `graph_validate` needn't import `graph_render`
+  — that was the backend's only circular import; `graph_render` asserts at import
+  that its handler table matches this set.
 - **`graph_validate.py`** — `validate(graph, output_id=None)`: raises `ValueError`
   → HTTP 400 on an unrenderable graph (missing output, malformed bindings, cycles,
   a stacked combine feeding a merge). `output_id` names the render **target**: when
@@ -100,7 +107,9 @@ the implementation lives in five modules:
   skipped — a graph mid-build has no output yet, and an unrelated half-wired output
   must not 400 a card's preview.
 - **`graph_hash.py`** — `output_hash(...)`: the per-output render-cache key (see
-  Caching below) + `RENDER_VERSION`.
+  Caching below) + `RENDER_VERSION` (history: [`docs/render-versions.md`](docs/render-versions.md)).
+  A slot card's UNWIRED slots are stripped before hashing: the render skips them, so
+  pressing `+ slot` must not re-render a byte-identical clip.
 - **`graph_modulators.py`** — every node that produces a 0..1 **value curve**
   (signal / LFO / noise / shaper / math / scope), the colour-card resolver, the
   points pipelines (pattern / animate / merge), and `resolve_node_curve` (the
@@ -274,7 +283,8 @@ card touches no shared component. The canvas has two **view modes** switched
 from the toolbar — `graph.viewMode`: "detailed" (default, classic full cards) or
 "compact" (header + live preview + one in/one out anchor; the body opens the
 full card in a settings modal) — with `graph.viewOverrides` listing per-card
-exceptions (GRAPH_VERSION 16; the earlier `expanded`/`minimized` sets are
+exceptions (added at GRAPH_VERSION 16, now 28 — see `factories.ts` for the log;
+the earlier `expanded`/`minimized` sets are
 stripped on load); `output` never compacts. Each view keeps its **own card
 positions** (v20): `x/y` is the detailed position, optional `cx/cy` the compact
 one — `useGraphEditor` hands the canvas a display graph and translates commits

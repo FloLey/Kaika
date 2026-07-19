@@ -10,36 +10,16 @@ import json
 from .graph_common import LOOSE_PORT, _nodes_of
 
 # Bump when render SEMANTICS change so stale clips (cached under an old meaning of
-# the same graph) are invalidated. Folded into `output_hash`.
-#   v2: clip = full segment (duration dropped) + per-frame medium params + r/g/b.
-#   v3: combine nodes + video DAG + background applied at the terminal (was per-sim).
-#   v4: lyrics rendered at a resolution-independent text size then downscaled to the
-#       grid (was rasterised at the coarse sim grid → overflowed small boxes at low qual).
-#   v5: transform mirror/kaleidoscope fold fills out-of-frame samples by MIRRORING the
-#       edge (was black) → no gaps on a non-square canvas / under rotation.
-#   v6: slideshow accepts VIDEO items (was images only) — a video slide now PLAYS from
-#       its per-item in-point while active (SlideshowClip), so the same graph renders
-#       differently. (The per-item start/kind/order already ride in node.data.)
-#   v7: the look-FX wave (specs/look-fx/) — new echo card (motion trails). A pure
-#       addition, bumped by house rule so the wave invalidates as one version.
-#   v8: generative cards rebuilt as physical simulations — waves = pool caustics
-#       + refraction of an optional video input, rain = spectral wave-equation
-#       drops on an optional input, lightning = DBM growth + restrikes, fire =
-#       heat field riding the fluid solver, aurora = Chapman-layer curtains,
-#       clouds = Beer-Lambert-lit density; new port sets; gen cards can feed a
-#       merge combine (shared field). Same graphs render entirely differently.
-#   v9: the montage card — a trigger-driven video switcher (slot k's input re-timed
-#       to start at cut k, last input holds). A pure addition, bumped by house rule.
+# the same graph) are invalidated. Folded into `output_hash`. The full history is in
+# docs/render-versions.md — only the last few entries are useful while working here.
 #  v10: the change card — a value modulator emitting its input's smoothed |derivative|
-#       (units/sec), for gating on musical CHANGE. A pure addition, house rule.
-#  v11: sim-free graphs (pure video/image/montage layers, stack combines) render at
-#       the output's NATIVE resolution (short side capped at 540) instead of the
-#       coarse simulation grid — clip previews stop looking like mush. Same graphs
-#       now produce different (bigger) frames, so old cached clips must invalidate.
+#       (units/sec), for gating on musical CHANGE.
+#  v11: sim-free graphs (pure video/image/montage layers, stack combines) render at the
+#       output's NATIVE resolution (short side capped at 540) instead of the coarse
+#       simulation grid — clip previews stopped looking like mush.
 #  v12: a video card feeding a MONTAGE slot ignores the `sync="song"` pre-roll — the
-#       montage already re-times its inputs (local frame 0 = the cut), so the pre-roll
-#       seeked past the end of any clip shorter than the segment's song offset and
-#       rendered a frozen last frame for the whole slot.
+#       montage already re-times its inputs, and the pre-roll seeked past the end of any
+#       clip shorter than the segment's song offset, freezing a whole slot.
 RENDER_VERSION = 12
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so

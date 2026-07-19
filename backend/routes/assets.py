@@ -28,6 +28,14 @@ from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 
+from ..config import (
+    ASSET_MAX_BYTES,
+    CLIP_TIMEOUT,
+    PREVIEW_HEIGHT,
+    PREVIEW_THUMB_WIDTH,
+    PROXY_TIMEOUT,
+    THUMB_TIMEOUT,
+)
 from .. import db
 from .. import jobs
 from ..media import download_youtube_video, parse_timestamp, serve_range
@@ -40,9 +48,7 @@ bp = Blueprint("assets", __name__)
 # reference is immutable. Allowed extensions live in paths.ASSET_EXTS (shared with
 # the serving route's mimetype table).
 _ASSET_EXTS = ASSET_EXTS
-# 2 GB default (was 200 MB — phone videos blew past it); app.py MAX_CONTENT_LENGTH
-# is the hard Flask ceiling this soft check must stay under.
-_ASSET_MAX_BYTES = int(os.environ.get("ASSET_MAX_BYTES", str(2 * 1024**3)))
+_ASSET_MAX_BYTES = ASSET_MAX_BYTES  # the same limit app.py gives Flask
 
 
 # Preview PROXIES: `<sha>-proxy.mp4`, a 360p/no-audio copy of a video asset. Card
@@ -57,11 +63,11 @@ _THUMB_SUFFIX = "-thumb.jpg"
 _DERIVED_SUFFIXES = (_THUMB_SUFFIX, _PROXY_SUFFIX)
 # Excerpt cuts are `<sha>-clip-<start>-<dur>.mp4`; matched by prefix, not suffix.
 _CLIP_INFIX = "-clip-"
-_PROXY_HEIGHT = 360
-_THUMB_WIDTH = 240
-_PROXY_TIMEOUT = 900  # a 4K phone clip transcodes in ~40s; this is the pathological case
-_CLIP_TIMEOUT = 180
-_THUMB_TIMEOUT = 30
+_PROXY_HEIGHT = PREVIEW_HEIGHT
+_THUMB_WIDTH = PREVIEW_THUMB_WIDTH
+_PROXY_TIMEOUT = PROXY_TIMEOUT
+_CLIP_TIMEOUT = CLIP_TIMEOUT
+_THUMB_TIMEOUT = THUMB_TIMEOUT
 _PROXY_SLOTS = threading.Semaphore(2)  # cap concurrent transcodes (they're CPU-heavy)
 _proxy_pending: set[str] = set()
 _proxy_lock = threading.Lock()
