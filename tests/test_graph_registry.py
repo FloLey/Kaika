@@ -8,8 +8,11 @@ handler + one registration, with nothing left to hand-sync.
 from backend import graph
 
 
-def test_video_producers_derive_from_handlers():
-    assert graph._VIDEO_PRODUCERS == tuple(graph._VIDEO_HANDLERS)
+def test_video_producers_match_the_handler_table():
+    """The producer set now lives in graph_common (the leaf) so validation needn't import
+    the render module — but it must still name exactly the cards that have handlers. The
+    module asserts this at import; here it is as a test with a readable diff."""
+    assert set(graph._VIDEO_PRODUCERS) == set(graph._VIDEO_HANDLERS)
 
 
 def test_core_node_types_are_registered():

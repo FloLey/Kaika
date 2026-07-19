@@ -7,6 +7,7 @@ import ImagegenGallery from "./ImagegenGallery";
 import { useResolvedPoints } from "./useResolvedPoints";
 import { patternPoints } from "../../../lib/pointsGen";
 import { aspectOf } from "../../../lib/output";
+import { VIDEO_TYPES } from "./CompactPreview";
 import type { NodeCtx } from "./nodeProps";
 import type {
   BackdropData,
@@ -25,7 +26,10 @@ import type {
 // controls (box editor, drop zone, prompts…) stay in the LEFT column.
 
 const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math", "scope"]);
-const VIDEO_TYPES = new Set(["fluid", "combine", "image", "video", "slideshow", "lyrics"]);
+// ONE list, shared with CompactPreview. It used to be a second literal here with six
+// entries against that file's nineteen, so montage / transform / stylize / echo /
+// colorgrade / the sim cards silently fell through to the `default` branch and only
+// looked right by accident.
 
 // ---- colour helpers (mirror ColorNode's swatch math; kept tiny, as in CompactPreview) ----
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));

@@ -68,10 +68,15 @@ def health():
 
     device = imagegen._pick_device()
     gpu = torch.cuda.get_device_name(0) if device == "cuda" else device
-    return jsonify({
-        "ok": True, "device": device, "gpu": gpu, "torch": torch.__version__,
-        "models": {m: s["label"] for m, s in imagegen.MODELS.items()},
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "device": device,
+            "gpu": gpu,
+            "torch": torch.__version__,
+            "models": {m: s["label"] for m, s in imagegen.MODELS.items()},
+        }
+    )
 
 
 @app.route("/stylize", methods=["POST"])
@@ -82,10 +87,14 @@ def stylize():
     p = _params()
     try:
         styled = imagegen.stylize_frames(
-            arrays["frames"], p.get("prompt", ""),
-            strength=float(p.get("strength", 1.0)), inpaint=bool(p.get("inpaint", False)),
-            model=p.get("model") or None, seed=int(p.get("seed", 1)),
-            control=arrays.get("control"), control_scale=p.get("control_scale"),
+            arrays["frames"],
+            p.get("prompt", ""),
+            strength=float(p.get("strength", 1.0)),
+            inpaint=bool(p.get("inpaint", False)),
+            model=p.get("model") or None,
+            seed=int(p.get("seed", 1)),
+            control=arrays.get("control"),
+            control_scale=p.get("control_scale"),
             negative=p.get("negative") or "blurry, low quality, watermark, text",
             short=p.get("short"),
         )
@@ -102,8 +111,11 @@ def generate():
     p = _params()
     try:
         images = imagegen.generate(
-            p.get("prompt", ""), seed=int(p.get("seed", 1)), count=int(p.get("count", 1)),
-            model=p.get("model") or None, long_edge=p.get("long_edge"),
+            p.get("prompt", ""),
+            seed=int(p.get("seed", 1)),
+            count=int(p.get("count", 1)),
+            model=p.get("model") or None,
+            long_edge=p.get("long_edge"),
             aspect=tuple(p["aspect"]) if p.get("aspect") else None,
         )
     except RuntimeError as e:
@@ -124,7 +136,11 @@ def depth():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5100"))
-    log.info("Kaika remote inference — device %s, port %d, auth %s",
-             imagegen._pick_device(), port, "on" if TOKEN else "OFF (no token set)")
+    log.info(
+        "Kaika remote inference — device %s, port %d, auth %s",
+        imagegen._pick_device(),
+        port,
+        "on" if TOKEN else "OFF (no token set)",
+    )
     # threaded: /health stays responsive while imagegen's _infer_lock serialises the GPU.
     app.run(host="0.0.0.0", port=port, threaded=True)

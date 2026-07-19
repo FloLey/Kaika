@@ -20,7 +20,7 @@ DEFAULT_KEY = "inter"
 
 
 def _label(stem: str) -> str:
-    """"ArchivoBlack" / "archivo_black" -> "Archivo Black"; "BebasNeue" -> "Bebas Neue"."""
+    """ "ArchivoBlack" / "archivo_black" -> "Archivo Black"; "BebasNeue" -> "Bebas Neue"."""
     s = re.sub(r"[_-]+", " ", stem)
     s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)  # split camelCase
     return " ".join(w[:1].upper() + w[1:] for w in s.split())

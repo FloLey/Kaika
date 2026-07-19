@@ -67,6 +67,34 @@ def _output_params(output: dict, fps: int) -> dict:
 # check) must ignore them — mirrored from lib/graph/core.ts LOOSE_PORT.
 LOOSE_PORT = "__in"
 
+# Every node type that PRODUCES a video stream. Declared here, in the leaf module, so
+# validation can check output wiring without importing the render dispatch table — that
+# import was the backend's only circular one (graph_render -> graph_validate ->
+# graph_render, worked around with a function-local import) and a layer inversion besides.
+# `graph_render` asserts its handler table matches this set, so the two cannot drift.
+VIDEO_PRODUCERS = (
+    "fluid",
+    "output",
+    "combine",
+    "montage",
+    "lyrics",
+    "image",
+    "slideshow",
+    "video",
+    "backdrop",
+    "transform",
+    "stylize",
+    "extract",
+    "echo",
+    "colorgrade",
+    "waves",
+    "lightning",
+    "fire",
+    "aurora",
+    "rain",
+    "clouds",
+)
+
 
 def _video_source(graph: dict, target_id: str, target_port: str):
     """The node id wired into (target_id, target_port) via an edge, or None."""

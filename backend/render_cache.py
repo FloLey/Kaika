@@ -93,7 +93,9 @@ def evict(
     now = time.time() if now is None else now
     removed = evict_entries(
         stat_entries(cache_dir.glob("*.mp4")),
-        max_bytes=max_bytes, max_age_days=max_age_days, now=now,
+        max_bytes=max_bytes,
+        max_age_days=max_age_days,
+        now=now,
     )
     if removed:
         log.info("render cache: evicted %d clip(s)", removed)

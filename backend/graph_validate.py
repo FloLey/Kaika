@@ -4,15 +4,18 @@ inside a render."""
 
 from __future__ import annotations
 
-from .graph_common import _PORT_SPECS, LOOSE_PORT, _is_emitter_source, _nodes_of, _video_source
+from .graph_common import (
+    _PORT_SPECS,
+    LOOSE_PORT,
+    VIDEO_PRODUCERS,
+    _is_emitter_source,
+    _nodes_of,
+    _video_source,
+)
 
 
 def _video_producers() -> tuple:
-    # Lazy: the producer set derives from graph_render's handler registry, and
-    # graph_render imports this module — resolving it at call time breaks the cycle.
-    from .graph_render import _VIDEO_PRODUCERS
-
-    return _VIDEO_PRODUCERS
+    return VIDEO_PRODUCERS
 
 
 def _validate_binding(key: str, binding: dict, nodes: dict) -> None:

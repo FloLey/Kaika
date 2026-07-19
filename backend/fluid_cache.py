@@ -153,7 +153,9 @@ def evict(
     committed = (p for p in CACHE_DIR.glob("*.npy") if not p.name.endswith(".tmp.npy"))
     removed = render_cache.evict_entries(
         render_cache.stat_entries(committed),
-        max_bytes=max_bytes, max_age_days=max_age_days, now=now,
+        max_bytes=max_bytes,
+        max_age_days=max_age_days,
+        now=now,
     )
     if removed:
         log.info("fluid frame cache: evicted %d entr(ies)", removed)

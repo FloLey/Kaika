@@ -90,7 +90,10 @@ def submit(job_id: str, step: str, fn) -> None:
     """
     with _LOCK:
         _JOBS[job_id] = {
-            "state": "running", "step": step, "error": None, "result": None,
+            "state": "running",
+            "step": step,
+            "error": None,
+            "result": None,
             "updated": time.time(),
         }
         _prune_locked()

@@ -19,7 +19,9 @@ _JOB_ID_RE = re.compile(r"^[a-f0-9]{8}$")
 def validate_job_id(job_id) -> bool:
     """True if ``job_id`` is the canonical 8-char hex shape (or the app-managed
     "playground", which serves its bundled sample assets like any project)."""
-    return bool(job_id and isinstance(job_id, str) and (_JOB_ID_RE.match(job_id) or job_id == "playground"))
+    return bool(
+        job_id and isinstance(job_id, str) and (_JOB_ID_RE.match(job_id) or job_id == "playground")
+    )
 
 
 # Asset ids / filename stems: content-addressed sha16 (alnum), plus the HD-export

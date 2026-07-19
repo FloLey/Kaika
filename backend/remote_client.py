@@ -69,16 +69,32 @@ def _post(url: str, token: str, path: str, body: bytes, params: dict, what: str)
 
 
 def stylize_remote(
-    frames, prompt, strength, inpaint, model, seed, control, control_scale, negative,
-    short, url, token, on_progress=None,
+    frames,
+    prompt,
+    strength,
+    inpaint,
+    model,
+    seed,
+    control,
+    control_scale,
+    negative,
+    short,
+    url,
+    token,
+    on_progress=None,
 ):
     """Remote twin of imagegen.stylize_frames — same signature semantics, batched.
     All defaults are already resolved by the caller; the server applies them verbatim."""
     import numpy as np
 
     params = dict(
-        prompt=str(prompt), strength=float(strength), inpaint=bool(inpaint), model=model,
-        seed=int(seed), control_scale=float(control_scale), negative=str(negative),
+        prompt=str(prompt),
+        strength=float(strength),
+        inpaint=bool(inpaint),
+        model=model,
+        seed=int(seed),
+        control_scale=float(control_scale),
+        negative=str(negative),
         short=int(short),
     )
     total = len(frames)
@@ -105,8 +121,12 @@ def generate_remote(prompt, seed, count, model, long_edge, aspect, url, token) -
     from PIL import Image
 
     params = dict(
-        prompt=str(prompt), seed=int(seed), count=int(count), model=model,
-        long_edge=long_edge, aspect=list(aspect) if aspect else None,
+        prompt=str(prompt),
+        seed=int(seed),
+        count=int(count),
+        model=model,
+        long_edge=long_edge,
+        aspect=list(aspect) if aspect else None,
     )
     out = _post(url, token, "/generate", b"", params, "generate")
     arrays = unpack_npz(out)

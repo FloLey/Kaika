@@ -27,6 +27,7 @@ from .graph_common import (
     FLUID_FPS,
     LEGACY_GRID,
     LOOSE_PORT,
+    VIDEO_PRODUCERS,
     _POINT_CAP,
     _field_nodes,
     _fluid_for_output,
@@ -1954,8 +1955,14 @@ _BLOCK_HANDLERS = {
     "rain": _rain_block,
     "clouds": _clouds_block,
 }
-# Node types that produce a video stream (used by validate to check output wiring).
-_VIDEO_PRODUCERS = tuple(_VIDEO_HANDLERS)
+# The producer set lives in graph_common (the leaf) so validate needn't import this
+# module. Assert the two agree at import: a card added to one and not the other would
+# otherwise fail late, as a confusing "not a video producer" on a card that renders fine.
+assert set(_VIDEO_HANDLERS) == set(VIDEO_PRODUCERS), (
+    f"handler table and graph_common.VIDEO_PRODUCERS disagree: "
+    f"{set(_VIDEO_HANDLERS) ^ set(VIDEO_PRODUCERS)}"
+)
+_VIDEO_PRODUCERS = VIDEO_PRODUCERS  # back-compat name for existing importers
 
 
 def render(

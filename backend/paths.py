@@ -39,8 +39,13 @@ ASSET_EXTS = {
     "video": {"mp4", "mov", "webm", "m4v"},
 }
 ASSET_MIME = {
-    "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
-    "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm", "m4v": "video/mp4",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "webp": "image/webp",
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "webm": "video/webm",
+    "m4v": "video/mp4",
 }
 
 

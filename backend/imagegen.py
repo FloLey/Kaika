@@ -127,7 +127,7 @@ def _target_size(long_edge: int, aspect: tuple | None, max_edge: int) -> tuple[i
     each rounded to a multiple of 16 and floored at 256. A missing/degenerate aspect
     falls back to a square."""
     edge = max(256, min(int(long_edge or max_edge), max_edge))
-    aw, ah = (aspect or (1, 1))
+    aw, ah = aspect or (1, 1)
     aw, ah = float(aw or 1), float(ah or 1)
     if aw <= 0 or ah <= 0:
         aw = ah = 1.0
@@ -212,8 +212,10 @@ def _load_stylize_pipe(model: str, inpaint: bool, control: bool):
                 "`pip install -r requirements.txt` (diffusers/transformers/safetensors)"
             ) from e
         device = _pick_device()
-        dtype = torch.bfloat16 if spec["kind"] == "zimage" else (
-            torch.float16 if device != "cpu" else torch.float32
+        dtype = (
+            torch.bfloat16
+            if spec["kind"] == "zimage"
+            else (torch.float16 if device != "cpu" else torch.float32)
         )
         try:
             if control:
@@ -352,9 +354,18 @@ def stylize_frames(
         from . import remote_client
 
         return remote_client.stylize_remote(
-            frames, prompt, strength, inpaint, model, seed,
-            control if have_control else None, control_scale, negative, int(short),
-            *ep, on_progress=on_progress,
+            frames,
+            prompt,
+            strength,
+            inpaint,
+            model,
+            seed,
+            control if have_control else None,
+            control_scale,
+            negative,
+            int(short),
+            *ep,
+            on_progress=on_progress,
         )
     # Follow the input by default (draft only): with no explicit control wired, use canny of
     # the input as a ControlNet so the output tracks the input's shapes. HD (Z-Image) keeps
@@ -366,7 +377,9 @@ def stylize_frames(
     # instead of erroring (its `strength` still tracks the input's structure).
     if use_control and model not in STYLIZE_CONTROLNET:
         if have_control:
-            log.warning("control not available for '%s' (no ControlNet) — generating without it", model)
+            log.warning(
+                "control not available for '%s' (no ControlNet) — generating without it", model
+            )
         use_control = False
     pipe = _load_stylize_pipe(model, inpaint, use_control)
     # Z-Image's ControlNet pipeline ships as txt2img + control (no image/strength/mask args), so
@@ -398,8 +411,9 @@ def stylize_frames(
                 c = control[min(i, len(control) - 1)]
                 cimg = cv2.resize(np.ascontiguousarray(c), (W, H), interpolation=cv2.INTER_LINEAR)
             else:  # auto (draft): canny of the (resized) input so the output follows its shapes
-                cimg = cv2.cvtColor(cv2.Canny(cv2.cvtColor(dye, cv2.COLOR_RGB2GRAY), 80, 160),
-                                    cv2.COLOR_GRAY2RGB)
+                cimg = cv2.cvtColor(
+                    cv2.Canny(cv2.cvtColor(dye, cv2.COLOR_RGB2GRAY), 80, 160), cv2.COLOR_GRAY2RGB
+                )
         if zimage_control:
             # The Union's pipeline is txt2img + control, so we hand-roll img2img: seed its
             # `latents` with a noised encode of the input and hand it the matching tail of the
@@ -412,22 +426,37 @@ def stylize_frames(
             sigma0 = float(pipe.scheduler.sigmas[0])
             px = pipe.image_processor.preprocess(Image.fromarray(dye), height=H, width=W)
             z0 = retrieve_latents(
-                pipe.vae.encode(px.to(device, dtype=pipe.vae.dtype)), generator=gen, sample_mode="argmax"
+                pipe.vae.encode(px.to(device, dtype=pipe.vae.dtype)),
+                generator=gen,
+                sample_mode="argmax",
             )
             z0 = (z0 - pipe.vae.config.shift_factor) * pipe.vae.config.scaling_factor
-            noise = torch.randn(z0.shape, generator=gen, dtype=torch.float32).to(device, dtype=z0.dtype)
+            noise = torch.randn(z0.shape, generator=gen, dtype=torch.float32).to(
+                device, dtype=z0.dtype
+            )
             latents = sigma0 * noise + (1.0 - sigma0) * z0  # the scheduler's scale_noise convention
             kw = dict(
-                prompt=str(prompt), negative_prompt=negative, height=H, width=W,
-                num_inference_steps=len(sub), guidance_scale=0.0, generator=gen,
+                prompt=str(prompt),
+                negative_prompt=negative,
+                height=H,
+                width=W,
+                num_inference_steps=len(sub),
+                guidance_scale=0.0,
+                generator=gen,
                 control_image=Image.fromarray(cimg),
                 controlnet_conditioning_scale=float(control_scale),
-                latents=latents.to(pipe.transformer.dtype), sigmas=sub,
+                latents=latents.to(pipe.transformer.dtype),
+                sigmas=sub,
             )
         else:
             kw = dict(
-                prompt=str(prompt), negative_prompt=negative, image=Image.fromarray(dye),
-                strength=strength, num_inference_steps=steps, guidance_scale=0.0, generator=gen,
+                prompt=str(prompt),
+                negative_prompt=negative,
+                image=Image.fromarray(dye),
+                strength=strength,
+                num_inference_steps=steps,
+                guidance_scale=0.0,
+                generator=gen,
             )
             if inpaint:
                 kw["mask_image"] = Image.fromarray((_density_mask(dye) * 255).astype(np.uint8))
