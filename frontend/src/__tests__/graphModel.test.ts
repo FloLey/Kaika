@@ -9,6 +9,8 @@ import {
   montageNode,
   setMontageSlotSpan,
   signalNode,
+  gateNode,
+  changeNode,
   outputNode,
   fluidNode,
   emptyGraph,
@@ -1224,6 +1226,34 @@ describe("✨ arrange lays a montage's clips out in SLOT order", () => {
     // A graph with no slot card gets its edges back untouched (same array).
     const plain = { ...emptyGraph(), nodes: [videoNode(0, 0)], edges: [] } as Graph;
     expect(rankedEdges(plain)).toBe(plain.edges);
+  });
+
+  it("orders the cards even when their wires cross several columns", () => {
+    // The real-project shape that 5446fcc missed: a trigger chain (signal → gate →
+    // change → montage) pushes the montage three columns right, so every clip's wire
+    // spans several columns and gets split through invisible dummy corridors. Ranking
+    // only the node ADJACENT to the montage sorted those corridors while the cards
+    // themselves kept their scrambled rows — 38 crossed wires, "video 23" on top.
+    const { g, feeders } = rig();
+    const chain = [signalNode({ id: "sig-1" }, 0, 0), gateNode(0, 0), changeNode(0, 0)];
+    const mg = g.nodes.find((n) => n.type === "montage")!;
+    const deep: Graph = {
+      ...g,
+      nodes: [
+        ...g.nodes.map((n) => {
+          const k = feeders.indexOf(n.id);
+          return k < 0 ? n : { ...n, y: 5000 - k * 700 }; // scattered, worst case
+        }),
+        ...chain,
+      ],
+      edges: [
+        ...g.edges,
+        { id: "e1", source: chain[0].id, sourcePort: "out", target: chain[1].id, targetPort: "in" },
+        { id: "e2", source: chain[1].id, sourcePort: "out", target: chain[2].id, targetPort: "in" },
+        { id: "e3", source: chain[2].id, sourcePort: "out", target: mg.id, targetPort: "trigger" },
+      ],
+    };
+    expect(arrangeTopDown(deep, feeders)).toEqual(feeders);
   });
 
   it("is stable: arranging twice lays the cards out identically", () => {

@@ -179,12 +179,14 @@ export function flowLayout(
   // feeder itself, or the last dummy of a long wire's corridor. That's the row we get
   // to order, and ordering it by slot index is what stops the wires from crossing.
   const feeders = new Map<string, Map<string, number>>();
+  const rankNode = (t: string, id: string, rank: number) =>
+    (feeders.get(t) ?? feeders.set(t, new Map()).get(t)!).set(id, rank);
   for (const [s, t, rank] of links) {
     const cs = col.get(s)!;
     const ct = col.get(t)!;
     if (ct - cs <= 1) {
       segs.push([s, t]);
-      if (rank != null) (feeders.get(t) ?? feeders.set(t, new Map()).get(t)!).set(s, rank);
+      if (rank != null) rankNode(t, s, rank);
       continue;
     }
     const sy = byId.get(s)!.y + byId.get(s)!.h / 2;
@@ -192,13 +194,18 @@ export function flowLayout(
     let prev = s;
     for (let c = cs + 1; c < ct; c++) {
       const id = `~${s}~${t}~${c}`;
+      if (rank != null) rankNode(t, id, rank); // the corridor carries the slot's rank too
       meta.set(id, { w: 0, h: 0, y: sy + ((ty - sy) * (c - cs)) / (ct - cs) });
       col.set(id, c);
       segs.push([prev, id]);
       prev = id;
     }
     segs.push([prev, t]);
-    if (rank != null) (feeders.get(t) ?? feeders.set(t, new Map()).get(t)!).set(prev, rank);
+    // Rank the FEEDER CARD itself as well: a wire spanning several columns is what
+    // put the card far from the montage, and it is the card's row we need ordered —
+    // ranking only the node adjacent to the montage sorted the empty corridors while
+    // the cards kept their scrambled rows (the bug that shipped in 5446fcc).
+    if (rank != null) rankNode(t, s, rank);
   }
 
   // Group ids (cards + dummies) per column; the initial row order follows the
