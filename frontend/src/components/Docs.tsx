@@ -1291,6 +1291,12 @@ export default function Docs({ section }: { section?: string }) {
         </p>
         <ul>
           <li>
+            <strong>Rendered once.</strong> Reload the page and the card checks whether this exact
+            segment is already in HD on disk: if it is, you get <strong>⤢ view HD ✓</strong>{" "}
+            straight away instead of a fresh render. Edit anything that changes the frames and the
+            offer disappears by itself — it is the render you'd get, not a note saying one exists.
+          </li>
+          <li>
             Change the settings in the <a href="#export">export stage</a> — the HD button always
             follows them, so there's one place to tune quality and no way for the two to disagree.
           </li>

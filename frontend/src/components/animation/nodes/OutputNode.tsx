@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import NodeSettingsModal from "../NodeSettingsModal";
@@ -124,27 +124,56 @@ export default function OutputNode({
     ? `${exportSettings.width}×${exportSettings.height} · ${exportSettings.fps} fps · detail ${exportSettings.gridCells}`
     : "the final export's settings";
 
+  // ONE body for both the render and the cache lookup: the backend hashes what we
+  // send, so a lookup built even slightly differently would ask about another render.
+  // The graph travels in it because autosave is debounced — the saved copy can lag
+  // what's on screen, and HD must render exactly what's visible.
+  const hdBody = useCallback(() => {
+    if (!jobId || !graph || !segment) return null;
+    return {
+      job_id: jobId,
+      segment: {
+        id: segment.id,
+        start: segment.start,
+        end: segment.end,
+        signals: segment.signals,
+        finalOutputId,
+        lyric_lines: lyricLines,
+      },
+      graph,
+      output_id: node.id,
+    };
+  }, [jobId, graph, segment, finalOutputId, lyricLines, node.id]);
+
   function startHd() {
-    if (!jobId || !graph || !segment) return;
+    const body = hdBody();
+    if (!body) return;
     setHdOpen(false);
-    hd.start(() =>
-      api.startSegmentHdRender({
-        job_id: jobId,
-        // The graph travels in the body: autosave is debounced, so the saved copy
-        // can lag what's on screen and HD must render exactly what's visible.
-        segment: {
-          id: segment.id,
-          start: segment.start,
-          end: segment.end,
-          signals: segment.signals,
-          finalOutputId,
-          lyric_lines: lyricLines,
-        },
-        graph,
-        output_id: node.id,
-      })
-    );
+    setCachedHd("");
+    hd.start(() => api.startSegmentHdRender(body));
   }
+
+  // Already rendered? Ask once per render-relevant change, keyed on the SAME
+  // `renderKey` the draft preview uses — moving a card or renaming it asks nothing;
+  // only an edit that would produce different frames does. A reload lands here and
+  // offers the file on disk instead of launching a render the machine already did.
+  const [cachedHd, setCachedHd] = useState("");
+  useEffect(() => {
+    const body = hdBody();
+    if (!body || hd.busy || hd.finalUrl) return;
+    let live = true;
+    api
+      .findSegmentHdRender(body)
+      .then((r) => live && setCachedHd(r.url || ""))
+      .catch(() => live && setCachedHd("")); // a miss is not an error worth showing
+    return () => {
+      live = false;
+    };
+    // `renderKey` (already computed above for the draft preview) is exactly "what
+    // would change the frames" — reusing it means one definition of that, and hdBody's
+    // identity churn on every keystroke doesn't re-ask.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderKey, hd.busy, hd.finalUrl]);
 
   // Open the viewer by itself once the render lands (the whole point is to look at it).
   const hdFinal = hd.finalUrl;
@@ -225,13 +254,17 @@ export default function OutputNode({
           text={`Renders this segment at the FINAL EXPORT's settings (${hdSpecs}), with the segment's audio, and opens it full screen — what the master will actually look like.`}
           section="animation-output-hd"
         />
-        {hd.finalUrl && !hd.busy && (
+        {(hd.finalUrl || cachedHd) && !hd.busy && (
           <button
             className="anim-hd-view"
             onClick={() => setHdOpen(true)}
-            title="open the HD render"
+            title={
+              hd.finalUrl
+                ? "open the HD render"
+                : "this segment is already rendered in HD — open it (no re-render)"
+            }
           >
-            ⤢ view HD
+            {hd.finalUrl ? "⤢ view HD" : "⤢ view HD ✓"}
           </button>
         )}
       </div>
@@ -291,11 +324,11 @@ export default function OutputNode({
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      {hdOpen && (hd.finalUrl || hd.videoUrl) && (
+      {hdOpen && (hd.finalUrl || hd.videoUrl || cachedHd) && (
         <HdViewerModal
-          url={hd.finalUrl || hd.videoUrl}
+          url={hd.finalUrl || hd.videoUrl || cachedHd}
           settings={exportSettings}
-          streaming={!hd.finalUrl}
+          streaming={!hd.finalUrl && !cachedHd}
           onClose={() => setHdOpen(false)}
         />
       )}

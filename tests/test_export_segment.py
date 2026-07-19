@@ -279,3 +279,74 @@ def test_route_409s_while_an_hd_render_is_running(client, monkeypatch):
     finally:
         EX._HD_RUNNING = None
         EX._HD_SLOT.release()  # the job never ran, so release the slot by hand
+
+
+# ── the cache lookup (`POST /export/segment/cached`) ─────────────────────────
+#
+# A reloaded editor has lost the in-memory job registry, but the rendered FILE is
+# still on disk. The lookup answers "already exported?" as a pure function of
+# `output_hash` over what the client is looking at — no fourth store to keep in sync,
+# and no entry that can outlive the file it names.
+
+
+def _cached(client, body):
+    return client.post("/export/segment/cached", json=body)
+
+
+def _seg_body():
+    return {"job_id": "deadbeef", "segment": {**SEG, "graph": _heavy_graph()}}
+
+
+def test_cached_lookup_misses_when_nothing_was_rendered(client, monkeypatch):
+    monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
+    r = _cached(client, _seg_body())
+    assert r.status_code == 200
+    assert r.get_json() == {"url": None}
+
+
+def test_cached_lookup_finds_the_exact_file_the_render_would_write(client, monkeypatch):
+    """The lookup and the render must agree on the key — that is the whole point.
+
+    Rather than hard-code a hash, ask the render path itself where it would write
+    (`_hd_paths`, the one definition both routes share) and plant a file there.
+    """
+    monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
+    body = _seg_body()
+    err, ctx = EX._segment_request(body)
+    assert err is None
+    silent, muxed = EX._hd_paths(*ctx)
+
+    silent.parent.mkdir(parents=True, exist_ok=True)
+    silent.write_bytes(b"x")
+    r = _cached(client, body).get_json()
+    assert r["url"] == f"/fluid/{silent.name}"
+    assert r["audio"] is False  # the silent clip is a fallback
+
+    muxed.write_bytes(b"x")  # once muxed, THAT is what the viewer plays
+    r = _cached(client, body).get_json()
+    assert r["url"] == f"/fluid/{muxed.name}"
+    assert r["audio"] is True
+
+
+def test_cached_lookup_misses_after_the_graph_changes(client, monkeypatch):
+    """No rule is written for invalidation — the key simply moves. This pins it."""
+    monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
+    body = _seg_body()
+    err, ctx = EX._segment_request(body)
+    assert err is None
+    silent, _ = EX._hd_paths(*ctx)
+    silent.parent.mkdir(parents=True, exist_ok=True)
+    silent.write_bytes(b"x")
+    assert _cached(client, body).get_json()["url"] is not None
+
+    edited = _seg_body()
+    for n in edited["segment"]["graph"]["nodes"]:
+        if n["type"] == "fluid":
+            n["data"] = {**n.get("data", {}), "seed": 4242}  # any render-visible edit
+    assert _cached(client, edited).get_json()["url"] is None
+
+
+def test_cached_lookup_shares_its_guard_rails_with_the_render_route(client, monkeypatch):
+    monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
+    assert _cached(client, {"job_id": "../etc", "segment": SEG}).status_code == 404
+    assert _cached(client, {"job_id": "deadbeef"}).status_code == 400

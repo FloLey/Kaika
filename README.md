@@ -172,6 +172,11 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
   the whole-song HD export (its `export.audioMode` picks the muxed audio:
   the original mix or the vocals-removed **instrumental**, mixed lazily from the
   separated stems). Clips serve from `/fluid/<name>.mp4` (Range/seek).
+- `POST /export/segment/cached` — same body as `/export/segment` → `{url, audio}`
+  when that exact segment is ALREADY in the render cache, else `{url: null}`.
+  Stateless: it hashes what you send (the key the render writes under) and looks on
+  disk, so nothing extra is stored and an edited graph misses on its own. Lets a
+  reloaded editor offer the finished file instead of re-rendering it.
 - `POST /export/segment` — `{job_id, segment, graph, output_id?, hdStylize?}` →
   renders ONE segment at the project's **export** settings (an Output card's HD
   button) with the segment's audio slice muxed in. The graph rides in the body

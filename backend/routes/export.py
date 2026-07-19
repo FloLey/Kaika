@@ -5,6 +5,7 @@ Loads the project's segments/graphs/output/export settings + lyric lines from th
 background job — same poll/cancel contract as `/animate/stream`.
 """
 
+from __future__ import annotations
 import hashlib
 import json
 import logging
@@ -124,6 +125,100 @@ def export_stream(body):
     return refused or jsonify({"render_id": render_id})
 
 
+def _segment_request(body):
+    """Parse the shared body of the two segment-HD routes -> (error, ctx).
+
+    Both the render and the cache lookup must agree on EVERY input that feeds
+    `output_hash` — job, output card, the segment (lyric lines included) and the HD
+    settings. Parsing it once is what keeps the lookup honest: a lookup that computed
+    the key even slightly differently would answer "already exported" about a file
+    rendered from something else, which is worse than no lookup at all."""
+    job_id = body.get("job_id")
+    if not validate_job_id(job_id):
+        return error_response("bad job id", 404), None
+    seg = body.get("segment")
+    if not isinstance(seg, dict):
+        return error_response("missing segment", 400), None
+    graph = body.get("graph") or seg.get("graph")
+    if not isinstance(graph, dict) or not graph.get("nodes"):
+        return error_response("missing graph", 400), None
+    row = db.get_project(job_id)
+    if row is None:
+        return error_response("unknown project", 404), None
+    data = row.get("data") or {}
+    export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
+
+    # Which output card to render: what was clicked, else the segment's marked final,
+    # else the only output in the graph — otherwise it's genuinely ambiguous.
+    outs = [n.get("id") for n in graph.get("nodes", []) if n.get("type") == "output"]
+    output_id = body.get("output_id") or seg.get("finalOutputId")
+    if output_id not in outs:
+        if len(outs) != 1:
+            return (
+                error_response(
+                    f"pick which output to render in HD (found {len(outs)}: {outs})", 400
+                ),
+                None,
+            )
+        output_id = outs[0]
+    try:
+        graphmod.validate(graph, output_id)
+    except ValueError as e:
+        return error_response(str(e), 400), None
+
+    lyric_lines = _cached_lyric_lines(job_id)
+    seg = {**seg, "graph": graph, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
+    return None, (job_id, seg, graph, output_id, export)
+
+
+def _hd_output(export: dict) -> dict:
+    """The render settings ONE segment's HD pass uses. Folded into `output_hash`, so
+    this must be the single definition — the lookup route and the render read it here."""
+    return {
+        **song_render.output_from_export(export),
+        # A sim-free graph must render at the export's NATIVE size, not on a
+        # simulation grid — see graph_render._NATIVE_SHORT.
+        "nativeShort": min(int(export.get("width") or 1080), int(export.get("height") or 1920)),
+    }
+
+
+def _hd_paths(job_id, seg, graph, output_id, export):
+    """`(silent, muxed)` cache paths for this exact HD render. `silent` is the shared
+    render-cache entry (`render_stream` returns it on a hit); `muxed` is the sibling
+    carrying the audio — what the viewer actually plays."""
+    h = graphmod.output_hash(job_id, seg, graph, output_id, _hd_output(export))
+    silent = ANIM_DIR / f"{h}.mp4"
+    muxed = ANIM_DIR / f"hd-{h}-{str(export.get('audioMode', 'original'))[:4]}.mp4"
+    return silent, muxed
+
+
+@bp.post("/export/segment/cached")
+@json_body
+def export_segment_cached(body):
+    """Has THIS segment already been exported in HD? -> {url} or {url: null}.
+
+    Stateless on purpose: the answer is `output_hash` over what the client is looking
+    at, checked against the render cache right now. Nothing new is stored, so there is
+    no fourth place to keep in sync and no entry can outlive the file it names — edit a
+    card and the key moves, so the answer becomes "no" without a rule written for it.
+
+    Lets a reloaded editor show a finished export instead of launching a new one: the
+    in-memory job registry is gone after a reload, but the FILE is still on disk.
+
+    Caveat: `_regenerate_hd_images` swaps imagegen/stylize assetUrls in memory, so a
+    segment carrying those hashes differently here than it did while exporting — the
+    answer is a miss and you re-export. Wrong-negative by design; never a false hit."""
+    err, ctx = _segment_request(body)
+    if err:
+        return err
+    silent, muxed = _hd_paths(*ctx)
+    for path in (muxed, silent):  # prefer the one with audio
+        if path.exists():
+            render_cache.touch(path)  # a reused export must not age out
+            return jsonify({"url": f"/fluid/{path.name}", "audio": path is muxed})
+    return jsonify({"url": None})
+
+
 @bp.post("/export/segment")
 @json_body
 def export_segment(body):
@@ -135,38 +230,10 @@ def export_segment(body):
     lag what the user is looking at — this must render exactly what's on screen); the HD
     settings come from the project's saved `export` block, so a segment preview and the
     final master can never disagree about size/fps/grid/audio."""
-    job_id = body.get("job_id")
-    if not validate_job_id(job_id):
-        return error_response("bad job id", 404)
-    seg = body.get("segment")
-    if not isinstance(seg, dict):
-        return error_response("missing segment", 400)
-    graph = body.get("graph") or seg.get("graph")
-    if not isinstance(graph, dict) or not graph.get("nodes"):
-        return error_response("missing graph", 400)
-    row = db.get_project(job_id)
-    if row is None:
-        return error_response("unknown project", 404)
-    data = row.get("data") or {}
-    export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
-
-    # Which output card to render: what was clicked, else the segment's marked final,
-    # else the only output in the graph — otherwise it's genuinely ambiguous.
-    outs = [n.get("id") for n in graph.get("nodes", []) if n.get("type") == "output"]
-    output_id = body.get("output_id") or seg.get("finalOutputId")
-    if output_id not in outs:
-        if len(outs) != 1:
-            return error_response(
-                f"pick which output to render in HD (found {len(outs)}: {outs})", 400
-            )
-        output_id = outs[0]
-    try:
-        graphmod.validate(graph, output_id)
-    except ValueError as e:
-        return error_response(str(e), 400)
-
-    lyric_lines = _cached_lyric_lines(job_id)
-    seg = {**seg, "graph": graph, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
+    err, ctx = _segment_request(body)
+    if err:
+        return err
+    job_id, seg, graph, output_id, export = ctx
     hd_stylize = bool(body.get("hdStylize", True))
 
     refused, render_id = _start_hd_render(
@@ -195,12 +262,7 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
         _regenerate_hd_images(job_id, [seg], export, should_cancel)
         if should_cancel and should_cancel():
             return None
-        output = {
-            **song_render.output_from_export(export),
-            # A sim-free graph must render at the export's NATIVE size, not on a
-            # simulation grid — see graph_render._NATIVE_SHORT.
-            "nativeShort": min(int(export.get("width") or 1080), int(export.get("height") or 1920)),
-        }
+        output = _hd_output(export)  # shared with /export/segment/cached
         if hd_stylize:
             _regenerate_hd_stylize(job_id, [seg], export, should_cancel, output)
             if should_cancel and should_cancel():
@@ -229,7 +291,7 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
         audio = song_render.export_audio_path(job_id, export, stem_audio_path)
         if audio is None:
             return url  # no audio available — the silent clip is the result
-        muxed = ANIM_DIR / f"hd-{silent.stem}-{str(export.get('audioMode', 'original'))[:4]}.mp4"
+        _, muxed = _hd_paths(job_id, seg, graph, output_id, export)
         muxed_url = f"/fluid/{muxed.name}"
         if not muxed.exists():
             on_progress(phase="audio")

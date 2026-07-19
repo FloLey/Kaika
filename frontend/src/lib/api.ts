@@ -365,6 +365,21 @@ export async function startSegmentHdRender(body: {
   return postJson<StreamStartResult>("/export/segment", body);
 }
 
+// Has this exact segment already been rendered in HD? Stateless on the backend: it
+// hashes what you send (the same key the render writes under) and looks in the render
+// cache. `{url: null}` when nothing matches — an edited graph hashes differently, so
+// the answer goes stale on its own. Lets a reloaded editor offer the finished file
+// instead of re-rendering it; the in-memory job registry is gone after a reload, the
+// FILE is not.
+export async function findSegmentHdRender(body: {
+  job_id: string;
+  segment: unknown;
+  graph: unknown;
+  output_id?: string;
+}): Promise<{ url: string | null; audio?: boolean }> {
+  return postJson<{ url: string | null; audio?: boolean }>("/export/segment/cached", body);
+}
+
 export async function getExportStatus(renderId: string): Promise<RenderStatus> {
   return getRenderStatus(`/export/stream/${renderId}`);
 }
