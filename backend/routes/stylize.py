@@ -47,8 +47,11 @@ def stylize(body, job_id):
     prompt = str(d.get("prompt") or "flowers")
     gen_job = uuid4().hex[:8]
     jobs.submit(
-        gen_job, "stylizing",
-        lambda: _stylize_job(gen_job, job_id, segment, graph, node_id, output, prompt, inpaint, model),
+        gen_job,
+        "stylizing",
+        lambda: _stylize_job(
+            gen_job, job_id, segment, graph, node_id, output, prompt, inpaint, model
+        ),
     )
     return jsonify({"job_id": gen_job})
 
@@ -63,7 +66,12 @@ def _stylize_job(gen_job, job_id, segment, graph, node_id, output, prompt, inpai
         job_id, segment, graph, node_id, stem_audio_path, output
     )
     styled = imagegen.stylize_frames(
-        frames, prompt, strength=strength, inpaint=inpaint, model=model, control=control,
+        frames,
+        prompt,
+        strength=strength,
+        inpaint=inpaint,
+        model=model,
+        control=control,
         # short=None → per-model preview size: draft 384 (fast iteration), HD 576 — the
         # empirical floor below which Z-Image paints blobs instead of subjects.
         short=None,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { nodeRenderable, outputHash } from "../../../lib/graphModel";
 import { usePreservePlayback } from "./usePreservePlayback";
-import { useStreamRender } from "./useStreamRender";
+import { forgetRender, useStreamRender } from "./useStreamRender";
 import { useSyncedPlayback } from "./useSyncedPlayback";
 import type { NodeCtx } from "./nodeProps";
 import type { GraphNode } from "../../../lib/types";
@@ -66,7 +66,10 @@ export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = f
     visible && active && renderable && !suppressed
   );
 
-  usePreservePlayback(videoRef, videoUrl);
+  // Restore-on-reload only while the transport is stopped: when it's playing,
+  // useSyncedPlayback owns currentTime (it has the real clock) and a second writer
+  // would race its drift correction.
+  usePreservePlayback(videoRef, videoUrl, !groupPlaying);
   useSyncedPlayback(videoRef, videoUrl, groupPlaying, groupClock, segStart);
 
   const renderLabel = progress
@@ -81,6 +84,10 @@ export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = f
       className={"anim-output-well" + (compact ? " anim-output-well-sm" : "")}
       style={{ "--out-aspect": aspect } as CSSProperties}
     >
+      {/* `loop`/`autoPlay` are UNCONDITIONAL. They used to be !groupPlaying, so during
+          playback the clip reached its end, fired `ended` and STUCK on the last frame
+          while the audio looped back. Native looping wraps frame-accurate with no
+          seek — and useSyncedPlayback's wrap-aware drift maths assumes it. */}
       {videoUrl && (
         <video
           ref={videoRef}
@@ -89,8 +96,9 @@ export default function StreamPreview({ node, ctx, aspect = "1 / 1", compact = f
           muted
           playsInline
           preload="auto"
-          loop={!groupPlaying}
-          autoPlay={!groupPlaying}
+          loop
+          autoPlay
+          onError={() => forgetRender(videoUrl)}
         />
       )}
       {busy && !videoUrl && (

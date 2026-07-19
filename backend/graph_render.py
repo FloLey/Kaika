@@ -146,6 +146,15 @@ def _render_target(graph: dict, nodes: dict, output_id: str) -> str:
     return output_id  # a producer node previewed directly
 
 
+def _clip_dims(segment: dict, output: dict | None) -> tuple[float, int]:
+    """(duration, fps) of a segment's clip — the ONE place the 0.5 s floor lives.
+
+    Shared by `Dag.__init__` and `render_stream`'s cache-hit path, which needs the frame
+    total to report progress but has nothing to resolve (the clip is already on disk)."""
+    start, end = float(segment["start"]), float(segment["end"])
+    return max(0.5, end - start), int((output or {}).get("fps", FLUID_FPS))
+
+
 class Dag:
     """Resolves the video DAG feeding an output (spec 10).
 
@@ -171,9 +180,7 @@ class Dag:
         self.stem_audio_path = stem_audio_path
         self.output = output or {}
         self.nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
-        start, end = float(segment["start"]), float(segment["end"])
-        self.duration = max(0.5, end - start)
-        self.fps = int(self.output.get("fps", FLUID_FPS))
+        self.duration, self.fps = _clip_dims(segment, self.output)
         self._video: dict = {}
         self._emit: dict = {}
         self._params: dict = {}
@@ -2007,13 +2014,15 @@ def render_stream(
         output_id = _nodes_of(graph, "output")[0]["id"]
     out_path = paths.ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
     url = f"/fluid/{out_path.name}"
-    dag = _Dag(job_id, segment, graph, stem_audio_path, output)
-    total = max(1, round(dag.duration * dag.fps))
-    if out_path.exists():  # already rendered — nothing to stream
+    if out_path.exists():  # already rendered — nothing to stream, and no Dag to build
         render_cache.touch(out_path)
         if on_progress:
+            d, fps = _clip_dims(segment, output)
+            total = max(1, round(d * fps))
             on_progress(total, total, url)
         return url
+    dag = _Dag(job_id, segment, graph, stem_audio_path, output)
+    total = max(1, round(dag.duration * dag.fps))
 
     out_w = int(output.get("width", 0)) or None
     out_h = int(output.get("height", 0)) or None

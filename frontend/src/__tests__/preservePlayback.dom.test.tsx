@@ -43,4 +43,23 @@ describe("usePreservePlayback", () => {
     v.dispatchEvent(new Event("loadedmetadata")); // restores 4
     expect(v.currentTime).toBe(4);
   });
+
+  // While the segment plays, useSyncedPlayback owns currentTime — it has the real
+  // clock. A restore here would be a second, uncoordinated writer racing its drift
+  // correction, so the restore half is gated off.
+  it("does not restore while the transport owns the clock (enabled=false)", () => {
+    function Probe({ url }: { url: string }) {
+      const videoRef = useRef<HTMLVideoElement>(null);
+      usePreservePlayback(videoRef, url, false);
+      return <video ref={videoRef} src={url} />;
+    }
+    const { container } = render(<Probe url="/fluid/stream/a/preview.mp4?n=0" />);
+    const v = container.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(v, "duration", { value: 10, configurable: true });
+    v.currentTime = 4;
+    v.dispatchEvent(new Event("timeupdate"));
+    v.currentTime = 0;
+    v.dispatchEvent(new Event("loadedmetadata"));
+    expect(v.currentTime).toBe(0); // left alone
+  });
 });

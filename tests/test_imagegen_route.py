@@ -10,7 +10,7 @@ from PIL import Image
 pytest.importorskip("torch")
 
 from backend import imagegen  # noqa: E402
-from backend.routes import uploads as uploads_routes  # noqa: E402
+from backend.routes import assets as assets_mod, imagegen as imagegen_routes  # noqa: E402
 
 
 def _wait_job(client, job_id, timeout=5.0):
@@ -29,7 +29,7 @@ def test_generate_image_stores_assets(client, live_db, tmp_path, monkeypatch):
     job = "ab12cd34"
     db.delete_project(job)
     db.create_project(job, title="t", source="s", duration=1.0, fmin=20, has_lyrics=False, stems={})
-    monkeypatch.setattr(uploads_routes, "ASSETS_DIR", tmp_path)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", tmp_path)
     # Two distinct tiny stills instead of the real model. One image per call (the
     # worker calls once per prompt, seeded seed+i). Capture the model the route picks.
     used = {}

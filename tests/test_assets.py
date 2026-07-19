@@ -61,11 +61,11 @@ def test_asset_db_round_trip(live_db):
 # /upload-asset -> GET /assets -> DELETE
 # --------------------------------------------------------------------------- #
 def test_upload_asset_persists_lists_and_deletes(live_db, client, tmp_path, monkeypatch):
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir()
-    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", assets_dir)
 
     job = "a1a1a1a1"
     _mk_project(job)
@@ -99,11 +99,11 @@ def test_upload_asset_keeps_folder_metadata(live_db, client, tmp_path, monkeypat
     """A folder upload sends each file's relative directory as `folder`; it rides the
     asset dict (sanitized) so the library can group by it. Files stay content-addressed
     flat on disk — the folder is display metadata only."""
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir()
-    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", assets_dir)
     job = "a4a4a4a4"
     _mk_project(job)
     try:
@@ -133,11 +133,11 @@ def test_video_upload_generates_a_thumbnail_and_delete_removes_it(
     """A video asset gets a server-side `<sha>-thumb.jpg` on upload (the library grid
     shows it as a plain <img> — a grid of live <video> decoders froze the tab), and
     deleting the asset unlinks the thumb with it."""
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir()
-    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", assets_dir)
     job = "a5a5a5a5"
     _mk_project(job)
     try:
@@ -183,9 +183,9 @@ def test_gc_keeps_a_thumb_alive_with_its_base_file(monkeypatch, tmp_path):
 
 
 def test_upload_asset_rejects_unknown_extension(live_db, client, tmp_path, monkeypatch):
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
-    monkeypatch.setattr(uploads, "ASSETS_DIR", tmp_path / "assets")
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", tmp_path / "assets")
     job = "a2a2a2a2"
     _mk_project(job)
     try:
@@ -205,11 +205,11 @@ def test_upload_asset_rejects_unknown_extension(live_db, client, tmp_path, monke
 # delete 400'd; see backend/web.py validate_asset_id).
 # --------------------------------------------------------------------------- #
 def test_hyphenated_hd_asset_serves_and_deletes(live_db, client, tmp_path, monkeypatch):
-    from backend.routes import serving, uploads
+    from backend.routes import assets as assets_mod, serving
 
     assets_dir = tmp_path / "assets"
     monkeypatch.setattr(serving, "ASSETS_DIR", assets_dir)
-    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", assets_dir)
 
     job, asset_id = "d0010101", "hd-a1b2c3d4e5f60718"
     _mk_project(job)
@@ -250,23 +250,23 @@ def test_asset_routes_still_reject_unsafe_names(client, tmp_path, monkeypatch):
 # YouTube -> video asset (async worker, downloader monkeypatched)
 # --------------------------------------------------------------------------- #
 def test_asset_from_youtube_adds_video(live_db, tmp_path, monkeypatch):
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir()
-    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", assets_dir)
 
     def fake_dl(url, out_dir, stem="ytvideo", start=None, end=None):
         p = Path(out_dir) / f"{stem}.mp4"
         p.write_bytes(b"FAKE-VIDEO-BYTES")
         return p
 
-    monkeypatch.setattr(uploads, "download_youtube_video", fake_dl)
+    monkeypatch.setattr(assets_mod, "download_youtube_video", fake_dl)
 
     job = "ytjob001"
     _mk_project(job)
     try:
-        asset = uploads._download_asset_video(job, "https://youtu.be/whatever")
+        asset = assets_mod._download_asset_video(job, "https://youtu.be/whatever")
         assert asset["kind"] == "video" and asset["name"] == "ytvideo.mp4"
         assert (assets_dir / job / f"{asset['id']}.mp4").exists()
         assert any(a["id"] == asset["id"] for a in db.list_assets(job))
@@ -280,7 +280,7 @@ def test_asset_from_youtube_adds_video(live_db, tmp_path, monkeypatch):
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_video_upload_splits_audio_and_keeps_video(live_db, tmp_path, monkeypatch):
     from backend import media
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
     up, sep, spec, ass = (tmp_path / n for n in ("uploads", "separated", "spectro", "assets"))
     for d in (up, sep, spec, ass):
@@ -289,7 +289,7 @@ def test_video_upload_splits_audio_and_keeps_video(live_db, tmp_path, monkeypatc
     monkeypatch.setattr(uploads, "UPLOAD_DIR", up)
     monkeypatch.setattr(uploads, "SEPARATED_DIR", sep)
     monkeypatch.setattr(uploads, "SPECTRO_DIR", spec)
-    monkeypatch.setattr(uploads, "ASSETS_DIR", ass)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", ass)
     monkeypatch.setattr(media, "UPLOAD_DIR", up)
     monkeypatch.setattr(media, "SEPARATED_DIR", sep)
 
@@ -395,11 +395,11 @@ def test_asset_proxy_serves_the_original_then_the_proxy(live_db, client, tmp_pat
     """`/asset-proxy` never breaks a preview: it serves the ORIGINAL while the 360p
     copy is still being made (so a fresh clip previews immediately), and the proxy
     once it lands — which is what stops several 4K phone clips from stalling the tab."""
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir()
-    monkeypatch.setattr(uploads, "ASSETS_DIR", assets_dir)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", assets_dir)
     job = "a6a6a6a6"
     d = assets_dir / job
     d.mkdir()
@@ -412,14 +412,14 @@ def test_asset_proxy_serves_the_original_then_the_proxy(live_db, client, tmp_pat
 
     # No proxy yet -> the original is served (and a transcode is kicked off).
     calls = []
-    monkeypatch.setattr(uploads, "_ensure_proxy_async", lambda p: calls.append(p))
+    monkeypatch.setattr(assets_mod, "_ensure_proxy_async", lambda p: calls.append(p))
     r = client.get(f"/asset-proxy/{job}/abc123")
     assert r.status_code == 200 and calls == [src]
 
     # Once generated, the proxy is served instead. What matters is that it's been
     # DOWNSCALED to 360p (on a real 4K phone clip that's ~100× fewer bytes; this
     # synthetic 640x480 source is already tiny, so file size proves nothing).
-    assert uploads._make_video_proxy(src)
+    assert assets_mod._make_video_proxy(src)
     proxy = d / "abc123-proxy.mp4"
     assert proxy.exists()
     height = subprocess.run(
@@ -433,7 +433,7 @@ def test_asset_proxy_serves_the_original_then_the_proxy(live_db, client, tmp_pat
     assert int(r2.headers["Content-Length"]) == proxy.stat().st_size
 
     # A derived companion is never mistaken for the original asset…
-    assert uploads._asset_base_file(job, "abc123") == src
+    assert assets_mod._asset_base_file(job, "abc123") == src
     # …and delete reaps it with its base file.
     _mk_project(job)
     try:
@@ -444,8 +444,8 @@ def test_asset_proxy_serves_the_original_then_the_proxy(live_db, client, tmp_pat
 
 
 def test_asset_proxy_rejects_unknown_and_unsafe_ids(client, tmp_path, monkeypatch):
-    from backend.routes import uploads
+    from backend.routes import assets as assets_mod, uploads
 
-    monkeypatch.setattr(uploads, "ASSETS_DIR", tmp_path)
+    monkeypatch.setattr(assets_mod, "ASSETS_DIR", tmp_path)
     assert client.get("/asset-proxy/a7a7a7a7/nope").status_code == 404
     assert client.get("/asset-proxy/a7a7a7a7/-evil").status_code == 400

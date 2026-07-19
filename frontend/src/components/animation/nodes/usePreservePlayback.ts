@@ -7,9 +7,17 @@ import type { RefObject } from "react";
 //
 // `reset()` drops the remembered position: call it when the render starts over from
 // scratch (a fresh edit, a new export), where resuming mid-clip would be wrong.
+//
+// `enabled` gates the RESTORE half. While the segment is playing, `useSyncedPlayback`
+// owns `currentTime` outright — it has the real clock — and a restore-on-loadedmetadata
+// would be a second, uncoordinated writer racing its drift correction. The two roles
+// are disjoint: with the transport stopped there IS no clock, and this is the only
+// thing that knows where we were. `save` stays armed either way (it costs nothing and
+// keeps the resume-to-idle position warm).
 export function usePreservePlayback(
   videoRef: RefObject<HTMLVideoElement | null>,
-  videoUrl: string
+  videoUrl: string,
+  enabled = true
 ): { reset: () => void } {
   const lastTime = useRef(0);
 
@@ -23,12 +31,12 @@ export function usePreservePlayback(
       if (lastTime.current > 0 && lastTime.current < v.duration) v.currentTime = lastTime.current;
     };
     v.addEventListener("timeupdate", save);
-    v.addEventListener("loadedmetadata", restore);
+    if (enabled) v.addEventListener("loadedmetadata", restore);
     return () => {
       v.removeEventListener("timeupdate", save);
       v.removeEventListener("loadedmetadata", restore);
     };
-  }, [videoRef, videoUrl]);
+  }, [videoRef, videoUrl, enabled]);
 
   // Block body, not an expression: an implicit `0` return would be read as an effect
   // cleanup function at the call site.

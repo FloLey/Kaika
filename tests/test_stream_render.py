@@ -205,3 +205,21 @@ def test_render_stream_cancel_stops_early():
     assert out is None
     assert not (G.ANIM_DIR / f"{oh}.mp4").exists()  # no partial promoted to the cache
     assert not list(G.STREAM_DIR.glob(f"{oh}*"))  # per-render scratch cleaned up
+
+
+def test_render_stream_cache_hit_needs_no_dag(monkeypatch):
+    """A clip already on disk short-circuits BEFORE any graph resolution: there is
+    nothing to stream, and the frame total the progress callback reports is just
+    duration x fps (`_clip_dims`, the one place the 0.5s floor lives)."""
+    g = _mod_graph()
+    oh = G.output_hash("job", SEG, g, "o1", OUT)
+    cached = G.ANIM_DIR / f"{oh}.mp4"
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_bytes(b"cached clip")
+    monkeypatch.setattr(G, "_Dag", lambda *a, **k: pytest.fail("a cache hit must not build a Dag"))
+    seen = []
+    url = G.render_stream("job", SEG, g, NOAUDIO, OUT, "o1", on_progress=lambda *a: seen.append(a))
+    assert url == f"/fluid/{oh}.mp4"
+    expected = max(1, round(max(0.5, SEG["end"] - SEG["start"]) * OUT["fps"]))
+    assert seen == [(expected, expected, url)]
+    cached.unlink()

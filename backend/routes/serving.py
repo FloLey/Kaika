@@ -85,13 +85,21 @@ def asset_file(job_id: str, name: str):
     """A user-uploaded image/video layer asset (data/assets/<job_id>/<sha>.<ext>).
     Video is range-served so `<video>` can seek; images are sent whole."""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-    if not validate_job_id(job_id) or ext not in _ASSET_MIME or not validate_asset_id(name.split(".")[0]):
+    if (
+        not validate_job_id(job_id)
+        or ext not in _ASSET_MIME
+        or not validate_asset_id(name.split(".")[0])
+    ):
         abort(404)
     p = ASSETS_DIR / job_id / name
     if not p.exists():
         abort(404)
     mimetype = _ASSET_MIME[ext]
-    return serve_range(p, mimetype=mimetype) if mimetype.startswith("video/") else send_file(str(p), mimetype=mimetype)
+    return (
+        serve_range(p, mimetype=mimetype)
+        if mimetype.startswith("video/")
+        else send_file(str(p), mimetype=mimetype)
+    )
 
 
 @bp.route("/spectrogram/<job_id>/<stem>")

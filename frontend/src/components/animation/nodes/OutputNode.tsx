@@ -9,7 +9,7 @@ import { outputHash, outputRenderable } from "../../../lib/graphModel";
 import { aspectOf } from "../../../lib/output";
 import { useRenderJob } from "../../../lib/useRenderJob";
 import { usePreservePlayback } from "./usePreservePlayback";
-import { useStreamRender } from "./useStreamRender";
+import { forgetRender, useStreamRender } from "./useStreamRender";
 import { useSyncedPlayback } from "./useSyncedPlayback";
 import { jobIdOf, type NodeProps } from "./nodeProps";
 
@@ -73,13 +73,16 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
   );
 
   // Auto-render this output (debounced, block-streamed, cancel-on-edit) — the same
-  // machinery the fluid/combine card previews use, but OUTSIDE the preview-slot cap:
-  // an output is what the user is waiting on, so it never queues behind a card.
+  // machinery the fluid/combine card previews use, but in its OWN lane: an output is
+  // what the user is waiting on, so it never queues behind a card preview.
   const { videoUrl, busy, error, progress } = useStreamRender(ctx, node.id, renderKey, renderable, {
-    slot: false,
+    lane: "output",
   });
 
-  const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl);
+  // Restore-on-reload only while the transport is stopped: when it's playing,
+  // useSyncedPlayback owns currentTime (it has the real clock) and a second writer
+  // would race its drift correction.
+  const { reset: resetPlayback } = usePreservePlayback(videoRef, videoUrl, !groupPlaying);
   // A fresh edit restarts the preview from the top.
   useEffect(() => {
     resetPlayback();
@@ -232,6 +235,10 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
         <span className="anim-output-open-badge" aria-hidden="true">
           ⤢
         </span>
+        {/* `loop`/`autoPlay` are UNCONDITIONAL. They used to be !groupPlaying, so during
+            playback the clip reached its end, fired `ended` and STUCK on the last frame
+            while the audio looped back. Native looping wraps frame-accurate with no
+            seek — and useSyncedPlayback's wrap-aware drift maths assumes it. */}
         {videoUrl ? (
           <video
             ref={videoRef}
@@ -240,8 +247,9 @@ export default function OutputNode({ node, selected, helpers, ctx, onGraphChange
             muted
             playsInline
             preload="auto"
-            loop={!groupPlaying}
-            autoPlay={!groupPlaying}
+            loop
+            autoPlay
+            onError={() => forgetRender(videoUrl)}
           />
         ) : (
           !busy &&
