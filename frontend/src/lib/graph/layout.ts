@@ -56,6 +56,29 @@ export function estimateCardSize(type: string, mode: "detailed" | "compact"): Ca
   return DETAILED_SIZES[type] || DETAILED_DEFAULT;
 }
 
+// Reading order over a set of cards: columns left→right, then top→bottom inside each
+// column. A card joins the current column while its left edge stays within half a card
+// width of the PREVIOUS card's — chaining, so a hand-dragged stack tolerates drift
+// across its whole height and still reads as one column. A real grid can't chain shut:
+// its columns sit a card width plus FLOW_GAPS.x apart, far past the tolerance. Ids
+// break exact ties, so the order is deterministic (two cards at the same spot must not
+// swap between runs).
+//
+// Used by ✨ arrange to give a montage's slots the order you SEE (useGraphEditor).
+export function readingOrder(items: LayoutRect[]): string[] {
+  const byX = [...items].sort((a, b) => a.x - b.x || a.y - b.y || (a.id < b.id ? -1 : 1));
+  const columns: LayoutRect[][] = [];
+  let colX = -Infinity;
+  for (const it of byX) {
+    if (columns.length && it.x - colX <= it.w / 2) columns[columns.length - 1].push(it);
+    else columns.push([it]);
+    colX = it.x; // chain from the previous card, not the column's first
+  }
+  return columns.flatMap((c) =>
+    [...c].sort((a, b) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : 1)).map((r) => r.id)
+  );
+}
+
 // Edge-to-edge overlap of two rects along one axis, in px (negative = separated by
 // that many px). "Too close" means the edge distance is under `gap` on BOTH axes.
 const penX = (a: LayoutRect, b: LayoutRect) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);

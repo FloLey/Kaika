@@ -512,8 +512,12 @@ export default function Docs({ section }: { section?: string }) {
           layout (cards only move if they would overlap, and then as little as possible). The{" "}
           <strong>✨ arrange</strong> toolbar button lays the view you're looking at out along the
           data flow — sources left, output right — giving the cards room and untangling wire
-          crossings where it can (compact uses the same layout, just tighter). In compact view,{" "}
-          <strong>click a card's body</strong> to open its settings window:{" "}
+          crossings where it can (compact uses the same layout, just tighter). If the view holds a{" "}
+          <a href="#animation-montage">montage</a>, arrange also puts its <strong>slots</strong> in
+          the order its clips now read on screen — so re-ordering a montage is a matter of dragging
+          cards. That one is a real edit, not just tidying: the montage re-renders. Clicking arrange
+          again changes nothing. In compact view, <strong>click a card's body</strong> to open its
+          settings window:{" "}
           <strong>inputs &amp; controls on the left, a big live preview on the right</strong>{" "}
           (editing the graph live — <kbd>Esc</kbd>, the ✕, or a click outside closes it). The
           right-hand preview is tailored per card — the sim/composite, a value's pulse, an
@@ -1097,6 +1101,13 @@ export default function Docs({ section }: { section?: string }) {
           video card's <em>sync</em> setting is ignored inside a montage, since the montage owns the
           timing (otherwise a clip shorter than the segment's position in the song would sit frozen
           on its last frame). Its preview on the card free-runs for the same reason.
+        </p>
+        <p>
+          <strong>Re-ordering the clips.</strong> Slot order is play order, and it follows what you
+          see: drag the video cards into the order you want (top to bottom, and left-hand columns
+          first if you've spread them into a grid), then hit <strong>✨ arrange</strong> — the slots
+          line up on their cards' positions. Empty slots keep their row. Since this genuinely
+          changes the film, the montage re-renders afterwards.
         </p>
         <p>
           One rule: a card feeding a montage slot can't <em>also</em> feed something else (another

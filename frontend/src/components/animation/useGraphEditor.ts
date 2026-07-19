@@ -9,10 +9,18 @@ import {
   disconnect,
   removeNode,
   renameNode,
+  sortMontageSlots,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
 import type { GraphHistory } from "../../lib/graph/history";
-import { FLOW_GAPS, estimateCardSize, flowLayout, resolveOverlaps, tighten } from "../../lib/graph/layout";
+import {
+  FLOW_GAPS,
+  estimateCardSize,
+  flowLayout,
+  readingOrder,
+  resolveOverlaps,
+  tighten,
+} from "../../lib/graph/layout";
 import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
 import type { Graph, GraphEdge, GraphNode, OutputSettings, Segment } from "../../lib/types";
@@ -60,8 +68,8 @@ function layoutForMode(nodes: GraphNode[], mode: "detailed" | "compact"): GraphN
   if (nodes.length < 2) return nodes;
   const rects: LayoutRect[] = nodes.map((n) => {
     const s = estimateCardSize(n.type, mode);
-    const x = mode === "compact" ? n.cx ?? n.x : n.x;
-    const y = mode === "compact" ? n.cy ?? n.y : n.y;
+    const x = mode === "compact" ? (n.cx ?? n.x) : n.x;
+    const y = mode === "compact" ? (n.cy ?? n.y) : n.y;
     return { id: n.id, x, y, w: s.w, h: s.h };
   });
   const firstCompactEntry = mode === "compact" && nodes.every((n) => n.cx == null);
@@ -92,7 +100,20 @@ interface GraphEditorOpts {
 }
 
 export function useGraphEditor(opts: GraphEditorOpts) {
-  const { segment, stems, job, output, exportSettings, assets, lyricLines, onSaveLyricLines, groupClock, groupPlaying, commitGraph, setFinalOutput } = opts;
+  const {
+    segment,
+    stems,
+    job,
+    output,
+    exportSettings,
+    assets,
+    lyricLines,
+    onSaveLyricLines,
+    groupClock,
+    groupPlaying,
+    commitGraph,
+    setFinalOutput,
+  } = opts;
 
   // A stable graph object: segment.graph when present, else a fresh empty graph.
   // normalizeGraph migrates older saves so every fluid node carries the current
@@ -223,7 +244,10 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater]
   );
 
-  const overrides = useMemo(() => new Set<string>(graph.viewOverrides || []), [graph.viewOverrides]);
+  const overrides = useMemo(
+    () => new Set<string>(graph.viewOverrides || []),
+    [graph.viewOverrides]
+  );
   // `output` never compacts — its body IS the live render preview — so it's excluded
   // here at the source (NodeFrame also hides its toggle) rather than special-cased
   // by every consumer of the compact set.
@@ -285,7 +309,16 @@ export function useGraphEditor(opts: GraphEditorOpts) {
           const p = pos.get(n.id);
           return p && (p.x !== n.x || p.y !== n.y) ? { ...n, x: p.x, y: p.y } : n;
         });
-        return nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
+        const laid = nodes.some((n, i) => n !== g.nodes[i]) ? { ...g, nodes } : g;
+        // A montage's slot order becomes the order its feeders now READ on screen, so
+        // arranging the cards is how you re-order the film. Sorted on the FINAL
+        // positions, not the ones you dragged: flowLayout may permute a column to undo
+        // a crossing elsewhere (it breaks barycenter ties by id, layout.ts:246), and
+        // promising an order the layout can then contradict would re-cut the montage on
+        // every click. Reading the result back makes it idempotent by construction.
+        const placed = rects.map((r) => ({ ...r, ...(pos.get(r.id) || {}) }));
+        const rank = new Map(readingOrder(placed).map((id, i) => [id, i]));
+        return sortMontageSlots(laid, rank);
       });
     },
     [applyDisplayUpdater]
@@ -372,8 +405,6 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     },
     [applyUpdater, clearSelected]
   );
-
-
 
   // Rename a card (node-level `name`); NodeFrame's title edit calls this. Node-level,
   // so it never touches outputHash → no re-render.
