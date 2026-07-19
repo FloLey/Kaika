@@ -79,6 +79,26 @@ _proxy_pending: set[str] = set()
 _proxy_lock = threading.Lock()
 
 
+def _write_atomic(dest: Path, data: bytes) -> None:
+    """Write `data` to `dest` via a temp file + `os.replace`.
+
+    A content-addressed store promises that the file at `<sha>` hashes to `<sha>`, and
+    a plain `write_bytes` breaks that promise the moment it is interrupted: it TRUNCATES
+    first, so a killed worker leaves an empty (or half) file sitting under the hash of
+    the complete content. That happened to one upload here — 0 bytes, no moov atom, and
+    a stale thumbnail still showing the clip it used to be. `os.replace` is atomic on
+    POSIX: a reader sees the old file or the new one, never a partial one, and a crash
+    leaves the destination untouched.
+    """
+    tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp{dest.suffix}")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except BaseException:
+        tmp.unlink(missing_ok=True)  # never leave scratch behind, not even on SIGTERM
+        raise
+
+
 def _ffmpeg_atomic(args: list, dest: Path, timeout: int) -> bool:
     """Run ffmpeg writing to a temp file, then rename into `dest`. The three derived-file
     makers (thumb / proxy / clip excerpt) all need the same dance: a reader must never see
@@ -331,7 +351,7 @@ def _store_asset(
     dest_dir = ASSETS_DIR / job_id
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{sha}.{ext}"
-    dest.write_bytes(data)
+    _write_atomic(dest, data)
     if kind == "video":
         _make_video_thumb(dest)  # best-effort — the grid has a placeholder fallback
     asset = {

@@ -493,3 +493,56 @@ def test_every_derived_transcode_goes_through_the_concurrency_cap(tmp_path, monk
 
     assert peak <= 2, f"{peak} concurrent ffmpeg — the cap is not being taken"
     assert all((tmp_path / f"out{i}.mp4").exists() for i in range(8))  # all still ran
+
+
+def test_an_interrupted_upload_never_truncates_a_stored_asset(tmp_path, monkeypatch):
+    """A content-addressed store must never hold a partial file under a full hash.
+
+    `write_bytes` truncates before writing, so a worker killed mid-upload left a
+    0-byte file sitting under the sha of the COMPLETE clip — undetectable (the
+    thumbnail from the previous write was still there) and unreadable (no moov atom).
+    `_write_atomic` writes beside it and renames; a failure leaves the old file intact
+    and no scratch behind.
+    """
+    from backend.routes import assets
+
+    dest = tmp_path / "abc123.mp4"
+    dest.write_bytes(b"the original clip")
+
+    boom = RuntimeError("worker killed mid-write")
+
+    def fail_write(self, data):  # blow up exactly where a killed upload would
+        raise boom
+
+    monkeypatch.setattr(Path, "write_bytes", fail_write)
+    with pytest.raises(RuntimeError):
+        assets._write_atomic(dest, b"a replacement that never lands")
+
+    monkeypatch.undo()
+    assert dest.read_bytes() == b"the original clip"  # untouched, not truncated
+    assert list(tmp_path.glob("*.tmp*")) == []  # no scratch left behind
+
+    assets._write_atomic(dest, b"a replacement that does land")
+    assert dest.read_bytes() == b"a replacement that does land"
+    assert list(tmp_path.glob("*.tmp*")) == []
+
+
+def test_upload_route_stores_bytes_atomically(client, monkeypatch, tmp_path):
+    """The upload path must go through `_write_atomic` — not a direct write."""
+    from backend.routes import assets
+
+    seen = []
+    real = assets._write_atomic
+    monkeypatch.setattr(assets, "_write_atomic", lambda d, b: (seen.append(d), real(d, b))[1])
+    monkeypatch.setattr(assets, "_make_video_thumb", lambda p: True)
+    monkeypatch.setattr(assets, "_video_duration", lambda p: 1.0)
+    monkeypatch.setattr(assets.db, "add_asset", lambda *a, **k: None)
+
+    r = client.post(
+        "/upload-asset/deadbeef",
+        data={"file": (io.BytesIO(b"\x00\x01video bytes"), "clip.mp4")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+    assert len(seen) == 1 and seen[0].name.endswith(".mp4")
+    assert seen[0].read_bytes() == b"\x00\x01video bytes"
