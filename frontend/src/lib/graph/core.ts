@@ -68,14 +68,12 @@ export const VIDEO_SOURCES = new Set<string>([
 // `nodeRenderable`. Never emitter sources: a merge combine needs raw fluid emitters.
 export const VIDEO_FX = new Set<string>(["transform", "stylize", "extract", "echo", "colorgrade"]);
 
-export const VIDEO_PRODUCERS = new Set<string>([
-  "fluid",
-  "combine",
-  "montage", // N slot inputs like combine (slot id = targetPort), so not VIDEO_FX
-  "output",
-  ...VIDEO_SOURCES,
-  ...VIDEO_FX,
-]);
+// Generated from backend/graph_common.py — the two sides must name the same cards, and
+// this used to be a hand-kept third copy of the concept. VIDEO_SOURCES / VIDEO_FX above
+// stay hand-written: they are FRONTEND groupings encoding a rendering rule the backend
+// has no notion of (FX cards need their `video` input wired; never emitter sources).
+// `graphConstants.test.ts` asserts the groupings still add up to the generated set.
+export { VIDEO_PRODUCERS } from "./generated";
 
 // The node wired into (targetId, targetPort) via a video edge, or null.
 export function videoSource(graph: Graph, targetId: string, targetPort: string): string | null {

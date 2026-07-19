@@ -42,8 +42,8 @@ Backend tests run as `.venv/bin/python -m pytest -q`; frontend as
 - **Every backend route prefix must be in the Vite proxy**
   (`frontend/vite.config.js`) or the frontend 404s on it.
 - **Never hand-edit generated/exported files**: `frontend/src/lib/fluidParams.js`
-  (`make gen-params`) and `backend/playground_pipelines.json`
-  (`make export-playground`).
+  and `frontend/src/lib/graph/generated.ts` (both `make gen-params`), and
+  `backend/playground_pipelines.json` (`make export-playground`).
 - **Backend param specs are the source of truth** (`backend/animation_params.py`:
   `FLUID_/COLOR_/SOURCE_PARAM_SPEC`); the frontend tables derive via codegen,
   guarded by `tests/test_fluid_params_codegen.py`.

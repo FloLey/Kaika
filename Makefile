@@ -101,7 +101,10 @@ clean-cache:
 gc-cache:
 	.venv/bin/python -m backend.cache_gc
 
-# Regenerate frontend/src/lib/fluidParams.js from animation_params.FLUID_PARAM_SPEC.
-# Run after editing the spec; a pytest fails CI if the committed file is stale.
+# Regenerate the frontend's generated files from the backend:
+#   src/lib/fluidParams.js        <- animation_params.{FLUID,COLOR,SOURCE}_PARAM_SPEC
+#   src/lib/graph/generated.ts    <- graph_common.VIDEO_PRODUCERS,
+#                                    graph_hash.{_SIGNAL_HASH_FIELDS,_SLOT_CARDS}
+# Run after editing any of them; a pytest (and CI's --check) fails if either is stale.
 gen-params:
 	.venv/bin/python -m backend.gen_fluid_params
