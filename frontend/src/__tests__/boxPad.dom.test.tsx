@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import BoxPad from "../components/animation/nodes/BoxPad";
 
 // jsdom has no canvas backend; return null so the preview draw no-ops quietly (instead of
@@ -9,8 +9,6 @@ beforeAll(() => {
   HTMLCanvasElement.prototype.getContext = (() =>
     null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
-
-afterEach(cleanup);
 
 // Map the pad to a fixed 100x100 box at the origin so client coords are 0..1 fractions.
 function mockPad(container: HTMLElement) {
@@ -26,7 +24,9 @@ const BOX = { x: 0.1, y: 0.1, w: 0.3, h: 0.3 };
 
 describe("BoxPad", () => {
   it("renders the rectangle, four corner handles and a numeric readout", () => {
-    const { container, getByText } = render(<BoxPad box={BOX} aspect="1 / 1" onChange={() => {}} />);
+    const { container, getByText } = render(
+      <BoxPad box={BOX} aspect="1 / 1" onChange={() => {}} />
+    );
     expect(container.querySelector(".anim-box-rect")).toBeTruthy();
     expect(container.querySelectorAll(".anim-box-handle").length).toBe(4);
     expect(getByText(/x 0.10 · y 0.10 · w 0.30 · h 0.30/)).toBeTruthy();
@@ -67,7 +67,9 @@ describe("BoxPad", () => {
     // one (bubbles to React's delegated listener) that does — like the window moves below.
     container
       .querySelector(".anim-box-rect")!
-      .dispatchEvent(Object.assign(new Event("pointerdown", { bubbles: true }), { clientX: 10, clientY: 10 }));
+      .dispatchEvent(
+        Object.assign(new Event("pointerdown", { bubbles: true }), { clientX: 10, clientY: 10 })
+      );
     move(50, 50); // drag toward the centre
     up();
     expect(onChange).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import ExportStep from "../components/export/ExportStep";
 import { EXPORT_DEFAULTS } from "../lib/export";
 import type { OutputSettings, Segment } from "../lib/types";
@@ -12,8 +12,6 @@ vi.mock("../lib/api", () => ({
   startExport: vi.fn(),
   cancelExport: vi.fn(),
 }));
-
-afterEach(cleanup);
 
 const canvas = (w: number, h: number): OutputSettings => ({
   width: w,

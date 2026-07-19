@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import ConfirmDialog from "../ui/ConfirmDialog";
-
-afterEach(cleanup);
 
 // The app's replacement for window.confirm on destructive actions (delete a project,
 // overwrite a segment's animation): portaled, escapable, and autofocused on confirm.

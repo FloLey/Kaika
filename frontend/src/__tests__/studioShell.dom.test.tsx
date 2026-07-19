@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import Studio from "../components/studio/Studio";
 
 // jsdom doesn't implement media playback; stub the transport calls Studio makes on
@@ -10,8 +10,6 @@ beforeAll(() => {
   HTMLMediaElement.prototype.pause = vi.fn();
   HTMLMediaElement.prototype.load = vi.fn();
 });
-
-afterEach(cleanup);
 
 // First coverage of the Studio shell (converted to .tsx in spec 01 step 4).
 // Rendered with no stems so no SignalCard/audio graph mounts — keeps the test to

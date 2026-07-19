@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { useEffect, useRef } from "react";
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render } from "@testing-library/react";
 import { usePreservePlayback } from "../components/animation/nodes/usePreservePlayback";
-
-afterEach(cleanup);
 
 // `reset()` is called straight from an effect body. If it returned a value (an arrow
 // with an implicit `lastTime.current = 0` return did), React reads that value as the

@@ -38,5 +38,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.{js,jsx,ts,tsx}"],
+    // One global afterEach(cleanup) instead of a copy per DOM test — see setup.ts.
+    setupFiles: ["./src/__tests__/setup.ts"],
   },
 });

@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent, act } from "@testing-library/react";
 import AnimationCanvas from "../components/animation/AnimationCanvas";
 import type { Graph, Segment } from "../lib/types";
-
-afterEach(cleanup);
 
 const baseSegment: Segment = { id: "s1", label: "seg", start: 0, end: 8, signals: [] };
 
@@ -50,11 +48,15 @@ describe("AnimationCanvas + useGraphEditor (jsdom)", () => {
 // Undo/redo is also bound to ⌘Z, but the toolbar buttons are the discoverable path —
 // and their disabled state is the only signal that a step exists.
 describe("undo/redo toolbar (jsdom)", () => {
-  const undoBtn = (c: HTMLElement) => c.querySelector('button[aria-label="Undo"]') as HTMLButtonElement;
-  const redoBtn = (c: HTMLElement) => c.querySelector('button[aria-label="Redo"]') as HTMLButtonElement;
+  const undoBtn = (c: HTMLElement) =>
+    c.querySelector('button[aria-label="Undo"]') as HTMLButtonElement;
+  const redoBtn = (c: HTMLElement) =>
+    c.querySelector('button[aria-label="Redo"]') as HTMLButtonElement;
 
   it("both buttons start disabled on a fresh graph", () => {
-    const { container } = render(<AnimationCanvas segment={baseSegment} onGraphChange={() => {}} />);
+    const { container } = render(
+      <AnimationCanvas segment={baseSegment} onGraphChange={() => {}} />
+    );
     expect(undoBtn(container).disabled).toBe(true);
     expect(redoBtn(container).disabled).toBe(true);
   });
@@ -101,7 +103,15 @@ describe("undo/redo toolbar (jsdom)", () => {
 describe("view modes: detailed | compact (jsdom)", () => {
   const gateGraph = (viewMode?: "detailed" | "compact", viewOverrides: string[] = []) => ({
     version: 16,
-    nodes: [{ id: "n-g", type: "gate", x: 0, y: 0, data: { threshold: 0.5, hysteresis: 0.1, invert: false } }],
+    nodes: [
+      {
+        id: "n-g",
+        type: "gate",
+        x: 0,
+        y: 0,
+        data: { threshold: 0.5, hysteresis: 0.1, invert: false },
+      },
+    ],
     edges: [],
     ...(viewMode ? { viewMode } : {}),
     viewOverrides,
@@ -233,7 +243,10 @@ describe("per-view card positions (v20, jsdom)", () => {
     const onGraphChange = vi.fn();
     const graph = twoCards("compact");
     // Both cards share the same DETAILED spot (built while compact, seeded alike).
-    graph.nodes = [gate("n-a", { x: 0, y: 0, cx: 0, cy: 0 }), gate("n-b", { x: 0, y: 0, cx: 300, cy: 0 })];
+    graph.nodes = [
+      gate("n-a", { x: 0, y: 0, cx: 0, cy: 0 }),
+      gate("n-b", { x: 0, y: 0, cx: 300, cy: 0 }),
+    ];
     const seg = { ...baseSegment, graph } as Segment;
     const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
     fireEvent.click(getByText("▦ detailed"));

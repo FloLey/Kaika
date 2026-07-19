@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent, act } from "@testing-library/react";
 import GraphCanvas from "../components/animation/GraphCanvas";
 import type { Graph, GraphNode } from "../lib/types";
-
-afterEach(cleanup);
 
 // A trivial node-agnostic graph + renderNode so we exercise GraphCanvas itself
 // (selection + keyboard delete) without any signal/fluid specifics.
@@ -122,7 +120,13 @@ describe("drop-anywhere wiring (jsdom)", () => {
       edges: [],
       view: { tx: 0, ty: 0, scale: 1 },
     };
-    const renderNode = (node: GraphNode, helpers: { portRef: (n: string, p: string, k: string, f: string) => (el: Element | null) => void; startConnect: (n: string, p: string, f: string, e: unknown) => void }) => (
+    const renderNode = (
+      node: GraphNode,
+      helpers: {
+        portRef: (n: string, p: string, k: string, f: string) => (el: Element | null) => void;
+        startConnect: (n: string, p: string, f: string, e: unknown) => void;
+      }
+    ) => (
       <div data-testid={`node-${node.id}`}>
         <span
           data-testid={`out-${node.id}`}

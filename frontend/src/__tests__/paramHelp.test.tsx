@@ -59,8 +59,24 @@ const HELPERS = {
 // arguments come from NODE_PARAMS and are checked separately. This is the contract: add a
 // control to a card and you must list its key here (and give it help) or the test fails —
 // which is exactly what stopped the old per-argument "?" from silently rotting.
+//
+// EVERY palette type must appear, `[]` meaning "renders no inline controls, deliberately"
+// — see `every palette card is accounted for` below. Eleven types were simply absent
+// before, so their controls were never checked at all.
 const INLINE_ARGS: Record<string, string[]> = {
   fluid: ["enabled", "radial", "wrap"],
+  // Cards with no inline data controls. `points`/`scope`/`merge-points` are wiring-only;
+  // `output`'s single badge belongs to the HD-render button, not a `data` field.
+  points: [],
+  scope: [],
+  "merge-points": [],
+  output: [],
+  transform: ["mode", "segments", "wrap"],
+  extract: ["kind"],
+  stylize: ["model", "inpaint"], // prompt is a textarea with a plain title tooltip
+  echo: ["mode"],
+  gate: ["threshold", "hysteresis", "minGap", "divide", "invert"],
+  slideshow: ["threshold", "hysteresis", "fit", "box"],
   color: ["mode"],
   colorgrade: ["mode", "map", "colorA", "colorB", "tint"],
   lyrics: ["font", "align", "case", "reveal", "box", "outline", "outlineWidth"],
@@ -142,6 +158,20 @@ describe("per-argument help catalog", () => {
     expect(argHelp("fluid", "vorticity", "medium").section).toBe("fluid-medium");
   });
 
+  // Without this, both maps were opt-IN: a brand-new card absent from EXPECTED_BADGES got
+  // `?? 0` and passed while rendering no help at all, and one absent from INLINE_ARGS had
+  // its controls checked by nobody. Now a new card has to be listed — opting out is a
+  // deliberate `[]`/`0`, written down, rather than silence.
+  it("every palette card is accounted for in both help tables", () => {
+    const types = paletteSpecs().map((s) => s.type);
+    const missingBadges = types.filter((t) => !(t in EXPECTED_BADGES));
+    const missingInline = types.filter((t) => !(t in INLINE_ARGS));
+    expect(missingBadges, "add these to EXPECTED_BADGES (0 is a valid, explicit answer)").toEqual(
+      []
+    );
+    expect(missingInline, "add these to INLINE_ARGS ([] is a valid, explicit answer)").toEqual([]);
+  });
+
   it("every palette card renders its expected '?' badges (help is wired, not just catalogued)", () => {
     for (const spec of paletteSpecs()) {
       const node = spec.factory!(0, 0);
@@ -153,9 +183,9 @@ describe("per-argument help catalog", () => {
       } as unknown as NodeCtx;
       const html = renderToStaticMarkup(renderAnimNode(node, HELPERS, ctx));
       const badges = (html.match(/role="note"/g) || []).length; // one per Info badge
-      expect(badges, `${spec.type} rendered ${badges} '?' badges`).toBe(
-        EXPECTED_BADGES[spec.type] ?? 0
-      );
+      // No `?? 0` fallback: an unlisted card is caught by the accounting test above, and
+      // silently expecting zero is how a help-less card used to pass.
+      expect(badges, `${spec.type} rendered ${badges} '?' badges`).toBe(EXPECTED_BADGES[spec.type]);
     }
   });
 

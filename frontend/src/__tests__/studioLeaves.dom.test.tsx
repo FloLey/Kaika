@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import CurveView from "../components/studio/CurveView";
 import PulsePad from "../components/studio/PulsePad";
 import VolumeControl from "../components/studio/VolumeControl";
 import SegmentRail from "../components/studio/SegmentRail";
 import Spectrogram from "../components/studio/Spectrogram";
-
-afterEach(cleanup);
 
 // First coverage of the studio leaf components (previously untested; converted to
 // .tsx in spec 01 step 4).
