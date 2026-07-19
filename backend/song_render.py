@@ -121,6 +121,13 @@ def _mux_audio(
         raise RuntimeError(proc.stderr.decode(errors="replace")[-2000:])
 
 
+def close_plan(ctx: dict) -> None:
+    """Release every DAG `build_plan` opened. Safe to call twice (`Dag.close` is
+    idempotent), and tolerant of a partially-built ctx so it can run from a `finally`."""
+    for entry in (ctx or {}).get("plan") or []:
+        entry[0].close()
+
+
 def build_plan(
     job_id: str, segments: list, lyric_lines: list, export: dict, stem_audio_path
 ) -> dict:
@@ -151,7 +158,7 @@ def build_plan(
     dye_layout = {
         n: fluid._dye_layout(srcs) for n, srcs in layer_sources.items()
     }  # n -> (modes, wrap)
-    return {
+    return {  # NB: the plan's DAGs hold resources — the caller must `close_plan(ctx)`
         "plan": plan,
         "dye_layout": dye_layout,
         "total": total,
@@ -231,37 +238,45 @@ def render_song(
     out_path = paths.ANIM_DIR / f"song_{_export_hash(job_id, segments, lyric_lines, export)}.mp4"
     url = f"/fluid/{out_path.name}"
     ctx = build_plan(job_id, segments, lyric_lines, export, stem_audio_path)
-    if out_path.exists():  # identical export already rendered
-        render_cache.touch(out_path)
-        if on_progress:
-            on_progress(ctx["total"], ctx["total"], url)
-        return url
-
-    # Strip the "song_" underscore: the id names the scratch dir AND lands in the
-    # progress preview URL, and /fluid/stream/<render_id>/… only serves alnum ids.
-    render_id = out_path.stem.replace("_", "") + uuid.uuid4().hex[:8]
-    scratch = paths.STREAM_DIR / render_id
-    shutil.rmtree(scratch, ignore_errors=True)
-    scratch.mkdir(parents=True, exist_ok=True)
-    silent = scratch / "video.mp4"
-    enc = fluid.StreamEncoder(silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"])
+    # `build_plan` opens one DAG per segment, and each may hold ffmpeg decoders (a video /
+    # slideshow / stylize card registers clip.close on it). They outlive build_plan by
+    # design — `iter_song_windows` walks them — so they're drained here, in an OUTER
+    # finally that also covers the cache-hit early return below. That return leaked a
+    # decoder per video card on EVERY repeat export.
     try:
-        for _a, b, styled in iter_song_windows(ctx, should_cancel):
-            enc.write(styled)  # opens ffmpeg on the first window
+        if out_path.exists():  # identical export already rendered
+            render_cache.touch(out_path)
             if on_progress:
-                on_progress(b, ctx["total"], f"/fluid/stream/{render_id}/video.mp4?n={b}")
-        if should_cancel and should_cancel():  # iter stopped early -> cancelled
-            return None
-        enc.finalize()
-        audio = export_audio_path(job_id, export, stem_audio_path)
-        if audio is not None:
-            _mux_audio(silent, audio, out_path)
-        else:  # no audio available — ship the silent video
-            shutil.move(str(silent), str(out_path))
-        render_cache.evict(paths.ANIM_DIR)
-        if on_progress:
-            on_progress(ctx["total"], ctx["total"], url)
-        return url
-    finally:
-        enc.close()  # no-op unless cancelled / errored mid-stream
+                on_progress(ctx["total"], ctx["total"], url)
+            return url
+
+        # Strip the "song_" underscore: the id names the scratch dir AND lands in the
+        # progress preview URL, and /fluid/stream/<render_id>/… only serves alnum ids.
+        render_id = out_path.stem.replace("_", "") + uuid.uuid4().hex[:8]
+        scratch = paths.STREAM_DIR / render_id
         shutil.rmtree(scratch, ignore_errors=True)
+        scratch.mkdir(parents=True, exist_ok=True)
+        silent = scratch / "video.mp4"
+        enc = fluid.StreamEncoder(silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"])
+        try:
+            for _a, b, styled in iter_song_windows(ctx, should_cancel):
+                enc.write(styled)  # opens ffmpeg on the first window
+                if on_progress:
+                    on_progress(b, ctx["total"], f"/fluid/stream/{render_id}/video.mp4?n={b}")
+            if should_cancel and should_cancel():  # iter stopped early -> cancelled
+                return None
+            enc.finalize()
+            audio = export_audio_path(job_id, export, stem_audio_path)
+            if audio is not None:
+                _mux_audio(silent, audio, out_path)
+            else:  # no audio available — ship the silent video
+                shutil.move(str(silent), str(out_path))
+            render_cache.evict(paths.ANIM_DIR)
+            if on_progress:
+                on_progress(ctx["total"], ctx["total"], url)
+            return url
+        finally:
+            enc.close()  # no-op unless cancelled / errored mid-stream
+            shutil.rmtree(scratch, ignore_errors=True)
+    finally:
+        close_plan(ctx)

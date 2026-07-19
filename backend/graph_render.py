@@ -187,9 +187,54 @@ class Dag:
         self._params: dict = {}
         self._resolver = None  # lazily-built shared value resolver (one per render)
         self._block_fns: dict = {}  # node_id -> produce(a, b) (block streaming)
-        self._executors: list = []  # per-combine branch pools, shut down by stream_blocks
+        self._executors: list = []  # per-combine branch pools, released by close()
         self._cache_writers: list = []  # discard() for incremental frame caches (cancel cleanup)
         self._closers: list = []  # persistent per-node resources (e.g. VideoClip decoders)
+
+    # ---- resource lifetime ---------------------------------------------------
+    # A DAG opens three kinds of thing: branch thread pools, incremental frame-cache
+    # writers, and persistent ffmpeg decoders (slideshow / video / stylize register
+    # `clip.close` on `_closers`). This drain used to live ONLY inside `stream_blocks`'
+    # finally, so every other entry point — `render()`, `song_render`, the points and
+    # stylize resolvers — leaked a decoder per video card, per call.
+    #
+    # `test_card_impact`'s whole-vs-streamed parity test could never catch it: it builds
+    # a fresh `Dag` per call and goes through `.video()` / `.stream_blocks()` directly,
+    # never through `render()`. So the leak was invisible to the one test that looks at
+    # both paths at once.
+
+    def close(self) -> None:
+        """Release everything this DAG opened. Idempotent, and safe to call mid-render.
+
+        Each item is drained independently: a decoder that raises on close must not
+        strand the ones after it, and must not mask an exception already propagating
+        (this runs from `finally` blocks).
+        """
+        for ex in self._executors:
+            try:
+                ex.shutdown(wait=False)
+            except Exception as e:  # noqa: BLE001 — cleanup must not raise
+                log.warning("dag close: executor shutdown failed (%s)", e)
+        self._executors.clear()
+        for discard in self._cache_writers:  # drop partial caches (no-op if committed)
+            try:
+                discard()
+            except Exception as e:  # noqa: BLE001
+                log.warning("dag close: discarding a partial frame cache failed (%s)", e)
+        self._cache_writers.clear()
+        for closer in self._closers:  # reap persistent decoders (also on cancel)
+            try:
+                closer()
+            except Exception as e:  # noqa: BLE001
+                log.warning("dag close: closing a decoder failed (%s)", e)
+        self._closers.clear()
+
+    def __enter__(self) -> "Dag":
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self.close()
+        return False  # never swallow the render's own exception
 
     def _fluid_params(self, fluid_node):
         # Memoized per fluid: a fluid with drawn points resolves params through both
@@ -472,15 +517,7 @@ class Dag:
                 yield a, b, total, produce(a, b)
                 a = b
         finally:
-            for ex in self._executors:
-                ex.shutdown(wait=False)
-            self._executors.clear()
-            for discard in self._cache_writers:  # drop partial caches (no-op if committed)
-                discard()
-            self._cache_writers.clear()
-            for close in self._closers:  # reap persistent decoders (also on cancel)
-                close()
-            self._closers.clear()
+            self.close()
 
 
 def resolve_node_points(job_id, segment, graph, node_id, stem_audio_path) -> dict:
@@ -488,8 +525,8 @@ def resolve_node_points(job_id, segment, graph, node_id, stem_audio_path) -> dic
     (each emitter's base position, 0..1). No render, no DB — mirrors
     `resolve_node_curve` for the value cards, so points/pattern/animate/merge can show
     a live scatter in the editor."""
-    dag = Dag(job_id, segment, graph, stem_audio_path, {})
-    specs = dag._resolve_points(node_id)
+    with Dag(job_id, segment, graph, stem_audio_path, {}) as dag:
+        specs = dag._resolve_points(node_id)
     pts = [[float(s["points"][0][0]), float(s["points"][0][1])] for s in specs if s.get("points")]
     return {"points": pts}
 
@@ -498,22 +535,22 @@ def stylize_source(job_id, segment, graph, node_id, stem_audio_path, output=None
     """Render the clips feeding a `stylize` node → (frames, strength, fps, control).
     `frames` = the `video` input (the img2img base), `control` = the `control` input's frames
     (an Extract card's edges/depth) or None. Reuses the whole render DAG — no duplicate pipeline."""
-    dag = Dag(job_id, segment, graph, stem_audio_path, output or {})
-    src = _video_source(graph, node_id, "video")
-    if src is None:
-        raise ValueError("stylize node has no video input wired")
+    with Dag(job_id, segment, graph, stem_audio_path, output or {}) as dag:
+        src = _video_source(graph, node_id, "video")
+        if src is None:
+            raise ValueError("stylize node has no video input wired")
 
-    def _clip(sid):
-        c = dag.video(sid)
-        if c.shape[-1] == 4:  # a layer -> flatten onto black to a 3-channel clip
-            c = fluid.flatten(c)
-        return np.ascontiguousarray(c)
+        def _clip(sid):
+            c = dag.video(sid)
+            if c.shape[-1] == 4:  # a layer -> flatten onto black to a 3-channel clip
+                c = fluid.flatten(c)
+            return np.ascontiguousarray(c)
 
-    frames = _clip(src)
-    ctrl_src = _video_source(graph, node_id, "control")
-    control = _clip(ctrl_src) if ctrl_src is not None else None
-    node = dag.nodes[node_id]
-    strength = float(np.mean(dag._fx_params(node)["strength"]))
+        frames = _clip(src)
+        ctrl_src = _video_source(graph, node_id, "control")
+        control = _clip(ctrl_src) if ctrl_src is not None else None
+        node = dag.nodes[node_id]
+        strength = float(np.mean(dag._fx_params(node)["strength"]))
     return frames, strength, dag.fps, control
 
 
@@ -1994,13 +2031,15 @@ def render(
         render_cache.touch(out_path)  # keep this hot clip from aging out (LRU)
         return url
 
-    dag = _Dag(job_id, segment, graph, stem_audio_path, output)
-    src = _render_target(graph, dag.nodes, output_id)  # output OR direct producer preview
-    frames = dag.video(src)
-    frames = fluid.flatten(frames)  # RGBA -> RGB on black (backgrounds are now layers)
-    out_w = int(output.get("width", 0)) or None
-    out_h = int(output.get("height", 0)) or None
-    fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
+    # `with`: the sync path opens the same decoders the streaming path does (slideshow /
+    # video / stylize register clip.close on the DAG), and used to leak every one of them.
+    with _Dag(job_id, segment, graph, stem_audio_path, output) as dag:
+        src = _render_target(graph, dag.nodes, output_id)  # output OR direct producer preview
+        frames = dag.video(src)
+        frames = fluid.flatten(frames)  # RGBA -> RGB on black (backgrounds are now layers)
+        out_w = int(output.get("width", 0)) or None
+        out_h = int(output.get("height", 0)) or None
+        fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
     render_cache.evict(paths.ANIM_DIR)  # bound the cache after adding a clip
     return url
 
