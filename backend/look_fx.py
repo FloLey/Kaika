@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .optional_deps import require_cv2
+
 
 def echo_scan(
     frames: np.ndarray,
@@ -95,13 +97,7 @@ _thermal_lut_cache: dict[str, np.ndarray] = {}
 
 
 def _cv2():
-    try:
-        import cv2
-    except ImportError as e:  # pragma: no cover
-        raise RuntimeError(
-            "the Color Grade card needs opencv — `pip install -r requirements.txt`"
-        ) from e
-    return cv2
+    return require_cv2("the Color Grade card")
 
 
 def _thermal_lut(name: str) -> np.ndarray:

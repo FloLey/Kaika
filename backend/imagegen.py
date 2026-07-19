@@ -38,6 +38,8 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 from . import settings as app_settings  # noqa: E402 — stdlib-only module, safe anywhere
 
+from .optional_deps import require_cv2
+
 log = logging.getLogger("kaika.imagegen")
 
 # The two known models. `kind` selects the diffusers pipeline class; `steps` is the
@@ -296,8 +298,9 @@ def _zimage_sigmas(full: list[float], strength: float) -> list[float]:
 def _density_mask(dye):
     """Soft 0..1 mask of where the clip has substance (its luminance) — confines a repaint
     to the fluid's shape so its black background survives untouched."""
-    import cv2
     import numpy as np
+
+    cv2 = require_cv2("the AI Stylize card")
 
     g = cv2.cvtColor(dye, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
     return np.clip(cv2.GaussianBlur(g, (0, 0), 3) * 3, 0, 1)
@@ -325,8 +328,9 @@ def stylize_frames(
     fluid's black background black. `inpaint` confines the repaint to the input's density.
     The SAME fixed seed each frame → coherence."""
     import numpy as np
-    import cv2
     import torch
+
+    cv2 = require_cv2("the AI Stylize card")
     from PIL import Image
 
     model = model or DRAFT_MODEL

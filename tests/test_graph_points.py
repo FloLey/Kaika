@@ -51,7 +51,7 @@ def _edge(s, t, tp):
 
 
 def _render(g):
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     return dag.video(G._video_source(g, "o", "video"))
 
 
@@ -90,7 +90,7 @@ def test_no_points_is_single_centre_source():
     assert _band(fr, 0.5) > 5.0
     assert _band(fr, 0.2) < 1.0 and _band(fr, 0.8) < 1.0
     # and the executor reports a single emitter
-    assert len(G._Dag("job", SEG, g, NOAUDIO, OUT).emitters("f")) == 1
+    assert len(G.Dag("job", SEG, g, NOAUDIO, OUT).emitters("f")) == 1
 
 
 def test_points_fluid_into_merge_contributes_n_emitters():
@@ -115,7 +115,7 @@ def test_points_fluid_into_merge_contributes_n_emitters():
         "nodes": [f, pts, cb, out],
         "edges": [_edge("p", "f", "positions"), _edge("f", "cb", "s0"), _edge("cb", "o", "video")],
     }
-    assert len(G._Dag("job", SEG, g, NOAUDIO, OUT).emitters("cb")) == 2
+    assert len(G.Dag("job", SEG, g, NOAUDIO, OUT).emitters("cb")) == 2
 
 
 def test_moving_a_point_busts_the_output_hash():

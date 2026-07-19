@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
@@ -129,10 +129,10 @@ def save_segments(
     job_id: str,
     segments: list,
     *,
-    step: Optional[str] = None,
-    title: Optional[str] = None,
-    output: Optional[dict] = None,
-    export: Optional[dict] = None,
+    step: str | None = None,
+    title: str | None = None,
+    output: dict | None = None,
+    export: dict | None = None,
 ) -> bool:
     """Update the editable tree (segments + per-segment tracks), and optionally the
     step/title, the project-wide `output` render settings, and the `export` (HD final
@@ -195,7 +195,7 @@ def get_projects_full() -> list[dict[str, Any]]:
     return rows
 
 
-def get_project(job_id: str) -> Optional[dict[str, Any]]:
+def get_project(job_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM projects WHERE job_id = %s", (job_id,)).fetchone()
     if row is not None:

@@ -138,7 +138,7 @@ def _render_lyrics_layer(extra_nodes, extra_edges):
     ] + extra_edges
     g = {"version": 11, "nodes": nodes, "edges": edges}
     graph.validate(g)
-    dag = graph._Dag("job", seg, g, lambda j, s: None, {"fps": 6, "width": 160, "height": 120})
+    dag = graph.Dag("job", seg, g, lambda j, s: None, {"fps": 6, "width": 160, "height": 120})
     return dag.video("ly")[3]  # the RGBA lyrics layer, mid-clip frame
 
 
@@ -262,7 +262,7 @@ def test_lyrics_render_reads_segment_lines():
     seg = {"start": 0.0, "end": 4.0, "signals": [], "lyric_lines": LINES}
     g = _lyrics_graph()
     graph.validate(g)
-    dag = graph._Dag("job", seg, g, lambda j, s: None, {"fps": 8, "width": 160, "height": 64})
+    dag = graph.Dag("job", seg, g, lambda j, s: None, {"fps": 8, "width": 160, "height": 64})
     frames = dag.video("o1")
     assert frames.shape[0] == 32 and int(frames.max()) > 0
 

@@ -8,7 +8,7 @@ field carries through unbroken, so transitions are seamless. Layer numbers are t
 continuity key: layer `n` in one segment continues into layer `n` of the next; a layer
 absent in a segment keeps advecting (fades, no new dye); a new number starts fresh.
 
-Per segment we reuse the EXISTING machinery: `_Dag.field_layers` finds the fluid/merge
+Per segment we reuse the EXISTING machinery: `Dag.field_layers` finds the fluid/merge
 fields feeding the final output and resolves each one's `simulate()` params (emitters +
 medium) exactly as its preview does; a `fluid.LayerInjector` drives the matching
 persistent field with segment-local timing. The segment's window is then styled by

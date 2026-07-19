@@ -1,4 +1,4 @@
-"""End-to-end render: graph -> _Dag -> fluid.simulate -> (mp4) (B8.1).
+"""End-to-end render: graph -> Dag -> fluid.simulate -> (mp4) (B8.1).
 
 The frame pipeline runs without ffmpeg; the mp4 encode is gated on ffmpeg being
 present so the suite still passes in a minimal CI image.
@@ -49,7 +49,7 @@ def _const_graph():
 
 def test_dag_resolves_fluid_to_uint8_frames():
     g = _const_graph()
-    dag = graph._Dag("job", _SEG, g, _stem_path, _OUTPUT)
+    dag = graph.Dag("job", _SEG, g, _stem_path, _OUTPUT)
     frames = dag.video("n-f")
     gh, gw = fluid.grid_from_output(_OUTPUT)
     assert frames.shape == (6, gh, gw, 3)

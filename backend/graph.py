@@ -26,64 +26,41 @@ Design notes (locked by the spec):
 
 from __future__ import annotations
 
+# This list IS the public surface. It carried 22 further private names nobody imported
+# (`LEGACY_GRID`, `_MERGE_MEDIUM_DEFAULTS`, `_sim_video`, `_encoder_error`, …) — a facade
+# re-exporting names no caller uses documents nothing and invites new code to depend on
+# internals. Import from the implementation module when working inside the package; add a
+# name here only when something outside it needs the name.
+#
 # Re-exported module attributes (tests reach e.g. `graph.fluid`, `graph.signals`).
-from . import fluid, fluid_cache, render_cache, signals, sources  # noqa: F401
-from .paths import ANIM_DIR, ASSETS_DIR, STREAM_DIR  # noqa: F401
+from . import fluid, signals  # noqa: F401
+from .paths import ANIM_DIR, STREAM_DIR  # noqa: F401
 from .graph_common import (  # noqa: F401
-    _PORT_SPECS,
     FLUID_FPS,
-    LEGACY_GRID,
     _POINT_CAP,
-    _field_nodes,
-    _fluid_for_output,
-    _is_emitter_source,
-    _nodes_of,
-    _output_params,
     _video_source,
     composite,
 )
-from .graph_validate import _has_cycle, _validate_binding, validate  # noqa: F401
-from .graph_hash import (  # noqa: F401
-    RENDER_VERSION,
-    _SIGNAL_HASH_FIELDS,
-    _contributing_ids,
-    _node_for_hash,
-    _referenced_signal_defs,
-    output_hash,
-)
+from .graph_validate import validate  # noqa: F401
+from .graph_hash import _contributing_ids, output_hash  # noqa: F401
 from .graph_modulators import (  # noqa: F401
     _animate_point_specs,
     _lfo_curve,
-    _make_value_resolver,
     _math_combine,
     _noise_curve,
     _pattern_points,
-    _resolve_node_color,
-    _sample_gradient,
     _shaper_curve,
-    _signal_curve,
-    _source_statics,
     _static_point_spec,
     resolve_node_curve,
 )
 from .graph_render import (  # noqa: F401
     _BLOCK_HANDLERS,
     _EMITTER_HANDLERS,
-    _MERGE_MEDIUM_DEFAULTS,
     _VIDEO_HANDLERS,
-    _VIDEO_PRODUCERS,
-    RENDER_BLOCK_SECONDS,
     Dag,
-    _Dag,
-    _fluid_cache_key,
-    _sim_blocks,
-    _sim_video,
     build_params,
     render,
     render_stream,
     resolve_node_points,
     stylize_source,
 )
-
-# Back-compat alias — the encoder lifecycle helpers live in fluid.py now.
-_encoder_error = fluid.encoder_error

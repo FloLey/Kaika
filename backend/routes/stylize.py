@@ -2,6 +2,7 @@
 clip as a background job, storing the result as a content-addressed mp4 asset that the
 render handler decodes. Same job/asset shape as the Image gen card (`/generate-image`)."""
 
+from __future__ import annotations
 import logging
 import os
 import tempfile

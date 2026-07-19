@@ -23,7 +23,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 import numpy as np
 import librosa
@@ -36,7 +36,7 @@ _log = logging.getLogger("kaika.segment")
 GAP_S = 4.0  # an instrumental gap this long (s) is a section break
 
 
-def load_audio(path: str | Path, sr: Optional[int] = None):
+def load_audio(path: str | Path, sr: int | None = None):
     """(mono float32, sr). soundfile decodes wav/flac/ogg directly; mp4/m4a/aac
     go through the system ffmpeg to a temp wav — librosa's audioread fallback
     has no backend in this venv, so plain ``librosa.load`` fails on video."""
@@ -81,10 +81,10 @@ class LyricLine:
     aligned: bool = True  # False = interpolated, not actually heard
 
 
-def parse_plain(text: str) -> List[str]:
+def parse_plain(text: str) -> list[str]:
     """Plain lyrics -> lines: drop blanks, ``[Chorus]`` markers, Genius
     "You might also like" blocks, and inline ``(ad-lib)`` asides."""
-    out: List[str] = []
+    out: list[str] = []
     in_junk = False
     for raw in text.splitlines():
         raw = raw.strip()
@@ -104,9 +104,9 @@ def parse_plain(text: str) -> List[str]:
     return out
 
 
-def parse_lrc(text: str) -> List[LyricLine]:
+def parse_lrc(text: str) -> list[LyricLine]:
     """Timestamped .lrc -> lines; ``t1`` is the next line's start (last +4 s)."""
-    lines: List[LyricLine] = []
+    lines: list[LyricLine] = []
     for raw in text.splitlines():
         raw = raw.strip()
         if not raw or _LRC_META.match(raw):
@@ -157,12 +157,12 @@ def _whisper_backend() -> str:
     return "cpu"
 
 
-def transcribe_words(audio_path: str | Path, model_name: str = "small") -> List[tuple]:
+def transcribe_words(audio_path: str | Path, model_name: str = "small") -> list[tuple]:
     """``[(word, t0, t1)]`` for the track with word timestamps. Backend is
     chosen automatically (mlx / faster-whisper)."""
     backend = _whisper_backend()
 
-    def run_mlx() -> List[tuple]:
+    def run_mlx() -> list[tuple]:
         import mlx_whisper
 
         # Decode to 16 kHz mono and pass the waveform directly — mlx-whisper
@@ -178,7 +178,7 @@ def transcribe_words(audio_path: str | Path, model_name: str = "small") -> List[
             for w in (seg.get("words") or [])
         ]
 
-    def run_fw(device: str, compute: str) -> List[tuple]:
+    def run_fw(device: str, compute: str) -> list[tuple]:
         from faster_whisper import WhisperModel
 
         model = WhisperModel(model_name, device=device, compute_type=compute)
@@ -200,21 +200,21 @@ def transcribe_words(audio_path: str | Path, model_name: str = "small") -> List[
 # Alignment
 # --------------------------------------------------------------------------- #
 def _resolve_lines(
-    lines: List[str], words: Sequence[Tuple[str, float, float]]
-) -> List[Optional[LyricLine]]:
+    lines: list[str], words: Sequence[tuple[str, float, float]]
+) -> list[LyricLine | None]:
     """Per-ORIGINAL-line alignment: returns a slot per input line (a LyricLine,
     incl. interpolated ones, or None). difflib's matching blocks are monotonic,
     so a repeated chorus lands on its own occurrence."""
-    ref_tok: List[str] = []
-    ref_line: List[int] = []
+    ref_tok: list[str] = []
+    ref_line: list[int] = []
     for li, line in enumerate(lines):
         for tok in line.split():
             n = _norm(tok)
             if n:
                 ref_tok.append(n)
                 ref_line.append(li)
-    hyp_tok: List[str] = []
-    hyp_t: List[Tuple[float, float]] = []
+    hyp_tok: list[str] = []
+    hyp_t: list[tuple[float, float]] = []
     for w, t0, t1 in words:
         n = _norm(w)
         if n:
@@ -241,7 +241,7 @@ def _resolve_lines(
             per_line.setdefault(li, []).append(match_t[ri])
 
     n = len(lines)
-    res: List[Optional[LyricLine]] = [None] * n
+    res: list[LyricLine | None] = [None] * n
     for li in range(n):
         ts = per_line.get(li, [])
         if counts.get(li) and len(ts) / counts[li] >= 0.4:
@@ -264,7 +264,7 @@ def _resolve_lines(
     return res
 
 
-def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]) -> List[LyricLine]:
+def align_lines(lines: list[str], words: Sequence[tuple[str, float, float]]) -> list[LyricLine]:
     """Aligned lyric lines (Nones dropped) with readable display timings — used
     for the review overlay / `lyric_lines`."""
     res = _resolve_lines(lines, words)
@@ -281,10 +281,10 @@ def align_lines(lines: List[str], words: Sequence[Tuple[str, float, float]]) -> 
 # --------------------------------------------------------------------------- #
 # Boundaries & labelling
 # --------------------------------------------------------------------------- #
-def _lyric_signature(lines: List[dict], start: float, end: float) -> str:
+def _lyric_signature(lines: list[dict], start: float, end: float) -> str:
     """Normalized word signature of lines sung within a section — the identity
     used to spot a repeated chorus."""
-    words: List[str] = []
+    words: list[str] = []
     for ln in lines:
         mid = (float(ln["t0"]) + float(ln["t1"])) / 2
         if start <= mid < end:
@@ -295,14 +295,14 @@ def _lyric_signature(lines: List[dict], start: float, end: float) -> str:
     return " ".join(words)
 
 
-def _gap_boundaries(lines: List[dict], duration: float) -> List[float]:
+def _gap_boundaries(lines: list[dict], duration: float) -> list[float]:
     """Cut candidates from line timing: start of the first line, end of the
     last, and the midpoint of every gap longer than ``GAP_S``. Works for both
     aligned lyrics and pseudo-lines built from vocal-activity intervals."""
     if not lines:
         return []
     ls = sorted(lines, key=lambda l: float(l["t0"]))
-    cuts: List[float] = []
+    cuts: list[float] = []
     first, last = float(ls[0]["t0"]), float(ls[-1]["t1"])
     if first > GAP_S:
         cuts.append(first)
@@ -315,8 +315,8 @@ def _gap_boundaries(lines: List[dict], duration: float) -> List[float]:
 
 
 def _merge_boundaries(
-    cluster_t: List[float], primary_t: List[float], duration: float, min_gap: float = 6.0
-) -> List[float]:
+    cluster_t: list[float], primary_t: list[float], duration: float, min_gap: float = 6.0
+) -> list[float]:
     """Union of clustering + primary boundaries, deduped so none sit closer
     than ``min_gap`` (primary cuts win — they reflect real structure)."""
     kept = [0.0, duration]
@@ -327,15 +327,15 @@ def _merge_boundaries(
 
 
 def _label_sections(
-    bound_t: List[float],
+    bound_t: list[float],
     duration: float,
-    energies: List[float],
-    lyric_lines: Optional[List[dict]] = None,
-) -> List[dict]:
+    energies: list[float],
+    lyric_lines: list[dict] | None = None,
+) -> list[dict]:
     """Edges are intro/outro; the middle is labelled by lyric content when
     available (repeated block = chorus, unique = verse, instrumental =
     drop/build by energy), else by energy alone."""
-    sections: List[dict] = []
+    sections: list[dict] = []
     n = len(bound_t) - 1
     e_norm = _normalise(np.array(energies)) if energies else np.array([])
     sigs = (
@@ -371,7 +371,7 @@ def _label_sections(
     return sections
 
 
-def _cluster_boundaries(y, sr, S, rms, duration) -> List[float]:
+def _cluster_boundaries(y, sr, S, rms, duration) -> list[float]:
     """Base cut points: agglomerative clustering on chroma + MFCC."""
     k = max(2, min(8, int(round(duration / 25.0)) + 1))
     chroma = librosa.feature.chroma_stft(S=S**2, sr=sr)
@@ -407,7 +407,7 @@ def vocal_activity(
     env = _normalise(librosa.feature.rms(y=y, hop_length=hop)[0])
     times = (np.arange(len(env)) * hop / sr).tolist()
 
-    voiced: List[Tuple[float, float]] = []
+    voiced: list[tuple[float, float]] = []
     above = env >= thresh
     i = 0
     n = len(above)
@@ -421,7 +421,7 @@ def vocal_activity(
         else:
             i += 1
     # Fill short holes, then drop short runs.
-    merged: List[List[float]] = []
+    merged: list[list[float]] = []
     for a, b in voiced:
         if merged and a - merged[-1][1] <= merge_gap_s:
             merged[-1][1] = b
@@ -550,8 +550,8 @@ def _sections_from_bars(secs, downbeats, duration):
 # --------------------------------------------------------------------------- #
 def propose_segments(
     audio_path: str | Path,
-    stems: Optional[dict] = None,
-    lyrics_text: Optional[str] = None,
+    stems: dict | None = None,
+    lyrics_text: str | None = None,
     model_name: str = "small",
     fps: int = 20,
 ) -> dict:
@@ -575,8 +575,8 @@ def propose_segments(
     env, env_times, voiced = vocal_activity(voice_src, fps=fps)
 
     # Whisper alignment: per-line times (for bars) + display lines.
-    res_lines: List[Optional[LyricLine]] = []
-    lyric_lines: List[dict] = []
+    res_lines: list[LyricLine | None] = []
+    lyric_lines: list[dict] = []
     if lyrics_text and lyrics_text.strip():
         try:
             words = transcribe_words(voice_src, model_name)

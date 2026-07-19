@@ -74,7 +74,7 @@ def test_a_segment_renders_a_real_moving_clip(playground, client):
     assert len(served.get_data()) > 1000, "the served clip is suspiciously small"
 
     # …and the frames move. This is the assertion the whole file exists for.
-    frames = graph._Dag(playground["job_id"], body["segment"], seg["graph"], _stem_path, OUT).video(
+    frames = graph.Dag(playground["job_id"], body["segment"], seg["graph"], _stem_path, OUT).video(
         out_id
     )
     assert_not_black(frames, "rendered segment")

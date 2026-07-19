@@ -77,7 +77,7 @@ def test_field_carries_across_boundary():
     assert frames[w1 + 1].mean() > 5.0  # seg2's opening still has advected dye (carried)
 
     # Control: seg2 rendered ALONE starts from a blank field -> ~black.
-    dag = G._Dag(
+    dag = G.Dag(
         "job",
         {**segs[1], "lyric_lines": []},
         segs[1]["graph"],

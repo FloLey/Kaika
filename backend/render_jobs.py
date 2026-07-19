@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 
+from .job_table import prune_jobs
 from .config import MAX_JOB_RECORDS
 from concurrent.futures import ThreadPoolExecutor
 
@@ -32,14 +33,8 @@ _log = logging.getLogger("kaika.render")
 
 
 def _prune_locked() -> None:
-    if len(_JOBS) <= _MAX_JOBS:
-        return
-    finished = sorted(
-        ((rid, j) for rid, j in _JOBS.items() if j["state"] != "running"),
-        key=lambda kv: kv[1]["updated"],
-    )
-    for rid, _ in finished[: len(_JOBS) - _MAX_JOBS]:
-        _JOBS.pop(rid, None)
+    """Bound the render-job table. See `job_table.prune_jobs`."""
+    prune_jobs(_JOBS, _MAX_JOBS)
 
 
 def start(run) -> str:

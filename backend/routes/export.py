@@ -47,6 +47,50 @@ _HD_RUNNING: str | None = None
 _SEGMENT_KEEP = 10
 
 
+def _start_hd_render(run):
+    """Admit ONE HD render: take the shared slot, start the job, remember its id.
+
+    Returns `(response, status)` on refusal, or `(None, render_id)` on success. Written
+    twice before (song + segment), including the `except: release; raise` that hands the
+    slot back — miss that once and the first failed export 409s every later one for the
+    life of the process, with a render_id that finished long ago and nothing in the UI to
+    explain it.
+    """
+    global _HD_RUNNING
+    if not _HD_SLOT.acquire(blocking=False):
+        return (
+            jsonify({"error": "an HD render is already running", "render_id": _HD_RUNNING}),
+            409,
+        ), None
+    try:
+        render_id = render_jobs.start(run)
+    except Exception:
+        _HD_SLOT.release()
+        raise
+    _HD_RUNNING = render_id
+    return None, render_id
+
+
+def _finish_hd_render() -> None:
+    """Release the slot and forget the running id. Pairs with `_start_hd_render`; both
+    job bodies call it from a `finally`."""
+    global _HD_RUNNING
+    _HD_RUNNING = None
+    _HD_SLOT.release()
+
+
+def _cached_lyric_lines(job_id: str) -> list:
+    """A project's aligned lyric lines from the analysis cache.
+
+    Delegates to `cache_gc._lyric_lines`, which is the copy that HANDLES a corrupt file.
+    The two inline copies here did not: an unreadable analysis JSON 500'd the export
+    route while the GC sweep shrugged it off. Same data, same read, one behaviour.
+    """
+    from ..cache_gc import _lyric_lines
+
+    return _lyric_lines(job_id)
+
+
 @bp.post("/export/stream")
 @json_body
 def export_stream(body):
@@ -62,8 +106,7 @@ def export_stream(body):
     data = row.get("data") or {}
     segments = data.get("segments") or []
     export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
-    cache = ANALYSIS_DIR / f"{job_id}.json"
-    lyric_lines = json.loads(cache.read_text()).get("lyric_lines", []) if cache.exists() else []
+    lyric_lines = _cached_lyric_lines(job_id)
 
     if not segments:
         return error_response("project has no segments", 400)
@@ -73,20 +116,12 @@ def export_stream(body):
 
     # Shares the single HD slot with /export/segment — two fine-grid renders at once
     # would just starve each other (and every card preview) on the same worker pool.
-    global _HD_RUNNING
-    if not _HD_SLOT.acquire(blocking=False):
-        return jsonify({"error": "an HD render is already running", "render_id": _HD_RUNNING}), 409
-    try:
-        render_id = render_jobs.start(
-            lambda on_progress, should_cancel: _export_job(
-                job_id, segments, lyric_lines, export, on_progress, should_cancel
-            )
+    refused, render_id = _start_hd_render(
+        lambda on_progress, should_cancel: _export_job(
+            job_id, segments, lyric_lines, export, on_progress, should_cancel
         )
-    except Exception:
-        _HD_SLOT.release()
-        raise
-    _HD_RUNNING = render_id
-    return jsonify({"render_id": render_id})
+    )
+    return refused or jsonify({"render_id": render_id})
 
 
 @bp.post("/export/segment")
@@ -100,7 +135,6 @@ def export_segment(body):
     lag what the user is looking at — this must render exactly what's on screen); the HD
     settings come from the project's saved `export` block, so a segment preview and the
     final master can never disagree about size/fps/grid/audio."""
-    global _HD_RUNNING
     job_id = body.get("job_id")
     if not validate_job_id(job_id):
         return error_response("bad job id", 404)
@@ -131,24 +165,16 @@ def export_segment(body):
     except ValueError as e:
         return error_response(str(e), 400)
 
-    cache = ANALYSIS_DIR / f"{job_id}.json"
-    lyric_lines = json.loads(cache.read_text()).get("lyric_lines", []) if cache.exists() else []
+    lyric_lines = _cached_lyric_lines(job_id)
     seg = {**seg, "graph": graph, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
     hd_stylize = bool(body.get("hdStylize", True))
 
-    if not _HD_SLOT.acquire(blocking=False):
-        return jsonify({"error": "an HD render is already running", "render_id": _HD_RUNNING}), 409
-    try:
-        render_id = render_jobs.start(
-            lambda on_progress, should_cancel: _segment_hd_job(
-                job_id, seg, graph, output_id, export, hd_stylize, on_progress, should_cancel
-            )
+    refused, render_id = _start_hd_render(
+        lambda on_progress, should_cancel: _segment_hd_job(
+            job_id, seg, graph, output_id, export, hd_stylize, on_progress, should_cancel
         )
-    except Exception:
-        _HD_SLOT.release()
-        raise
-    _HD_RUNNING = render_id
-    return jsonify({"render_id": render_id})
+    )
+    return refused or jsonify({"render_id": render_id})
 
 
 # Frames-in-flight guard: a block holds `block_seconds * fps` frames at the FULL output
@@ -164,7 +190,6 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
     """One segment, rendered at the final export's settings, with its audio slice muxed
     in. Phases: HD assets -> render -> audio (published so the UI doesn't sit at 0%
     through minutes of regeneration)."""
-    global _HD_RUNNING
     try:
         on_progress(phase="assets")
         _regenerate_hd_images(job_id, [seg], export, should_cancel)
@@ -220,15 +245,13 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
         _record_export(job_id, muxed_url, key="segment_exports", keep=_SEGMENT_KEEP)
         return muxed_url
     finally:
-        _HD_RUNNING = None
-        _HD_SLOT.release()
+        _finish_hd_render()
 
 
 def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cancel):
     """The background export: FIRST regenerate every Image-gen card's images fresh in
     HD (swapping their draft assetUrls in the in-memory graph), THEN render the song.
     Regeneration is slow (Z-Image is minutes/image), so it honours cancellation."""
-    global _HD_RUNNING
     try:
         on_progress(phase="assets")
         _regenerate_hd_images(job_id, segments, export, should_cancel)
@@ -254,8 +277,7 @@ def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cance
             _record_export(job_id, url)
         return url
     finally:
-        _HD_RUNNING = None
-        _HD_SLOT.release()
+        _finish_hd_render()
 
 
 def _record_export(job_id: str, url: str, *, key: str = "song_exports", keep: int = 3) -> None:

@@ -2,6 +2,7 @@
 per-segment animation graph. Each catches its own errors and returns JSON before
 reaching the global handler."""
 
+from __future__ import annotations
 import logging
 
 from flask import Blueprint, jsonify

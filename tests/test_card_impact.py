@@ -2,7 +2,7 @@
 
 For each pipeline in `card_demo.DEMOS` (the exported `playground_pipelines.json`, one per
 card) render it and assert it produces a non-empty frame — i.e. the card is wired into a
-valid pipeline that actually shows something. Uses `graph._Dag(...).video()` (no ffmpeg)
+valid pipeline that actually shows something. Uses `graph.Dag(...).video()` (no ffmpeg)
 so all of them check in a couple of seconds. A small synthetic drum stem backs the
 `signal` card's referenced signal.
 """
@@ -46,7 +46,7 @@ def _frames(demo, stem):
     if any(n.get("type") == "lyrics" for n in g["nodes"]):
         seg["lyric_lines"] = LINES
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
-    return graph._Dag("playground", seg, g, stem, OUT).video(out_id)
+    return graph.Dag("playground", seg, g, stem, OUT).video(out_id)
 
 
 @pytest.mark.parametrize("demo", card_demo.DEMOS, ids=[d["key"] for d in card_demo.DEMOS])
@@ -136,9 +136,9 @@ def test_whole_clip_matches_the_block_stream(demo, stem_path):
     if any(n.get("type") == "lyrics" for n in g["nodes"]):
         seg["lyric_lines"] = LINES
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
-    whole = graph._Dag("playground", seg, g, stem_path, OUT).video(out_id)
+    whole = graph.Dag("playground", seg, g, stem_path, OUT).video(out_id)
     streamed = np.concatenate(
-        [f for *_, f in graph._Dag("playground", seg, g, stem_path, OUT).stream_blocks(out_id, 3)]
+        [f for *_, f in graph.Dag("playground", seg, g, stem_path, OUT).stream_blocks(out_id, 3)]
     )
     assert whole.shape == streamed.shape, demo["key"]
     # ffmpeg seeking makes a video-backed card differ by a hair at a block seam; a

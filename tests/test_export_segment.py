@@ -80,7 +80,7 @@ def _hd_output():
 
 
 def _dims(graph, output):
-    return GR._grid_dims(G._Dag("job", SEG, graph, NOAUDIO, output))
+    return GR._grid_dims(G.Dag("job", SEG, graph, NOAUDIO, output))
 
 
 # ── the shared export→output contract ────────────────────────────────────────
@@ -150,9 +150,9 @@ def test_light_graph_streams_at_its_hd_size():
     # block rendering must agree on ONE frame size (the lockstep invariant).
     graph = _light_graph()
     out = {**_hd_output(), "width": 240, "height": 320, "nativeShort": 320}
-    dag = G._Dag("job", SEG, graph, NOAUDIO, out)
+    dag = G.Dag("job", SEG, graph, NOAUDIO, out)
     whole = dag.video("o")
-    blocks = np.concatenate([G._Dag("job", SEG, graph, NOAUDIO, out)._block_producer("o")(0, 5)])
+    blocks = np.concatenate([G.Dag("job", SEG, graph, NOAUDIO, out)._block_producer("o")(0, 5)])
     assert whole.shape[1:3] == (320, 240)
     assert blocks.shape[1:3] == whole.shape[1:3]
 

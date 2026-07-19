@@ -48,7 +48,7 @@ def resolve_port(binding, pmin: float, pmax: float, pdef: float, resolve):
 def _output_params(output: dict, fps: int) -> dict:
     """The simulate() top-level `output` block from project render settings.
 
-    Shared by `build_params` (single-fluid) and `_Dag._merge_params` (merge combine)
+    Shared by `build_params` (single-fluid) and `Dag._merge_params` (merge combine)
     so the size/quality/fps contract lives in one place. `gridCells` (the HD export's
     explicit grid) passes through when present so the sim grid matches the export."""
     out = {

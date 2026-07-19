@@ -65,8 +65,8 @@ def _arr(v, n):
 # --------------------------------------------------------------------------- #
 def test_whole_clip_and_block_stream_are_identical():
     graph = _graph(length=0.5, amount=1.0)
-    whole = G.fluid.flatten(G._Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
-    dag = G._Dag("job", SEG, graph, NOAUDIO, OUT)
+    whole = G.fluid.flatten(G.Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
+    dag = G.Dag("job", SEG, graph, NOAUDIO, OUT)
     streamed = np.concatenate(
         [G.fluid.flatten(b) for _a, _b, _t, b in dag.stream_blocks("o", 4)], axis=0
     )
@@ -109,8 +109,8 @@ def test_a_flash_leaves_a_monotonically_fading_trail():
 
 
 def test_echo_actually_changes_a_moving_clip():
-    plain = G.fluid.flatten(G._Dag("job", SEG, _graph(length=0.0), NOAUDIO, OUT).video("o"))
-    trailed = G.fluid.flatten(G._Dag("job", SEG, _graph(length=0.8), NOAUDIO, OUT).video("o"))
+    plain = G.fluid.flatten(G.Dag("job", SEG, _graph(length=0.0), NOAUDIO, OUT).video("o"))
+    trailed = G.fluid.flatten(G.Dag("job", SEG, _graph(length=0.8), NOAUDIO, OUT).video("o"))
     assert plain.shape == trailed.shape
     assert not np.array_equal(plain, trailed)
     # trails only ADD light on top of the dry frame, never remove it
@@ -199,8 +199,8 @@ def test_ghost_stream_matches_sync():
 
 def test_ghost_whole_clip_and_block_stream_are_identical_through_the_dag():
     graph = _graph(mode="ghost", length=0.5, amount=1.0)
-    whole = G.fluid.flatten(G._Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
-    dag = G._Dag("job", SEG, graph, NOAUDIO, OUT)
+    whole = G.fluid.flatten(G.Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
+    dag = G.Dag("job", SEG, graph, NOAUDIO, OUT)
     streamed = np.concatenate(
         [G.fluid.flatten(b) for _a, _b, _t, b in dag.stream_blocks("o", 4)], axis=0
     )
@@ -209,10 +209,10 @@ def test_ghost_whole_clip_and_block_stream_are_identical_through_the_dag():
 
 def test_ghost_and_bright_actually_differ_on_a_moving_clip():
     ghost = G.fluid.flatten(
-        G._Dag("job", SEG, _graph(mode="ghost", length=0.8), NOAUDIO, OUT).video("o")
+        G.Dag("job", SEG, _graph(mode="ghost", length=0.8), NOAUDIO, OUT).video("o")
     )
     bright = G.fluid.flatten(
-        G._Dag("job", SEG, _graph(mode="bright", length=0.8), NOAUDIO, OUT).video("o")
+        G.Dag("job", SEG, _graph(mode="bright", length=0.8), NOAUDIO, OUT).video("o")
     )
     assert not np.array_equal(ghost, bright)
 
@@ -304,8 +304,8 @@ def _gradient_color(nid="col1"):
 
 def test_colorgrade_stream_matches_sync():
     graph = _cg_graph(mode="duotone", intensity=1.0, shift=0.3)
-    whole = G.fluid.flatten(G._Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
-    dag = G._Dag("job", SEG, graph, NOAUDIO, OUT)
+    whole = G.fluid.flatten(G.Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
+    dag = G.Dag("job", SEG, graph, NOAUDIO, OUT)
     streamed = np.concatenate(
         [G.fluid.flatten(b) for _a, _b, _t, b in dag.stream_blocks("o", 4)], axis=0
     )
@@ -317,9 +317,9 @@ def test_colorgrade_wired_tint_overrides_the_swatch_and_sweeps():
     graph = _cg_graph(mode="duotone", tint_node=color_card, intensity=1.0)
     graph["nodes"].append(lfo)
     graph["edges"].append(_edge("lfo1", "col1", "position"))
-    swept = G.fluid.flatten(G._Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
+    swept = G.fluid.flatten(G.Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
     plain = G.fluid.flatten(
-        G._Dag("job", SEG, _cg_graph(mode="duotone", intensity=1.0), NOAUDIO, OUT).video("o")
+        G.Dag("job", SEG, _cg_graph(mode="duotone", intensity=1.0), NOAUDIO, OUT).video("o")
     )
     assert not np.array_equal(swept, plain)  # the tint changed the grade
     # the gradient position sweeps over the clip, so the graded colour CHANGES per

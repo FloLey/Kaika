@@ -1,5 +1,6 @@
 """Project routes — the resumable per-song state (segments, output, step)."""
 
+from __future__ import annotations
 import json
 import shutil
 

@@ -13,7 +13,7 @@ from backend import fluid
 from backend import graph as G
 
 # render() encodes an mp4 via ffmpeg; skip those two cases where it's not installed
-# (e.g. minimal CI). The frame-level tests use _Dag.video and need no ffmpeg.
+# (e.g. minimal CI). The frame-level tests use Dag.video and need no ffmpeg.
 _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 24, "background": "#101418"}
@@ -96,7 +96,7 @@ def _graph(mode, op1=1.0):
 
 
 def _frames(g):
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     return dag.video(G._video_source(g, "out1", "video"))
 
 
@@ -243,7 +243,7 @@ def test_merge_respects_per_component_wrap():
                 _edge("cb", "o", "video"),
             ],
         }
-        frames = G._Dag("job", SEG, g, NOAUDIO, OUT).video(G._video_source(g, "o", "video"))
+        frames = G.Dag("job", SEG, g, NOAUDIO, OUT).video(G._video_source(g, "o", "video"))
         return float(frames.mean())
 
     ab = mean(True, False, ("A", "B"))

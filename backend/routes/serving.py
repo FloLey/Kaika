@@ -4,6 +4,7 @@ images. All static-ish reads off disk (range-served where <audio>/<video> seek).
 Named `serving` (not `media`) so it doesn't clash with `backend/media.py`, the
 audio/spectrogram helper module it imports from."""
 
+from __future__ import annotations
 from flask import Blueprint, abort, jsonify, send_file
 
 from .. import fonts

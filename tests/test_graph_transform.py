@@ -74,8 +74,8 @@ def _graph(mode="kaleidoscope", **ports):
 # --------------------------------------------------------------------------- #
 def test_whole_clip_and_block_stream_are_identical():
     graph = _graph(rotate=45.0, zoom=1.2)
-    whole = G.fluid.flatten(G._Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
-    dag = G._Dag("job", SEG, graph, NOAUDIO, OUT)
+    whole = G.fluid.flatten(G.Dag("job", SEG, graph, NOAUDIO, OUT).video("o"))
+    dag = G.Dag("job", SEG, graph, NOAUDIO, OUT)
     streamed = np.concatenate(
         [G.fluid.flatten(b) for _a, _b, _t, b in dag.stream_blocks("o", 4)], axis=0
     )
@@ -84,8 +84,8 @@ def test_whole_clip_and_block_stream_are_identical():
 
 
 def test_transform_actually_changes_the_frames():
-    plain = G.fluid.flatten(G._Dag("job", SEG, _graph_passthrough(), NOAUDIO, OUT).video("o"))
-    warped = G.fluid.flatten(G._Dag("job", SEG, _graph(rotate=90.0), NOAUDIO, OUT).video("o"))
+    plain = G.fluid.flatten(G.Dag("job", SEG, _graph_passthrough(), NOAUDIO, OUT).video("o"))
+    warped = G.fluid.flatten(G.Dag("job", SEG, _graph(rotate=90.0), NOAUDIO, OUT).video("o"))
     assert plain.shape == warped.shape
     assert not np.array_equal(plain, warped)
 

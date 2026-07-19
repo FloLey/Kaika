@@ -176,10 +176,10 @@ def test_block_streaming_matches_whole_clip(assets):
         "edges": [_edge("lfo", "ig", "trigger"), _edge("ig", "o", "video")],
     }
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     assert not np.array_equal(whole[0], whole[-1])  # the slideshow actually switched
     streamed = np.concatenate(
-        [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
+        [f for *_, f in G.Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
     )
     assert np.array_equal(whole, streamed)  # image-only seams are exact (pure indexing)
 
@@ -226,9 +226,9 @@ def test_mixed_video_slideshow_block_matches_whole_clip(video_asset):
         "edges": [_edge("lfo", "sl", "trigger"), _edge("sl", "o", "video")],
     }
     G.validate(g)
-    whole = G._Dag("job", seg, g, NOAUDIO, out_cfg).video("o")
+    whole = G.Dag("job", seg, g, NOAUDIO, out_cfg).video("o")
     streamed = np.concatenate(
-        [f for *_, f in G._Dag("job", seg, g, NOAUDIO, out_cfg).stream_blocks("o", 7)]
+        [f for *_, f in G.Dag("job", seg, g, NOAUDIO, out_cfg).stream_blocks("o", 7)]
     )
     assert whole.shape == streamed.shape
     assert np.abs(whole.astype(int) - streamed.astype(int)).mean() < 2.0  # ~exact (seam jitter)
@@ -265,7 +265,7 @@ def test_legacy_asseturls_still_render(assets):
         "edges": [_edge("sl", "o", "video")],
     }
     G.validate(g)
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
     assert [it["kind"] for it in out] == ["image", "image"]
     assert out[0]["path"].endswith("red.png") and out[1]["path"].endswith("blue.png")
@@ -292,7 +292,7 @@ def test_wired_imagegen_list_feeds_the_slideshow(assets, tmp_path):
         "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")],
     }
     G.validate(g)
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
     assert len(out) == 2
     assert out[0]["path"].endswith("red.png") and out[1]["path"].endswith("blue.png")
@@ -321,7 +321,7 @@ def test_imagegen_active_count_caps_the_passed_images(assets):
         "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")],
     }
     G.validate(g)
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
     assert len(out) == 2  # the third image is hidden by the cap
 
@@ -346,7 +346,7 @@ def test_imagegen_empty_rows_dont_become_blank_slots(assets):
         "edges": [_edge("gen", "sl", "images"), _edge("sl", "o", "video")],
     }
     G.validate(g)
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     out = _slideshow_items(dag, dag.nodes["sl"])
     assert len(out) == 2  # the "" slot is dropped, not rendered blank
 

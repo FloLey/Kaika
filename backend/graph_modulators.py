@@ -3,7 +3,7 @@
 pipeline (parametric layouts + transforms -> emitter source specs, spec 02).
 
 `_make_value_resolver` is the shared memoized entry point: `build_params` (fluid
-ports), `_Dag` (FX/source-card ports) and the Scope card's `resolve_node_curve`
+ports), `Dag` (FX/source-card ports) and the Scope card's `resolve_node_curve`
 all resolve through it."""
 
 from __future__ import annotations
@@ -317,7 +317,7 @@ def _make_value_resolver(
     type-dispatched (signal / lfo / noise / shaper / math) and recursing through value
     inputs. A zeros placeholder is seeded before recursing so a (validate-rejected)
     cycle degrades to flat 0 instead of looping forever. Shared by `build_params`
-    (fluid ports) and `_Dag` (FX-card ports)."""
+    (fluid ports) and `Dag` (FX-card ports)."""
     cache: dict[str, np.ndarray] = {}
 
     def resolve_source(node_id: str) -> np.ndarray:

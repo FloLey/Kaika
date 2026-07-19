@@ -42,7 +42,7 @@ def _edge(s, t, tp):
 
 
 def _dag(nodes, edges):
-    return G._Dag("job", SEG, {"nodes": nodes, "edges": edges}, NOAUDIO, OUT)
+    return G.Dag("job", SEG, {"nodes": nodes, "edges": edges}, NOAUDIO, OUT)
 
 
 def _card(nid, t, **over):

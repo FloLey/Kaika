@@ -2,6 +2,7 @@
 inference server's /health FROM the backend — the token never reaches the browser and
 there is no CORS to configure on the GPU box."""
 
+from __future__ import annotations
 import logging
 import time
 

@@ -94,7 +94,7 @@ def test_pattern_into_fluid_positions_yields_one_emitter_per_point():
         ],
     }
     graph.validate(g)  # no raise
-    dag = graph._Dag("job", seg, g, lambda j, s: None, {"fps": 24, "width": 128, "height": 128})
+    dag = graph.Dag("job", seg, g, lambda j, s: None, {"fps": 24, "width": 128, "height": 128})
     emitters = dag._fluid_emitters(g["nodes"][1])
     assert len(emitters) == 8
     assert all("points" in e and "color" in e for e in emitters)
@@ -148,7 +148,7 @@ def test_chained_points_pipeline_resolves():
         ],
     }
     graph.validate(g)
-    dag = graph._Dag("job", seg, g, lambda j, s: None, {"fps": 24, "width": 128, "height": 128})
+    dag = graph.Dag("job", seg, g, lambda j, s: None, {"fps": 24, "width": 128, "height": 128})
     emitters = dag._fluid_emitters(g["nodes"][2])
     # 3 points, each animated into an orbit path
     assert len(emitters) == 3

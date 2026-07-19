@@ -189,7 +189,7 @@ def test_montage_cuts_between_inputs(assets):
     with a block seam straddling the cut."""
     g = _montage_graph(assets)
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     assert whole.shape[0] == 12 and whole.shape[-1] == 4
     assert whole[0, 32, 32, 0] > 200 and whole[0, 32, 32, 2] < 50  # red first
     assert whole[6, 32, 32, 2] > 200 and whole[6, 32, 32, 0] < 50  # blue after the cut
@@ -198,7 +198,7 @@ def test_montage_cuts_between_inputs(assets):
     # (test_montage_retimes_each_slot_to_its_cut).
     assert np.array_equal(whole[5], whole[0]) and np.array_equal(whole[11], whole[6])
     streamed = np.concatenate(
-        [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
+        [f for *_, f in G.Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
     )
     assert np.array_equal(whole, streamed)  # the lockstep invariant, cut mid-block
 
@@ -208,7 +208,7 @@ def test_montage_holds_last_input(assets):
     and the 3rd never shows."""
     g = _montage_graph(assets, n_slots=3)  # im3 is red again (assets wrap)
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     # one rise (frame 6): slot 2 (blue) holds through the last frame — never red again.
     assert whole[-1, 32, 32, 2] > 200 and whole[-1, 32, 32, 0] < 50
 
@@ -241,14 +241,14 @@ def test_montage_span_slot_plays_through_two_intervals(assets):
         ],
     }
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     red = lambda f: f[32, 32, 0] > 200 and f[32, 32, 2] < 50  # noqa: E731
     blue = lambda f: f[32, 32, 2] > 200 and f[32, 32, 0] < 50  # noqa: E731
     assert red(whole[4])  # past the swallowed cut (frame 3) — the ×2 slot holds
     assert blue(whole[6]) and blue(whole[8])  # slot 2 takes the SECOND rise
     assert red(whole[9])  # slot 3 on the third rise
     streamed = np.concatenate(
-        [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
+        [f for *_, f in G.Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
     )
     assert np.array_equal(whole, streamed)
 
@@ -293,14 +293,14 @@ def test_montage_retimes_each_slot_to_its_cut(video_asset):
         ],
     }
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     # standalone: the same start=1.5 card alone — its frame 0 is the in-point frame.
     solo = {
         "version": 27,
         "nodes": [vid_node("v2", 1.5), {"id": "o", "type": "output", "data": {}}],
         "edges": [_edge("v2", "o", "video")],
     }
-    ref = G._Dag("job", SEG, solo, NOAUDIO, OUT).video("o")
+    ref = G.Dag("job", SEG, solo, NOAUDIO, OUT).video("o")
     assert np.array_equal(whole[6], ref[0])  # the cut lands exactly on the in-point
     assert not np.array_equal(whole[6], whole[5])  # and it IS a visible cut
     assert_moves(whole, "montage of real clips")  # the clips PLAY, they don't freeze
@@ -325,11 +325,11 @@ def test_montage_accepts_a_3ch_producer(assets):
         ],
     }
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     assert whole.shape[-1] == 4
     assert whole[0, 32, 32, 0] > 200  # the backdrop's orange shows in slot 1
     streamed = np.concatenate(
-        [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
+        [f for *_, f in G.Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
     )
     assert np.array_equal(whole, streamed)
 
@@ -474,23 +474,23 @@ def test_slot_cache_serves_a_second_whole_clip_render(assets, monkeypatch):
     """Re-rendering the same montage decodes nothing: break the image producer and
     the render still succeeds, byte-identical, entirely from the slot cache."""
     g = _montage_graph(assets)
-    first = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    first = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     monkeypatch.setattr(S, "image", _boom)
-    assert np.array_equal(G._Dag("job", SEG, g, NOAUDIO, OUT).video("o"), first)
+    assert np.array_equal(G.Dag("job", SEG, g, NOAUDIO, OUT).video("o"), first)
 
 
 def test_slot_cache_serves_the_block_path_too(assets, monkeypatch):
     g = _montage_graph(assets)
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     streamed = np.concatenate([f for *_, f in dag.stream_blocks("o", 5)])
     monkeypatch.setattr(S, "image", _boom)
     again = np.concatenate(
-        [f for *_, f in G._Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
+        [f for *_, f in G.Dag("job", SEG, g, NOAUDIO, OUT).stream_blocks("o", 5)]
     )
     assert np.array_equal(streamed, again)
     # …and the streaming render agrees with the whole-clip one (lockstep holds
     # across the cache: both paths store/serve the same local frames).
-    assert np.array_equal(G._Dag("job", SEG, g, NOAUDIO, OUT).video("o"), streamed)
+    assert np.array_equal(G.Dag("job", SEG, g, NOAUDIO, OUT).video("o"), streamed)
 
 
 def test_appending_a_slot_renders_only_the_new_one(assets, monkeypatch):
@@ -517,7 +517,7 @@ def test_appending_a_slot_renders_only_the_new_one(assets, monkeypatch):
             _edge("mt", "o", "video"),
         ],
     }
-    G._Dag("job", SEG, two, NOAUDIO, OUT).video("o")  # cold: both slots rendered
+    G.Dag("job", SEG, two, NOAUDIO, OUT).video("o")  # cold: both slots rendered
 
     three = copy.deepcopy(two)
     three["nodes"].append(_image_node("im3", assets[0]))
@@ -527,7 +527,7 @@ def test_appending_a_slot_renders_only_the_new_one(assets, monkeypatch):
     calls = []
     real = S.image
     monkeypatch.setattr(S, "image", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
-    frames = G._Dag("job", SEG, three, NOAUDIO, OUT).video("o")
+    frames = G.Dag("job", SEG, three, NOAUDIO, OUT).video("o")
     assert len(calls) == 1  # im1/im2 came from the cache; only im3 was produced
     assert frames.shape[0] == 12
 
@@ -537,11 +537,11 @@ def test_retiming_the_trigger_reuses_every_cached_slot(assets, monkeypatch):
     span change) re-uses them — only a slot that grew LONGER than its cached run
     has to render again."""
     g = _montage_graph(assets)
-    G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")  # cold at rate 2 (one cut)
+    G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")  # cold at rate 2 (one cut)
     retimed = copy.deepcopy(g)
     next(n for n in retimed["nodes"] if n["type"] == "lfo")["data"]["rate"] = 4
     monkeypatch.setattr(S, "image", _boom)
-    out = G._Dag("job", SEG, retimed, NOAUDIO, OUT).video("o")  # cuts moved: still cached
+    out = G.Dag("job", SEG, retimed, NOAUDIO, OUT).video("o")  # cuts moved: still cached
     assert out.shape[0] == 12
 
 
@@ -549,13 +549,13 @@ def test_slot_cache_invalidates_when_the_slot_chain_changes(assets, monkeypatch)
     """The key is the slot's own contributing subgraph — editing the upstream card
     (here: swapping its asset) must re-render THAT slot."""
     g = _montage_graph(assets)
-    G._Dag("job", SEG, g, NOAUDIO, OUT).video("o")
+    G.Dag("job", SEG, g, NOAUDIO, OUT).video("o")
     edited = copy.deepcopy(g)
     next(n for n in edited["nodes"] if n["id"] == "im1")["data"]["assetUrl"] = assets[1]
     calls = []
     real = S.image
     monkeypatch.setattr(S, "image", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
-    G._Dag("job", SEG, edited, NOAUDIO, OUT).video("o")
+    G.Dag("job", SEG, edited, NOAUDIO, OUT).video("o")
     assert len(calls) == 1  # only the edited slot re-rendered
 
 
@@ -601,7 +601,7 @@ def test_montage_input_ignores_the_song_sync_preroll(video_asset):
         ],
     }
     G.validate(g)
-    dag = G._Dag("job", seg, g, NOAUDIO, OUT)
+    dag = G.Dag("job", seg, g, NOAUDIO, OUT)
     assert _feeds_a_montage(dag, "v1") and _feeds_a_montage(dag, "v2")
     speed = np.ones(12, np.float32)
     # in a slot: straight to the in-point, no 30s pre-roll
@@ -627,5 +627,5 @@ def test_a_card_outside_a_montage_is_untouched(video_asset):
         "nodes": [_video_card("v1", video_asset), {"id": "o", "type": "output", "data": {}}],
         "edges": [_edge("v1", "o", "video")],
     }
-    dag = G._Dag("job", {"start": 30.0, "end": 31.0, "signals": []}, g, NOAUDIO, OUT)
+    dag = G.Dag("job", {"start": 30.0, "end": 31.0, "signals": []}, g, NOAUDIO, OUT)
     assert not _feeds_a_montage(dag, "v1")

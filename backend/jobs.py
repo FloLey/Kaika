@@ -24,6 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from . import paths
+from .job_table import prune_jobs
 from .config import MAX_JOB_RECORDS
 
 _POOL = ThreadPoolExecutor(max_workers=int(os.environ.get("JOB_WORKERS", "1")))
@@ -70,17 +71,9 @@ _restore()
 
 
 def _prune_locked() -> None:
-    """Drop the oldest finished jobs once the map exceeds `_MAX_JOBS`, so a
-    long-lived server doesn't grow one entry per upload forever (mirrors
-    `render_jobs._prune_locked`)."""
-    if len(_JOBS) <= _MAX_JOBS:
-        return
-    finished = sorted(
-        ((jid, j) for jid, j in _JOBS.items() if j["state"] != "running"),
-        key=lambda kv: kv[1]["updated"],
-    )
-    for jid, _ in finished[: len(_JOBS) - _MAX_JOBS]:
-        _JOBS.pop(jid, None)
+    """Drop the oldest finished jobs once the map exceeds `_MAX_JOBS`, so a long-lived
+    server doesn't grow one entry per upload forever."""
+    prune_jobs(_JOBS, _MAX_JOBS)
 
 
 def submit(job_id: str, step: str, fn) -> None:

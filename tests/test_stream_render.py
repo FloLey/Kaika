@@ -3,7 +3,7 @@
 The core guarantee is that streaming changes *when* you see frames, never *which*
 frames: block-by-block production must be byte-identical to the monolithic path at
 the raw-frame level. We assert that for the resumable sim (`FluidClip`), for the
-whole DAG (`_Dag.stream_blocks` vs `video`), and then exercise the terminal
+whole DAG (`Dag.stream_blocks` vs `video`), and then exercise the terminal
 `render_stream` (progress + cancellation) where ffmpeg is available.
 """
 
@@ -135,8 +135,8 @@ def test_fluidclip_advance_must_be_contiguous():
 def test_stream_blocks_equal_video(build, out_id):
     g = build()
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video(out_id)
-    dag = G._Dag("job", SEG, g, NOAUDIO, OUT)
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video(out_id)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
     streamed = np.concatenate([f for _, _, _, f in dag.stream_blocks(out_id, 11)])
     assert np.array_equal(whole, streamed)
 
@@ -216,7 +216,7 @@ def test_render_stream_cache_hit_needs_no_dag(monkeypatch):
     cached = G.ANIM_DIR / f"{oh}.mp4"
     cached.parent.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(b"cached clip")
-    monkeypatch.setattr(G, "_Dag", lambda *a, **k: pytest.fail("a cache hit must not build a Dag"))
+    monkeypatch.setattr(G, "Dag", lambda *a, **k: pytest.fail("a cache hit must not build a Dag"))
     seen = []
     url = G.render_stream("job", SEG, g, NOAUDIO, OUT, "o1", on_progress=lambda *a: seen.append(a))
     assert url == f"/fluid/{oh}.mp4"

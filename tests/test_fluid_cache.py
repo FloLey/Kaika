@@ -71,7 +71,7 @@ def _graph(opacity, force):
 
 def _render(g, out=OUT):
     G.validate(g)
-    dag = G._Dag("job", SEG, g, NOAUDIO, out)
+    dag = G.Dag("job", SEG, g, NOAUDIO, out)
     return np.concatenate([f for *_, f in dag.stream_blocks("o1", 12)])
 
 
@@ -111,6 +111,6 @@ def test_streamed_matches_cached_whole(monkeypatch):
     """A cache populated by the whole-clip path serves byte-identical block slices."""
     g = _graph(0, 30)
     G.validate(g)
-    whole = G._Dag("job", SEG, g, NOAUDIO, OUT).video("o1")  # stores fluid frames
+    whole = G.Dag("job", SEG, g, NOAUDIO, OUT).video("o1")  # stores fluid frames
     streamed = _render(g)  # hits the cache, slices per block
     assert np.array_equal(whole, streamed)

@@ -55,7 +55,7 @@ def test_segment_render_stays_within_budget():
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
     frames, elapsed = _timed(
         "fluid segment render",
-        lambda: graph._Dag(
+        lambda: graph.Dag(
             "playground", {**_SEG, "signals": demo["signals"]}, g, _noaudio, _OUT
         ).video(out_id),
     )
@@ -91,7 +91,7 @@ def test_cached_slot_render_is_much_cheaper_than_cold(tmp_path, monkeypatch):
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
 
     def render():
-        return graph._Dag(
+        return graph.Dag(
             "playground", {**_SEG, "signals": demo["signals"]}, g, _noaudio, _OUT
         ).video(out_id)
 
