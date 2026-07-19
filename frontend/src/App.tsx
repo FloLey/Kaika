@@ -16,6 +16,7 @@ import { EXPORT_DEFAULTS, withExportDefaults } from "./lib/export";
 import { useLogPoll } from "./lib/useLogPoll";
 import * as logbus from "./lib/logbus";
 import * as api from "./lib/api";
+import { createSaveChain } from "./lib/saveChain";
 
 export default function App() {
   // projects | upload | processing | review | studio | error
@@ -69,17 +70,14 @@ export default function App() {
   // out of order server-side (the DB would keep the OLDER payload while the UI
   // thinks everything saved). The chain serializes them, and a queued save that a
   // newer edit superseded is skipped instead of writing stale state.
-  const saveSeq = useRef(0);
-  const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const saveChain = useRef(createSaveChain());
   useEffect(() => {
     if (!job || (step !== "review" && step !== "studio" && step !== "export")) return;
     const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
     const jsonStr = JSON.stringify(payload);
     if (jsonStr === lastSaved.current) return;
     const t = setTimeout(() => {
-      const seq = ++saveSeq.current;
-      saveChain.current = saveChain.current.then(async () => {
-        if (seq !== saveSeq.current) return; // superseded — a newer payload is queued
+      saveChain.current.supersedable(async () => {
         try {
           await api.saveProject(job, payload);
           lastSaved.current = jsonStr;
@@ -106,13 +104,13 @@ export default function App() {
     async (lines: unknown[]) => {
       if (!job) return;
       const base = { step, segments: serializeSegments(segments), output, export: exportSettings };
-      const run = saveChain.current.then(async () => {
+      // `exclusive`: this payload carries lyric_lines the autosave payload lacks, so it
+      // must never be skipped as superseded.
+      return saveChain.current.exclusive(async () => {
         await api.saveProject(job, { ...base, lyric_lines: lines });
         setLyricLines(lines);
         lastSaved.current = JSON.stringify(base); // autosave needn't re-PUT this state
       });
-      saveChain.current = run.catch(() => {}); // keep the chain alive on failure
-      return run; // the editor still sees success/failure
     },
     [job, step, segments, output, exportSettings]
   );
@@ -124,16 +122,11 @@ export default function App() {
   const saveFixture = useCallback(async (): Promise<api.FixtureExport> => {
     if (!job) throw new Error("no project open");
     const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
-    const run = saveChain.current.then(async () => {
+    return saveChain.current.exclusive(async () => {
       await api.saveProject(job, payload);
       lastSaved.current = JSON.stringify(payload);
       return api.exportPlaygroundFixture();
     });
-    saveChain.current = run.then(
-      () => {},
-      () => {}
-    ); // keep the chain alive either way
-    return run;
   }, [job, step, segments, output, exportSettings]);
 
   // ---- new track: upload + propose -----------------------------------------
