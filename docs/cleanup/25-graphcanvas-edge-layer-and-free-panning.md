@@ -1,6 +1,20 @@
 # Step 25 — GraphCanvas: an edge layer, and free panning
 
-**Status: NOT DONE — and its perf premise is now suspect.**
+**Status: item 3 DONE** (`737b29a`) — the zoom limit measures once per gesture instead of
+once per wheel tick. **Counted: 400 forced layout reads → 40** for 20 cards over 10 ticks.
+
+⚠ **Counted, not timed.** jsdom reports `offsetWidth` as 0 and cannot price a layout
+flush, so the read *count* is verifiable here and the millisecond cost is not. The count is
+the structural claim and it scales with card count × event rate; a real browser profile
+would put a number on it, and nobody has one yet. Same caveat applies to item 2 below.
+
+**Item 2 (panning commits React state per pointermove) remains unmeasured and undone.** It
+is the same kind of claim from the same audit that got four of five perf findings wrong
+this wave. The in-repo precedent is suggestive — node dragging was deliberately moved to
+ref+tick with a comment saying why — but suggestive is not measured. Item 1
+(`<EdgeLayer>`) is readability and stands on its own.
+
+**Original status note (superseded):**
 
 Step 21 measured the editor's per-render graph walks at **0.1 ms**, against an audit that
 described them as a heavy per-edit cost. This step's items 2 and 3 (pan committing React
