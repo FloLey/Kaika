@@ -11,7 +11,6 @@ import json
 import logging
 import threading
 import time
-from pathlib import Path
 
 from flask import Blueprint, jsonify
 
@@ -455,8 +454,8 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
     (they agree for the whole-song path — a segment render passes its `nativeShort` one)."""
     render_output = output or song_render.output_from_export(export)
     from .. import imagegen, fluid, graph as graphmod
-    import tempfile
     import os
+    from uuid import uuid4
 
     short = int(export.get("stylizeSize") or 768)  # HD generation short side
     stylize_nodes = [
@@ -505,7 +504,14 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
                 short=short,
             )
             dest.parent.mkdir(parents=True, exist_ok=True)
-            tmp = Path(tempfile.mkdtemp(prefix="hdstylize-")) / "c.mp4"
+            # Encoded BESIDE `dest`, not in /tmp, so the publish below is a same-filesystem
+            # `os.replace`. Two bugs die with that: the old code did
+            # `dest.write_bytes(tmp.read_bytes())`, which (a) pulled a whole HD clip through
+            # RAM for no reason, and (b) TRUNCATES `dest` first — so a worker killed
+            # mid-write left a partial file that the `dest.exists()` check above then served
+            # forever as a cache hit. Same reasoning as `routes/assets._write_atomic`, minus
+            # the copy, because ffmpeg can write straight to the final directory.
+            tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp{dest.suffix}")
             # An HD-regenerated stylize clip is a SOURCE the export then re-encodes, so it
             # carries the export CRF — a preview-grade intermediate would cap the master.
             fluid.render_mp4(
@@ -516,12 +522,11 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
                 out_h=styled.shape[1],
                 crf=fluid.CRF_EXPORT,
             )
-            dest.write_bytes(tmp.read_bytes())
             try:
-                os.unlink(tmp)
-                os.rmdir(tmp.parent)
-            except OSError:
-                pass
+                os.replace(tmp, dest)  # atomic: a reader sees the whole clip or nothing
+            except BaseException:
+                tmp.unlink(missing_ok=True)  # never leave scratch behind, not even on SIGTERM
+                raise
             db.add_asset(
                 job_id,
                 {

@@ -50,6 +50,16 @@ PROXY_TIMEOUT = 900  # a 4K phone clip transcodes in ~40s; this is the pathologi
 CLIP_TIMEOUT = 180
 THUMB_TIMEOUT = 30
 
+# The same ceilings for the RENDER path, which had none at all while the upload path
+# timed out everywhere. A hung ffmpeg there is worse than a slow one: `_HD_SLOT`
+# (`routes/export.py`) is a BoundedSemaphore(1) released in a `finally` that a hang never
+# reaches, so ONE wedged ffprobe 409s every subsequent export for the life of the process.
+# Generous — these are ceilings on a hang, not budgets. A real render that legitimately
+# exceeds one of these was already going to look broken to the user.
+PROBE_TIMEOUT = 30  # ffprobe on one file — metadata only, no decode
+DECODE_TIMEOUT = 600  # decode/transcode a stem or clip to an intermediate
+ENCODE_TIMEOUT = 1800  # encode a whole song's video, or mux its audio in
+
 
 def normalise(x: np.ndarray) -> np.ndarray:
     """Peak-normalise to 0..1; all-zero (or near-zero) input -> zeros.

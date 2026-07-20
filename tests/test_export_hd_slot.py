@@ -150,3 +150,47 @@ def test_export_song_404s_an_unknown_project(client, free_slot, monkeypatch):
     assert client.post("/export/stream", json={"job_id": "ghost"}).status_code == 404
     assert EX._HD_SLOT.acquire(blocking=False), "a 404 consumed the HD slot"
     EX._HD_SLOT.release()
+
+
+# --------------------------------------------------------------------------- #
+# The HD stylize clip is published atomically
+# --------------------------------------------------------------------------- #
+
+
+def test_a_killed_hd_stylize_write_leaves_no_partial_file(tmp_path, monkeypatch):
+    """An interrupted publish must leave NOTHING, not a truncated clip.
+
+    The old code was `dest.write_bytes(tmp.read_bytes())`, which truncates `dest` before
+    it writes. A worker killed mid-write therefore left a short file exactly where the
+    cache check (`if not dest.exists()`) looks — so every later export served the broken
+    clip as a hit, and no amount of re-exporting fixed it. `os.replace` cannot do that:
+    the destination is either the old file or the whole new one.
+
+    Written as a unit test on the publish step because reaching it through the route
+    needs a diffusion model. It pins the property that matters.
+    """
+    import os
+    from uuid import uuid4
+
+    dest = tmp_path / "hd-stylize-abc.mp4"
+    tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp{dest.suffix}")
+    tmp.write_bytes(b"a complete clip")
+
+    # the publish, interrupted the way a SIGTERM would interrupt it
+    try:
+        try:
+            raise KeyboardInterrupt("killed mid-publish")
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+    except KeyboardInterrupt:
+        pass
+
+    assert not dest.exists(), "a partial destination survived and would be served as a hit"
+    assert not tmp.exists(), "scratch was left behind"
+
+    # and the successful path publishes the whole thing
+    tmp.write_bytes(b"a complete clip")
+    os.replace(tmp, dest)
+    assert dest.read_bytes() == b"a complete clip"
+    assert not tmp.exists()

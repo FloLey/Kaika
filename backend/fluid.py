@@ -22,6 +22,8 @@ import numpy as np
 from scipy import fft as sfft
 from scipy.ndimage import gaussian_filter, map_coordinates
 
+from .config import ENCODE_TIMEOUT
+
 
 def _series(x, nframes: int) -> np.ndarray:
     """Coerce a scalar or sequence into a float32 array of length nframes.
@@ -750,7 +752,8 @@ def render_mp4(
     cmd = _encode_args(w, h, fps, out_w, out_h, int(frames.shape[-1]), crf) + [
         "-movflags", "+faststart", str(path),
     ]  # fmt: skip
-    proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True)
+    # ENCODE ceiling: a whole clip in one shot, so this is the long one.
+    proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True, timeout=ENCODE_TIMEOUT)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.decode()[-2000:])
 

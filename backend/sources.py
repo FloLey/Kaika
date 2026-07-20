@@ -11,6 +11,7 @@ lib/nodeParams.ts; the box/outline/font are static `data` fields.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from functools import lru_cache
 
@@ -20,6 +21,9 @@ from scipy.ndimage import gaussian_filter
 
 from . import fonts as _fonts, procgen
 from .animation_params import SOURCE_PARAM_SPEC
+from .config import PROBE_TIMEOUT
+
+log = logging.getLogger(__name__)
 
 # key -> (min, max, default) per source card — the executor's compact view, derived
 # from the rich spec in animation_params (which also generates the frontend table,
@@ -1012,23 +1016,35 @@ def image(
 
 @lru_cache(maxsize=128)
 def _video_meta(path: str):
-    """(duration_sec, width, height) for a video, via ffprobe (cached)."""
-    out = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height:format=duration",
-            "-of",
-            "json",
-            path,
-        ],
-        capture_output=True,
-        text=True,
-    )
+    """(duration_sec, width, height) for a video, via ffprobe (cached).
+
+    ⚠ This is THE call the export's `_HD_SLOT` deadlock ran through. That slot is a
+    `BoundedSemaphore(1)` released in a `finally`, and a `subprocess.run` with no timeout
+    never reaches it — so one ffprobe wedged on a corrupt or network-stalled file used to
+    409 every subsequent export for the life of the process. The ceiling is the fix; the
+    fallback below is what makes a timeout survivable rather than merely visible.
+    """
+    try:
+        out = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height:format=duration",
+                "-of",
+                "json",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=PROBE_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        log.warning("ffprobe failed or timed out on %s — using placeholder dimensions", path)
+        return 0.0, 16, 16
     try:
         j = json.loads(out.stdout or "{}")
     except ValueError:

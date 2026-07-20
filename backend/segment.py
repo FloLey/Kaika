@@ -29,7 +29,7 @@ import numpy as np
 import librosa
 
 from . import llm
-from .config import N_FFT, HOP, normalise as _normalise
+from .config import N_FFT, HOP, DECODE_TIMEOUT, normalise as _normalise
 
 _log = logging.getLogger("kaika.segment")
 
@@ -58,7 +58,8 @@ def load_audio(path: str | Path, sr: int | None = None):
         cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(path), "-ac", "1"]
         if sr:
             cmd += ["-ar", str(int(sr))]
-        subprocess.run(cmd + [tmp.name], check=True, capture_output=True)
+        # DECODE ceiling: one stem to mono wav.
+        subprocess.run(cmd + [tmp.name], check=True, capture_output=True, timeout=DECODE_TIMEOUT)
         y, native = sf.read(tmp.name, dtype="float32", always_2d=True)
     return y.mean(axis=1), int(native)
 

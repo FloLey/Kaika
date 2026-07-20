@@ -21,7 +21,7 @@ import torch
 from flask import Response, abort, request, send_file
 
 from . import segment as seg
-from .config import N_FFT, HOP as HOP_LENGTH, N_MELS, FMIN
+from .config import N_FFT, HOP as HOP_LENGTH, N_MELS, FMIN, DECODE_TIMEOUT
 from .paths import (
     UPLOAD_DIR,
     SEPARATED_DIR,
@@ -128,7 +128,8 @@ def _ensure_instrumental(stem_dir: Path, original: Path | None = None) -> Path |
         )
         cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(original), "-i", str(vocals),
                "-filter_complex", flt, "-map", "[out]", str(out)]  # fmt: skip
-        proc = subprocess.run(cmd, capture_output=True)
+        # DECODE ceiling: a vocals-subtraction filter over one song.
+        proc = subprocess.run(cmd, capture_output=True, timeout=DECODE_TIMEOUT)
         if proc.returncode == 0 and out.exists():
             return out
         log.warning("instrumental: subtraction failed, falling back to the stem sum")
@@ -141,7 +142,7 @@ def _ensure_instrumental(stem_dir: Path, original: Path | None = None) -> Path |
         cmd += ["-i", str(p)]
     # normalize=0: sum, don't average — the stems already sum to the mix level.
     cmd += ["-filter_complex", "amix=inputs=3:normalize=0", str(out)]
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = subprocess.run(cmd, capture_output=True, timeout=DECODE_TIMEOUT)
     if proc.returncode != 0 or not out.exists():
         out.unlink(missing_ok=True)
         return None

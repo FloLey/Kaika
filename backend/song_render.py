@@ -30,6 +30,7 @@ import uuid
 import numpy as np
 
 from . import fluid, paths, render_cache
+from .config import ENCODE_TIMEOUT
 from .graph_hash import RENDER_VERSION
 from .graph_render import Dag, _clip_dims
 
@@ -122,7 +123,8 @@ def _mux_audio(
         "-c:v", "copy", "-c:a", "aac", "-shortest",
         "-movflags", "+faststart", str(out_path),
     ]  # fmt: skip
-    proc = subprocess.run(cmd, capture_output=True)
+    # ENCODE ceiling: this muxes a whole song's video with its audio.
+    proc = subprocess.run(cmd, capture_output=True, timeout=ENCODE_TIMEOUT)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.decode(errors="replace")[-2000:])
 
