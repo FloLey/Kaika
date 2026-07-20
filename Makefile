@@ -70,8 +70,8 @@ test-frontend:
 	cd frontend && npm run test
 
 lint:
-	.venv/bin/ruff check backend tests
-	.venv/bin/black --check backend tests
+	.venv/bin/ruff check backend tests scripts
+	.venv/bin/black --check backend tests scripts/measure_render.py scripts/ai_stylize_prototype.py
 	cd frontend && npm run lint
 	cd frontend && npm run typecheck
 	cd frontend && npm run format:check

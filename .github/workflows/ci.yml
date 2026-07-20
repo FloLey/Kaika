@@ -5,9 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to the same ref cancels the run it supersedes -- CI minutes spent proving
+# a commit nobody is waiting on are wasted twice over (the queue behind them too).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # `backend.db` defaults its DSN to postgresql://demucs:demucs@localhost:5432/demucs
     # (db.py:22) — the same credentials docker-compose uses locally — so matching them
     # here means the `live_db` fixture connects with no env wiring at all.
@@ -32,12 +39,16 @@ jobs:
           python-version: "3.12"
           cache: pip
       # ruff is static — no runtime deps needed, so lint fast first.
+      # Versions come from requirements-dev.txt via -c, so this list names WHICH tools
+      # CI needs without restating their versions. They used to be pinned here AND in
+      # requirements-dev.txt AND in .pre-commit-config.yaml, with nothing keeping the
+      # three equal — `pip install -r requirements-dev.txt` silently disagreed with CI.
       - name: Install lint/test tooling
-        run: pip install ruff==0.15.19 black==26.5.1 pytest==9.1.1 pytest-cov==7.1.0
+        run: pip install -c requirements-dev.txt ruff black pytest pytest-cov
       - name: Ruff
-        run: ruff check backend tests
+        run: ruff check backend tests scripts
       - name: Black (format check)
-        run: black --check backend tests
+        run: black --check backend tests scripts/measure_render.py scripts/ai_stylize_prototype.py
       # torch is a top-level import of backend/media.py, so importing backend.app —
       # and therefore EVERY route test — needs it. Without it those tests skipped
       # silently and CI was green on a third of the suite it never ran. The CPU wheel
@@ -47,8 +58,13 @@ jobs:
         run: pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cpu
       # Everything else backend/ imports at module scope. Derived by walking the AST
       # for col_offset==0 imports, so it is the full set, not a guess.
+      # -c requirements.txt: CI installs the NARROW set it needs (the ML stack is lazy
+      # and genuinely unnecessary here) but at the PINNED versions the app actually runs.
+      # Unpinned, CI validated a combination nobody has ever run, and an upstream minor
+      # release broke it on an unrelated PR -- against a requirements.txt whose own header
+      # says "torch/librosa/demucs combos are brittle across versions".
       - name: Install test runtime deps
-        run: pip install numpy scipy librosa matplotlib soundfile flask "psycopg[binary]" pillow
+        run: pip install -c requirements.txt numpy scipy librosa matplotlib soundfile flask "psycopg[binary]" pillow
       # --strict-deps turns "skipped for a missing dependency" into a failure
       # (conftest.py's pytest_terminal_summary). This machine is supposed to have
       # everything, so a skip here is a provisioning bug, not an acceptable outcome.
@@ -59,6 +75,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend

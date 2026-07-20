@@ -40,5 +40,26 @@ export default defineConfig({
     include: ["src/**/*.test.{js,jsx,ts,tsx}"],
     // One global afterEach(cleanup) instead of a copy per DOM test — see setup.ts.
     setupFiles: ["./src/__tests__/setup.ts"],
+    coverage: {
+      // A ratchet, not a target — the same shape as pyproject.toml's `fail_under = 70`
+      // for the backend, which had no frontend counterpart at all. Measured 72.3%
+      // statements (2026-07-20); 65 leaves room for a normal feature commit while still
+      // failing loudly if a large untested surface lands at once. Raise it when a
+      // coverage step banks real ground.
+      thresholds: { statements: 65, lines: 65, branches: 65, functions: 50 },
+      exclude: [
+        // Prose, not logic: the in-app user guide is one long JSX document per section.
+        // Counting it would let real code rot behind a number that documentation props up
+        // — and a test already guards its anchors, which is the property that matters.
+        "src/components/docs/**",
+        // Generated (`make gen-params`) — covered by the codegen no-diff test instead.
+        "src/lib/fluidParams.js",
+        "src/lib/graph/generated.ts",
+        "src/**/*.test.{js,jsx,ts,tsx}",
+        "src/__tests__/**",
+        "src/main.jsx",
+        "**/*.config.js",
+      ],
+    },
   },
 });

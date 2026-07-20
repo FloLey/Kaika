@@ -181,7 +181,9 @@ def run(cfg, pipe, device, src: np.ndarray, tag: str) -> Path:
         # flicker). --per-frame isolates "can the model restyle the fluid" from the loop.
         init = dye if cfg.per_frame else prev
         if cfg.noise_inject > 0:  # perturb the init in pixel space to break attractors
-            noise = np.random.default_rng(cfg.seed + t).normal(0, cfg.noise_inject * 255, init.shape)
+            noise = np.random.default_rng(cfg.seed + t).normal(
+                0, cfg.noise_inject * 255, init.shape
+            )
             init = np.clip(init.astype(np.float32) + noise, 0, 255).astype(np.uint8)
         t0 = time.time()
         out = infer(init, extract_control(dye, cv2), cfg.denoise)
@@ -192,16 +194,22 @@ def run(cfg, pipe, device, src: np.ndarray, tag: str) -> Path:
         prev = out
         if t % 24 == 0 or t == len(src) - 1:
             spf = np.mean(times)
-            print(f"  [{tag}] {t + 1}/{len(src)}  {spf:.2f}s/frame  "
-                  f"eta {spf * (len(src) - t) / 60:.1f}min", flush=True)
+            print(
+                f"  [{tag}] {t + 1}/{len(src)}  {spf:.2f}s/frame  "
+                f"eta {spf * (len(src) - t) / 60:.1f}min",
+                flush=True,
+            )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"{tag}.mp4"
     encode(frames_out, cfg.fps, out_path)
     spf = float(np.mean(times)) if times else 0.0
     total = float(np.sum(times))
-    print(f"  [{tag}] DONE  {W}x{H}  steps={steps}  {spf:.2f}s/frame  "
-          f"total {total:.0f}s ({total / 60:.1f}min)  -> {out_path}", flush=True)
+    print(
+        f"  [{tag}] DONE  {W}x{H}  steps={steps}  {spf:.2f}s/frame  "
+        f"total {total:.0f}s ({total / 60:.1f}min)  -> {out_path}",
+        flush=True,
+    )
     return out_path
 
 
@@ -224,15 +232,26 @@ def main() -> None:
     ap.add_argument("--list", action="store_true", help="list cached fluid clips and exit")
     ap.add_argument("--source", help="cache key (data/fluid_cache/<key>.npy) or a path")
     ap.add_argument("--frames", type=int, default=240, help="max frames to stylize (240 ≈ 10s)")
-    ap.add_argument("--res", type=int, default=512, help="working short-side px (SD-Turbo native 512)")
+    ap.add_argument(
+        "--res", type=int, default=512, help="working short-side px (SD-Turbo native 512)"
+    )
     ap.add_argument("--denoise", type=float, default=0.45, help="img2img strength (the key dial)")
     ap.add_argument("--sweep", help="comma list of denoise values → one clip each")
-    ap.add_argument("--steps", type=int, default=0, help="inference steps (0 = auto for ~2 effective)")
+    ap.add_argument(
+        "--steps", type=int, default=0, help="inference steps (0 = auto for ~2 effective)"
+    )
     ap.add_argument("--control-scale", type=float, default=0.8, help="ControlNet strength (0=off)")
-    ap.add_argument("--per-frame", action="store_true",
-                    help="restyle each dye frame directly (no feedback loop damping)")
-    ap.add_argument("--noise-inject", type=float, default=0.0,
-                    help="add gaussian pixel noise to the init each frame (0..1, breaks attractors)")
+    ap.add_argument(
+        "--per-frame",
+        action="store_true",
+        help="restyle each dye frame directly (no feedback loop damping)",
+    )
+    ap.add_argument(
+        "--noise-inject",
+        type=float,
+        default=0.0,
+        help="add gaussian pixel noise to the init each frame (0..1, breaks attractors)",
+    )
     ap.add_argument("--lab", type=int, default=0, help="LAB-match to anchor every N frames (0=off)")
     ap.add_argument("--fixed-noise", action="store_true", help="reuse one noise seed every frame")
     ap.add_argument("--model", default=DEFAULT_MODEL)

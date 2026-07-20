@@ -3,7 +3,18 @@
 # `# noqa: BLE001` markers, so blind-except is flagged but suppressible.
 line-length = 100
 target-version = "py312"
-exclude = [".venv", "data", "__pycache__", "frontend"]
+exclude = [
+  ".venv",
+  "data",
+  "__pycache__",
+  "frontend",
+  # One-shot prototypes from the ai-stylize wave, kept only so their numbers stay
+  # reproducible — their findings live in docs/ai-stylize/. They are archived in place,
+  # not maintained, and every lint error under scripts/ is in one of them. The decision
+  # is deliberate: `scripts/` IS linted now (measure_render.py backs `make measure-render`
+  # and is real tooling), and half-linting a directory is worse than either extreme.
+  "scripts/_*.py",
+]
 
 # Bug-catching rules, not style churn. Deliberately NOT enabling `I`
 # (import-sort would move matplotlib.use("Agg") after the pyplot import and break
