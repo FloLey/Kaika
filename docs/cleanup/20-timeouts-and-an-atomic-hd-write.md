@@ -1,5 +1,26 @@
 # Step 20 — Timeouts, and an atomic HD write
 
+**Status: DONE** — `769212a`.
+
+> Two corrections from doing it. There were **six** untimed calls, not five: `fluid.py`'s
+> `render_mp4` was missed, and every line number below had drifted (`fluid.py:685`→`753`,
+> `song_render.py:119`→`125`, `sources.py:1016` moved too). Re-grep, as this file already
+> says.
+>
+> Landed as three ceilings in `config.py` beside the existing `PROXY`/`CLIP`/`THUMB` ones —
+> `PROBE_TIMEOUT` 30, `DECODE_TIMEOUT` 600, `ENCODE_TIMEOUT` 1800 — deliberately generous,
+> because they bound a *hang*, not a budget.
+>
+> One thing worth stating that the step below does not: **a ceiling alone would trade a
+> deadlock for an outage.** `_video_meta` catches its own `TimeoutExpired` and returns the
+> `(0.0, 16, 16)` placeholder it already had for corrupt files, so a stalled probe degrades
+> one card instead of 500-ing the export.
+>
+> The HD publish went further than "reuse `_write_atomic`": the clip is now encoded *beside*
+> `dest` rather than in `/tmp`, so publishing is a same-filesystem `os.replace` and the
+> whole read-back-through-RAM disappears with the truncation bug. ffmpeg can write straight
+> to the final directory; there was never a reason to copy.
+
 **Tier.** Core. Two robustness holes, both of which fail in a way the user experiences as
 "exports are broken" with nothing in the logs to explain it.
 
