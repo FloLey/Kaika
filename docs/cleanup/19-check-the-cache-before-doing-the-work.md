@@ -138,7 +138,7 @@ Two consequences to handle deliberately:
 | Finding | State |
 |---|---|
 | 1. song export plans before checking | ✅ `4a39773` — 567 ms → 0.2 ms cold |
-| 2. HD stylize key derived from the render it avoids | **not started** |
+| 2. HD stylize key derived from the render it avoids | ✅ `8d6073c` — 676 ms → 0.1 ms per segment |
 
 ## Acceptance criteria
 
@@ -150,7 +150,12 @@ Two consequences to handle deliberately:
   guarantee got *stronger*: the test now asserts a cache hit constructs no `Dag` at all,
   because what is never opened cannot leak. The old test asserted the mechanism (that
   `close` was called), which the fix made unsatisfiable.
-- Old `hd-stylize-*` files are confirmed GC-reachable. — pending, belongs to finding 2.
+- Old `hd-stylize-*` files: ⚠ **checked, and the answer is the opposite of what this step
+  assumed.** They are not orphaned-and-collected — `db.add_asset` registers each generated
+  clip in the project's asset LIBRARY, and `cache_gc._assets_from` keeps every library entry
+  alive. So v3-keyed clips are *pinned*, not swept, and the v4 rekey means a project can hold
+  both until someone removes the old ones from the library by hand. Disk cost, not
+  correctness; worth knowing before assuming the sweep handles it.
 
 ## Risks
 
