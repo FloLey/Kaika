@@ -15,6 +15,8 @@ import pytest
 from backend import graph as G
 from backend import graph_render as GR
 
+from helpers import assert_frames_close
+
 NOAUDIO = lambda j, s: None  # noqa: E731
 SEG = {"start": 0.0, "end": 1.0, "signals": [], "lyric_lines": []}
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 10}
@@ -79,8 +81,7 @@ def test_whole_clip_and_block_stream_are_identical():
     streamed = np.concatenate(
         [G.fluid.flatten(b) for _a, _b, _t, b in dag.stream_blocks("o", 4)], axis=0
     )
-    assert streamed.shape == whole.shape
-    assert np.array_equal(whole, streamed)
+    assert_frames_close(whole, streamed, label="transform whole vs streamed")
 
 
 def test_transform_actually_changes_the_frames():

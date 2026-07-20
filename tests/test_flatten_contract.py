@@ -17,6 +17,8 @@ import numpy as np
 
 from backend import fluid, sources
 
+from helpers import assert_frames_close
+
 
 def _rgba(rgb: tuple, alpha: int, shape=(1, 2, 2)) -> np.ndarray:
     f = np.zeros((*shape, 4), np.uint8)
@@ -194,9 +196,16 @@ def test_ffmpeg_composite_matches_the_numpy_one_through_a_real_encode(tmp_path):
     fluid.render_mp4(frames, 8, new, w, h)  # RGBA straight in
 
     a, b = decode(old), decode(new)
-    assert a.shape == b.shape == (8, h, w, 3)
-    diff = np.abs(a.astype(int) - b.astype(int))
-    assert diff.mean() < 2 and diff.max() < 8, f"mean {diff.mean():.2f}, max {diff.max()}"
+    assert a.shape == (8, h, w, 3)
+    assert_frames_close(
+        a,
+        b,
+        atol=8,
+        mean_atol=2,
+        label="rgba straight to ffmpeg vs the numpy composite",
+        why="both round-trip through a lossy encode; flat colours keep this small, and a "
+        "first attempt on random noise measured compression rather than the composite",
+    )
     # the fade really is a fade in BOTH (an alpha drop would make every frame identical)
     for clip in (a, b):
         assert int(clip[0, 32, 32].max()) < 8 < int(clip[7, 32, 32].max())

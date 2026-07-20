@@ -5,6 +5,11 @@ segment that rendered 79 frozen frames out of 80, and a card whose preview never
 Every render check in the repo measured brightness (`test_card_impact`) or compared two
 DIFFERENT renders — nothing ever compared frame i to frame i+1, so a clip of 80 identical
 images passed exactly like an animated one.
+
+`assert_frames_close` covers the other axis. Comparing two renders was never missing — it
+was hand-rolled in nine files under four different tolerances, with no shared answer to
+"what does agree mean?". Wave 3's perf work needs one, because a windowed Gaussian is
+supposed to be *nearly* identical and someone has to say how near.
 """
 
 from __future__ import annotations
@@ -95,6 +100,64 @@ def assert_not_black(frames: np.ndarray, label: str = "") -> None:
     what = f"{label}: " if label else ""
     assert peak >= 32, f"{what}render is visually black (peak brightness {peak})"
     assert lit >= 0.005, f"{what}render lights only {lit:.3%} of its pixels"
+
+
+def assert_frames_close(
+    a: np.ndarray,
+    b: np.ndarray,
+    *,
+    atol: int = 0,
+    mean_atol: float = 0.0,
+    label: str = "",
+    why: str = "",
+) -> None:
+    """Two renders of the same thing agree. EXACT unless a tolerance is stated.
+
+    `atol` bounds the worst single channel value (in 8-bit levels); `mean_atol` bounds the
+    clip-wide mean. Both are checked and both default to 0, so weakening this assertion is
+    always someone typing a number — never an omission.
+
+    Why two bounds and not one: `test_card_impact` compares whole-vs-streamed by clip-wide
+    MEAN on purpose, because ffmpeg seeking makes video-backed cards differ by a hair at
+    block seams and a max bound fails on them. But a mean alone hides the opposite failure —
+    a large divergence confined to three frames averages into nothing across a whole clip.
+    One bound each way catches both shapes. `test_flatten_contract` already paired them by
+    hand; this is that pairing, named.
+
+    A nonzero tolerance must carry `why`. Every floor in this module justifies its number in
+    prose, and a tolerance that travels by copy-paste should drag its reasoning along with
+    it — a reviewer then sees a claim to check rather than a bare float.
+
+    NB the stacks are compared AS GIVEN: an RGBA pair is compared on all four channels,
+    because an alpha difference is a real difference. Flatten first if you mean to ignore it.
+    """
+    assert not (atol or mean_atol) or why, "a nonzero tolerance must say why (pass `why=`)"
+    what = f"{label}: " if label else ""
+    a, b = np.asarray(a), np.asarray(b)
+    assert a.shape == b.shape, f"{what}frame stacks differ in shape — {a.shape} vs {b.shape}"
+    if a.size == 0:
+        return
+    # int16 holds the full -255..255 range at half the memory of the int64 these tests
+    # otherwise promote to (an HD block is large enough for that to matter).
+    d = np.abs(a.astype(np.int16) - b.astype(np.int16))
+    worst, mean = int(d.max()), float(d.mean())
+    if worst <= atol and mean <= mean_atol:
+        return
+    # Diagnostics are built only on the failure path — a bare `allclose` cannot tell
+    # "you broke the physics" from "you moved one edge pixel", and that distinction is
+    # the whole reason this helper exists.
+    flat = d.reshape(len(d), -1)
+    fi = int(np.argmax(flat.max(axis=1)))
+    where = tuple(int(i) for i in np.unravel_index(int(np.argmax(d)), d.shape))
+    raise AssertionError(
+        f"{what}renders differ — max {worst} (bound {atol}), "
+        f"clip mean {mean:.3f} (bound {mean_atol})\n"
+        f"  worst frame {fi} of {len(d)}: max {int(flat[fi].max())}, "
+        f"mean {float(flat[fi].mean()):.3f}\n"
+        f"  {float((d > atol).mean()):.4%} of values over the max bound; "
+        f"worst at {where}: {int(a[where])} vs {int(b[where])}"
+        + (f"\n  stated tolerance: {why}" if why else "")
+    )
 
 
 # ---- graph builders ---------------------------------------------------------

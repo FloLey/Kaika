@@ -13,7 +13,7 @@ import soundfile as sf
 
 from backend import card_demo, graph
 
-from helpers import assert_moves, assert_not_black
+from helpers import assert_frames_close, assert_moves, assert_not_black
 
 OUT = {"fps": 8, "width": 120, "height": 120, "quality": "draft", "background": "#000000"}
 LINES = [{"t0": 0.0, "t1": 1.0, "text": "playground lyrics"}]
@@ -140,10 +140,15 @@ def test_whole_clip_matches_the_block_stream(demo, stem_path):
     streamed = np.concatenate(
         [f for *_, f in graph.Dag("playground", seg, g, stem_path, OUT).stream_blocks(out_id, 3)]
     )
-    assert whole.shape == streamed.shape, demo["key"]
-    # ffmpeg seeking makes a video-backed card differ by a hair at a block seam; a
-    # genuine divergence (a card rendering different content) is orders of magnitude
-    # bigger than this.
-    assert (
-        np.abs(whole.astype(int) - streamed.astype(int)).mean() < 2.0
-    ), f"{demo['key']}: the export path and the preview path disagree"
+    assert_frames_close(
+        whole,
+        streamed,
+        atol=8,
+        mean_atol=2.0,
+        label=f"{demo['key']}: the export path and the preview path disagree",
+        why="ffmpeg seeking can make a video-backed card differ by a hair at a block seam, "
+        "and a genuine divergence is orders of magnitude bigger. Both bounds are headroom "
+        "today: measured 2026-07-20, all 34 demos agree EXACTLY (max delta 0), the five "
+        "video-backed ones included. Kept non-zero so a decoder or ffmpeg-version change "
+        "does not turn a hair of seam jitter into a red suite",
+    )
