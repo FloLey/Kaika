@@ -13,11 +13,12 @@ import numpy as np
 import pytest
 
 from backend import fluid, fluid_cache
+
+from helpers import no_audio as NOAUDIO
 from backend import graph as G
 
 OUT = {"width": 96, "height": 128, "quality": "draft", "fps": 24, "background": "#101418"}
 SEG = {"start": 0.0, "end": 2.0, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 @pytest.fixture(autouse=True)

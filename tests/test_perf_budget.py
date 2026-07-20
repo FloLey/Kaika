@@ -17,7 +17,7 @@ import pytest
 
 from backend import card_demo, graph
 
-from helpers import assert_moves, out, timed
+from helpers import assert_moves, no_audio, out, timed
 
 pytestmark = pytest.mark.perf
 
@@ -46,7 +46,7 @@ def test_segment_render_stays_within_budget():
     frames, elapsed = timed(
         "fluid segment render",
         lambda: graph.Dag(
-            "playground", {**_SEG, "signals": demo["signals"]}, g, _noaudio, _OUT
+            "playground", {**_SEG, "signals": demo["signals"]}, g, no_audio, _OUT
         ).video(out_id),
     )
     assert_moves(frames, "fluid demo")
@@ -63,7 +63,7 @@ def test_value_curve_resolve_stays_within_budget():
     node_id = next(n["id"] for n in g["nodes"] if n["type"] == "lfo")
     result, elapsed = timed(
         "resolve lfo curve",
-        lambda: graph.resolve_node_curve("playground", _SEG, g, node_id, _noaudio, fps=24),
+        lambda: graph.resolve_node_curve("playground", _SEG, g, node_id, no_audio, fps=24),
     )
     assert len(result["curve"]) > 1
     assert elapsed < RESOLVE_BUDGET_S, f"/resolve took {elapsed:.1f}s (budget {RESOLVE_BUDGET_S}s)"
@@ -82,7 +82,7 @@ def test_cached_slot_render_is_much_cheaper_than_cold(tmp_path, monkeypatch):
 
     def render():
         return graph.Dag(
-            "playground", {**_SEG, "signals": demo["signals"]}, g, _noaudio, _OUT
+            "playground", {**_SEG, "signals": demo["signals"]}, g, no_audio, _OUT
         ).video(out_id)
 
     cold_frames, cold = timed("montage cold", render)
@@ -93,7 +93,3 @@ def test_cached_slot_render_is_much_cheaper_than_cold(tmp_path, monkeypatch):
     assert warm <= max(
         cold, 0.05
     ), f"cached render ({warm:.2f}s) was slower than cold ({cold:.2f}s)"
-
-
-def _noaudio(_job, _stem):
-    return None

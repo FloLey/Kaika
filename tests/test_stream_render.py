@@ -16,6 +16,8 @@ import numpy as np
 import pytest
 
 from backend import fluid
+
+from helpers import no_audio as NOAUDIO
 from backend import graph as G
 
 _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
@@ -27,7 +29,6 @@ SEG = {
     "signals": [],
     "lyric_lines": [{"t0": 0.2, "t1": 1.6, "text": "les avions dessinent dans le ciel"}],
 }
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _fl(nid, color, pos, angle):

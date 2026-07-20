@@ -373,7 +373,10 @@ export function videoNode(x: number, y: number): VideoNode {
       fit: "cover",
       sync: "song",
       start: 0,
-      loop: true,
+      // OFF by default: a clip shorter than its window now goes BLANK rather than
+      // looping (see sources.VideoClip.frames). In a montage a mid-cut restart is
+      // always visible; tick this when a replay is what you actually want.
+      loop: false,
       crop_x: 0,
       crop_y: 0,
       crop_w: 1,

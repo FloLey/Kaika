@@ -15,9 +15,8 @@ import pytest
 from backend import graph as G
 from backend import graph_render as GR
 
-from helpers import assert_frames_close
+from helpers import assert_frames_close, no_audio as NOAUDIO
 
-NOAUDIO = lambda j, s: None  # noqa: E731
 SEG = {"start": 0.0, "end": 1.0, "signals": [], "lyric_lines": []}
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 10}
 PARAMS = ("zoom", "rotate", "pan_x", "pan_y")

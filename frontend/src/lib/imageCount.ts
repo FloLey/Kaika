@@ -37,12 +37,6 @@ export function slideshowItems(graph: Graph | null | undefined, node: GraphNode)
   return [...own, ...gens];
 }
 
-// URL-only view of the effective items — kept for the switch-count / compact preview,
-// which only need the count and the urls.
-export function slideshowUrls(graph: Graph | null | undefined, node: GraphNode): string[] {
-  return slideshowItems(graph, node).map((it) => it.url);
-}
-
 // Frame index of each rising edge of a 0..1 `curve` — a 0→1 crossing of the
 // threshold with a small dead band, matching the slideshow/montage's built-in
 // hysteresis so the counts agree. A curve that STARTS high isn't a rise (frame 0

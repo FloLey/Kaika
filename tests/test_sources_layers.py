@@ -16,6 +16,8 @@ import pytest
 from PIL import Image
 
 from backend import graph as G
+
+from helpers import no_audio as NOAUDIO
 from backend import paths
 from backend import sources as S
 
@@ -23,7 +25,6 @@ _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpe
 
 OUT = {"width": 96, "height": 128, "quality": "draft", "fps": 24}
 SEG = {"start": 0.0, "end": 1.0, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 @pytest.fixture

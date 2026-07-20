@@ -14,6 +14,8 @@ import numpy as np
 import pytest
 
 from backend import fluid
+
+from helpers import no_audio as NOAUDIO
 from backend import graph as G
 from backend import graph_render as GR
 from backend import song_render as SR
@@ -22,7 +24,6 @@ from backend.routes import export as EX
 EXPORT = {"width": 1080, "height": 1920, "fps": 30, "gridCells": 216, "imageSize": 1024}
 PREVIEW = {"width": 1080, "height": 1920, "quality": "draft", "fps": 24}
 SEG = {"id": "s1", "start": 0.0, "end": 1.0, "signals": [], "lyric_lines": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _edge(s, t, tp):

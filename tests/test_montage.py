@@ -19,13 +19,12 @@ from backend import sources as S
 from backend.graph_common import composite
 from backend.graph_render import _montage_block, _montage_starts, _montage_video, _to_rgba
 
-from helpers import assert_moves
+from helpers import assert_moves, no_audio as NOAUDIO
 
 _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 12}
 SEG = {"start": 0.0, "end": 1.0, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _edge(s, t, tp):

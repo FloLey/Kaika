@@ -10,6 +10,8 @@ import pytest
 from PIL import Image
 
 from backend import graph as G
+
+from helpers import no_audio as NOAUDIO
 from backend import paths
 from backend.graph_render import _slideshow_index, _slideshow_items
 from backend.sources import SlideshowClip
@@ -18,7 +20,6 @@ _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpe
 
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 12}
 SEG = {"start": 0.0, "end": 1.0, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _edge(s, t, tp):

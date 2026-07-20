@@ -16,11 +16,10 @@ import pytest
 from backend import graph as G
 from backend.sources import SOURCE_PARAMS
 
-from helpers import assert_moves
+from helpers import assert_moves, no_audio as NOAUDIO
 
 OUT = {"width": 120, "height": 64, "quality": "draft", "fps": 24}
 SEG = {"start": 0.0, "end": 2.5, "signals": [], "lyric_lines": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _ports(card, **over):

@@ -55,7 +55,7 @@ Postgres.
 ```
 backend/            Flask API + the render engine
   routes/           ten blueprints (absolute URLs, no prefixes)
-  graph.py          ← 87-line facade; the executor lives in graph_*.py
+  graph.py          ← 66-line facade; the executor lives in graph_*.py
   fluid.py          the fluid simulation (+ fire mode) + encoders
   sources.py        non-fluid video layers (lyrics/image/video/backdrop + sim cards)
   procgen.py        the simulation kit (wave spectra, caustics, DBM, spectral ripple…)

@@ -10,6 +10,8 @@ import numpy as np
 import pytest
 
 from backend import fluid
+
+from helpers import no_audio as NOAUDIO
 from backend import graph as G
 
 # render() encodes an mp4 via ffmpeg; skip those two cases where it's not installed
@@ -18,7 +20,6 @@ _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpe
 
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 24, "background": "#101418"}
 SEG = {"start": 0.0, "end": 1.0, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731  (const fluids never extract a signal)
 
 
 def _fluid(nid, color, pos, angle):

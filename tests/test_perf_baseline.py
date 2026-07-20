@@ -25,7 +25,7 @@ import pytest
 from backend import graph, song_render
 from backend.graph_common import _POINT_CAP
 
-from helpers import assert_moves, edge, graph_of, node, out, timed
+from helpers import assert_moves, edge, graph_of, no_audio, node, out, timed
 
 pytestmark = pytest.mark.bench
 
@@ -37,8 +37,6 @@ BUDGETS = {
     "clouds": 60.0,
     "song_cache_hit": 5.0,
 }
-
-_NOAUDIO = lambda _job, _stem: None  # noqa: E731
 
 # ⚠ Output settings decide the frame size, and getting them wrong makes a benchmark measure
 # nothing. Two different paths matter:
@@ -63,7 +61,7 @@ def _ports(**kw) -> dict:
 
 
 def _render(g, out_dict, seg, out_id="out"):
-    return graph.Dag("bench", seg, g, _NOAUDIO, out_dict).video(out_id)
+    return graph.Dag("bench", seg, g, no_audio, out_dict).video(out_id)
 
 
 @pytest.fixture(scope="module")
@@ -153,7 +151,7 @@ def test_transform_block_over_rgba_at_native_resolution():
     seg = {"start": 0.0, "end": 0.5, "signals": []}
 
     def run():
-        dag = graph.Dag("bench", seg, g, _NOAUDIO, _HD_NATIVE)
+        dag = graph.Dag("bench", seg, g, no_audio, _HD_NATIVE)
         return np.concatenate([f for *_, f in dag.stream_blocks("out", 6)])
 
     frames, elapsed = timed("transform block, 1080p RGBA", run)

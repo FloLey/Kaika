@@ -7,9 +7,10 @@ import numpy as np
 
 from backend import graph as G
 
+from helpers import no_audio as NOAUDIO
+
 OUT = {"width": 96, "height": 96, "quality": "draft", "fps": 24, "background": "#000000"}
 SEG = {"start": 0.0, "end": 1.5, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _fluid(nid="f"):

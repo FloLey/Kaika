@@ -23,11 +23,12 @@ import numpy as np
 import pytest
 
 from backend import graph_render as GR
+
+from helpers import no_audio as NOAUDIO
 from backend import song_render as SR
 
 SEG = {"id": "s1", "start": 0.0, "end": 0.5, "signals": [], "lyric_lines": []}
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 8}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _graph():

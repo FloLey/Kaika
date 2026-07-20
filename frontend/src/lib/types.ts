@@ -626,6 +626,12 @@ export type GraphNode =
 export type NodeType = GraphNode["type"];
 
 // One node's `data` for a given type (e.g. NodeData<"fluid"> = FluidData).
+// KEPT deliberately though nothing imports it today. It is the one-line spelling of
+// "the node type for this NodeType", which every narrowing site would otherwise write by
+// hand as an inline Extract<>. Deleting an unused *type* saves no bytes at runtime and
+// costs the next person the derivation; deleting an unused *component* (PortConnections,
+// MiniSpark) removes real drift risk. Those are different calls and this file makes the
+// second one, not the first.
 export type NodeOf<T extends NodeType> = Extract<GraphNode, { type: T }>;
 
 export type PortFlow = "value" | "video" | "points" | "color" | "images";

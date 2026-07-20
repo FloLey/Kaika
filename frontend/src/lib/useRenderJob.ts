@@ -14,16 +14,6 @@ import * as api from "./api";
 // Both consumers poll the same `/export/stream/<id>` endpoints (they're generic
 // over render_jobs), so `start` just takes whichever kick-off call is relevant.
 
-export interface RenderJobState {
-  busy: boolean;
-  error: string;
-  progress: { done: number; total: number } | null;
-  phase: string | null;
-  segment: string | null; // "2/4 · verse" — whole-song exports only
-  videoUrl: string; // the growing preview while running, the finished file when done
-  finalUrl: string; // set only once the render completed (enables download)
-}
-
 const POLL_MS = 500;
 
 export function useRenderJob(storeKey: string | null) {

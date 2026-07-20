@@ -14,10 +14,11 @@ import numpy as np
 import pytest
 
 from backend import graph as G
+
+from helpers import no_audio as NOAUDIO
 from backend import paths
 from backend import song_render as SR
 
-NOAUDIO = lambda j, s: None  # noqa: E731
 EXPORT = {"width": 64, "height": 96, "fps": 20, "gridCells": 32, "background": "#000000"}
 
 

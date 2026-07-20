@@ -110,16 +110,29 @@ describe("useSyncedPlayback — segment playing", () => {
     expect(v.playbackRate).toBe(1);
   });
 
-  it("waits instead of chasing a position the file does not contain yet", () => {
+  it("HOLDS when the file stops short of the playhead, instead of wrapping to zero", () => {
     // A streamed preview still growing: the clock is past the end of what's on disk.
+    // The element loops, so letting it run would restart the clip mid-segment — which
+    // reads as "the video plays twice from its start".
     const { v, audio } = mount();
     Object.defineProperty(v, "duration", { value: 3, configurable: true });
     audio.currentTime = 4.2;
     v.currentTime = 2.5;
     tick();
-    expect(v.currentTime).toBe(2.5);
+    expect(v.currentTime).toBe(2.5); // no seek
     expect(v.playbackRate).toBe(1);
-    expect(v.paused).toBe(false); // still playing, just not steered
+    expect(v.paused).toBe(true); // frozen on the last rendered frame
+  });
+
+  it("resumes once the render catches up with the playhead", () => {
+    const { v, audio } = mount();
+    Object.defineProperty(v, "duration", { value: 3, configurable: true });
+    audio.currentTime = 4.2; // past the partial clip → holds
+    tick();
+    expect(v.paused).toBe(true);
+    Object.defineProperty(v, "duration", { value: 6, configurable: true }); // more blocks landed
+    tick();
+    expect(v.paused).toBe(false);
   });
 
   it("tolerates missing metadata", () => {

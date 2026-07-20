@@ -100,18 +100,25 @@ export function useSyncedPlayback(
         if (!v.paused) v.pause();
         return;
       }
-      if (v.paused) arm.play();
       const dur = v.duration;
-      if (!Number.isFinite(dur) || dur <= 0) return; // no metadata yet — just let it play
+      if (!Number.isFinite(dur) || dur <= 0) {
+        if (v.paused) arm.play(); // no metadata yet — just let it roll
+        return;
+      }
       const target = a.currentTime - segStart;
-      // The clock is outside the clip: either before this segment, or the file on disk
-      // is still SHORTER than we are into the segment (a streamed preview still growing,
-      // or a clip trimmed shorter than its window). Don't fight it — chasing a position
-      // the file doesn't contain is exactly what made this thrash.
+      // The clip does not contain "now": either we're before this segment, or the file
+      // on disk stops short of the playhead (a streamed preview still growing, a clip
+      // trimmed shorter than its window). HOLD on the last frame — the frames for now
+      // simply don't exist. Letting it run instead would hit the end and, because the
+      // element loops, wrap to zero: on screen that reads as the clip restarting in the
+      // middle of the segment, which is exactly the "it plays twice from the start"
+      // complaint. Freezing is honest; a spurious replay is a lie about the timeline.
       if (target < 0 || target >= dur) {
+        if (!v.paused) v.pause();
         if (v.playbackRate !== 1) v.playbackRate = 1;
         return;
       }
+      if (v.paused) arm.play(); // back inside the rendered range — resume
       if (v.seeking) return; // never stack seeks: each one restarts the decode
       // Wrap-aware: the segment loops (useStudioPlayback sends the audio back to
       // winStart) and the clip loops natively, so at the seam the two can be a whole

@@ -4,6 +4,10 @@
 flask==3.1.3
 demucs==4.0.1
 torch==2.12.1
+# torchaudio's decode backend (it imports this from its own __init__), so nothing in
+# backend/ references it directly and a grep says "dead". It is not: dropping it
+# breaks demucs stem separation at load time, not import time. Pinned explicitly
+# because torchaudio does NOT declare it as a hard requirement.
 torchcodec==0.14.0
 librosa==0.11.0
 matplotlib==3.11.0

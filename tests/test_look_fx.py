@@ -13,9 +13,10 @@ from __future__ import annotations
 import numpy as np
 
 from backend import graph as G
+
+from helpers import no_audio as NOAUDIO
 from backend import look_fx
 
-NOAUDIO = lambda j, s: None  # noqa: E731
 SEG = {"start": 0.0, "end": 1.0, "signals": [], "lyric_lines": []}
 OUT = {"width": 64, "height": 64, "quality": "draft", "fps": 10}
 

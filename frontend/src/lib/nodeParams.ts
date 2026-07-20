@@ -74,4 +74,3 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
 export const nodeParams = (type: string): FluidParam[] => NODE_PARAMS[type] || [];
 export const nodeParam = (type: string, key: string): FluidParam | undefined =>
   nodeParams(type).find((p) => p.key === key);
-export const hasParams = (type: string): boolean => (NODE_PARAMS[type]?.length ?? 0) > 0;

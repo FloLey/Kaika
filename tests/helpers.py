@@ -175,6 +175,18 @@ def timed(label: str, fn):
     return value, elapsed
 
 
+def no_audio(_job, _stem):
+    """The stem resolver for a test that has no audio — the value 15 test files spelled
+    out as `NOAUDIO = lambda j, s: None  # noqa: E731`, one copy each.
+
+    A `Dag` takes a `(job_id, stem) -> path | None` resolver; returning None means every
+    signal resolves flat, which is what a const-parameter render wants. A named function
+    also drops 14 of the repo's 20 `E731` suppressions, since the lambda was only ever
+    assigned to a name to begin with.
+    """
+    return None
+
+
 # ---- graph builders ---------------------------------------------------------
 # Every render test hand-rolls these; the shapes are identical modulo the card's data.
 # Adopt on touch — there is no value in rewriting a passing test just to use them.

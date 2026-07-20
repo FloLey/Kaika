@@ -3,8 +3,9 @@ node's base positions for the card preview (no render)."""
 
 from backend import graph as G
 
+from helpers import no_audio as NOAUDIO
+
 SEG = {"start": 0.0, "end": 1.0, "signals": []}
-NOAUDIO = lambda j, s: None  # noqa: E731
 
 
 def _edge(s, t, tp):
