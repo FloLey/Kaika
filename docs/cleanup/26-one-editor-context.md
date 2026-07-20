@@ -1,5 +1,11 @@
 # Step 26 — One editor context instead of a nine-prop drill
 
+> **Both salvaged items are now done** — `7e781c0` (asset-card naming) and `2e12446`
+> (`buildSavePayload`). The `dropAssetCard` framing was overstated, though: it does not
+> break the binding↔edge invariant, because `addAssetCard` adds a node with **no edges**
+> and `mutations.ts` keeps the wiring helpers in a separate section. The real defect was an
+> unwritten "the card I added is last" contract. The refactor itself stays closed.
+
 **Status: CLOSED — do not do this.** Decided on measurement, 2026-07-20.
 
 This step is gated on step 21's numbers, and they came in against it. The per-edit editor

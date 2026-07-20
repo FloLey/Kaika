@@ -6,8 +6,16 @@ TypeScript already infers — 7 of the hook's 10 fields). `NodeOf<T>` **kept**, 
 comment saying why: deleting an unused type saves nothing at runtime and costs the next
 person the derivation, unlike an unused component.
 
-**Not done**: `validate()`'s keep-or-delete call, `CompactCard.inFlow` vs
-`nodeInputs.cardInputs`, and the `STUB_HELPERS`/`NOOP_HELPERS` twins.
+**Now DONE** — `254c268`, `a1cb81b`:
+- `CompactCard.inFlow` defers to `cardInputs`. Not cosmetic: GraphCanvas validates a wire
+  drop by flow, so a stale literal silently refuses a legal wire.
+- One `STUB_HELPERS`, beside the interface. The two copies were identical *except* one was
+  `as unknown as NodeHelpers` — which is precisely why one definition matters: a new
+  required member breaks the typed copy at compile time and the cast copy at runtime.
+- `validate()` **kept**, with the decision written into the file: it mirrors the backend's
+  enforcing copy, the UI never needs it (the backend 400s), and ⚠ nothing keeps the two in
+  sync — its own test asserts against itself, so a backend rule change leaves it quietly
+  wrong and green.
 
 **Tier.** Optional. Nothing depends on it; it is a clean, self-contained deletion pass.
 

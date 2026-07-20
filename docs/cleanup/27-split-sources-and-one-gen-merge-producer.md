@@ -1,6 +1,11 @@
 # Step 27 — Split `sources.py`; one gen-merge producer
 
-**Status: PARTLY DONE** — `e3cfd60` deletes the `/animate` route (item 3). ⚠ Its Vite proxy
+**Status: item 2 and item 3 DONE** — `52604a4` (combine derives), `e3cfd60` (`/animate` deleted).
+
+Item 2 needed no new abstraction in the end: `combine`'s per-kind state is created fresh
+for a single-block scan (rain's `state` starts `None`, lightning's `bolt_cache` defaults
+to `None`), so `_whole_from_block("combine")` just works and `CLAUDE.md`'s exception list
+is one shorter. Only the `sources.py` split (item 1) remains. ⚠ Its Vite proxy
 entry **stays**: it is a prefix and it is what routes `/animate/stream`.
 
 **Items 1 and 2 not done, and item 1 should be reconsidered before anyone starts.** Wave 3
