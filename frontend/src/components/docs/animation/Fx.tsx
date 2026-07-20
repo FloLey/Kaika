@@ -86,9 +86,14 @@ export default function Fx() {
         last frame). Its preview on the card free-runs for the same reason.
       </p>
       <p>
-        <strong>Two warnings per row.</strong> <strong>⚠ −1.2s</strong> means the clip is shorter
-        than its slot — from its in-point there isn't enough material, so it loops back (or freezes,
-        if its loop is off). <strong>⧉ 3</strong> means this slot plays a clip slot 3 already used:
+        <strong>Two warnings per row, and a total on the card.</strong> <strong>⚠ −1.2s</strong>{" "}
+        means the clip is shorter than its slot — from its in-point there isn't enough material.
+        With <em>loop</em> on it replays from the in-point; with <em>loop</em> off{" "}
+        <strong>the slot goes black</strong> for the missing seconds, which is deliberate: a frozen
+        still reads as a broken render, black reads as "you are short here". The card's header
+        totals it (<strong>⚠ 1 slot short — 1.2s black</strong>) because a badge on one row out of
+        thirty is not a warning anyone finds — a real export shipped with 1.2s of black in it for
+        exactly that reason. <strong>⧉ 3</strong> means this slot plays a clip slot 3 already used:
         from the same in-point the two play <em>identical frames</em>, which on screen looks like
         the video looping rather than cutting — the badge turns red for that case, and stays grey
         when the in-points differ (another moment of the same footage, often deliberate). Both are

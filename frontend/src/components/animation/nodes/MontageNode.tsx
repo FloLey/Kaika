@@ -192,6 +192,24 @@ export default function MontageNode({
     return avail < needed - 0.05 ? { short: needed - avail, avail, needed, loop: c.loop } : null;
   };
 
+  // Card-level roll-up of the per-row shortfalls: how many slots are short, and how many
+  // SECONDS of black that actually costs (a looping slot is short but never goes black).
+  const shortRows = useMemo(() => {
+    const rows: { row: number; short: number }[] = [];
+    let black = 0;
+    let looping = 0;
+    inputs.forEach((_s, i) => {
+      const sf = shortfall(i, wiredOrdinal[i]);
+      if (!sf) return;
+      rows.push({ row: i + 1, short: sf.short });
+      if (sf.loop) looping++;
+      else black += sf.short;
+    });
+    return { n: rows.length, rows, black, looping };
+    // `shortfall` closes over clips/durations/cuts; those are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs, wiredOrdinal, clips, durations, cuts, fps]);
+
   // What `+ fill` would do, for the button's label-in-a-tooltip and its disabled state.
   // Same arithmetic as `fillMontageSlots`: the budget is one span unit per cut plus one
   // for the opening slot; unwired slots (existing + about to be created) each get a card.
@@ -240,6 +258,23 @@ export default function MontageNode({
         <strong>{cuts ? cuts.rises : 0}×</strong> this segment
         <ArgInfo type="montage" k="inputs" />
       </div>
+      {/* A ⚠ badge on ONE row out of 37 is not a warning anyone finds — a real export went
+          out with 1.2s of black in it and the row badge was sitting there the whole time.
+          Total the deficit here, where the eye already is. */}
+      {shortRows.n > 0 && (
+        <div
+          className="anim-fx-hint anim-montage-short"
+          title={
+            `${shortRows.n} slot${shortRows.n === 1 ? "" : "s"} short of material: ` +
+            `${shortRows.rows.map((r) => `slot ${r.row} (−${r.short.toFixed(1)}s)`).join(", ")}. ` +
+            "A slot with loop off goes BLACK once its clip runs out."
+          }
+        >
+          ⚠ {shortRows.n} slot{shortRows.n === 1 ? "" : "s"} short —{" "}
+          <strong>{shortRows.black.toFixed(1)}s black</strong>
+          {shortRows.looping > 0 && ` (+${shortRows.looping} looping)`}
+        </div>
+      )}
 
       <div className="anim-combine-inputs">
         {inputs.map((slot, i) => {
@@ -277,9 +312,11 @@ export default function MontageNode({
                     title={
                       `clip too short: only ${s.avail.toFixed(1)}s left from its in-point ` +
                       `for a ${s.needed.toFixed(1)}s slot (${s.short.toFixed(1)}s missing) — ` +
-                      (s.loop ? "it loops back to the in-point" : "it freezes on its last frame") +
-                      ". Move the in-point earlier (🎞 on the video card), turn the slot's ×N " +
-                      "down, or cut more often."
+                      (s.loop
+                        ? "it loops back to the in-point"
+                        : `the slot goes BLACK for the last ${s.short.toFixed(1)}s`) +
+                      ". Tick loop on the video card to replay it, move the in-point earlier " +
+                      "(🎞 on the card), turn the slot's ×N down, or cut more often."
                     }
                   >
                     ⚠ −{s.short.toFixed(1)}s

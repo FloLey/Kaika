@@ -67,7 +67,8 @@ export default function Sources() {
           of a centre crop. The clip plays live inside the placement box, showing exactly what will
           render. Timing controls: <em>sync</em> (<em>song</em> keeps a background clip
           phase-continuous across segments; <em>segment</em> restarts it at each cut), a{" "}
-          <em>start</em> offset into the source, and <em>loop</em> (off = the last frame holds).
+          <em>start</em> offset into the source, and <em>loop</em> (off = past the end the card
+          renders <strong>nothing</strong>, so it shows as black unless another layer is beneath).
           Both <em>opacity</em> and <em>speed</em> are modulatable — a signal on <em>speed</em>{" "}
           <strong>time-warps the clip</strong> (slow-motion in the quiet bars, whip-fast on the
           drop).
