@@ -244,13 +244,8 @@ def export_segment(body):
     return refused or jsonify({"render_id": render_id})
 
 
-# Frames-in-flight guard: a block holds `block_seconds * fps` frames at the FULL output
-# size (1080x1920x30fps ≈ 8 MB/frame → a 5 s block is over a gigabyte). Scale the block
-# down with the pixel count, floored so short segments still stream. Also tightens
-# cancellation latency, which is only checked between blocks.
-def _hd_block_seconds(w: int, h: int) -> float:
-    ref = 540 * 960
-    return max(0.5, min(5.0, 5.0 * ref / max(1, w * h)))
+# The rule lives in `song_render` so both HD paths share it; see there for why.
+_hd_block_seconds = song_render.hd_block_seconds
 
 
 def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progress, should_cancel):

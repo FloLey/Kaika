@@ -202,3 +202,64 @@ def test_the_generator_stays_usable_without_the_callback():
     segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6))]
     ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
     assert len(list(SR.iter_song_windows(ctx))) == 1
+
+
+def _backdrop_out(color="#204080"):
+    """A sim-FREE segment: nothing for the continuous fields to inject."""
+    return {
+        "version": 1,
+        "nodes": [
+            {"id": "b", "type": "backdrop", "data": {"color": color, "ports": {}}},
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("b", "o", "video")],
+    }
+
+
+def test_a_sim_free_segment_is_streamed_not_held_whole():
+    """The whole-clip path renders at the DAG's own frame size, which for a sim-free graph
+    is the export's NATIVE size — a 60 s segment at 2160x3840 RGBA is ~59 GB in ONE
+    allocation. A real 4K export sat at 13-17 GB resident until the OS memory killer took
+    it. A segment with no field to inject has no reason to be held whole: it streams."""
+    # Longer than one block: hd_block_seconds caps at 5 s, so a 12 s segment must split.
+    segs = [_seg("s1", 0.0, 12.0, _backdrop_out())]
+    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    windows = list(SR.iter_song_windows(ctx))
+    assert len(windows) > 1, "a sim-free segment still renders as one whole-clip window"
+    biggest = max(w.shape[0] for _a, _b, w in windows)
+    assert biggest < ctx["total"], "one window still covers the whole segment"
+    # Consecutive, gapless, and covering exactly the segment.
+    assert windows[0][0] == 0 and windows[-1][1] == ctx["total"]
+    assert all(b == windows[i + 1][0] for i, (_a, b, _w) in enumerate(windows[:-1]))
+    assert sum(w.shape[0] for _a, _b, w in windows) == ctx["total"]
+
+
+def test_streaming_a_sim_free_segment_renders_the_same_pixels():
+    """The lockstep invariant, applied to the change: streamed must equal whole-clip.
+    Compared after `flatten`, because the streamed blocks stay RGBA (the encoder
+    composites them over black) while the fluid path yields flattened RGB."""
+    from backend import fluid as F
+
+    segs = [_seg("s1", 0.0, 2.0, _backdrop_out("#3a7f2b"))]
+    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    streamed = np.concatenate([F.flatten(w) for _a, _b, w in SR.iter_song_windows(ctx)], axis=0)
+
+    dag, oid = ctx["plan"][0][0], ctx["plan"][0][1]
+    whole = F.flatten(dag.video(oid))
+    assert streamed.shape == whole.shape
+    assert np.array_equal(streamed, whole), "streaming changed the picture"
+
+
+def test_a_mixed_song_keeps_both_paths_and_stays_gapless():
+    """A song can mix a fluid segment (held whole, RGB) with a sim-free one (streamed,
+    RGBA). The frame ranges must still tile the song exactly, in order."""
+    segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 3.0, _backdrop_out())]
+    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    windows = list(SR.iter_song_windows(ctx))
+    assert windows[0][2].shape[-1] == 3  # the fluid segment: one flattened window
+    assert any(w.shape[-1] == 4 for _a, _b, w in windows[1:])  # the streamed one: RGBA
+    at = 0
+    for a, b, w in windows:
+        assert a == at and b - a == w.shape[0]
+        at = b
+    assert at == ctx["total"]

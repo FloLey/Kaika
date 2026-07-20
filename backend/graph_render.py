@@ -994,6 +994,9 @@ def _montage_video(dag: "Dag", node: dict) -> np.ndarray:
     gh, gw = _grid_dims(dag)
     starts = _montage_starts(params["trigger"], [span for _, span in slots], d)
     bounds = starts + [nframes]
+    # Same set-level decision as the block path: the slots are one cache SET, and a set
+    # that cannot coexist evicts itself entry by entry (see fluid_cache.set_fits).
+    cacheable = fluid_cache.set_fits(int(nframes) * gh * gw * 4)
     out = np.zeros((nframes, gh, gw, 4), np.uint8)
     for k, r in enumerate(starts):
         end = bounds[k + 1]
@@ -1013,7 +1016,8 @@ def _montage_video(dag: "Dag", node: dict) -> np.ndarray:
         n0 = len(dag._closers)
         frames = _to_rgba(dag.video(src))
         out[r:end] = frames[:need]
-        fluid_cache.store(key, frames)
+        if cacheable:
+            fluid_cache.store(key, frames)
         for close in dag._closers[n0:]:
             try:
                 close()
@@ -1729,6 +1733,11 @@ def _montage_block(dag: "Dag", node: dict):
     starts = _montage_starts(params["trigger"], [span for _, span in slots], d)
     bounds = np.array(starts + [nframes])
 
+    # One entry per slot, each comfortably under the per-entry ceiling, but the SET is
+    # what has to survive: 21 slots of a 4K montage total far past the budget, so they
+    # evict each other in slot order and nothing is ever re-read. Decide once, up front.
+    cacheable = fluid_cache.set_fits(int(nframes) * gh * gw * 4)
+
     def _slot_producer(src: str, length: int):
         """`produce_local(a, b) -> RGBA frames` for one slot: served straight from the
         slot frame cache when it holds enough frames (no decoder, no sim, no upstream
@@ -1739,6 +1748,8 @@ def _montage_block(dag: "Dag", node: dict):
         cached = fluid_cache.load(key)
         if cached is not None and cached.shape[1:] == (gh, gw, 4) and len(cached) >= length:
             return lambda a, b: np.ascontiguousarray(cached[a:b]), None
+        # A hit above is always honoured — a cached slot costs nothing to READ. Only
+        # WRITING a set that cannot survive is refused.
         # Closers registered while BUILDING this slot's chain (its decoders) belong to
         # this slot alone — validate enforces that a slot's upstream chain feeds nothing
         # else, which is exactly what makes releasing them early safe. Snapshot the list
@@ -1746,7 +1757,9 @@ def _montage_block(dag: "Dag", node: dict):
         n0 = len(dag._closers)
         inner = dag._block_producer(src)
         mine = dag._closers[n0:]
-        mm, finalize, discard = fluid_cache.frame_writer(key, (length, gh, gw, 4))
+        mm, finalize, discard = (
+            fluid_cache.frame_writer(key, (length, gh, gw, 4)) if cacheable else (None, None, None)
+        )
         if mm is None:  # cache disabled/refused/unopenable — render straight through
             return (lambda a, b: _to_rgba(inner(a, b))), mine
         dag._closers.append(discard)  # a cancelled stream drops the partial file

@@ -731,3 +731,72 @@ def test_an_entry_too_big_for_the_budget_is_not_written(monkeypatch, tmp_path):
     d2()
     fluid_cache.store("small2", np.zeros((8, 64, 64, 4), np.uint8))
     assert (tmp_path / "small2.npy").exists()
+
+
+def _six_cuts(assets):
+    """A montage where SIX slots actually play — the set guard is only ever decisive with
+    several short slots. With two, each entry is half the total, so the per-entry ceiling
+    (25%) always fires before the set ceiling (50%) and the set guard cannot be tested."""
+    g = _montage_graph(assets, n_slots=6)
+    g["nodes"] = [
+        {**n, "data": {**n["data"], "rate": 6}} if n["id"] == "lfo" else n for n in g["nodes"]
+    ]
+    return g
+
+
+def test_a_slot_set_too_big_for_the_budget_caches_nothing(assets, monkeypatch, tmp_path):
+    """Per-ENTRY size is not the whole question. A montage writes one entry per slot, each
+    comfortably under the per-entry ceiling, and the SET is what has to survive: 21 slots
+    of a 4K montage total far past the budget, so they evict each other in slot order and
+    nothing is ever re-read. Measured on the real chorus: 8 GB resident and climbing with
+    the writes, 1.1 GB flat without them.
+
+    The budget is picked so every slot PASSES `too_big` and only the set fails. Two earlier
+    drafts of this test were green with the set guard deleted, because the per-entry guard
+    was silently doing the work — hence the explicit assertions on both thresholds.
+    """
+    from backend import fluid_cache
+
+    monkeypatch.setattr(fluid_cache, "CACHE_DIR", tmp_path)
+    g = _six_cuts(assets)
+    total = 12 * 64 * 64 * 4  # nframes * gh * gw * 4 — the whole montage
+    budget = int(total * 1.2)
+    monkeypatch.setattr(fluid_cache, "CACHE_MAX_BYTES", budget)
+    per_slot = total / 6
+    assert per_slot <= budget * fluid_cache.MAX_ENTRY_FRACTION, "a slot must pass too_big"
+    assert total > budget * fluid_cache.SET_FRACTION, "the set must fail set_fits"
+
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    _montage_block(dag, dag.nodes["mt"])(0, 12)
+    dag.close()
+    assert list(tmp_path.glob("*.npy")) == [], "wrote a set LRU cannot keep"
+
+    monkeypatch.setattr(fluid_cache, "CACHE_MAX_BYTES", 8 * 1024**3)
+    dag2 = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    _montage_block(dag2, dag2.nodes["mt"])(0, 12)
+    dag2.close()
+    assert list(tmp_path.glob("*.npy")), "an ordinary montage no longer caches its slots"
+
+
+def test_a_cached_slot_is_still_read_when_the_set_would_not_be_written(
+    assets, monkeypatch, tmp_path
+):
+    """The guard refuses WRITES, never reads: a hit costs nothing and skips a whole decode.
+    Getting this backwards would throw away the cache's benefit on every re-render."""
+    from backend import fluid_cache
+
+    monkeypatch.setattr(fluid_cache, "CACHE_DIR", tmp_path)
+    g = _six_cuts(assets)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    _montage_block(dag, dag.nodes["mt"])(0, 12)  # populate with a normal budget
+    dag.close()
+    assert list(tmp_path.glob("*.npy"))
+
+    monkeypatch.setattr(fluid_cache, "CACHE_MAX_BYTES", int(12 * 64 * 64 * 4 * 1.2))
+    dag2 = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    built = []
+    real = dag2._block_producer
+    monkeypatch.setattr(dag2, "_block_producer", lambda nid: built.append(nid) or real(nid))
+    _montage_block(dag2, dag2.nodes["mt"])(0, 12)
+    dag2.close()
+    assert built == [], f"a cached slot was re-rendered instead of read: {built}"

@@ -30,6 +30,9 @@ CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_FRAME_CACHE_MAX_AGE_DAYS", "14"
 # Largest single entry worth writing, as a share of the budget. Above this an entry
 # cannot coexist with its siblings, so caching it only costs I/O (see `frame_writer`).
 MAX_ENTRY_FRACTION = float(os.environ.get("FLUID_FRAME_CACHE_MAX_ENTRY_FRACTION", "0.25"))
+# Largest GROUP of entries one render may write, as a share of the budget. Below 1.0 so a
+# set that only just fits still leaves room for anything else already hot (see `set_fits`).
+SET_FRACTION = float(os.environ.get("FLUID_FRAME_CACHE_SET_FRACTION", "0.5"))
 ENABLED = os.environ.get("FLUID_FRAME_CACHE", "1") != "0"
 
 
@@ -58,6 +61,27 @@ def too_big(nbytes: int) -> bool:
         CACHE_MAX_BYTES / 1024**3,
     )
     return True
+
+
+def set_fits(total_bytes: int) -> bool:
+    """Can a whole GROUP of entries a single render is about to write coexist here?
+
+    `too_big` judges one entry, which is not enough: a montage writes one entry per slot,
+    each individually well under the per-entry ceiling, and the SUM blows the budget.
+    They then evict one another in slot order, so nothing survives to be re-read and every
+    write is pure loss — measured on a 21-slot 4K montage, resident memory climbed to
+    8 GB (the memmaps are dirty pages) where the same render caches nothing and holds
+    1.1 GB. Ask before writing the first entry of a set, not after.
+    """
+    if total_bytes <= CACHE_MAX_BYTES * SET_FRACTION:
+        return True
+    log.info(
+        "fluid frame cache: skipping a set totalling %.1f GB (over %.0f%% of the %.0f GB budget)",
+        total_bytes / 1024**3,
+        SET_FRACTION * 100,
+        CACHE_MAX_BYTES / 1024**3,
+    )
+    return False
 
 
 def load(key: str) -> np.ndarray | None:

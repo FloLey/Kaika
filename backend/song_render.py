@@ -65,6 +65,19 @@ def output_from_export(export: dict) -> dict:
     }
 
 
+# Frames-in-flight guard: a block holds `block_seconds * fps` frames at the FULL output
+# size (1080x1920x30fps ≈ 8 MB/frame → a 5 s block is over a gigabyte). Scale the block
+# down with the pixel count, floored so short segments still stream. Also tightens
+# cancellation latency, which is only checked between blocks.
+#
+# Lives here, not in `routes/export.py`, because BOTH HD paths need it and routes imports
+# this module (never the reverse). The single-segment export always streamed; the whole
+# SONG export did not, and materialised a whole segment at native 4K instead.
+def hd_block_seconds(w: int, h: int) -> float:
+    ref = 540 * 960
+    return max(0.5, min(5.0, 5.0 * ref / max(1, w * h)))
+
+
 def export_audio_path(job_id: str, export: dict, stem_audio_path):
     """The audio file an export muxes, or None. `audioMode` "instrumental" takes
     the vocals-removed mix (karaoke covers); anything else — or a failure to build
@@ -195,9 +208,16 @@ def build_plan(
 
 
 def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
-    """Yield `(a, b, styled_window)` per segment — the continuous render. The K persistent
-    `FluidSim` fields carry across yields (that's the whole point): entering a segment
-    only swaps the injected rules. `styled_window` is flattened RGB `[win, gh, gw, 3]`.
+    """Yield `(a, b, styled_frames)` — the continuous render. The K persistent `FluidSim`
+    fields carry across yields (that's the whole point): entering a segment only swaps the
+    injected rules.
+
+    A segment WITH fluid fields yields exactly one window covering it, flattened RGB
+    `[win, gh, gw, 3]` — the persistent fields must be advanced over the whole window
+    before the segment's DAG can be fed them. A segment with NO fluid field has nothing to
+    inject, so it is streamed in blocks instead and yields several times, RGBA. Callers
+    must therefore treat this as a stream of consecutive frame ranges, not one per
+    segment, and must not assume a channel count (the encoder handles both).
     Stops early (returns) if `should_cancel()` before a segment. Pure/no I/O, so tests can
     concatenate the windows and assert continuity without ffmpeg.
 
@@ -233,6 +253,28 @@ def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
                     dye_modes=modes,
                 )
             injectors.append((f["node_id"], f["layer"], inj))
+
+        if not injectors:
+            # NOTHING to inject: no fluid field feeds this segment's output, so there is
+            # no reason to hold the whole clip in memory — stream it in blocks like the
+            # single-segment HD export already does, and yield each block.
+            #
+            # This is what took the machine down. The whole-clip path renders at the DAG's
+            # own frame size, which for a sim-free graph is the export's NATIVE size: a
+            # 60 s segment at 2160x3840 RGBA is ~59 GB in one allocation. Observed: 13-17 GB
+            # resident and climbing before the OS memory killer fired. A fluid segment was
+            # never in this danger — it renders on the sim grid, which is orders smaller.
+            #
+            # Blocks come out RGBA here where the fluid path yields flattened RGB. That is
+            # fine and deliberate: `StreamEncoder` fixes its input format on the first block
+            # and converts any later mismatch, and ffmpeg composites RGBA over black exactly
+            # as `fluid.flatten` does (pinned by tests/test_flatten_contract.py). Flattening
+            # here instead would cost a full extra pass over every frame for no difference.
+            block = max(1, round(hd_block_seconds(ctx["w"], ctx["h"]) * ctx["fps"]))
+            for a0, b0, _total, blk in dag.stream_blocks(oid, block):
+                yield done + a0, done + b0, blk
+            done += window
+            continue
 
         # Advance ALL live fields over this window; capture each USED field's frames.
         captured = {nid: np.empty((window, gh, gw, 3), np.uint8) for nid, _, _ in injectors}
