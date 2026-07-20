@@ -16,6 +16,8 @@ export default defineConfig({
       "/extract": "http://127.0.0.1:5000",
       "/resolve": "http://127.0.0.1:5000",
       "/playground": "http://127.0.0.1:5000",
+      // Keep: this prefix still covers /animate/stream (+ /status, /cancel), which is
+      // the only animate endpoint left. The one-shot POST /animate was deleted.
       "/animate": "http://127.0.0.1:5000",
       "/export": "http://127.0.0.1:5000",
       "/fonts": "http://127.0.0.1:5000",

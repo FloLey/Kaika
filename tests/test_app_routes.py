@@ -26,12 +26,14 @@ def test_extract_unknown_job_is_404(client):
     assert r.status_code == 404
 
 
-def test_animate_rejects_non_object_body(client):
-    assert client.post("/animate", json="nope").status_code == 400
+def test_animate_stream_rejects_non_object_body(client):
+    # `/animate` (the one-shot render) is gone; `/animate/stream` carries the same
+    # validation and is the only one the frontend ever used.
+    assert client.post("/animate/stream", json="nope").status_code == 400
 
 
-def test_animate_missing_fields_is_400(client):
-    assert client.post("/animate", json={"job_id": "x"}).status_code == 400
+def test_animate_stream_missing_fields_is_400(client):
+    assert client.post("/animate/stream", json={"job_id": "x"}).status_code == 400
 
 
 def test_fluid_rejects_non_object_body(client):

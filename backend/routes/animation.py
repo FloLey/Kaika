@@ -142,35 +142,6 @@ def fluid_route(params):
     return jsonify({"url": f"/fluid/{h}.mp4"})
 
 
-@bp.post("/animate")
-@json_body
-def animate(body):
-    """Render a per-segment graph (`01`) to a cached, looping mp4 -> {url}.
-
-    The request carries the live signal defs (`segment.signals`, Issue 1A) so the
-    executor needs no DB read. Output is written under data/fluid/ and served by
-    the existing `/fluid/<name>` route. Bad graph -> HTTP 400.
-    """
-    job_id = body.get("job_id")
-    graph = body.get("graph")
-    segment = body.get("segment")  # { start, end, signals: [...] }
-    output = body.get("output")  # project render settings (size/quality/fps/bg)
-    output_id = body.get("output_id")  # which output's pipeline to render (N per graph)
-    if not job_id or graph is None or segment is None:
-        return error_response("missing job_id, segment, or graph", 400)
-    if _bad_job(job_id):
-        return error_response("bad job id", 404)
-    try:
-        url = graphmod.render(job_id, segment, graph, stem_audio_path, output, output_id)
-    except ValueError as e:
-        log.warning("animate rejected graph (%s): %s", job_id, e)
-        return error_response(str(e), 400)
-    except Exception as e:  # noqa: BLE001
-        log.error("animate failed (%s)", job_id, exc_info=e)
-        return error_response(f"{type(e).__name__}: {e}", 500)
-    return jsonify({"url": url})
-
-
 @bp.post("/animate/stream")
 @json_body
 def animate_stream(body):

@@ -46,8 +46,14 @@ def test_playground_loads_through_the_real_routes(playground):
 
 @_needs_ffmpeg
 def test_a_segment_renders_a_real_moving_clip(playground, client):
-    """POST /animate for one segment and check the FRAMES, not just the status code: the
-    route can happily return 200 for a clip that is 80 copies of one frozen image."""
+    """Render one segment and check the FRAMES, not just that a file appeared: a render
+    can happily produce 80 copies of one frozen image.
+
+    Drives `graph.render` directly rather than the deleted `/animate` route. That route
+    ran a one-shot multi-minute render inside the Flask request thread with no
+    cancellation, and the frontend never called it (only `/animate/stream`). What this
+    test is for -- a real segment produces a real moving clip, and `/fluid/<name>`
+    serves it -- is unchanged, because `graph.render` is the code the route called."""
     seg = next(
         (
             s
@@ -64,11 +70,9 @@ def test_a_segment_renders_a_real_moving_clip(playground, client):
         "output": OUT,
         "output_id": out_id,
     }
-    r = client.post("/animate", json=body)
-    assert r.status_code == 200, r.get_data(as_text=True)
-    url = r.get_json()["url"]
+    url = graph.render(body["job_id"], body["segment"], seg["graph"], _stem_path, OUT, out_id)
 
-    # The route serves it, and the served bytes are a real playable clip.
+    # /fluid/<name> serves it, and the served bytes are a real playable clip.
     served = client.get(url)
     assert served.status_code in (200, 206)
     assert len(served.get_data()) > 1000, "the served clip is suspiciously small"
@@ -83,7 +87,7 @@ def test_a_segment_renders_a_real_moving_clip(playground, client):
 
 @_needs_ffmpeg
 def test_rendering_twice_reuses_the_cached_clip(playground, client):
-    """The second POST must return the same URL — the render cache keyed on the graph.
+    """The second render must return the same URL — the render cache keyed on the graph.
     A hash that stopped being stable would silently re-render everything, forever."""
     seg = playground["segments"][0]
     out_id = next(n["id"] for n in seg["graph"]["nodes"] if n["type"] == "output")
@@ -94,10 +98,9 @@ def test_rendering_twice_reuses_the_cached_clip(playground, client):
         "output": OUT,
         "output_id": out_id,
     }
-    first = client.post("/animate", json=body)
-    second = client.post("/animate", json=body)
-    assert first.status_code == second.status_code == 200
-    assert first.get_json()["url"] == second.get_json()["url"]
+    first = graph.render(body["job_id"], body["segment"], seg["graph"], _stem_path, OUT, out_id)
+    second = graph.render(body["job_id"], body["segment"], seg["graph"], _stem_path, OUT, out_id)
+    assert first == second
 
 
 def _stem_path(job_id, stem):
