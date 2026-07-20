@@ -1072,6 +1072,21 @@ _GEN_FALLBACK = {
     "clouds": "sky",
 }
 
+# The shared-field renderer for each gen-sim kind, as an EXPLICIT table rather than
+# `getattr(sources, kind)`. `kind` originates from a graph node's `type`, so the old form
+# let a graph value index a module namespace — the one place in this codebase that
+# happened. It also failed as an AttributeError from somewhere confusing rather than
+# saying which kind was unknown, and it made the legal set ungreppable: nothing tied it to
+# `_GEN_FALLBACK` above, which is the same list.
+_GEN_MERGE_FN = {
+    "waves": sources.waves,
+    "lightning": sources.lightning,
+    "aurora": sources.aurora,
+    "rain": sources.rain,
+    "clouds": sources.clouds,
+}
+assert set(_GEN_MERGE_FN) == set(_GEN_FALLBACK), "gen-sim kind tables disagree"
+
 
 def _gen_points(dag: "Dag", node: dict):
     """The emitter-source SPECS from a points-flow card wired into `positions`,
@@ -1604,7 +1619,12 @@ def _combine_block(dag: "Dag", node: dict):
     if kind is not None:
         gh, gw = _grid_dims(dag)
         producer = dag._block_producer(base_src) if base_src else None
-        fn = getattr(sources, kind)
+        fn = _GEN_MERGE_FN.get(kind)
+        if fn is None:  # a card type that grew a `_kind` but no shared-field renderer
+            raise ValueError(
+                f"combine(merge) got gen kind '{kind}', which has no shared-field "
+                f"renderer (known: {', '.join(sorted(_GEN_MERGE_FN))})"
+            )
         if kind == "rain":
             state = {"s": None}
 
