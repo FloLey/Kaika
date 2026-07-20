@@ -1,18 +1,96 @@
 # Step 17 — The fluid emitter hot loop
 
-**Tier.** Core. The single biggest measurable win in the repo.
+**Status: RESOLVED, but not as proposed.** The windowing this step is built around was
+measured and **rejected**; a different, exact change took ~40% of the emitter cost instead.
+Landed 2026-07-20.
 
-**Goal.** Stop computing a full-grid exponential per emitter per frame.
+---
 
-**Blocked by.** Step **16** (hard — the tolerance for this approximation is decided there,
-and the parity helper is what proves the picture survived).
+## What the sweep decided
 
-**⚠ May require a `RENDER_VERSION` bump** (`backend/graph_hash.py`) — see "The version
-question" below. If bumped, `docs/render-versions.md` gets the entry.
+Step 16 §2 required the truncation tolerance to be measured *before* this step was written.
+It was, and the answer was no. The prototype computed the full grid and zeroed outside the
+k·rc box (measuring truncation only, not slice arithmetic), swept k ∈ {2.5, 3, 4} plus a
+mass-renormalised variant, over every fluid-bearing demo plus hand-built radial, heat,
+wrap-edge and small-radius cases.
 
-**Size.** L — small diff, large blast radius. Every fluid render in the app goes through it.
+Max per-channel delta, worst case over all workloads:
 
-> Line numbers are a snapshot — re-grep before relying on one.
+| | k=2.5 | k=3 | k=4 | k=3 renormalised |
+|---|---|---|---|---|
+| worst over all cases | **198** | **200** | **200** | **202** |
+| (typical 1 s demo) | 20–180 | 3–49 | 1–8 | 3–49 |
+
+**k does not help.** The reason is in the per-frame breakdown of the 5-second case at k=3:
+
+```
+f0:1  f13:7  f26:5  f39:48  f52:123  f66:197  f79:178  f92:164  f105:186  f119:191
+```
+
+The error **compounds monotonically with frame index** and saturates near 200 levels. The
+sim is recursive — `step()` advects the previous field — so it is a chaotic system, and a
+perturbation of ~1e-4 relative amplifies through advection and the pressure solve until the
+two runs are different plausible flows rather than the same flow to within a tolerance. A
+1-second clip hides this (k=4 looks like ≤8 levels); anything longer does not.
+
+Mass renormalisation (`1/erf(k/√2)²`, to preserve `add_radial`'s divergence source through
+`_project`) does **not** rescue it — 202 at k=3. It corrects the systematic mass loss, not
+the chaotic amplification, and those are different problems.
+
+**This is exactly why step 16 required the sweep first.** Written the other way round, the
+windowing would have shipped on the strength of a 1-second parity test and quietly changed
+every long render.
+
+## What landed instead
+
+The profile that motivated this step was right that the emitters cost ~6× the solver
+(measured 8.1 ms/frame against `step()`'s 1.4 on the 180×96 export grid — the audit's "~3×"
+was an understatement). It was wrong about *which part*:
+
+| per call, 180×96 grid | ms |
+|---|---|
+| `_gauss` — the `exp()` everyone blames | 0.028 |
+| `add_dye`'s `(amount*g)[...,None] * color[None,None,:]` temporary | **0.069** |
+
+The full-frame `(H,W,3)` temporary cost **two and a half times the exponential**. At
+`_POINT_CAP = 64` emitters that is ~4.4 ms/frame of pure allocation, against ~1.4 ms for all
+four FFTs in `step()`.
+
+Accumulating one channel at a time removes it and is **bit-identical** — same operands, same
+order, one fewer intermediate array:
+
+```python
+a = amount * self._gauss(px, py, radius)
+dye = self.dye[layer]
+for c in range(dye.shape[-1]):
+    dye[..., c] += a * color[c]
+```
+
+| | before | after | |
+|---|---|---|---|
+| `add_dye` (excl. `_gauss`) | 0.069 ms | 0.019 ms | 3.6× |
+| points fluid, 64 emitters, r=0.08, 2 s | 0.52 s | **0.36 s** | **1.44×** |
+| points fluid, 64 emitters, r=0.02, 2 s | 0.50 s | **0.34 s** | 1.47× |
+
+Verified bit-identical across **every** fluid-bearing Playground demo over 2-second clips,
+and pinned by `test_add_dye_matches_the_broadcast_it_replaced_exactly`
+(`tests/test_fluid_perf.py`) so the claim cannot rot. **No `RENDER_VERSION` bump** — and
+unlike the windowing, that is asserted rather than hoped.
+
+## What is still on the table
+
+`add_force` (`:186`), `add_heat` (`:191`) and `add_radial` (`:199`) still compute a full-grid
+`_gauss` each. Windowing them has the same chaotic-amplification problem, so it is not a free
+win — but note `_gauss` itself is only 0.028 ms, so the ceiling for windowing all four is
+~1.8 ms/frame at 64 emitters. **That is now smaller than what the `add_dye` fix already
+took**, and it costs a version bump plus visibly different long renders. Not obviously worth
+it; do not start without re-reading the sweep above.
+
+---
+
+> Everything below is the ORIGINAL step as written before the measurement. Kept because the
+> reasoning is instructive and the profile numbers in it are still broadly right — it is the
+> *conclusion* that the sweep overturned.
 
 ---
 
