@@ -26,7 +26,19 @@ from .graph_common import LOOSE_PORT, _nodes_of
 #       while the block path used `VideoClip(loop=True)`. The parity test's tolerance
 #       could never have proven those byte-identical, so the cached clips are
 #       invalidated rather than assumed equivalent.
-RENDER_VERSION = 13
+#  v14: a video card that runs OUT of material with `loop` off now renders BLANK for
+#       the rest of its window (was: hold the last frame). In a montage a slot longer
+#       than its clip froze on a still for the whole cut; blank is unambiguous, and
+#       the card's shortfall warning already reports the deficit. New video cards
+#       also default to loop=off, so the same graph can render differently.
+#  v15: the Transform card resamples through `cv2.remap` instead of four per-channel
+#       `scipy.map_coordinates` calls (98 ms -> 0.4 ms per 1080p RGBA frame). OpenCV
+#       computes the bilinear weights in FIXED POINT where scipy used float, so output
+#       differs by at most 1 level per channel — verified across all three edge modes
+#       and both channel counts, with zero values exceeding 1. Invisible, but not
+#       byte-identical, so the cached clips are invalidated rather than assumed
+#       equivalent (the same call v13 made).
+RENDER_VERSION = 15
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
