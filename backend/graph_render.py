@@ -677,35 +677,6 @@ def _output_video(dag: "Dag", node: dict) -> np.ndarray:
     return dag.video(src)
 
 
-def _combine_video(dag: "Dag", node: dict) -> np.ndarray:
-    data = node.get("data", {})
-    srcs = [(_video_source(dag.graph, node["id"], s.get("id")), s) for s in data.get("inputs", [])]
-    srcs = [(s, slot) for (s, slot) in srcs if s is not None]
-    if not srcs:
-        raise ValueError(f"combine '{node['id']}' has no inputs")
-    if data.get("mode") == "stack":
-        layers = [dag.video(s) for (s, _) in srcs]
-        opac = [float(slot.get("opacity", 1.0)) for (_, slot) in srcs]
-        return composite(layers, opac)
-    # merge: one shared physical field. Gen-sim cards dispatch to their shared-
-    # field renderer (same-kind only); fluids + fires share one solver sim, each
-    # emitter keeping its OWN `wrap` — see fluid.simulate().
-    kind, layers, base_src = _gen_merge_split(dag, node)
-    if kind is not None:
-        gh, gw = _grid_dims(dag)
-        n = max(1, round(dag.duration * dag.fps))
-        base = _flatten_rgb(dag.video(base_src)) if base_src else None
-        fn = getattr(sources, kind)
-        if kind == "rain":
-            frames, _ = fn(n, gh, gw, dag.fps, layers, base=base)
-            return frames
-        if kind == "waves":
-            return fn(n, gh, gw, dag.fps, layers, base=base)
-        return fn(n, gh, gw, dag.fps, layers)
-    params = dag._merge_params(layers, data.get("medium", {}))
-    return _sim_video(params)
-
-
 def _fluid_emitters_h(dag: "Dag", node: dict) -> list:
     return dag._fluid_emitters(node)
 
@@ -1556,7 +1527,7 @@ def _whole_from_block(card: str):
 _VIDEO_HANDLERS = {
     "fluid": _fluid_video,
     "output": _output_video,
-    "combine": _combine_video,
+    "combine": _whole_from_block("combine"),
     "lyrics": _whole_from_block("lyrics"),
     "image": _whole_from_block("image"),
     "slideshow": _whole_from_block("slideshow"),

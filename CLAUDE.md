@@ -90,8 +90,11 @@ Backend tests run as `.venv/bin/python -m pytest -q`; frontend as
   card normally needs only a `_xxx_block` handler: register the whole-clip entry
   as `_whole_from_block("xxx")` (`backend/graph_render.py`). Write a separate
   `_xxx_video` only when the block handler carries cross-block state — today that
-  is exactly `fluid`, `output`, `combine`, `montage` and `fire`; every other card
+  is exactly `fluid`, `output`, `montage` and `fire`; every other card
   in `_VIDEO_HANDLERS` derives. (`echo` used to be on this list: its accumulator
   is carried across blocks, but a single `produce(0, n)` call *is* the whole scan,
-  so it derives too.) `test_card_impact` asserts whole == streamed for every card,
+  so it derives too. `combine` left for the same reason: its per-kind state —
+  rain's `state`, lightning's `bolt_cache` — is created fresh for a single-block
+  scan, which is exactly what the whole-clip path was hand-rolling.)
+  `test_card_impact` asserts whole == streamed for every card,
   so the two paths cannot drift.
