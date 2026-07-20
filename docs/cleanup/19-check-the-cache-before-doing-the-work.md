@@ -1,5 +1,7 @@
 # Step 19 — Check the cache before doing the work
 
+**Status: DONE** — 19a `4a39773`, 19b `8d6073c`. Both findings landed.
+
 **Tier.** Core.
 
 **Goal.** Make a cache hit cost what a cache hit should cost. Both export paths currently do

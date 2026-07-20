@@ -1,5 +1,24 @@
 # Step 26 — One editor context instead of a nine-prop drill
 
+**Status: CLOSED — do not do this.** Decided on measurement, 2026-07-20.
+
+This step is gated on step 21's numbers, and they came in against it. The per-edit editor
+cost is **0.1 ms** of graph walking; the `ctx`-busts-the-memo argument that made a nine-prop
+context refactor look worthwhile is real but worth a fraction of a millisecond per edit.
+This step is L-sized, touches the editor's whole data flow, and its own Risks section names
+"a refactor that costs a week and changes no measurement" as the thing to avoid. That is
+now the measured expectation, not a risk.
+
+**Two items worth salvaging separately**, both independent of the refactor:
+- `Studio.tsx:223` `dropAssetCard` mutates a graph inside a component, which `CLAUDE.md`
+  forbids — it belongs in `lib/graph/mutations.ts`. A stated invariant being broken, and the
+  highest-value thing in this file.
+- `App.tsx`'s save payload literal is written three times. Three copies of a persisted
+  shape is a data bug waiting to happen.
+
+If the editor ever *feels* slow, reopen this with a profiler trace attached — not with the
+audit's reasoning, which measurement has already contradicted once.
+
 **Tier.** Optional — and **conditional**. Do not start it without numbers from step 21.
 
 **Goal.** Collapse the nine-prop drill that is written out five times, and in the same change

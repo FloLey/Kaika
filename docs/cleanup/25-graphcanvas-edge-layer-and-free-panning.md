@@ -1,5 +1,15 @@
 # Step 25 — GraphCanvas: an edge layer, and free panning
 
+**Status: NOT DONE — and its perf premise is now suspect.**
+
+Step 21 measured the editor's per-render graph walks at **0.1 ms**, against an audit that
+described them as a heavy per-edit cost. This step's items 2 and 3 (pan committing React
+state per pointermove, `getMinScale` measuring every node per wheel event) are the same
+*kind* of claim from the same audit, and **neither has been measured**. Profile before
+writing either — on this wave's record, the prior is against them.
+
+Item 1 (extracting `<EdgeLayer>`) is a readability change and stands on its own merits.
+
 **Tier.** Optional. But it is **unfinished wave-2 work**, not a new idea.
 
 **Goal.** Finish the `GraphCanvas.tsx` split that step 13 planned, and make background panning

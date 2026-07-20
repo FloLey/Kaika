@@ -1,5 +1,20 @@
 # Step 27 — Split `sources.py`; one gen-merge producer
 
+**Status: PARTLY DONE** — `e3cfd60` deletes the `/animate` route (item 3). ⚠ Its Vite proxy
+entry **stays**: it is a prefix and it is what routes `/animate/stream`.
+
+**Items 1 and 2 not done, and item 1 should be reconsidered before anyone starts.** Wave 3
+measured five perf claims in this backlog and four were wrong, all by reasoning from shape
+instead of profiling. Splitting `sources.py` is a *readability* change with no measurement
+behind it either way — it is not wrong, but it is 1,300 lines of import churn across a file
+every card touches, and the `getattr(sources, kind)` dispatch it must replace is the kind of
+detail that breaks quietly. Worth doing deliberately, not as a tidy-up.
+
+Item 2 (one gen-merge producer) is the more defensible half: `_combine_video` and
+`_combine_block` genuinely duplicate the dispatch, `produce_waves` is a character-for-
+character copy of `_waves_block`'s `produce`, and `test_card_impact`'s whole-vs-streamed
+assertion already covers `combine`, so the safety net exists.
+
 **Tier.** Optional.
 
 **Goal.** Finish the file split wave 1 proposed and never did, close the last whole-vs-block
