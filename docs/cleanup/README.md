@@ -184,6 +184,25 @@ Unchanged from wave 2, plus one:
   is how three fixes were wrongly declared done in one week.
 - Line numbers throughout are an audit snapshot — **re-grep before relying on one.**
 
+## ⚠ Uncommitted-tree collision
+
+The audit ran against a clean tree; the tree did not stay clean. At the time of writing, nine
+files are modified and uncommitted, three of them under wave 3's path:
+
+| Uncommitted file | Blocks |
+|---|---|
+| `backend/graph_hash.py` (**RENDER_VERSION 13 → 14**) | step 17's bump, if 16's sweep decides it needs one |
+| `backend/graph_render.py` (`drop_stale_blocks`) | step 18's `_transform_frames` hoist |
+| `scripts/measure_render.py` | reusing the profiler from step 16's benchmark |
+
+The `RENDER_VERSION` one is the sharp edge: bumping to 15 on top of an uncommitted 14 makes
+one version cover two unrelated semantic changes, and `docs/render-versions.md` stops being a
+usable changelog. **Land that work first and the problem is moot.**
+
+Everything else wave 3 touches is clear — `fluid.py`, `procgen.py`, `sources.py`,
+`look_fx.py`, `song_render.py`, `routes/export.py`, `tests/helpers.py` — which is the
+argument for doing 16, 19 and the free three-quarters of 18 first.
+
 ## Checked and found fine — do not re-audit
 
 Recorded so wave 4 does not spend itself here. Each was actively investigated in the
@@ -217,3 +236,20 @@ Recorded so wave 4 does not spend itself here. Each was actively investigated in
 - An early draft claimed `centerInContainer` performs its own `getBoundingClientRect`,
   making the edge loop 3× worse than it is. **It does not** — `ports.ts:11` takes
   `containerRect` as a parameter. The finding in step 21 is real; the 3× was not.
+- Step 16 claimed "there is no timing test in the repo (`grep perf_counter` finds only
+  job-wait loops)" and proposed a new `tests/test_perf_baseline.py`. **Both halves were
+  wrong.** `tests/test_perf_budget.py` has existed since `dc0d19e` — with a `perf` marker,
+  loose ceilings and a `_timed` helper — and `grep perf_counter backend tests scripts` finds
+  it at `:43,45`. The cited grep would have caught it; it was not run. Step 16 now carries
+  the correction.
+- **That correction was then itself wrong**, which is the most instructive entry here. It
+  proposed folding the new cases into `test_perf_budget.py` "under the marker that already
+  exists" — but **the `perf` marker deselects nothing**. There is no `addopts` in
+  `pyproject.toml`, `make test` runs bare `pytest -q`, and CI runs
+  `pytest --cov=backend --strict-deps`. `-m "not perf"` exists only in prose, including
+  `02-ci-runs-the-suite.md:47`, which specified it for CI and **never landed** — so wave 2's
+  step 02 is partially unshipped. Step 16 now specifies a `bench` marker *plus* a real
+  `addopts` deselect.
+- **All three are one failure**: a claim written down without being run, then inherited by
+  the next reader. A documented deselect is not a deselect; a cited grep is not a grep.
+  Re-run them.
