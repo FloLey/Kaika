@@ -14,7 +14,27 @@ serves the wrong clip, which is the worst bug class in this repo.
 
 ---
 
-## 1. The whole-song export runs full signal analysis before checking the file exists
+## 1. ~~The whole-song export runs full signal analysis before checking the file exists~~ — **DONE**
+
+> ✅ Landed in `4a39773`. Measured, 12 segments × 15 s, 3-minute stems, 1080p, repeat export:
+>
+> | | before | after |
+> |---|---|---|
+> | cold caches | 567.0 ms (12 extractions) | 0.2 ms (0) |
+> | warm caches | 2.3 ms (12 extractions) | 0.1 ms (0) |
+>
+> ⚠ **The framing below overstates it, and the correction is worth keeping.** This step
+> described "full STFT / HPSS / beat-track signal extraction over every segment", which reads
+> as minutes. `signals.py:28-76` keeps bounded LRU caches (`_STFT_CACHE` / `_HPSS_CACHE` /
+> `_BEAT_CACHE`, cap 4) keyed per stem + fps, so the real cost is roughly **one cold analysis
+> per stem, not one per segment** — and in a long-lived server the second repeat export finds
+> them warm anyway. 0.57 s saved, scaling with signal count and song length. Worth having,
+> and worth stating accurately.
+>
+> The `total` is derived by `song_total_frames` through `graph_render._clip_dims`, which its
+> own docstring already advertises for this exact use ("`render_stream`'s cache-hit path,
+> which needs the frame total to report progress but has nothing to resolve"). That is also
+> the one place the 0.5 s duration floor lives, so the two derivations cannot drift.
 
 `song_render.py:256`:
 
@@ -111,18 +131,34 @@ Two consequences to handle deliberately:
    `stylize_source`. Then change something upstream of the stylize node and assert it *did* —
    the miss direction is the one that matters for correctness.
 
+## Status
+
+| Finding | State |
+|---|---|
+| 1. song export plans before checking | ✅ `4a39773` — 567 ms → 0.2 ms cold |
+| 2. HD stylize key derived from the render it avoids | **not started** |
+
 ## Acceptance criteria
 
-- Neither path does its expensive work before its `exists()` check.
-- `ctx["total"]` and the derived total agree, on a multi-segment project with segments of
-  differing lengths (a test with two equal segments would pass with a wrong formula).
-- The step-06 drain guarantee still holds, with the comment updated to match.
-- Old `hd-stylize-*` files are confirmed GC-reachable.
+- Neither path does its expensive work before its `exists()` check. ✅ for 1.
+- `ctx["total"]` and the derived total agree. ✅ — the test asserts against `build_plan`'s own
+  `ctx["total"]` rather than a literal, so the two derivations are pinned together rather
+  than merely both being right today.
+- The step-06 drain guarantee still holds, with the comment updated to match. ✅ — and the
+  guarantee got *stronger*: the test now asserts a cache hit constructs no `Dag` at all,
+  because what is never opened cannot leak. The old test asserted the mechanism (that
+  `close` was called), which the fix made unsatisfiable.
+- Old `hd-stylize-*` files are confirmed GC-reachable. — pending, belongs to finding 2.
 
 ## Risks
 
-- **The derived total drifting from `ctx["total"]`.** They are two computations of one number,
-  which is the duplication wave 2 spent five steps removing. If the formula is non-trivial,
-  factor it into one helper that `build_plan` also uses, rather than writing it twice.
+- ~~**The derived total drifting from `ctx["total"]`**~~ — addressed by routing through
+  `_clip_dims` (the single home of the duration floor) and by pinning the two in a test.
 - **`output_hash` missing an input** — the one way finding 2 serves a stale clip. Verify by
-  enumeration, not by testing one case.
+  enumeration, not by testing one case. ⚠ Still live, and note what makes it awkward:
+  `strength` and `fps` currently arrive as *return values of the expensive call*
+  (`graph_render.py:582-583`), so finding 2 requires splitting `stylize_source` into a cheap
+  describe half and an expensive render half before the key can be computed at all.
+- **Believing a step file's magnitude claim.** Finding 1's was overstated by roughly two
+  orders of magnitude (see the correction above), and step 18's were wrong twice. Measure
+  finding 2 before writing it.
