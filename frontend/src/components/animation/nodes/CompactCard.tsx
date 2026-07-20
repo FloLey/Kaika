@@ -3,7 +3,7 @@ import NodeFrame, { MultiAnchor } from "./NodeFrame";
 import CompactPreview from "./CompactPreview";
 import NodeSettingsModal from "../NodeSettingsModal";
 import { chromeFor } from "./registry";
-import { nodeParam } from "../../../lib/nodeParams";
+import { cardInputs } from "../nodeInputs";
 import { stemColor } from "../../../lib/segments";
 import { isLooseEdge } from "../../../lib/graphModel";
 import type { NodeProps } from "./nodeProps";
@@ -33,9 +33,16 @@ function inFlow(
   node: NodeProps["node"],
   ctx: NodeProps["ctx"]
 ): "value" | "points" | "color" | "video" {
-  if (nodeParam(node.type, portId)) return "value";
-  if (portId === "positions") return "points";
-  if (portId === "fillColor" || portId === "outlineColor" || portId === "tint") return "color";
+  // ASK the declared table rather than re-deriving it. This used to hardcode
+  // `positions` -> points and fillColor/outlineColor/tint -> color, which is the same
+  // knowledge `cardInputs` already publishes for every card — two copies, one of them
+  // string literals, and a new port only ever added to the other. A wrong flow here is
+  // not cosmetic: GraphCanvas validates a drop by flow (ports.ts canConnect), so it
+  // would silently reject a legal wire dropped on a compact card.
+  const declared = cardInputs(node).inputs.find((i) => i.portId === portId);
+  if (declared) return declared.flow as "value" | "points" | "color" | "video";
+  // Not declarable: a VIDEO input actually fed by a colour card carries colour. That
+  // depends on the wiring, not the card, so it stays a lookup.
   const edge = (ctx.graph?.edges || []).find(
     (e) => e.target === node.id && e.targetPort === portId
   );

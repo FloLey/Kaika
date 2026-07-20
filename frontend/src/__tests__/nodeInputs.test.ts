@@ -174,3 +174,41 @@ describe("inputSource / partitionSources (compact wiring)", () => {
     expect(p.other).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// cardInputs is the ONE declaration of a port's flow
+// ---------------------------------------------------------------------------
+// CompactCard.inFlow used to re-derive this with string literals ("positions" ->
+// points, fillColor/outlineColor/tint -> color). Two copies of the same knowledge,
+// and a new port only ever gets added to one of them. A wrong flow is not cosmetic:
+// GraphCanvas validates a wire drop by flow (ports.ts canConnect), so the failure is
+// a legal wire silently refused on a compact card.
+describe("declared port flows (the contract CompactCard now defers to)", () => {
+  const flowOf = (node: GraphNode, portId: string) =>
+    cardInputs(node).inputs.find((i) => i.portId === portId)?.flow;
+
+  it("declares the ports CompactCard used to hardcode", () => {
+    const fluid = node("f", "fluid");
+    expect(flowOf(fluid, "positions")).toBe("points");
+    expect(flowOf(fluid, "color")).toBe("color");
+  });
+
+  it("gives every modulatable param the value flow", () => {
+    const params = cardInputs(node("f", "fluid")).inputs.filter((i) => i.kind !== "edge");
+    expect(params.length).toBeGreaterThan(0);
+    expect(params.every((i) => i.flow === "value")).toBe(true);
+  });
+
+  it("never declares a port twice with conflicting flows", () => {
+    // The failure this whole dedupe exists to prevent, asserted directly.
+    for (const type of ["fluid", "lyrics", "output", "montage", "combine", "colorgrade"]) {
+      const inputs = cardInputs(node("n", type)).inputs;
+      const byPort = new Map<string, string>();
+      for (const i of inputs) {
+        const seen = byPort.get(i.portId);
+        expect(seen === undefined || seen === i.flow).toBe(true);
+        byPort.set(i.portId, i.flow);
+      }
+    }
+  });
+});
