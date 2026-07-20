@@ -15,6 +15,7 @@ supposed to be *nearly* identical and someone has to say how near.
 from __future__ import annotations
 
 import re
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -158,6 +159,20 @@ def assert_frames_close(
         f"worst at {where}: {int(a[where])} vs {int(b[where])}"
         + (f"\n  stated tolerance: {why}" if why else "")
     )
+
+
+def timed(label: str, fn):
+    """`(value, seconds)` for one call, printing the measured number.
+
+    Always printing is the point, not a debug leftover: a budget that only speaks when it
+    trips tells you nothing about the drift on the way there. Shared by the `perf` budgets
+    and the `bench` baselines so both report in one format.
+    """
+    t0 = time.perf_counter()
+    value = fn()
+    elapsed = time.perf_counter() - t0
+    print(f"\n  [perf] {label}: {elapsed:.2f}s")
+    return value, elapsed
 
 
 # ---- graph builders ---------------------------------------------------------

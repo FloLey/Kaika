@@ -252,6 +252,30 @@ ceiling"). Follow it.
 working rules already say why: without a starting number, "it's faster" is an impression,
 and that is how three fixes were wrongly declared done in one week.
 
+### Baseline
+
+> Apple M5 Pro · Python 3.12.13 · numpy 2.4.6 · scipy 1.18.0 · commit `2e4d2e2`
+> `make bench`, median of 3 runs, machine otherwise idle.
+
+| Case | Time | Notes |
+|---|---|---|
+| points fluid, 64 emitters, r=0.08, 2 s | **0.52 s** | 180×96 sim grid — step 17's target |
+| points fluid, 64 emitters, r=0.02, 2 s | **0.50 s** | small-radius variant; windowing should win more here |
+| transform block, 1080p RGBA, 0.5 s | **1.30 s** | native path — step 18 fix 1's target |
+| clouds clip, 2 s | **0.15 s** | already 1.83× faster than pre-`372edb9` |
+| repeat song export, cache hit | **0.00 s** | already fixed by `4a39773`; recorded so a regression shows |
+
+⚠ **Two of these are post-optimisation** (clouds, song export). They are *not* virgin
+numbers, and a future reader comparing against the audit's prose will be confused unless
+that is stated. The two fluid rows and the transform row are untouched.
+
+⚠ **The output settings are load-bearing, and getting them wrong silently measures
+nothing.** A heavy producer (`_HEAVY_TYPES`) drags the render onto the coarse simulation
+grid; a *light* graph with `nativeShort` set renders at full 1080p. The first draft of the
+transform case put a fluid upstream and measured **64×64×3 at 0.05 s** — for an operation
+that costs 1.30 s on the path an HD export actually takes. The case now asserts its own
+frame shape so it cannot regress into measuring nothing.
+
 ### ⚠ The baseline is post-optimization, not virgin
 
 Three perf commits landed *after* this audit was written and *before* this step is built:

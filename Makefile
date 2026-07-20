@@ -1,7 +1,7 @@
 # Dev workflow: Postgres in Docker, app native (keeps Apple-Silicon GPU + HMR).
 .PHONY: dev restart db-up db-down install rerender-spectrograms seed-playground export-playground \
-	test test-backend test-strict test-frontend lint typecheck build clean-cache \
-	gc-cache gen-params format coverage
+	test test-backend test-strict test-frontend bench lint typecheck build clean-cache \
+	gc-cache gen-params format coverage measure-render
 
 # One command: start Postgres, then Flask (:5000) + Vite (:5173), both hot-reloading.
 # `make dev` runs flask + vite under one `trap 'kill 0'`, so killing the backend by
@@ -58,6 +58,13 @@ test-backend:
 # that is deliberately missing ffmpeg/torch/Postgres.
 test-strict:
 	.venv/bin/python -m pytest -q --strict-deps
+
+# Recorded performance baselines — the "before" column for a perf change. Deselected from
+# every other target by `addopts` in pyproject.toml, so this is the ONLY way they run.
+# `-s` because the whole output is the printed numbers. Take the median of a few runs on an
+# idle machine and write it into docs/cleanup/16-parity-and-benchmark-harness.md.
+bench:
+	.venv/bin/python -m pytest -m bench -q -s
 
 test-frontend:
 	cd frontend && npm run test

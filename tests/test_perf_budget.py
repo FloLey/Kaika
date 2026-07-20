@@ -12,14 +12,12 @@ Run just these with `-m perf`; deselect them with `-m "not perf"` on a busy mach
 
 from __future__ import annotations
 
-import time
-
 import numpy as np
 import pytest
 
 from backend import card_demo, graph
 
-from helpers import assert_moves, out
+from helpers import assert_moves, out, timed
 
 pytestmark = pytest.mark.perf
 
@@ -39,21 +37,13 @@ def _demo(key: str) -> dict:
     return demo
 
 
-def _timed(label: str, fn):
-    t0 = time.perf_counter()
-    value = fn()
-    elapsed = time.perf_counter() - t0
-    print(f"\n  [perf] {label}: {elapsed:.2f}s")
-    return value, elapsed
-
-
 def test_segment_render_stays_within_budget():
     """A one-second draft render of the fluid demo. If this trips, something started
     rendering far more than it was asked for."""
     demo = _demo("fluid")
     g = demo["graph"]
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
-    frames, elapsed = _timed(
+    frames, elapsed = timed(
         "fluid segment render",
         lambda: graph.Dag(
             "playground", {**_SEG, "signals": demo["signals"]}, g, _noaudio, _OUT
@@ -71,7 +61,7 @@ def test_value_curve_resolve_stays_within_budget():
     demo = _demo("lfo")
     g = demo["graph"]
     node_id = next(n["id"] for n in g["nodes"] if n["type"] == "lfo")
-    result, elapsed = _timed(
+    result, elapsed = timed(
         "resolve lfo curve",
         lambda: graph.resolve_node_curve("playground", _SEG, g, node_id, _noaudio, fps=24),
     )
@@ -95,8 +85,8 @@ def test_cached_slot_render_is_much_cheaper_than_cold(tmp_path, monkeypatch):
             "playground", {**_SEG, "signals": demo["signals"]}, g, _noaudio, _OUT
         ).video(out_id)
 
-    cold_frames, cold = _timed("montage cold", render)
-    warm_frames, warm = _timed("montage cached", render)
+    cold_frames, cold = timed("montage cold", render)
+    warm_frames, warm = timed("montage cached", render)
     assert np.array_equal(cold_frames, warm_frames), "the cache must return identical frames"
     # Generous: the cached path skips all decoding, so it is normally >10x faster. We only
     # assert it is not SLOWER, plus a loose ceiling that a broken key would blow past.
