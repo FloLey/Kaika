@@ -7,6 +7,14 @@ and close the help-badge gap on the screens that have none.
 
 > Line numbers are a snapshot — re-grep before relying on one.
 
+> **Later note (2026-07-20).** §4 of this step asked for a decision on `docs/generative-cards/`
+> and never got one; it has since been made. Shipped waves moved to `specs/` —
+> `specs/generative-cards/` (cards 01–06), `specs/cleanup/` (waves 1–2, including this file)
+> and `specs/ai-stylize/` — while `docs/` kept only living things: the 21-card backlog, the
+> open cleanup wave 3, `render-versions.md` and `history/`. **The paths quoted below are the
+> ones that existed when this audit was written**, and are left as-is: rewriting them would
+> falsify the record of what the tree looked like.
+
 ---
 
 ## Why this is one late step, when the rule says otherwise

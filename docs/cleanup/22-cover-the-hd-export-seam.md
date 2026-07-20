@@ -54,7 +54,7 @@ Every line of `procgen.py` is executed — transitively, by `tests/test_gen_sim_
 rendering the cards that call it. That catches "the card is black". It cannot catch "the
 ripple propagator drifted", because nothing asserts a numeric property of the output.
 
-`docs/cleanup/15-coverage-debt.md` named the one that matters and it is **still undone**:
+`specs/cleanup/15-coverage-debt.md` named the one that matters and it is **still undone**:
 **`dbm_tree` seeded determinism is asserted nowhere.** Seeded determinism is what makes a
 render reproducible, and reproducibility is what the entire content-hash cache is built on —
 if a generator is not deterministic for a fixed seed, the cache serves clips that do not match
@@ -100,7 +100,7 @@ Not this step's job; recorded because the audit measured them.
   is regenerated, what the progress callback reports), not just that a route returns 200.
 - `dbm_tree` seeded determinism is asserted.
 - The progress-counter bug at `:419` is fixed with a test that would have caught it.
-- `docs/cleanup/15-coverage-debt.md` gets a note that its `procgen` half is now done (its
+- `specs/cleanup/15-coverage-debt.md` gets a note that its `procgen` half is now done (its
   `segment.py` half is already stale — it says "zero direct tests", which stopped being true
   when `tests/test_segment_helpers.py` landed).
 

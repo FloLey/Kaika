@@ -1,9 +1,9 @@
 """Step 0 prototype — diffusion feedback-loop stylization of fluid frames.
 
 STANDALONE de-risk script (NOT imported by the app). It proves the loop from
-docs/Image_video_gen.md §8 works on this Mac: load cached fluid frames, run an
+specs/ai-stylize/BRIEF-image-video-gen.md §8 works on this Mac: load cached fluid frames, run an
 img2img + ControlNet feedback loop with an SD-Turbo-class model on MPS, and write
-an mp4. See docs/ai-stylize/step-0-prototype.md for the plan and exit gate.
+an mp4. See specs/ai-stylize/step-0-prototype.md for the plan and exit gate.
 
 Deps beyond the app: opencv-python-headless + accelerate (installed into .venv for
 the prototype; deliberately NOT added to the pinned requirements.txt).
@@ -90,7 +90,7 @@ def work_dims(gh: int, gw: int, short: int) -> tuple[int, int]:
 
 
 # --------------------------------------------------------------------------- #
-# Loop building blocks (docs/Image_video_gen.md §7, §11)
+# Loop building blocks (specs/ai-stylize/BRIEF-image-video-gen.md §7, §11)
 # --------------------------------------------------------------------------- #
 def extract_control(frame_rgb: np.ndarray, cv2) -> "PIL.Image.Image":  # noqa: F821
     """Density → Canny edges → the ControlNet control image (the brief's helper)."""

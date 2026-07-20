@@ -29,7 +29,7 @@ groupPlaying` — nine values, written out in full **five times**:
 | `useGraphEditor.ts:97-125` | destructured |
 | `useGraphEditor.ts:444-465` | assembled into `ctx` |
 
-`docs/cleanup/13-frontend-splits.md` flagged this as "if there is appetite". No appetite was
+`specs/cleanup/13-frontend-splits.md` flagged this as "if there is appetite". No appetite was
 found, and on its own that was a defensible call — prop drilling is ugly, not broken.
 
 ### The memo miss

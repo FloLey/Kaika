@@ -105,7 +105,7 @@ shrank it.
 `render_jobs.py` went 25% → 99% and the comment still calls it thin. (Step 23 raises the gate
 itself to 75; this item fixes the prose.)
 
-**`docs/cleanup/15-coverage-debt.md`** is stale twice: it calls `segment.py` "zero direct
+**`specs/cleanup/15-coverage-debt.md`** is stale twice: it calls `segment.py` "zero direct
 tests" (now 43%, `tests/test_segment_helpers.py` exists) and lists `backend/config.py` as
 zero-coverage (it is at 100% — absent from the term-missing report because `skip-covered`
 drops it). Its `procgen.py` half is still correct and still undone → step 22.

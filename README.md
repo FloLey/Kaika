@@ -79,7 +79,8 @@ Frontend: React + Vite (Web Audio API).
   `Docs.tsx`). Edit `Docs.tsx` to update the docs — a test guards that every
   linked section exists.
 - [`specs/`](specs/) and [`docs/history/`](docs/history/) — completed design
-  records (the *why* behind features), not a roadmap.
+  records (the *why* behind features), not a roadmap. Anything still open lives
+  in [`docs/`](docs/) instead — that split is the whole point of the two folders.
 
 ## Setup
 

@@ -305,7 +305,7 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
         # colours (subtle blend), 1.0 fully restyles to the prompt (real flowers/lava).
         _p("strength", 0, 1, 1),
     ],
-    # ── Generative SIMULATION cards (docs/generative-cards/) — real 2-D physics
+    # ── Generative SIMULATION cards (specs/generative-cards/) — real 2-D physics
     # (wave optics / Laplacian growth / buoyant combustion / wave equation /
     # volumetric lighting), signal-reactive per port. Colour is a static `palette`
     # select + an optional wired `color` card override (both static `data`, not

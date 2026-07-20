@@ -66,8 +66,8 @@ frontend/src/
   lib/graph/        ← the graph model package; graphModel.ts is its barrel
   components/       studio / animation (+ nodes/) / assets / export / review / upload
 tests/              pytest (backend); frontend/src/__tests__/ is vitest
-specs/              completed design records (the why, not a roadmap)
-docs/history/       archived review/backlog docs
+specs/              design records per shipped wave (the why, not a roadmap)
+docs/               only what is still live: open backlogs, changelogs, archive
 data/               gitignored working data (uploads, stems, caches, assets)
 ```
 
@@ -442,17 +442,27 @@ deployment model changes:
   add-a-node checklists.
 - In-app user guide — every screen and control (`/?doc=`, source
   `frontend/src/components/Docs.tsx`).
+The split is by **state, not by topic**: `specs/` is what shipped, `docs/` is what
+is still moving.
+
 - [`specs/`](specs/) — the design records for each feature wave
   (create-animation → hardening → improvement-batch → look-fx → polish →
-  playground-cards). **Historical**: they document *why* things are shaped this
-  way, not what's next.
-- [`docs/cleanup/`](docs/cleanup/) — the code-quality backlog, one file per step.
-  Each records what was deliberately NOT done and why, which is usually the more
-  useful half.
-- [`docs/generative-cards/`](docs/generative-cards/) — **mixed, unlike `specs/`**:
-  `01`–`06` are shipped design records (waves, lightning, fire, aurora, rain,
-  clouds); `07`–`27` are unbuilt proposals. Treat it as a card backlog.
-- [`docs/ai-stylize/`](docs/ai-stylize/) — the AI Stylize / Image gen wave.
+  playground-cards → generative-cards → cleanup waves 1–2 → ai-stylize).
+  **Historical**: they document *why* things are shaped this way, not what's next.
+  Where a spec and the code disagree the code is right — a design record is the
+  earlier intent, not a description of the product.
+- [`specs/ai-stylize/`](specs/ai-stylize/) — the AI Stylize wave, and **the one
+  exception to the rule above**: steps 0 and 2 shipped, 5 partly, and steps 1, 3
+  and 4 were never built. Its README carries a per-step status table; the step
+  files themselves are still written in the forward-looking voice they were
+  drafted in.
+- [`docs/cleanup/`](docs/cleanup/) — the code-quality backlog, **wave 3 (`16`–`28`),
+  open**. Each step records what was deliberately NOT done and why, which is
+  usually the more useful half. Waves 1–2 are done and live in
+  [`specs/cleanup/`](specs/cleanup/).
+- [`docs/generative-cards/`](docs/generative-cards/) — 21 **unbuilt** card
+  proposals (`07`–`27`). A backlog nobody has committed to; the six that were
+  built moved to [`specs/generative-cards/`](specs/generative-cards/).
 - [`docs/render-versions.md`](docs/render-versions.md) — the `RENDER_VERSION`
   changelog: what each bump changed and why it had to invalidate the cache.
 - [`docs/history/`](docs/history/) — archived review backlog + old TODOs.

@@ -68,7 +68,7 @@ components: `SettingsModal`, `ProjectList`, `LogsPanel`, `Processing`, `ReviewSt
 `UploadStep`/`UploadZone`, `InputPicker`, `ProblemsPanel`. `lib/api.ts` has 48 exports and
 `api.test.ts` covers ~5 — the right 5 (error/abort paths), but thin.
 
-**`lib/assetPreview.ts` deserves a callout:** `docs/cleanup/00-backlog.md` step 1b names it
+**`lib/assetPreview.ts` deserves a callout:** `specs/cleanup/00-backlog.md` step 1b names it
 as the site of a duplicated URL regex (written twice, `:14` and `:38`) *and* the source of
 the 1 GB-request class of bug. It still has no test. 46 lines. Do this one.
 

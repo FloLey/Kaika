@@ -4,7 +4,7 @@ A developer map of Kaika: the render pipeline, where things live, and the checkl
 for the two changes that touch several files at once (adding a param, adding a node
 type). For the full newcomer walkthrough see [`ARCHITECTURE.md`](ARCHITECTURE.md);
 completed design records live in [`specs/`](specs/) and
-[`docs/history/`](docs/history/).
+[`docs/history/`](docs/history/); open backlogs live in [`docs/`](docs/).
 
 ## Run it
 

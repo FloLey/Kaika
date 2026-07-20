@@ -16,7 +16,7 @@ inside the extracted `<EdgeLayer>` is cheaper than doing it twice.
 
 ## Why this is leftover, not new
 
-`docs/cleanup/13-frontend-splits.md` planned four extractions from `GraphCanvas.tsx`:
+`specs/cleanup/13-frontend-splits.md` planned four extractions from `GraphCanvas.tsx`:
 `useNodeDrag`, `useWireConnect`, `useMarquee`, and `<EdgeLayer>`. **Only `useWindowPointer`
 shipped** (commit `98fc397`, "one window-pointer gesture helper instead of three"). That was
 the shared primitive underneath the three gesture hooks — the right thing to do first, and

@@ -139,7 +139,7 @@ class FluidSim:
         # `dye_modes` it's a single layer matching the velocity edge mode (unchanged).
         self.dye_modes = list(dye_modes) if dye_modes else [self._adv_mode]
         self.dye = [np.zeros((h, w, 3), np.float32) for _ in self.dye_modes]
-        # FIRE mode (the fire card, docs/generative-cards): a normalised
+        # FIRE mode (the fire card, specs/generative-cards): a normalised
         # temperature field rides the same solver — heat emitters inject T,
         # buoyancy lifts it along a rotatable "up", quartic radiative cooling
         # shapes the flame, and rendering maps T through a blackbody ramp

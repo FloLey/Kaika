@@ -294,7 +294,7 @@ def backdrop(nframes, h, w, *, r, g, b, opacity, frame_offset=0) -> np.ndarray:
     return out
 
 
-# ── Generative simulation cards (docs/generative-cards/) ──────────────────────
+# ── Generative simulation cards (specs/generative-cards/) ──────────────────────
 # waves / lightning / aurora / rain / clouds are real 2-D simulations (fire
 # rides the fluid solver — see fluid.FireSim). Shared contract:
 #

@@ -273,7 +273,7 @@ export interface BackdropData {
   color: string; // hex fill colour
   ports: Record<string, FluidPort>;
 }
-// Generative source cards (docs/generative-cards/): synthesise an RGBA layer from
+// Generative source cards (specs/generative-cards/): synthesise an RGBA layer from
 // scratch, reactive to signal-driven ports. Colour is a static `palette` preset,
 // overridable by a `color` card wired into the "color" input. `seed` varies the noise.
 // The six generative simulation cards. Identical shape — a palette, a seed and the

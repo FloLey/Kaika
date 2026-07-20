@@ -1,11 +1,15 @@
 # AI-Stylized Video Cards — proposal
 
-Companion to [`Image_video_gen.md`](Image_video_gen.md) (the technical brief on diffusion
+Companion to [`BRIEF-image-video-gen.md`](BRIEF-image-video-gen.md) (the technical brief on diffusion
 feedback loops over fluid-sim frames). This document maps that brief onto Kaika's card
 architecture, adds web-research findings (2026-07), proposes concrete cards, and lays out a
-phased implementation plan. Status: **proposal — nothing here is implemented yet.**
+phased implementation plan.
 
-> **Per-step implementation plans:** [`ai-stylize/`](ai-stylize/README.md) breaks the phases
+**Status: PARTLY BUILT.** This line used to read "nothing here is implemented yet", which
+stopped being true when the AI Stylize card and the Z-Image HD export path shipped. See
+[`README.md`](README.md) for the per-step truth — three of the six steps were never built.
+
+> **Per-step implementation plans:** [`README.md`](README.md) breaks the phases
 > below into one detailed, executable `.md` per step (goal, files, build sequence, risks, exit
 > gate, verification).
 

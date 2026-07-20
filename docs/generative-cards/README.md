@@ -1,17 +1,18 @@
-# Generative cards — design catalog
+# Generative cards — the backlog (21 unbuilt cards)
 
-Today the **fluid** simulation is essentially the only card that *generates*
-visuals from audio. Every other card either shapes a 0..1 curve
-(signal / lfo / noise / shaper / math) or places an asset (image / video /
-lyrics / backdrop). This catalog is a menu of **27 new signal-reactive
-"content" cards** that broaden that vocabulary — each one a self-contained spec
-you can hand to an implementer.
+A menu of **signal-reactive "content" cards** that broaden Kaika's vocabulary beyond the
+fluid simulation. Each entry is a self-contained spec you can hand to an implementer.
 
-These are **design records, not a roadmap**. Nothing here is built yet. Each
-spec is written against Kaika's real card contract (verified against the code —
-see below), and every card is deliberately designed so its **vibe spans
-elegant→energetic purely through its parameters** — no card is locked to one
-mood. Pick the ones worth building; the spec is the starting point.
+**Nothing in this folder is built.** The six that WERE built — waves, lightning, fire,
+aurora, rain, clouds — shipped and moved out: their design records are at
+[`specs/generative-cards/`](../../specs/generative-cards/README.md), which is also the
+honest place to see how far the shipped cards drifted from their specs.
+
+So this is a **backlog, not a roadmap and not history**: nobody has committed to any of
+these. Each spec is written against Kaika's real card contract (verified against the code
+— see below), and every card is deliberately designed so its **vibe spans
+elegant→energetic purely through its parameters** — no card is locked to one mood. Pick
+the ones worth building; the spec is the starting point.
 
 ## The three build archetypes
 
@@ -92,14 +93,8 @@ Effort: 🟢 stateless field (copy `backdrop`) · 🟡 drawing / remap / light s
 🔴 stateful sim (FluidClip-style streaming).
 
 ### 🌊 Natural / elemental — `[gen]`
-| # | Card | Effort | Pitch |
-|---|---|---|---|
-| 01 | [waves-shoreline](01-waves-shoreline.md) | 🟡 | Top-down swells rolling onto sand, foam on the wash. |
-| 02 | [lightning](02-lightning.md) | 🟡 | Branching bolts struck on transients, glow + screen flash. |
-| 03 | [fire](03-fire.md) | 🟢 | Upward flame field, height & hue from the music. |
-| 04 | [aurora](04-aurora.md) | 🟢 | Scrolling curtains of light, colour bands that sway. |
-| 05 | [rain-storm](05-rain-storm.md) | 🟡 | Falling streaks, splashes, flashes on peaks. |
-| 06 | [clouds-nebula](06-clouds-nebula.md) | 🟢 | Drifting fbm clouds through a palette ramp. |
+Built and shipped — see [`specs/generative-cards/`](../../specs/generative-cards/README.md)
+for waves (01), lightning (02), fire (03), aurora (04), rain (05) and clouds (06).
 
 ### 🔊 Sound-native — `[gen]`
 | # | Card | Effort | Pitch |

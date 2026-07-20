@@ -19,7 +19,7 @@ now, while the diff is empty.
 | `graph_hash.py:27` `_SIGNAL_HASH_FIELDS` | `lib/graph/hash.ts:12` `SIGNAL_HASH_FIELDS` | **none** |
 | `graph_hash.py:44` `_SLOT_CARDS` | `lib/graph/hash.ts:49` `SLOT_CARDS` | a comment saying "mirrors backend" |
 
-`docs/cleanup/00-backlog.md` Step 4 flagged this and named the reason it is nasty:
+`specs/cleanup/00-backlog.md` Step 4 flagged this and named the reason it is nasty:
 *"hand-copied today and **drift is silent** (the digests differ on purpose, so nothing fails
 loudly)."*
 

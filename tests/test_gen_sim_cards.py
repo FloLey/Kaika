@@ -1,5 +1,5 @@
 """The generative SIMULATION cards (waves / lightning / fire / aurora / rain /
-clouds) — the physical rewrites of docs/generative-cards/.
+clouds) — the physical rewrites of specs/generative-cards/.
 
 Covers the contracts the redesign hangs on: block-streaming must be
 byte-identical to the whole clip (rain is the stateful one), waves/rain accept

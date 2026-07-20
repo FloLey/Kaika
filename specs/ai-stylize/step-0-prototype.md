@@ -1,7 +1,7 @@
 # Step 0 — Standalone prototype (de-risk the whole feature)
 
 **Goal:** prove, outside the app, that the diffusion feedback loop from
-[`../Image_video_gen.md`](../Image_video_gen.md) §8 produces a good-looking, coherent, affordable
+[`BRIEF-image-video-gen.md`](BRIEF-image-video-gen.md) §8 produces a good-looking, coherent, affordable
 clip on *this* Mac. Everything downstream (a card, jobs, caches, UI) is wasted effort if the
 model/quality/speed economics don't hold. This step commits **no** app code — just a script and a
 findings note.

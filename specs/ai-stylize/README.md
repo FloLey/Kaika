@@ -1,21 +1,30 @@
-# AI-Stylized Video Cards — implementation steps
+# AI-Stylized Video Cards — design records (a HALF-EXECUTED plan)
 
-This folder breaks the [proposal](../AI_stylize_cards_proposal.md) into self-contained,
+> **Read this first.** This folder is filed under `specs/`, but unlike every other wave here
+> it is **not** a record of finished work. Steps 0 and 2 shipped, step 5 shipped in part, and
+> **steps 1, 3 and 4 were never built** — there is no code for them anywhere. The `Status`
+> column below is the truth; the prose inside each step file is still written in the
+> forward-looking voice it was drafted in, so do not read "we will" as "we did".
+
+This folder breaks the [proposal](PROPOSAL.md) into self-contained,
 executable steps. Each file is a full implementation plan for one step: goal, prerequisites,
 files to touch (with real function names), a concrete build sequence, risks, an exit gate, and
-verification. Do them **in order** — every step has a gate that must pass before the next starts.
+verification. They were meant to be done **in order**, each gated on the last.
 
-The source brief is [`../Image_video_gen.md`](../Image_video_gen.md) (diffusion feedback loops,
+The source brief is [`BRIEF-image-video-gen.md`](BRIEF-image-video-gen.md) (diffusion feedback loops,
 Workflow A/B, velocity warping, drift control). Read it once before Step 0.
 
-| Step | File | Ships | Gate |
+| Step | File | Ships | Status |
 |---|---|---|---|
-| 0 | [`step-0-prototype.md`](step-0-prototype.md) | Standalone script proving the loop works on this Mac | 10-s clip looks good, < ~2 min at draft |
-| 1 | [`step-1-velocity-export.md`](step-1-velocity-export.md) | Sim velocity field captured + cached | Warp visibly beats no-warp at equal denoise |
-| 2 | [`step-2-aistylize-card.md`](step-2-aistylize-card.md) | The `AI Stylize` card, generate-on-demand | Wire → Generate → preview → export end-to-end |
-| 3 | [`step-3-drift-guards.md`](step-3-drift-guards.md) | LAB anchor, re-anchor, audio-reactive denoise | Onset-bound denoise re-keys and reacts |
-| 4 | [`step-4-shapes-card.md`](step-4-shapes-card.md) | `Shapes` producer (circles/lines) + analytic motion | Shapes demo renders non-black; feeds Stylize |
-| 5 | [`step-5-quality-scope.md`](step-5-quality-scope.md) | Z-Image HD, depth, prompt crossfade, song continuity | Per-feature; optional/later |
+| 0 | [`step-0-prototype.md`](step-0-prototype.md) | Standalone script proving the loop works on this Mac | **shipped** — `scripts/ai_stylize_prototype.py` |
+| 1 | [`step-1-velocity-export.md`](step-1-velocity-export.md) | Sim velocity field captured + cached | **not built** — no velocity side-channel exists |
+| 2 | [`step-2-aistylize-card.md`](step-2-aistylize-card.md) | The `AI Stylize` card, generate-on-demand | **shipped** — `backend/routes/stylize.py`, `StylizeNode.tsx` |
+| 3 | [`step-3-drift-guards.md`](step-3-drift-guards.md) | LAB anchor, re-anchor, audio-reactive denoise | **not built** — `anchorEvery`/`reanchorEvery`/`noiseInject` exist nowhere; the `stylize` port spec has one port, `strength` |
+| 4 | [`step-4-shapes-card.md`](step-4-shapes-card.md) | `Shapes` producer (circles/lines) + analytic motion | **not built** — no `shapes` card in `CARD_LABELS` or the frontend registry |
+| 5 | [`step-5-quality-scope.md`](step-5-quality-scope.md) | Z-Image HD, depth, prompt crossfade, song continuity | **partly shipped** — 5A only: `imagegen.HD_MODEL` (Z-Image-Turbo) + `_regenerate_hd_stylize`. Depth conditioning, prompt crossfade and song continuity are not built |
+
+One stale detail worth flagging rather than silently fixing: step 5 names a module
+`backend/videostylize.py` that never existed — the card lives in `backend/routes/stylize.py`.
 
 ## Cross-cutting decisions (apply to every step)
 
