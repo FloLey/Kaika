@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import GraphCanvas from "../components/animation/GraphCanvas";
 import type { Graph, GraphNode } from "../lib/types";
+import type { NodeHelpers } from "../components/animation/nodes/nodeProps";
 
 // A trivial node-agnostic graph + renderNode so we exercise GraphCanvas itself
 // (selection + keyboard delete) without any signal/fluid specifics.
@@ -215,5 +216,89 @@ describe("GraphCanvas zoom limit (layout-read count)", () => {
     // 20 cards x 2 properties = 40 reads for ONE measurement. Per-tick would be 400.
     expect(after).toBeLessThanOrEqual(40 * 2); // one measure, plus slack for a re-render
     expect(after).toBeLessThan(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a background pan costs, in renders
+// ---------------------------------------------------------------------------
+// usePanZoom calls setView on every pointermove, and GraphCanvas's layout effect has
+// `view` in its deps and calls tick() — so a single move can commit twice, with the edge
+// geometry rebuilt in the render body each time. Node DRAGGING was deliberately moved off
+// this pattern (ref + tick, "no graph commit while dragging"); panning never was.
+//
+// Counted, not timed: jsdom cannot price a React commit or a layout flush. The count is
+// the structural claim, and it is what a fix would change.
+describe("GraphCanvas pan (render count)", () => {
+  it("records how many card renders one pointermove costs", () => {
+    let renders = 0;
+    const graph = {
+      version: 2,
+      nodes: Array.from({ length: 12 }, (_, i) => ({
+        id: `n${i}`,
+        type: "x",
+        x: i * 50,
+        y: i * 30,
+        data: {},
+      })),
+      edges: Array.from({ length: 11 }, (_, i) => ({
+        id: `e${i}`,
+        source: `n${i}`,
+        sourcePort: "out",
+        target: `n${i + 1}`,
+        targetPort: "in",
+      })),
+      view: { tx: 0, ty: 0, scale: 1 },
+    };
+    // Registers real ports via helpers.portRef, so the edge-geometry map actually runs.
+    // Without this the map short-circuits on `!a || !b` BEFORE reading any rect, and the
+    // measurement silently reports zero for everything.
+    const renderNode = (node: GraphNode, helpers: NodeHelpers) => {
+      renders++;
+      return (
+        <div data-testid={`node-${node.id}`}>
+          <span ref={helpers.portRef(node.id, "out", "out", "video")} />
+          <span ref={helpers.portRef(node.id, "in", "in", "video")} />
+        </div>
+      );
+    };
+    const { container } = render(
+      <GraphCanvas graph={graph as unknown as Graph} renderNode={renderNode} />
+    );
+    const root = container.firstElementChild as HTMLElement;
+    root.setPointerCapture = () => {};
+    root.releasePointerCapture = () => {};
+    // the edge map calls this; count the forced layout reads a pan actually causes
+    let rects = 0;
+    root.getBoundingClientRect = () => {
+      rects++;
+      return { width: 800, height: 600, left: 0, top: 0, right: 800, bottom: 600 } as DOMRect;
+    };
+
+    act(() => {
+      fireEvent.pointerDown(root, { clientX: 100, clientY: 100, button: 0, pointerId: 1 });
+    });
+    const perMove: number[] = [];
+    const rectsPerMove: number[] = [];
+    for (let i = 1; i <= 5; i++) {
+      renders = 0;
+      rects = 0;
+      act(() => {
+        fireEvent.pointerMove(root, { clientX: 100 + i * 20, clientY: 100, pointerId: 1 });
+      });
+      perMove.push(renders);
+      rectsPerMove.push(rects);
+    }
+    console.log(`  [pan] renderNode calls per pointermove (12 cards): ${perMove.join(", ")}`);
+    console.log(
+      `  [pan] root.getBoundingClientRect per pointermove (11 edges): ${rectsPerMove.join(", ")}`
+    );
+    expect(perMove.every((n) => n === perMove[0])).toBe(true);
+    // Cards do not re-render on a pan — NodeCard's memo holds, as its comment claims.
+    expect(perMove[0]).toBe(0);
+    // The container rect is read once per RENDER, not once per edge. It was 22 here
+    // (11 edges x 2 renders); the ceiling is deliberately per-render so adding an edge
+    // cannot quietly reintroduce the per-edge form.
+    expect(rectsPerMove.every((n) => n <= 4)).toBe(true);
   });
 });

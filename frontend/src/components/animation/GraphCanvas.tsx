@@ -583,13 +583,19 @@ export default function GraphCanvas({
   }, [selected, onGraphChange]);
 
   // --- edge geometry (screen space, recomputed each tick) --------------------
+  // The container rect is read ONCE for the whole pass, not once per edge. It cannot
+  // change between edges — it is the same element in the same layout — and
+  // getBoundingClientRect forces synchronous layout, so the per-edge form cost one flush
+  // per edge per render. Measured on a 12-card / 11-edge graph: a single background-pan
+  // pointermove did 22 reads (11 edges x 2 renders, since setView re-renders and the
+  // layout effect's tick re-renders again); hoisting takes that to 2.
+  const edgeRect = rootRef.current?.getBoundingClientRect() ?? null;
   const edges = (graph.edges || [])
     .map((e) => {
       const a = portEls.current.get(portKey(e.source, e.sourcePort));
       const b = portEls.current.get(portKey(e.target, e.targetPort));
-      const root = rootRef.current;
-      if (!a || !b || !root) return null;
-      const rect = root.getBoundingClientRect();
+      if (!a || !b || !edgeRect) return null;
+      const rect = edgeRect;
       const ca = centerInContainer(a, rect);
       const cb = centerInContainer(b, rect);
       return {
