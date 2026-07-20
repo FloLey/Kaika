@@ -122,22 +122,55 @@ export default function GraphCanvas({
     return { minX, minY, maxX, maxY };
   }, []);
 
+  // The measured bbox, cached across a zoom GESTURE. `measureBBox` reads offsetWidth +
+  // offsetHeight per card — forced synchronous layout — and `getMinScale` runs on every
+  // wheel tick, so a 40-card graph did ~80 layout reads per tick, ~60 ticks/sec on a
+  // trackpad. The bbox cannot change during a zoom: it is built from node x/y and
+  // rendered card sizes, and `view` affects neither.
+  //
+  // Invalidated by exactly what CAN change it: `graph` (positions, cards added/removed),
+  // `layoutKey` (minimize/expand — a card that grew without the graph changing, which is
+  // the case a graph-identity cache alone would miss), and the ResizeObserver below.
+  // Deliberately NOT `view`.
+  //
+  // ⚠ One accepted staleness: a node drag mutates position via ref and only commits to
+  // `graph` on pointer-up (see the drag handler), so mid-drag the limit reflects the
+  // pre-drag layout. Zooming *during* a card drag is not a real gesture, and the commit
+  // invalidates immediately.
+  const bboxRef = useRef<{ epoch: number; box: ReturnType<typeof measureBBox> } | null>(null);
+  const bboxEpoch = useRef(0);
+  const invalidateBBox = useCallback(() => {
+    bboxEpoch.current += 1;
+  }, []);
+  useLayoutEffect(invalidateBBox, [graph, layoutKey, invalidateBBox]);
+
+  const cachedBBox = useCallback(
+    (nodes: GraphNode[]) => {
+      const c = bboxRef.current;
+      if (c && c.epoch === bboxEpoch.current) return c.box;
+      const box = measureBBox(nodes);
+      bboxRef.current = { epoch: bboxEpoch.current, box };
+      return box;
+    },
+    [measureBBox]
+  );
+
   // The dynamic zoom-out limit: dezoom is allowed until the WHOLE graph fits ×1.5
   // in both directions — a sprawling pipeline never jams against the static 0.15
-  // floor mid-overview. Evaluated per wheel tick, so it tracks drags/adds live.
+  // floor mid-overview.
   const getMinScale = useCallback(() => {
     const root = rootRef.current;
     const nodes = graphRef.current.nodes || [];
     if (!root || !nodes.length) return 0.15;
     const rect = root.getBoundingClientRect();
     if (rect.width < 40 || rect.height < 40) return 0.15;
-    const b = measureBBox(nodes);
+    const b = cachedBBox(nodes);
     const fitScale = Math.min(
       rect.width / Math.max(1, b.maxX - b.minX),
       rect.height / Math.max(1, b.maxY - b.minY)
     );
     return Math.min(0.15, fitScale / 1.5);
-  }, [measureBBox]);
+  }, [cachedBBox]);
 
   const {
     view,
@@ -242,10 +275,13 @@ export default function GraphCanvas({
   useEffect(() => {
     const root = rootRef.current;
     if (!root || typeof ResizeObserver === "undefined") return undefined;
-    const ro = new ResizeObserver(() => tick());
+    const ro = new ResizeObserver(() => {
+      invalidateBBox(); // the container resized, so the fit scale changed
+      tick();
+    });
     ro.observe(root);
     return () => ro.disconnect();
-  }, [tick]);
+  }, [tick, invalidateBBox]);
 
   // --- node dragging (moves the whole selection in one go) -------------------
   // The gesture is LOCAL to the canvas: per pointermove we track the offset and

@@ -160,3 +160,60 @@ describe("drop-anywhere wiring (jsdom)", () => {
     expect(onCardDrop).toHaveBeenCalledWith("src", "value", "tgt");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The zoom limit does not re-measure every card on every wheel tick
+// ---------------------------------------------------------------------------
+// `getMinScale` -> `measureBBox` reads offsetWidth + offsetHeight PER CARD, which is
+// forced synchronous layout, and it ran on every wheel event. This counts the reads
+// rather than timing them: jsdom reports 0 for offsetWidth and cannot price a layout
+// flush, but "how many reads happen" is the structural claim, and it is the one that
+// scales with card count and trackpad event rate.
+describe("GraphCanvas zoom limit (layout-read count)", () => {
+  function countingSetup(nodeCount: number) {
+    let reads = 0;
+    for (const prop of ["offsetWidth", "offsetHeight"]) {
+      Object.defineProperty(HTMLElement.prototype, prop, {
+        configurable: true,
+        get() {
+          reads++;
+          return 230;
+        },
+      });
+    }
+    const graph = {
+      version: 2,
+      nodes: Array.from({ length: nodeCount }, (_, i) => ({
+        id: `n${i}`,
+        type: "x",
+        x: i * 50,
+        y: i * 30,
+        data: {},
+      })),
+      edges: [],
+      view: { tx: 0, ty: 0, scale: 1 },
+    };
+    const renderNode = (node: GraphNode) => <div data-testid={`node-${node.id}`}>{node.id}</div>;
+    const utils = render(<GraphCanvas graph={graph as unknown as Graph} renderNode={renderNode} />);
+    return { ...utils, reads: () => reads, reset: () => (reads = 0) };
+  }
+
+  it("measures once for a burst of wheel ticks, not once per tick", () => {
+    const { container, reads, reset } = countingSetup(20);
+    const root = container.firstElementChild as HTMLElement;
+    // a real container, else getMinScale short-circuits on the <40px guard
+    root.getBoundingClientRect = () =>
+      ({ width: 800, height: 600, left: 0, top: 0, right: 800, bottom: 600 }) as DOMRect;
+
+    reset();
+    for (let i = 0; i < 10; i++) {
+      act(() => {
+        fireEvent.wheel(root, { deltaY: -100, ctrlKey: true, clientX: 400, clientY: 300 });
+      });
+    }
+    const after = reads();
+    // 20 cards x 2 properties = 40 reads for ONE measurement. Per-tick would be 400.
+    expect(after).toBeLessThanOrEqual(40 * 2); // one measure, plus slack for a re-render
+    expect(after).toBeLessThan(400);
+  });
+});
