@@ -1,5 +1,26 @@
 # Step 22 — Cover the HD-export seam
 
+**Status: PARTLY DONE** — `ca6c396`. `routes/export.py` 46% → 53%, `procgen.py` 95% → 99%.
+
+The procgen half is the interesting one and it argues against reading these numbers at
+all: procgen was *already* 95% line-covered with almost no direct tests, because every line
+is walked transitively by a card rendering. That proves "the card is not black". The new
+tests assert **properties** instead — seeded determinism *and its converse* (a routine that
+ignores its seed passes the first test), `dbm_tree` actually being a tree, `omega² = g·k`,
+and a ripple kernel that loses energy rather than gaining it.
+
+⚠ **Still uncovered, deliberately**: `_segment_hd_job`, `_export_job`,
+`_regenerate_hd_images`, `_regenerate_hd_stylize` (`259-309`, `316-349`, `383-540`). They
+need a diffusion model or a full render to reach, and a mock deep enough to execute them
+would be testing the mock. That is the coverage theatre this step warned against — left
+honestly uncovered instead.
+
+> Three bugs found while writing these, all mine and all from not reading a signature:
+> `dbm_tree` returns `(pts, parent, tip)`; `dbm_polylines` yields `(points, depth)` pairs;
+> and `ripple_step` returns the tuple `(ĥ⁺, ĥ)`, which I re-wrapped into another tuple — so
+> every iteration added an array dimension and the shape grew exponentially. It presented
+> as a hung suite.
+
 **Tier.** Core.
 
 **Goal.** Put tests under the largest uncovered block in the repo — which happens to be the
