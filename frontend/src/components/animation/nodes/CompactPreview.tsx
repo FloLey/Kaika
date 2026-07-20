@@ -1,4 +1,5 @@
 import ValuePreview from "./ValuePreview";
+import { upstreamKey } from "../../../lib/graphModel";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
 import BoxPad from "./BoxPad";
@@ -59,7 +60,7 @@ export const VIDEO_TYPES = new Set([
 // animate/merge points depend on upstream + transforms, so their scatter is resolved
 // from the backend (hooks can't be conditional — split into its own component).
 function ResolvedPointsPreview({ node, ctx }: { node: GraphNode; ctx: NodeCtx }) {
-  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const depKey = ctx?.graph ? upstreamKey(ctx.graph, node.id, ctx?.segment?.signals) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
   return <PointsPad points={points} aspect={ctxAspect(ctx)} compact />;
 }

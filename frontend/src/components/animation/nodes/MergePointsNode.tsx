@@ -1,7 +1,7 @@
 import NodeFrame, { Port } from "./NodeFrame";
 import PointsPad from "./PointsPad";
 import { useResolvedPoints } from "./useResolvedPoints";
-import { addInputPort, removeInputPort } from "../../../lib/graphModel";
+import { addInputPort, removeInputPort, upstreamKey } from "../../../lib/graphModel";
 import { ctxAspect } from "../../../lib/output";
 import type { NodeProps } from "./nodeProps";
 import type { MergePointsData } from "../../../lib/types";
@@ -21,7 +21,7 @@ export default function MergePointsNode({
   const d = node.data as MergePointsData;
   const inputs = d.inputs || [];
   const aspect = ctxAspect(ctx);
-  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const depKey = ctx?.graph ? upstreamKey(ctx.graph, node.id, ctx?.segment?.signals) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
 
   return (

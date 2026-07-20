@@ -1,4 +1,5 @@
 import type { ChangeEvent } from "react";
+import { upstreamKey } from "../../../lib/graphModel";
 import NodeFrame, { Port } from "./NodeFrame";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
@@ -30,7 +31,7 @@ export default function AnimatePointsNode({
   const d = node.data as AnimatePointsData;
   const set = useNodeData<AnimatePointsData>(node, onGraphChange);
   const aspect = ctxAspect(ctx);
-  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const depKey = ctx?.graph ? upstreamKey(ctx.graph, node.id, ctx?.segment?.signals) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
 
   return (

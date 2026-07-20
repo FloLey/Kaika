@@ -73,10 +73,20 @@ export default function App() {
   const saveChain = useRef(createSaveChain());
   useEffect(() => {
     if (!job || (step !== "review" && step !== "studio" && step !== "export")) return;
-    const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
-    const jsonStr = JSON.stringify(payload);
-    if (jsonStr === lastSaved.current) return;
+    // Serialised INSIDE the debounce, not before it. `serializeSegments` + stringify walk
+    // every segment's graph, and running them on the synchronous path meant paying for
+    // them on every keystroke and every slider tick, ~800ms of which are then thrown away.
+    // The equality guard moves in with them: scheduling a timer that decides to do nothing
+    // is far cheaper than serialising the project to find out.
     const t = setTimeout(() => {
+      const payload = {
+        step,
+        segments: serializeSegments(segments),
+        output,
+        export: exportSettings,
+      };
+      const jsonStr = JSON.stringify(payload);
+      if (jsonStr === lastSaved.current) return;
       saveChain.current.supersedable(async () => {
         try {
           await api.saveProject(job, payload);

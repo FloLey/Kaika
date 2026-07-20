@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { upstreamKey } from "../../../lib/graphModel";
 import ValuePreview from "./ValuePreview";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
@@ -54,7 +55,7 @@ const colorCss = (d: ColorData): string => {
 
 // animate/merge points resolve from the backend (hooks can't be conditional).
 function ResolvedPointsPreview({ node, ctx }: { node: GraphNode; ctx: NodeCtx }) {
-  const depKey = ctx?.graph ? JSON.stringify([ctx.graph.nodes, ctx.graph.edges]) : "";
+  const depKey = ctx?.graph ? upstreamKey(ctx.graph, node.id, ctx?.segment?.signals) : "";
   const { points } = useResolvedPoints(ctx, node.id, depKey);
   return <PointsPad points={points} aspect={ctxAspect(ctx)} />;
 }
