@@ -164,14 +164,18 @@ def colorgrade_apply(
     out = np.empty_like(frames)
     if c == 4:
         out[..., 3] = frames[..., 3]
-    lum = _luminance(rgb)  # (T,H,W) float32 0..255
+    # Luminance is computed PER FRAME inside each mode's loop, not once over the block.
+    # Every mode below reads one slice at a time, so the whole-block (T,H,W) float32 was
+    # pure peak memory: ~8 MB per HD frame, ~124 MB for a 15-frame block, live for the
+    # duration of the loop and touched once each. Same arithmetic, same result — the
+    # working set now fits nearer the cache instead of streaming from RAM.
 
     if mode == "thermal":
         lut = _thermal_lut(cmap)
-        idx = lum.astype(np.uint8)
         for i in range(t):
             roll = int(round(float(shift[i]) * 255.0)) % 256
-            graded = lut[(idx[i].astype(np.int16) + roll) % 256]  # (H,W,3) uint8
+            idx_i = _luminance(rgb[i]).astype(np.uint8)  # (H,W)
+            graded = lut[(idx_i.astype(np.int16) + roll) % 256]  # (H,W,3) uint8
             k = np.float32(intensity[i])
             out[i, ..., :3] = (
                 rgb[i].astype(np.float32) * (1 - k) + graded.astype(np.float32) * k
@@ -181,7 +185,7 @@ def colorgrade_apply(
     if mode == "duotone":
         for i in range(t):
             gamma = 2.0 ** (float(shift[i]) * 2.0 - 1.0)
-            shaped = (lum[i] / 255.0) ** np.float32(gamma)  # (H,W) 0..1
+            shaped = (_luminance(rgb[i]) / 255.0) ** np.float32(gamma)  # (H,W) 0..1
             graded = (
                 color_a * 255.0 * (1.0 - shaped[..., None]) + color_b[i] * 255.0 * shaped[..., None]
             )
@@ -195,7 +199,7 @@ def colorgrade_apply(
     cv2 = _cv2()
     sigma = max(1.5, h * 0.008)
     for i in range(t):
-        edges = cv2.Canny(np.ascontiguousarray(lum[i].astype(np.uint8)), 80, 160)
+        edges = cv2.Canny(np.ascontiguousarray(_luminance(rgb[i]).astype(np.uint8)), 80, 160)
         core = edges.astype(np.float32) / 255.0
         halo = cv2.GaussianBlur(core, (0, 0), sigma) * 2.5 * float(intensity[i])
         val = np.clip(core + halo, 0.0, 1.0)
