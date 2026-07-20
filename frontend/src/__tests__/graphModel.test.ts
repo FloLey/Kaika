@@ -1076,6 +1076,20 @@ describe("addAssetCard (library click → card on the canvas)", () => {
     expect(JSON.stringify(base)).toBe(before);
     expect(next.edges).toEqual(base.edges);
   });
+
+  it("names the card it added, not whichever node happens to be last", () => {
+    // Studio used to add the card and THEN rename graph.nodes[length - 1], an unwritten
+    // "the card I added is last" contract with the one function that decides placement.
+    // Passing the name through means the guess cannot go stale.
+    const g = addAssetCard(emptyGraph(), clip, "video 7");
+    const added = g.nodes.find((n) => (n.data as { assetUrl?: string }).assetUrl === clip.url);
+    expect(added?.name).toBe("video 7");
+  });
+
+  it("omitting the name leaves the factory default alone", () => {
+    const g = addAssetCard(emptyGraph(), clip);
+    expect(g.nodes[g.nodes.length - 1].name).toBe(emptyGraph().nodes[0]?.name ?? undefined);
+  });
 });
 
 describe("fillMontageSlots (+ fill on the montage card)", () => {

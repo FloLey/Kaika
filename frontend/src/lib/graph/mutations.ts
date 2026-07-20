@@ -249,13 +249,21 @@ export function fillMontageSlots(
 // already pointing at the file. New cards stack in a COLUMN under the existing graph:
 // picking twenty clips for a montage should never pile them on top of each other, and a
 // predictable column is easy to re-arrange afterwards.
-export function addAssetCard(graph: Graph, asset: { url: string; kind: "image" | "video" }): Graph {
+export function addAssetCard(
+  graph: Graph,
+  asset: { url: string; kind: "image" | "video" },
+  name?: string
+): Graph {
   const nodes = graph.nodes || [];
   const x = nodes.length ? Math.min(...nodes.map((n) => n.x)) : 80;
   const y = nodes.length ? Math.max(...nodes.map((n) => n.y)) + 140 : 80;
   const node = asset.kind === "video" ? videoNode(x, y) : imageNode(x, y);
   (node.data as { assetUrl: string }).assetUrl = asset.url;
-  return { ...graph, nodes: [...nodes, node] };
+  // `name` is applied HERE rather than by the caller re-walking the result. Studio used
+  // to call this, then map over every node renaming `graph.nodes[graph.nodes.length - 1]`
+  // — an unwritten "the card I added is last" contract with the one function allowed to
+  // decide where it goes. Naming it at the point of creation removes the guess.
+  return { ...graph, nodes: [...nodes, name ? { ...node, name } : node] };
 }
 
 // ---- wiring (keeps the §3.3 binding<->edge invariant) ------------------------

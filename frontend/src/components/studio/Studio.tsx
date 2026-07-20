@@ -226,17 +226,8 @@ export default function Studio({
       setSegments((prev) =>
         prev.map((seg) => {
           if (seg.id !== activeSeg.id) return seg;
-          const graph = addAssetCard(seg.graph || emptyGraph(), asset);
-          const added = graph.nodes[graph.nodes.length - 1];
-          return {
-            ...seg,
-            graph: {
-              ...graph,
-              nodes: graph.nodes.map((n) =>
-                n.id === added.id ? { ...n, name: defaultCardName(seg.graph || graph, n.type) } : n
-              ),
-            },
-          };
+          const base = seg.graph || emptyGraph();
+          return { ...seg, graph: addAssetCard(base, asset, defaultCardName(base, asset.kind)) };
         })
       );
       setAddedCount((n) => n + 1);
