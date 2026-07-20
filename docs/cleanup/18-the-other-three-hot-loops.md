@@ -47,26 +47,49 @@ coordinate axis and do one call, or at minimum hoist the `astype` to once per fr
 axis, and the channel axis must not be interpolated or padded. If that turns out awkward,
 take fix (b)'s cheap half (one `astype` per frame) and leave the per-channel calls.
 
-## 2. `procgen._value_noise_2d` rebuilds its RNG lattice on every call
+## 2. ~~`procgen._value_noise_2d` rebuilds its RNG lattice on every call~~ — **DONE, but not this way**
 
-`procgen.py:39`:
+> ✅ Landed in `372edb9`. **The finding as written was wrong**, and the way it was wrong is
+> the most useful thing in this file.
 
-```python
-lat = np.random.default_rng(seed).random((res_y, res_x), dtype=np.float32)
-```
+The audit proposed `lru_cache` on the lattice draw, reasoning that `clouds` issues ~14
+`fbm2d` octaves per frame and so rebuilds ~14 lattices per frame. That is all true. It is
+also irrelevant — **measured, the lattice is 0.005–0.028 ms of a ~2.0 ms call, i.e. 0.2–0.8%
+of it.** Caching it would have saved nothing, while adding a cache to invalidate, a
+`maxsize` to tune, and the non-writeable-array trap the ⚠ above correctly anticipated.
 
-The lattice is a pure function of `(res_y, res_x, seed)`. But `clouds` (`sources.py:927`)
-calls `_cloud_density` per layer per frame, and each call issues **~14 `fbm2d` octaves**
-(5 macro + 3 + 3 warp + 3 detail). That is ~14 fresh `default_rng` constructions and lattice
-draws per frame, drawn from a set of only ~14 distinct lattices for the entire clip.
+The real cost was next door, in the interpolation. The old form took four
+`lat[np.ix_(ym, xm)]` gathers, each materialising a full `(h, w)` frame by scattered 2-D
+fancy indexing. Doing the bilinear lerp **separably** — along x on the small `(res_y, w)`
+slab first, then gathering rows and lerping along y — replaces them with two slab gathers
+plus two contiguous row gathers:
 
-`lru_cache` on the lattice draw, keyed `(res_y, res_x, seed)`. Three lines.
+| | before | after | |
+|---|---|---|---|
+| `_value_noise_2d` 384², res=6 | 2.02 ms | 0.22 ms | 9.3× |
+| `_value_noise_2d` 384², res=96 | 1.98 ms | 0.31 ms | 6.4× |
+| **clouds card, 384², 2 s** | **47.1 ms** | **25.7 ms** | **1.83×** |
+| waves card | 22.7 ms | 20.7 ms | 1.10× |
+| rain card | 11.0 ms | 10.1 ms | 1.09× |
 
-⚠ **Return a read-only view or a copy.** A cached array handed to a caller that mutates it in
-place would corrupt every later frame — the classic `lru_cache`-on-a-mutable bug. Set
-`lat.flags.writeable = False` on the cached array and let any mutating caller copy
-explicitly; that turns a silent corruption into an immediate error. Also bound the cache
-(`maxsize`) — seeds are user-controllable, so an unbounded cache is a slow memory leak.
+Bit-identical (a gather is exact; the per-pixel multiply/add order is unchanged), so no
+`RENDER_VERSION` bump.
+
+**The lesson, for the rest of this wave:** the audit read "allocates on every call" as "is
+the hot loop" without profiling. Allocation size is not cost. A three-line microbenchmark
+before the fix would have redirected the work in about two minutes — which is exactly what
+step 16 exists to make routine.
+
+## 2b. ~~`sources._noise_row`, same shape~~ — **NOT A FINDING**
+
+Proposed on the same reasoning ("twice per band per frame in `aurora` while `cell` changes
+~once a second"). Profiled: `_noise_row` **does not appear in aurora's top-14 cumulative
+entries at all**, and aurora measured 10.4 ms both before and after the `_value_noise_2d`
+change — so it is not a meaningful consumer of either. `_row_at` (the interpolation, again)
+is the notable entry.
+
+**Do not implement this.** Left in the file rather than deleted so the next reader does not
+re-derive it from the same bad reasoning.
 
 **Same shape at `sources._noise_row`** (`:666`): `np.random.default_rng(seed).random(k)`,
 called twice per band per frame by `aurora` (`:722–723`), while `cell = int(t / period)`
@@ -92,6 +115,21 @@ Move the computation inside the loop for those two modes. Check what the third m
 before touching it — if it genuinely needs the whole block (a temporal operation), leave that
 branch alone and say why in a comment.
 
+> ✅ Landed in `372edb9`. All **three** modes read one slice at a time — `thermal` too, which
+> additionally built a second whole-block `(T,H,W)` uint8 `idx` array — so all three moved
+> inside their loops. Measured on a 15-frame 1080p block:
+>
+> | mode | peak before | peak after | time |
+> |---|---|---|---|
+> | thermal | 356.0 MB | 175.5 MB | 0.45 → 0.44 s |
+> | duotone | 356.0 MB | 197.8 MB | 0.56 → 0.54 s |
+> | neon | 356.0 MB | 191.8 MB | 0.36 → 0.36 s |
+>
+> **This is a memory win, not a speed win**, and was reported that way. The audit implied a
+> throughput gain ("only read one slice at a time"); the arithmetic is unchanged and so is
+> the wall clock. Halving peak on the HD export path is still worth having — it is the path
+> most likely to hit a memory ceiling — but the honest claim is the narrow one.
+
 ---
 
 ## Verification
@@ -108,15 +146,27 @@ branch alone and say why in a comment.
 
 ## Acceptance criteria
 
-- Three commits, each with its own before/after number.
-- No `RENDER_VERSION` bump — and if any of the three *does* move a pixel, stop and work out
-  why rather than bumping. These are meant to be exactly equivalent.
-- The `lru_cache` is bounded and its array is non-writeable.
+- Each fix commits with its own before/after number. ✅ for 2 and 3 (`372edb9`).
+- No `RENDER_VERSION` bump — and if any *does* move a pixel, stop and work out why rather
+  than bumping. These are meant to be exactly equivalent. ✅ both landed bit-identical,
+  verified with `assert_frames_close` at exact.
+- ~~The `lru_cache` is bounded and its array is non-writeable.~~ Moot — no cache was needed.
+
+## Status
+
+| Fix | State |
+|---|---|
+| 1. `_transform_frames` hoist | **deferred** — `graph_render.py` is in flight in the working tree |
+| 2. value-noise interpolation | ✅ `372edb9`, 1.83× on clouds (not the proposed cache) |
+| 2b. `_noise_row` | ❌ not a finding; profiled to nothing |
+| 3. per-frame luminance | ✅ `372edb9`, peak halved |
 
 ## Risks
 
-- **The mutable-cache trap** in fix 2 — the only way this step corrupts output rather than
-  merely failing. The non-writeable flag is not optional.
+- ~~**The mutable-cache trap** in fix 2~~ — gone with the cache.
 - **Constancy detection in fix 1** misfiring on a param that is constant *within* a block but
   varies across blocks. Block-local constancy is still correct here (`coords` is rebuilt per
   block), but confirm the resolved arrays really are block-scoped before relying on it.
+- **Believing this file.** Two of its three findings were wrong on the numbers, in the same
+  direction: allocation size was read as cost. Fix 1 is still unmeasured — profile it before
+  writing the hoist, not after.
