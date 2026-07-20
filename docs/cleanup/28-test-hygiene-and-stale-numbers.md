@@ -1,5 +1,18 @@
 # Step 28 — Test hygiene and stale numbers
 
+**Status: DONE** — `66a842e`. jsdom noise 20 → **0** lines. ⚠ The `getContext` stub must be
+UNCONDITIONAL: jsdom *defines* the method and throws inside it, so the obvious
+`if (!prototype.getContext)` guard never fires — that took it 20 → 8, not 20 → 0.
+
+`NOAUDIO` → `helpers.no_audio` across 15 files; `E731` in tests 15 → 4. Stale numbers
+corrected (`graph.py` 87 → **66** lines; the coverage comment was wrong on four of five
+figures) and `fail_under` raised 70 → **72** against a measured 79%.
+
+⚠ **`torchcodec` is NOT dead, and this file's own warning is why we know.** Zero references
+in `backend/`, `pip` `Required-by` empty — but torchaudio 2.11 imports it from its own
+`__init__` as the decode backend and does not declare it. Deleting it would have broken
+demucs stem separation at load time. Kept, and given the comment it was missing.
+
 **Tier.** Optional. A grab-bag of small things, none of which blocks anything, all of which
 cost more to keep explaining than to fix.
 

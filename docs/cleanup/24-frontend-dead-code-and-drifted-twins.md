@@ -1,5 +1,14 @@
 # Step 24 — Frontend dead code and drifted twins
 
+**Status: PARTLY DONE** — `66a842e`. Deleted: `PortConnections.tsx`, `MiniSpark.tsx`,
+`slideshowUrls`, `hasParams`, `RenderJobState` (a stale *partial* duplicate of a shape
+TypeScript already infers — 7 of the hook's 10 fields). `NodeOf<T>` **kept**, now with a
+comment saying why: deleting an unused type saves nothing at runtime and costs the next
+person the derivation, unlike an unused component.
+
+**Not done**: `validate()`'s keep-or-delete call, `CompactCard.inFlow` vs
+`nodeInputs.cardInputs`, and the `STUB_HELPERS`/`NOOP_HELPERS` twins.
+
 **Tier.** Optional. Nothing depends on it; it is a clean, self-contained deletion pass.
 
 **Goal.** Delete what nothing imports, and collapse two places where the same fact is encoded

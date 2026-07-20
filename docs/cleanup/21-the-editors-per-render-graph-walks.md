@@ -1,5 +1,22 @@
 # Step 21 — The editor's per-render graph walks
 
+**Status: DONE** — `55ff922`. **The premise was wrong and the fix is a different one.**
+
+Measured on a realistic editor graph (8–12 independent pipelines, 40–60 cards), per full
+editor render: `upstreamKey` **0.11–0.14 ms**, whole-graph stringify **0.06–0.14 ms**. The
+per-render graph walks are a tenth of a millisecond, and `upstreamKey` is *slower* than the
+stringify it was proposed to replace until the graph passes ~60 cards — `hash.ts`'s comment
+claiming otherwise is only true for large graphs. **Fix 1's five unmemoised calls were left
+alone**; memoising 0.1 ms is churn.
+
+The real defect is not CPU. `depKey` feeds `useResolvedPoints`, which POSTs
+`/resolve-points`, and its own comment says the key "should serialize the CONTRIBUTING
+graph". It serialised the whole one — so any unrelated card edit refired an HTTP request per
+points card. Fixed at the four sites. Fix 5 (App.tsx autosave) landed too.
+
+Fixes 3 (`getBoundingClientRect` per edge) and 4 (`feedsMontage`) are **not done** and are
+now suspect on the same grounds — measure before writing either.
+
 **Tier.** Core.
 
 **Goal.** Stop re-walking and re-serializing the whole graph in component render bodies. Five

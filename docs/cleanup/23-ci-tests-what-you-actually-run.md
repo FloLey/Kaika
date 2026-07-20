@@ -1,5 +1,14 @@
 # Step 23 — CI tests what you actually run
 
+**Status: DONE** — `04386b1`. Constraint files (`-c requirements.txt`,
+`-c requirements-dev.txt`) rather than a fourth copy of the versions;
+`tests/test_tooling_pins.py` enforces what remains, including that every package CI
+installs is actually pinned (a `-c` only constrains what the file mentions). `scripts/`
+decided: linted, with the `_`-prefixed ai-stylize prototypes excluded explicitly — all 22
+errors were in those. Frontend coverage gated at 65/50 with `components/docs/` excluded,
+which *lowered* the measured figure 72.3% → 69.5%, i.e. prose had been propping it up.
+Plus `concurrency` and `timeout-minutes`.
+
 **Tier.** Core.
 
 **Goal.** Close the gap between the dependency set CI validates and the one the app runs on,
