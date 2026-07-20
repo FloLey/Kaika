@@ -5,7 +5,17 @@
 Item 2 needed no new abstraction in the end: `combine`'s per-kind state is created fresh
 for a single-block scan (rain's `state` starts `None`, lightning's `bolt_cache` defaults
 to `None`), so `_whole_from_block("combine")` just works and `CLAUDE.md`'s exception list
-is one shorter. Only the `sources.py` split (item 1) remains. ⚠ Its Vite proxy
+is one shorter. Item 1's **`getattr` hazard is also gone** (`02f329e`) — `_GEN_MERGE_FN` is an explicit
+table, asserted against `_GEN_FALLBACK` so the two kind lists cannot drift. That was the
+part of item 1 worth having on its own: fifteen lines removing the one place a graph value
+indexed a module namespace, versus 1,300 lines of import churn to get the same safety as a
+side effect.
+
+**What remains of item 1 is the split itself, and it is now purely a readability call.**
+No measurement supports or opposes it; `sources.py` is three unrelated programs sharing a
+namespace, which is a real thing to dislike, but the concrete hazard the split was going to
+fix has been fixed without it. Do it because the file is hard to navigate, if it is — not
+because this backlog said so. ⚠ Its Vite proxy
 entry **stays**: it is a prefix and it is what routes `/animate/stream`.
 
 **Items 1 and 2 not done, and item 1 should be reconsidered before anyone starts.** Wave 3
