@@ -31,6 +31,23 @@ export interface NodeHelpers {
   selected?: boolean;
 }
 
+// The canonical no-op implementation, for the two places that render a card OUTSIDE the
+// wiring canvas: the settings modal and the input picker. Port dots register into the
+// void (hidden via .node-settings CSS), drags from an out port do nothing, the title bar
+// doesn't drag, and there is no edge layout to re-anchor.
+//
+// It lives HERE, beside the interface, because both call sites had their own copy with
+// identical bodies — and one of them was `as unknown as NodeHelpers`. That cast is the
+// reason this is worth one definition rather than two: add a required member to
+// NodeHelpers and the typed copy fails to compile (correct), while the cast copy keeps
+// compiling and is simply missing it at runtime.
+export const STUB_HELPERS: NodeHelpers = {
+  portRef: () => () => {},
+  startConnect: () => {},
+  onTitlePointerDown: () => {},
+  onLayoutChange: () => {},
+};
+
 // The editor context assembled by useGraphEditor + Studio, handed to every card.
 // Most fields are optional because individual cards read only what they need (and
 // guard with `ctx?.x`).

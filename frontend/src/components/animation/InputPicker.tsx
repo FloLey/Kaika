@@ -12,7 +12,7 @@ import {
 } from "../../lib/graph/mutations";
 import { nodeParam } from "../../lib/nodeParams";
 import { cardInputs, inputSource, partitionSources, type InputDesc } from "./nodeInputs";
-import type { NodeHelpers } from "./nodes/nodeProps";
+import { STUB_HELPERS } from "./nodes/nodeProps";
 import type { Graph, GraphNode } from "../../lib/types";
 
 interface Props {
@@ -21,15 +21,6 @@ interface Props {
   signals?: { id: string; name?: string }[];
   onGraphChange: (updater: (g: Graph) => Graph) => void;
 }
-
-// The settings window has no wiring canvas, so a param's ParamRow port dot registers
-// into the void (it's CSS-hidden); the value slider + source dropdown do the work.
-const NOOP_HELPERS = {
-  portRef: () => () => {},
-  startConnect: () => {},
-  onTitlePointerDown: () => {},
-  onLayoutChange: () => {},
-} as unknown as NodeHelpers;
 
 // The settings window's INPUTS panel: the single, complete editor for every input on
 // every card. A `param` row shows its VALUE control (const slider / [lo,hi] range via
@@ -139,7 +130,7 @@ export default function InputPicker({ node, graph, signals, onGraphChange }: Pro
               <ParamRow
                 node={node}
                 param={param}
-                helpers={NOOP_HELPERS}
+                helpers={STUB_HELPERS}
                 onGraphChange={onGraphChange}
                 onDetach={(k) => onGraphChange((g) => disconnect(g, node.id, k))}
               />

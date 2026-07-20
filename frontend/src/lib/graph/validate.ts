@@ -168,6 +168,20 @@ export function nodeRenderable(graph: Graph, nodeId: string): boolean {
   return contributingComplete(graph, nodeId);
 }
 
+// KEPT, with no production caller — a deliberate decision, not an oversight.
+//
+// This mirrors `backend/graph_validate.validate`, which is the ENFORCING copy: the
+// backend raises ValueError -> HTTP 400 on every render/export request, so the UI never
+// has to reject a graph itself. What the editor actually surfaces is `problems.ts`
+// (silently-dead wiring: a gate with no input, a collapsed lo-hi range) — warnings, a
+// different question from "is this renderable at all".
+//
+// ⚠ Nothing keeps the two in sync. If a rule is added backend-side, this copy simply
+// becomes wrong, and its own test will keep passing because the test asserts against
+// this implementation rather than against the backend's. Two options if that starts to
+// matter: generate the rule list the way `generated.ts` is generated, or delete this and
+// let the 400 be the only answer. Until then, treat a discrepancy as this file being
+// stale, never as the backend being wrong.
 export function validate(graph: Graph): ValidationResult {
   if (!graph || !Array.isArray(graph.nodes)) return { ok: false, error: "no graph" };
   const nodes = graph.nodes;

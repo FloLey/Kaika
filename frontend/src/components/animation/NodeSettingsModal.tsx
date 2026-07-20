@@ -9,7 +9,8 @@ import InputPicker from "./InputPicker";
 import SettingsVisual from "./nodes/SettingsVisual";
 import LyricsLinesEditor, { type LyricLine } from "./LyricsLinesEditor";
 import { MinimizeContext } from "./nodes/minimizeContext";
-import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
+import type { NodeCtx } from "./nodes/nodeProps";
+import { STUB_HELPERS } from "./nodes/nodeProps";
 import type { Graph, GraphNode } from "../../lib/types";
 import { useEscapeKey } from "../../lib/useEscapeKey";
 
@@ -25,16 +26,6 @@ import { useEscapeKey } from "../../lib/useEscapeKey";
 // controls on the LEFT, one big live preview on the RIGHT. The card's own inline
 // preview suppresses itself (ctx.previewInPanel) so the right-column CompactPreview is
 // the single visual (no double image, no duplicate fluid/combine stream).
-
-// Canvas helpers stubbed out: the modal has no wiring canvas, so ports register into
-// the void (their dots are hidden via .node-settings CSS), drags from an out port do
-// nothing, the title bar doesn't drag, and there's no edge layout to re-anchor.
-const STUB_HELPERS: NodeHelpers = {
-  portRef: () => () => {},
-  startConnect: () => {},
-  onTitlePointerDown: () => {},
-  onLayoutChange: () => {},
-};
 
 // Cards whose visual IS their editor (the points pad) render single-column — no
 // separate preview panel would add anything.
