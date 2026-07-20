@@ -92,9 +92,9 @@ checklist.
 Effort: 🟢 stateless field (copy `backdrop`) · 🟡 drawing / remap / light state ·
 🔴 stateful sim (FluidClip-style streaming).
 
-### 🌊 Natural / elemental — `[gen]`
-Built and shipped — see [`specs/generative-cards/`](../../specs/generative-cards/README.md)
-for waves (01), lightning (02), fire (03), aurora (04), rain (05) and clouds (06).
+> The catalog's first category — 🌊 **Natural / elemental**, cards 01–06 — is missing here
+> because it is the one that got built. Those specs are at
+> [`specs/generative-cards/`](../../specs/generative-cards/README.md); numbering picks up at 07.
 
 ### 🔊 Sound-native — `[gen]`
 | # | Card | Effort | Pitch |
