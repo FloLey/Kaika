@@ -14,7 +14,38 @@ commits**, so a parity regression bisects to one.
 
 ---
 
-## 1. `_transform_frames` rebuilds the same warp every frame
+## 1. ~~`_transform_frames` rebuilds the same warp every frame~~ — **DONE, and neither proposed fix was the reason**
+
+> ✅ Landed in `8cefeb7`. **1345 ms → 163 ms (8.3×)** on a 12-frame 1080p RGBA block; the
+> warp itself 98 ms → 0.4 ms per frame (234×). `RENDER_VERSION` → 15.
+>
+> **Both fixes proposed below are real and both are nearly worthless.** Profiled per frame at
+> 1080p RGBA:
+>
+> | | ms | share |
+> |---|---|---|
+> | `map_coordinates` ×4 channels | 92.1 | **88%** |
+> | build `coords` (fix a) | 3.8 | 3.6% |
+> | `astype(float32)` ×4 (fix b) | 1.8 | 1.7% |
+> | clip + `astype(uint8)` ×4 | 4.0 | 3.8% |
+>
+> The answer was to stop calling `map_coordinates` per channel: `cv2.remap` does all four in
+> one vectorised call, and OpenCV is already a dependency. **This is the third of step 18's
+> three findings to be misdiagnosed the same way** — the expensive thing was never the
+> allocation, it was the library call next to it.
+>
+> ⚠ Two traps worth keeping, both of which look like rounding until plotted. scipy `mirror`
+> is `BORDER_REFLECT_101` (abc|ba), **not** `BORDER_REFLECT` (abc|cb) — the wrong one costs
+> ~5.6 levels of mean error. And scipy `constant` returns `cval` for **any** coordinate
+> outside `[0, n-1]` (a hard cutoff) while cv2 blends against a virtual border pixel: half a
+> pixel out reads 100 where scipy reads 0, a one-pixel band up to 200 levels wide that a mean
+> hides completely. An explicit out-of-bounds mask restores it. With both handled, all 8
+> combinations (3 edge modes × 3ch/4ch) agree to max delta 1.
+>
+> The residual ±1 is cv2's fixed-point interpolation weights vs scipy's float — invisible but
+> not byte-identical, hence the version bump rather than an assumption of equivalence.
+
+### The original finding, kept for the reasoning it got wrong
 
 `graph_render.py:1280`. Per frame it builds `dx`, `dy`, `sx`, `sy` and `coords` — five full
 `(h,w)` float32 arrays — then loops channels:
@@ -156,7 +187,7 @@ branch alone and say why in a comment.
 
 | Fix | State |
 |---|---|
-| 1. `_transform_frames` hoist | **deferred** — `graph_render.py` is in flight in the working tree |
+| 1. `_transform_frames` | ✅ `8cefeb7`, 8.3× — via `cv2.remap`, **not** the proposed hoist (3.6%) |
 | 2. value-noise interpolation | ✅ `372edb9`, 1.83× on clouds (not the proposed cache) |
 | 2b. `_noise_row` | ❌ not a finding; profiled to nothing |
 | 3. per-frame luminance | ✅ `372edb9`, peak halved |
@@ -167,6 +198,9 @@ branch alone and say why in a comment.
 - **Constancy detection in fix 1** misfiring on a param that is constant *within* a block but
   varies across blocks. Block-local constancy is still correct here (`coords` is rebuilt per
   block), but confirm the resolved arrays really are block-scoped before relying on it.
-- **Believing this file.** Two of its three findings were wrong on the numbers, in the same
-  direction: allocation size was read as cost. Fix 1 is still unmeasured — profile it before
-  writing the hoist, not after.
+- **Believing this file.** **All three** of its findings were wrong on the numbers, in the
+  same direction: allocation size read as cost, without profiling. Two proposed caches that
+  would have saved ~0%, and a hoist worth 3.6% where the real target was an 88% library call
+  standing next to it. Every one was corrected by a three-line measurement taken before the
+  fix was written. That is the habit worth carrying into step 17 — which is the one finding
+  in this wave that measurement *confirmed*, and even understated (5.9×, not the ~3× claimed).

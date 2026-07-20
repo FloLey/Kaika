@@ -261,7 +261,7 @@ and that is how three fixes were wrongly declared done in one week.
 |---|---|---|
 | points fluid, 64 emitters, r=0.08, 2 s | **0.52 s** | 180×96 sim grid — step 17's target |
 | points fluid, 64 emitters, r=0.02, 2 s | **0.50 s** | small-radius variant; windowing should win more here |
-| transform block, 1080p RGBA, 0.5 s | **1.30 s** | native path — step 18 fix 1's target |
+| transform block, 1080p RGBA, 0.5 s | **1.30 s** → **0.21 s** | native path; step 18 fix 1 landed in `8cefeb7` |
 | clouds clip, 2 s | **0.15 s** | already 1.83× faster than pre-`372edb9` |
 | repeat song export, cache hit | **0.00 s** | already fixed by `4a39773`; recorded so a regression shows |
 
