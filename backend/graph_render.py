@@ -984,9 +984,21 @@ def _montage_video(dag: "Dag", node: dict) -> np.ndarray:
         if cached is not None and cached.shape[1:] == (gh, gw, 4) and len(cached) >= need:
             out[r:end] = cached[:need]  # unchanged slot — no decode, no simulation
             continue
+        # Same claim-and-release as the block path: this slot's decoders belong to it
+        # alone (validate enforces slot-chain exclusivity), and once its frames are
+        # copied out it will never be read again. Without this, a 23-slot montage held
+        # 23 ffmpeg processes and ~4.9 GB to the end of the segment — and the whole-SONG
+        # export runs on THIS path, so it was the one paying for it.
+        n0 = len(dag._closers)
         frames = _to_rgba(dag.video(src))
         out[r:end] = frames[:need]
         fluid_cache.store(key, frames)
+        for close in dag._closers[n0:]:
+            try:
+                close()
+            except Exception as e:  # noqa: BLE001 — a stuck decoder must not fail a render
+                log.warning("montage: releasing slot %d's decoder failed (%s)", k, e)
+        del dag._closers[n0:]  # released here; Dag.close() must not double-close
     return sources.apply_video_opacity(out, params["opacity"])
 
 
@@ -1615,11 +1627,17 @@ def _montage_block(dag: "Dag", node: dict):
         key = _montage_slot_key(dag, src, gh, gw)
         cached = fluid_cache.load(key)
         if cached is not None and cached.shape[1:] == (gh, gw, 4) and len(cached) >= length:
-            return lambda a, b: np.ascontiguousarray(cached[a:b])
+            return lambda a, b: np.ascontiguousarray(cached[a:b]), None
+        # Closers registered while BUILDING this slot's chain (its decoders) belong to
+        # this slot alone — validate enforces that a slot's upstream chain feeds nothing
+        # else, which is exactly what makes releasing them early safe. Snapshot the list
+        # around the build to claim them.
+        n0 = len(dag._closers)
         inner = dag._block_producer(src)
+        mine = dag._closers[n0:]
         mm, finalize, discard = fluid_cache.frame_writer(key, (length, gh, gw, 4))
-        if mm is None:  # cache disabled/unopenable — render straight through
-            return lambda a, b: _to_rgba(inner(a, b))
+        if mm is None:  # cache disabled/refused/unopenable — render straight through
+            return (lambda a, b: _to_rgba(inner(a, b))), mine
         dag._closers.append(discard)  # a cancelled stream drops the partial file
 
         def produce_local(a, b):
@@ -1629,24 +1647,48 @@ def _montage_block(dag: "Dag", node: dict):
                 finalize()
             return blk
 
-        return produce_local
+        # `discard` deliberately stays out of `mine`: it must live until Dag.close(),
+        # or releasing a finished slot would delete the cache it just wrote.
+        return produce_local, mine
 
-    # Producers only for slots that actually play — no idle FluidClips.
-    producers = [
-        _slot_producer(s, int(bounds[k + 1]) - int(bounds[k]))
-        for k, (s, _) in enumerate(slots[: len(starts)])
-    ]
+    # Built on FIRST USE, not up front: a 23-slot montage used to open every slot's cache
+    # writer before frame 0, and the >5min temp-file reaper then deleted the later slots'
+    # files mid-render ("finalize failed"). Lazy also means a slot's decoder starts when
+    # its slot does, instead of 23 of them idling for the whole segment.
+    built: dict = {}
+
+    def _slot(k: int):
+        if k not in built:
+            built[k] = _slot_producer(slots[k][0], int(bounds[k + 1]) - int(bounds[k]))
+        return built[k][0]
+
+    def _release(k: int) -> None:
+        """Drop a played-out slot's decoders. Slots are sequential and never revisited
+        (the contract above), and a closed VideoClip re-opens itself on demand
+        (`sources.VideoClip.frames`), so a surprise re-pull is slower, never wrong."""
+        entry = built.get(k)
+        if not entry or not entry[1]:
+            return
+        for close in entry[1]:
+            try:
+                close()
+            except Exception as e:  # noqa: BLE001 — a stuck decoder must not fail a render
+                log.warning("montage: releasing slot %d's decoder failed (%s)", k, e)
+        built[k] = (entry[0], None)  # released once; the producer stays callable
 
     def produce(a, b):
         out = np.zeros((b - a, gh, gw, 4), np.uint8)
         # A block may straddle one or more cuts: split it per slot bucket.
         k0 = int(np.searchsorted(bounds, a, side="right")) - 1
         k1 = int(np.searchsorted(bounds, b - 1, side="right")) - 1
+        for k in list(built):
+            if k < k0:  # the playhead has passed it for good
+                _release(k)
         for k in range(k0, k1 + 1):
             s, e = max(a, int(bounds[k])), min(b, int(bounds[k + 1]))
             if e > s:
                 r = int(bounds[k])
-                out[s - a : e - a] = producers[k](s - r, e - r)  # already RGBA
+                out[s - a : e - a] = _slot(k)(s - r, e - r)  # already RGBA
         return sources.apply_video_opacity(out, params["opacity"][a:b])
 
     return produce

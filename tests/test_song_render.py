@@ -182,7 +182,11 @@ def test_each_segment_announces_itself_before_it_is_rendered():
     ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
     seen = []
     windows = 0
-    for _a, _b, _w in SR.iter_song_windows(ctx, on_segment=lambda *a: seen.append((a, windows))):
+    # noqa B023: the lambda is invoked SYNCHRONOUSLY inside the loop, so reading the
+    # live `windows` is the point — binding it as a default would freeze it at 0.
+    for _a, _b, _w in SR.iter_song_windows(
+        ctx, on_segment=lambda *a: seen.append((a, windows))  # noqa: B023
+    ):
         windows += 1
     # both segments named, numbered 1..n with the count, and each announced BEFORE its
     # window was produced (windows still 0 for the first, 1 for the second)

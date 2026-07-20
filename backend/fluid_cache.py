@@ -27,6 +27,9 @@ CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "fluid_cache"
 # Raw frames are bulkier than the encoded clips, so a larger byte cap. All overridable.
 CACHE_MAX_BYTES = int(os.environ.get("FLUID_FRAME_CACHE_MAX_BYTES", str(8 * 1024**3)))  # 8 GB
 CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_FRAME_CACHE_MAX_AGE_DAYS", "14"))
+# Largest single entry worth writing, as a share of the budget. Above this an entry
+# cannot coexist with its siblings, so caching it only costs I/O (see `frame_writer`).
+MAX_ENTRY_FRACTION = float(os.environ.get("FLUID_FRAME_CACHE_MAX_ENTRY_FRACTION", "0.25"))
 ENABLED = os.environ.get("FLUID_FRAME_CACHE", "1") != "0"
 
 
@@ -89,6 +92,21 @@ def frame_writer(key: str, shape: tuple):
     render still runs, just uncached. (`evict()` also reaps any temp left behind.)"""
     noop = lambda: None  # noqa: E731
     if not ENABLED:
+        return None, noop, noop
+    # An entry bigger than a fraction of the whole budget can only be written and then
+    # evicted before anything reads it — LRU has no room to keep it AND the entries the
+    # same render is about to write. That is exactly what a 4K montage does: 32 MB per
+    # RGBA frame is 2.2 GB for a 3-second slot against an 8 GB cap, so 23 slots evict
+    # each other in turn and the write is pure loss. Refuse it: the render just runs
+    # uncached, which is what was happening anyway, minus the I/O.
+    want = int(np.prod(shape))
+    if want > CACHE_MAX_BYTES * MAX_ENTRY_FRACTION:
+        log.info(
+            "fluid frame cache: skipping a %.1f GB entry (over %.0f%% of the %.0f GB budget)",
+            want / 1024**3,
+            MAX_ENTRY_FRACTION * 100,
+            CACHE_MAX_BYTES / 1024**3,
+        )
         return None, noop, noop
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = CACHE_DIR / f"{key}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp.npy"

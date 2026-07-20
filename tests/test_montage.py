@@ -17,7 +17,7 @@ from backend import graph as G
 from backend import paths
 from backend import sources as S
 from backend.graph_common import composite
-from backend.graph_render import _montage_starts, _to_rgba
+from backend.graph_render import _montage_block, _montage_starts, _montage_video, _to_rgba
 
 from helpers import assert_moves
 
@@ -629,3 +629,84 @@ def test_a_card_outside_a_montage_is_untouched(video_asset):
     }
     dag = G.Dag("job", {"start": 30.0, "end": 31.0, "signals": []}, g, NOAUDIO, OUT)
     assert not _feeds_a_montage(dag, "v1")
+
+
+# ── decoders and cache writers are per-slot, not per-segment ─────────────────
+#
+# A 23-slot 4K montage held 23 ffmpeg processes and ~4.9 GB to the end of the segment:
+# every slot's chain was BUILT before frame 0, and nothing released a slot once its cut
+# had passed. The eager build had a second victim — each slot opened a cache temp file
+# up front, and the >5min reaper deleted the later ones mid-render ("finalize failed").
+# Both paths carry the fix, and the whole-song export runs on the whole-clip one.
+
+
+def _counting_video_node(nid, url, built, opened):
+    """An image node whose source construction and close() are observable."""
+    return _image_node(nid, url)
+
+
+def test_a_slot_is_built_only_when_its_cut_arrives(assets, monkeypatch):
+    """Lazy construction: rendering the first block must not build the last slot."""
+    g = _montage_graph(assets, n_slots=3)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    built = []
+    real = dag._block_producer
+    monkeypatch.setattr(dag, "_block_producer", lambda nid: (built.append(nid), real(nid))[1])
+    produce = _montage_block(dag, dag.nodes["mt"])
+    produce(0, 1)  # only the first slot plays here
+    assert built == ["im1"], f"built {built} while rendering the first frame"
+    produce(0, 12)  # the rest of the segment
+    assert set(built) >= {"im1", "im2"}
+
+
+def test_a_played_out_slot_releases_its_decoder_before_the_segment_ends(assets, monkeypatch):
+    """The release has to happen DURING the render — at the end, Dag.close() would do
+    it anyway and the peak would be unchanged."""
+    g = _montage_graph(assets, n_slots=2)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    closed = []
+    real = dag._block_producer
+
+    def spy(nid):
+        p = real(nid)
+        dag._closers.append(lambda nid=nid: closed.append(nid))
+        return p
+
+    monkeypatch.setattr(dag, "_block_producer", spy)
+    produce = _montage_block(dag, dag.nodes["mt"])
+    produce(0, 6)  # slot 1 only
+    assert closed == []
+    produce(6, 12)  # the cut lands: slot 1 is done for good
+    assert "im1" in closed, "a played-out slot kept its decoder to the end of the segment"
+
+
+def test_the_whole_clip_path_releases_each_slot_as_it_finishes(assets, monkeypatch):
+    """The song export renders through `video()`, so the fix must live here too."""
+    g = _montage_graph(assets, n_slots=2)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    closed = []
+    real = dag.video
+
+    def spy(nid):
+        frames = real(nid)
+        if nid != "mt":
+            dag._closers.append(lambda nid=nid: closed.append(nid))
+        return frames
+
+    monkeypatch.setattr(dag, "video", spy)
+    _montage_video(dag, dag.nodes["mt"])
+    assert set(closed) == {"im1", "im2"}, f"released {closed}"
+    assert not dag._closers, "a released closer must not fire again on Dag.close()"
+
+
+def test_an_entry_too_big_for_the_budget_is_not_written(monkeypatch, tmp_path):
+    """A 4K slot is 2.2 GB against an 8 GB cap: writing it only evicts its siblings."""
+    from backend import fluid_cache
+
+    monkeypatch.setattr(fluid_cache, "CACHE_DIR", tmp_path)
+    mm, _finalize, _discard = fluid_cache.frame_writer("huge", (72, 3840, 2160, 4))
+    assert mm is None  # refused -> the render runs uncached instead of thrashing
+    assert list(tmp_path.glob("*.npy")) == []  # and nothing was written
+    mm2, _f2, d2 = fluid_cache.frame_writer("small", (8, 64, 64, 4))
+    assert mm2 is not None  # ordinary entries are unaffected
+    d2()
