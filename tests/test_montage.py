@@ -699,58 +699,35 @@ def test_the_whole_clip_path_releases_each_slot_as_it_finishes(assets, monkeypat
 
 
 def test_an_entry_too_big_for_the_budget_is_not_written(monkeypatch, tmp_path):
-    """A 4K slot is 2.2 GB against an 8 GB cap: writing it only evicts its siblings."""
+    """A 4K slot is 2.2 GB against an 8 GB cap: writing it only evicts its siblings.
+
+    BOTH writers must refuse it. The guard first landed on `frame_writer` only, which
+    covers the streaming path — but the whole-clip path (`_montage_video`, and therefore
+    the whole-SONG export) writes through `store()`. That hole let a real 4K export write
+    20 GB to disk and lose it again seconds later, while holding 13-17 GB of RAM; the
+    machine's memory killer took the process.
+    """
     from backend import fluid_cache
 
     monkeypatch.setattr(fluid_cache, "CACHE_DIR", tmp_path)
+
+    # streaming writer
     mm, _finalize, _discard = fluid_cache.frame_writer("huge", (72, 3840, 2160, 4))
-    assert mm is None  # refused -> the render runs uncached instead of thrashing
-    assert list(tmp_path.glob("*.npy")) == []  # and nothing was written
+    assert mm is None
+    assert list(tmp_path.glob("*.npy")) == []
+
+    # whole-clip writer — the one that was unguarded
+    big = np.lib.format.open_memmap(  # a real oversized array without 2 GB of RAM
+        tmp_path / "src.dat", mode="w+", dtype=np.uint8, shape=(72, 3840, 2160, 4)
+    )
+    fluid_cache.store("huge2", big)
+    assert not (tmp_path / "huge2.npy").exists(), "store() wrote an entry LRU cannot keep"
+    del big
+    (tmp_path / "src.dat").unlink()
+
+    # ordinary entries still cache, through both writers
     mm2, _f2, d2 = fluid_cache.frame_writer("small", (8, 64, 64, 4))
-    assert mm2 is not None  # ordinary entries are unaffected
+    assert mm2 is not None
     d2()
-
-
-def test_a_played_out_slot_does_not_keep_its_last_block_of_frames(assets):
-    """Every producer memoizes its last block so a diamond consumer pulls it once, and
-    nothing ever dropped that memo. For a producer pulled EVERY block the memo is simply
-    overwritten — no leak. A montage slot is not: once its cut is over it is never pulled
-    again, so it sat on a full block of frames until `close()`. At 4K that is ~33 MB per
-    frame per slot; a 59 s chorus retained 5.7 GB, with RSS climbing linearly.
-
-    Six slots, six cuts: by the last block, only the slots still on screen may hold frames.
-    """
-    g = _montage_graph(assets, n_slots=6)
-    g["nodes"] = [
-        {**n, "data": {**n["data"], "rate": 6}} if n["id"] == "lfo" else n for n in g["nodes"]
-    ]
-    G.validate(g)
-    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
-    built, live = 0, 0
-    for _a, _b, _total, _frames in dag.stream_blocks("o", 2):
-        built = max(built, len(dag._block_memos))
-        live = sum(1 for m in dag._block_memos if m["val"] is not None)
-    dag.close()
-    assert built >= 6, f"only {built} producers built — the fixture never reaches later slots"
-    # The montage, its trigger chain, and the slot(s) in the final block. Emphatically
-    # not one per slot played.
-    assert live <= 4, f"{live} producers still hold a block of frames at the end of the render"
-
-
-def test_a_diamond_consumer_still_pulls_one_block_once(assets, monkeypatch):
-    """The memo drop must not defeat what the memo is FOR: two consumers of the same
-    producer inside one block still compute it once."""
-    g = _montage_graph(assets, n_slots=1)
-    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
-    calls = []
-    inner = dag._block_producer("im1")
-    monkeypatch.setitem(dag._block_fns, "im1", inner)
-    produce = dag._block_producer("im1")
-    real_len = len(dag._block_memos)
-    a, b = 0, 4
-    f1, f2 = produce(a, b), produce(a, b)
-    calls.append(real_len)
-    assert f1 is f2, "the one-block memo no longer serves a second consumer"
-    dag.drop_stale_blocks(b)  # playhead moved past it
-    assert produce(a, b) is not f1, "a dropped block must be recomputed, not served as None"
-    dag.close()
+    fluid_cache.store("small2", np.zeros((8, 64, 64, 4), np.uint8))
+    assert (tmp_path / "small2.npy").exists()

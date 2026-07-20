@@ -37,6 +37,29 @@ def _path(key: str) -> Path:
     return CACHE_DIR / f"{key}.npy"
 
 
+def too_big(nbytes: int) -> bool:
+    """Is an entry of `nbytes` too big to be worth caching?
+
+    An entry over a fraction of the whole budget can only be written and then evicted
+    before anything reads it — LRU has no room to keep it AND the entries the same
+    render is about to write. Caching it costs the I/O and buys nothing.
+
+    Both writers must ask. The guard first landed on `frame_writer` alone (the streaming
+    path) and that was an incomplete fix: the whole-clip path goes through `store()`, and
+    it is the one the whole-SONG export uses. A 4K montage slot went through unguarded,
+    wrote tens of GB, and the entry was gone again seconds later.
+    """
+    if nbytes <= CACHE_MAX_BYTES * MAX_ENTRY_FRACTION:
+        return False
+    log.info(
+        "fluid frame cache: skipping a %.1f GB entry (over %.0f%% of the %.0f GB budget)",
+        nbytes / 1024**3,
+        MAX_ENTRY_FRACTION * 100,
+        CACHE_MAX_BYTES / 1024**3,
+    )
+    return True
+
+
 def load(key: str) -> np.ndarray | None:
     """Cached frames for `key`, memory-mapped read-only for cheap block slicing, or
     None on a miss. A hit refreshes the file mtime so it stays hot (LRU)."""
@@ -59,7 +82,7 @@ def load(key: str) -> np.ndarray | None:
 def store(key: str, frames: np.ndarray) -> None:
     """Cache `frames` under `key`. Atomic (write-tmp-then-rename) and best-effort — a
     failure just means a future miss. Bounds the cache afterward."""
-    if not ENABLED:
+    if not ENABLED or too_big(int(frames.nbytes)):
         return
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     p = _path(key)
@@ -91,22 +114,11 @@ def frame_writer(key: str, shape: tuple):
     once finalized). Returns `(None, noop, noop)` when disabled or unopenable — the
     render still runs, just uncached. (`evict()` also reaps any temp left behind.)"""
     noop = lambda: None  # noqa: E731
-    if not ENABLED:
-        return None, noop, noop
-    # An entry bigger than a fraction of the whole budget can only be written and then
-    # evicted before anything reads it — LRU has no room to keep it AND the entries the
-    # same render is about to write. That is exactly what a 4K montage does: 32 MB per
-    # RGBA frame is 2.2 GB for a 3-second slot against an 8 GB cap, so 23 slots evict
-    # each other in turn and the write is pure loss. Refuse it: the render just runs
-    # uncached, which is what was happening anyway, minus the I/O.
-    want = int(np.prod(shape))
-    if want > CACHE_MAX_BYTES * MAX_ENTRY_FRACTION:
-        log.info(
-            "fluid frame cache: skipping a %.1f GB entry (over %.0f%% of the %.0f GB budget)",
-            want / 1024**3,
-            MAX_ENTRY_FRACTION * 100,
-            CACHE_MAX_BYTES / 1024**3,
-        )
+    # A 4K montage is what this catches: 32 MB per RGBA frame is 2.2 GB for a 3-second
+    # slot against an 8 GB cap, so the slots evict each other in turn and every write is
+    # pure loss. Refused means the render runs uncached — what was happening anyway,
+    # minus the I/O. See `too_big`.
+    if not ENABLED or too_big(int(np.prod(shape))):
         return None, noop, noop
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = CACHE_DIR / f"{key}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp.npy"
