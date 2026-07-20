@@ -708,13 +708,18 @@ _HEAVY_TYPES = {"fluid", "waves", "lightning", "fire", "aurora", "rain", "clouds
 # pixel count) at a quarter of that.
 #
 # An `output["nativeShort"]` OVERRIDES this cap and, unlike the plain preview path,
-# takes the native branch even when `gridCells` is set. That combination is exactly
-# the single-segment HD render (`/export/segment`): it carries the export's
-# `gridCells` for sim graphs, but a sim-FREE graph must render at the export's true
-# native size — pinning it to a 216-cell sim grid would make "HD" LOOK WORSE than the
-# 540p preview. The key is opt-in: no preview ever sends it (so no preview's
-# `_grid_dims` or `output_hash` changes), and the whole-song export must never set it
-# — `song_render` pushes every segment into ONE fixed-size encoder.
+# takes the native branch even when `gridCells` is set. That combination is exactly the
+# HD render: it carries the export's `gridCells` for sim graphs, but a sim-FREE graph
+# must render at the export's true native size — pinning it to a 216-cell sim grid would
+# make "HD" LOOK WORSE than the 540p preview. The key is opt-in: no preview ever sends it,
+# so no preview's `_grid_dims` or `output_hash` changes.
+#
+# BOTH HD paths set it (`song_render.output_from_export`). This comment used to say the
+# whole-song export must NEVER set it, because one fixed-size encoder spans every segment —
+# and that restriction is what made a master a nearest-neighbour upscale of a sim-grid
+# render while the segment HD render of the same bars was native. `build_plan` now sizes
+# that encoder from the largest grid in the plan instead of from a constant, and
+# `iter_song_windows` upscales any smaller segment to match, so the restriction is gone.
 _NATIVE_SHORT = 540
 
 
@@ -736,8 +741,9 @@ def _grid_dims(dag: "Dag"):
     SIMULATION grid (quality preset → 64/96/144 short-side cells — sims are expensive);
     but a graph with nothing to simulate (pure video/image/montage layers) renders at
     the output's NATIVE resolution, capped at `nativeShort` or _NATIVE_SHORT, so clips
-    stay sharp. An explicit `gridCells` (the HD song export) otherwise wins; no output
-    settings falls back to the legacy square."""
+    stay sharp. An explicit `gridCells` otherwise wins; no output settings falls back to
+    the legacy square. Both HD paths send `nativeShort`, so both resolve a given segment to
+    the same size — a test pins it (`test_both_hd_paths_use_one_output_dict`)."""
     if not dag.output:
         return LEGACY_GRID, LEGACY_GRID
     native = dag.output.get("nativeShort")

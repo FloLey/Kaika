@@ -76,8 +76,8 @@ def _heavy_graph():
 
 
 def _hd_output():
-    """What the route builds for a segment HD render."""
-    return {**SR.output_from_export(EXPORT), "nativeShort": min(EXPORT["width"], EXPORT["height"])}
+    """What the route builds for a segment HD render — now literally the shared contract."""
+    return EX._hd_output(EXPORT)
 
 
 def _dims(graph, output):
@@ -103,16 +103,21 @@ def test_export_defaults_are_shared_not_copied():
 # ── the HD clip is its own cache entry ───────────────────────────────────────
 
 
-def test_hd_hash_differs_from_preview_and_from_plain_export():
+def test_hd_hash_differs_from_the_preview():
+    """Rendering in HD can never overwrite (or invalidate) the draft preview a card shows.
+
+    This used to assert THREE distinct keys, the third being the whole-song export's own
+    settings. That third key existing was the bug: the song path lacked `nativeShort`, so it
+    rendered a sim-free segment on the coarse sim grid and let ffmpeg blow it up with
+    nearest-neighbour, while the segment HD render of the same bars was native. The two HD
+    dicts are now one, and `test_both_hd_paths_use_one_output_dict` pins that."""
     graph = _heavy_graph()
     keys = {
         G.output_hash("job", SEG, graph, "o", PREVIEW),
         G.output_hash("job", SEG, graph, "o", SR.output_from_export(EXPORT)),
-        G.output_hash("job", SEG, graph, "o", _hd_output()),
     }
-    # three distinct settings -> three distinct files: rendering in HD can never
-    # overwrite (or invalidate) the draft preview the card is showing.
-    assert len(keys) == 3
+    assert len(keys) == 2
+    assert G.output_hash("job", SEG, graph, "o", _hd_output()) in keys  # the HD key IS one
 
 
 # ── resolution: the light-graph trap ─────────────────────────────────────────
@@ -351,3 +356,58 @@ def test_cached_lookup_shares_its_guard_rails_with_the_render_route(client, monk
     monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
     assert _cached(client, {"job_id": "../etc", "segment": SEG}).status_code == 404
     assert _cached(client, {"job_id": "deadbeef"}).status_code == 400
+
+
+# ── the two HD paths must agree on frame size ────────────────────────────────
+
+
+def test_both_hd_paths_use_one_output_dict():
+    """The single-segment HD export and the whole-song export must render a segment at the
+    SAME size. They diverged because the segment route added `nativeShort` and the song path
+    did not: the master became a nearest-neighbour upscale of a sim-grid render (measured on
+    real projects: 2.1x from 1024x1800, and 5.0x from 384x216) while the segment HD preview
+    of the same bars was a true native render."""
+    assert EX._hd_output(EXPORT) == SR.output_from_export(EXPORT)
+
+
+@pytest.mark.parametrize("kind", ["light", "heavy"])
+def test_song_export_renders_a_segment_at_the_size_the_segment_export_does(kind):
+    """End-to-end, through the real machinery, so it survives a refactor of the dict.
+
+    The LIGHT case is the bug: the song path rendered on the sim grid. The HEAVY case pins
+    the non-regression — a fluid segment must still render on the sim grid both ways."""
+    graph = _light_graph() if kind == "light" else _heavy_graph()
+    seg = {**SEG, "graph": graph, "finalOutputId": "o"}
+    ctx = SR.build_plan("job", [seg], [], EXPORT, NOAUDIO)
+    first = next(iter(SR.iter_song_windows(ctx)))[2]
+    # The SEGMENT path's own dict — comparing the song path against itself proves nothing.
+    segment_dims = _dims(graph, EX._hd_output(EXPORT))
+    assert first.shape[1:3] == segment_dims, f"song {first.shape[1:3]} vs segment {segment_dims}"
+    assert (ctx["gh"], ctx["gw"]) == first.shape[1:3]  # and the encoder is fed that size
+
+
+def test_every_window_of_a_mixed_song_matches_the_encoder_input():
+    """ONE ffmpeg spans the whole song and its rawvideo geometry is fixed at the first write,
+    so every window — light or fluid — must arrive at exactly (gh, gw). This is the test that
+    catches a resize site someone forgot."""
+    segs = [
+        {
+            **SEG,
+            "id": "s1",
+            "start": 0.0,
+            "end": 1.0,
+            "graph": _heavy_graph(),
+            "finalOutputId": "o",
+        },
+        {
+            **SEG,
+            "id": "s2",
+            "start": 1.0,
+            "end": 2.0,
+            "graph": _light_graph(),
+            "finalOutputId": "o",
+        },
+    ]
+    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    sizes = {w.shape[1:3] for _a, _b, w in SR.iter_song_windows(ctx)}
+    assert sizes == {(ctx["gh"], ctx["gw"])}, f"mixed sizes reached one fixed encoder: {sizes}"

@@ -135,11 +135,19 @@ the implementation lives in five modules:
   simulation grid, but a graph with nothing to simulate renders at native
   resolution (short side capped at 540 — a full 1080p block stream would hold
   ~1 GB of frames in flight). `output["nativeShort"]` raises that cap and wins
-  over `gridCells`; only the single-segment HD render sets it, because pinning a
-  sim-free graph to a 216-cell export grid would make "HD" look *worse* than the
-  preview. Previews never send the key, so their sizes — and cache keys — are
-  untouched, and the whole-song export must never set it (one fixed-size encoder
-  spans every segment).
+  over `gridCells`, because pinning a sim-free graph to a 216-cell export grid
+  would make "HD" look *worse* than the preview. Previews never send the key, so
+  their sizes — and cache keys — are untouched. **Both HD paths send it**
+  (`song_render.output_from_export`, the shared contract), so the two resolve a
+  given segment to the same size; a test pins that. This used to be true of the
+  single-segment render only — one ffmpeg spans the whole song and its rawvideo
+  geometry is fixed at the first write, so the master was rendered on the sim grid
+  and upscaled with nearest-neighbour while the segment HD render of the same bars
+  was native. `song_render.build_plan` now sizes that encoder from the **largest
+  grid in the plan** rather than a constant, and `iter_song_windows` upscales any
+  smaller segment to match: an all-light song renders native end to end, an
+  all-fluid song is byte-identical to before, and only a mixed song resamples
+  anything (its fluid segments, which want nearest anyway).
 
 A node graph has three edge flows: **value** (0..1 curves into modulatable
 ports, each mapped through a per-port `[lo, hi]` range), **points** (emitter

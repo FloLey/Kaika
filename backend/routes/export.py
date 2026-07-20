@@ -171,15 +171,11 @@ def _segment_request(body):
     return None, (job_id, seg, graph, output_id, export)
 
 
-def _hd_output(export: dict) -> dict:
-    """The render settings ONE segment's HD pass uses. Folded into `output_hash`, so
-    this must be the single definition — the lookup route and the render read it here."""
-    return {
-        **song_render.output_from_export(export),
-        # A sim-free graph must render at the export's NATIVE size, not on a
-        # simulation grid — see graph_render._NATIVE_SHORT.
-        "nativeShort": min(int(export.get("width") or 1080), int(export.get("height") or 1920)),
-    }
+# The segment HD render's settings. `nativeShort` used to be added HERE and nowhere else,
+# which is exactly how the two HD paths came to render at different sizes; it now lives in
+# the shared contract, so this is a pure alias kept for its callers and for the test that
+# asserts the two paths still agree.
+_hd_output = song_render.output_from_export
 
 
 def _hd_paths(job_id, seg, graph, output_id, export):

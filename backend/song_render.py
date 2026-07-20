@@ -27,12 +27,13 @@ import shutil
 import subprocess
 import uuid
 
+import cv2
 import numpy as np
 
 from . import fluid, paths, render_cache
 from .config import ENCODE_TIMEOUT
 from .graph_hash import RENDER_VERSION
-from .graph_render import Dag, _clip_dims
+from .graph_render import Dag, _clip_dims, _grid_dims
 
 log = logging.getLogger("kaika.export")
 
@@ -50,7 +51,15 @@ def output_from_export(export: dict) -> dict:
     THE lockstep anchor between the two HD paths: the whole-song export
     (`build_plan`) and the single-segment HD export (`routes/export.segment`)
     both go through here, so a segment's HD preview can't drift from what the
-    final master will contain (a test pins the equivalence)."""
+    final master will contain (a test pins the equivalence).
+
+    That claim used to be false in the one way that mattered. `nativeShort` lived in the
+    ROUTE's dict, so a sim-free segment rendered at native size for a segment export and on
+    the coarse sim grid for the master — which ffmpeg then blew up with nearest-neighbour
+    (measured on real projects: 2.1x from 1024x1800, 5.0x from 384x216). It was withheld
+    here because ONE encoder spans the whole song and its input geometry is fixed at the
+    first write; `build_plan` now sizes that encoder from the largest grid in the plan
+    instead of from a constant, so the reason is gone."""
     return {
         "width": int(export.get("width", 1080)),
         "height": int(export.get("height", 1920)),
@@ -62,6 +71,9 @@ def output_from_export(export: dict) -> dict:
         # whole — changing the quality therefore re-keys every HD cache entry on its own,
         # with no RENDER_VERSION bump and no stale clip encoded at the old setting.
         "crf": fluid.CRF_EXPORT,
+        # A sim-free graph renders at the export's NATIVE size, not on a simulation grid —
+        # see graph_render._NATIVE_SHORT and _grid_dims.
+        "nativeShort": min(int(export.get("width") or 1080), int(export.get("height") or 1920)),
     }
 
 
@@ -94,7 +106,12 @@ def _export_hash(job_id, segments, lyric_lines, export) -> str:
     Folds RENDER_VERSION like output_hash does, so a render-semantics bump invalidates
     stale HD exports instead of serving them as cache hits."""
     payload = {
-        "v": 1,
+        # v2: sim-free segments render at native size instead of on the sim grid (the
+        # master used to be a nearest-neighbour upscale). RENDER_VERSION is deliberately
+        # NOT bumped: it is folded into `output_hash` for every render including previews,
+        # whose pixels are untouched — bumping it would evict a whole project's cache for a
+        # change confined to the HD paths. This local counter is the right scope.
+        "v": 2,
         "render_version": RENDER_VERSION,
         "job_id": job_id,
         "export": export,
@@ -173,8 +190,7 @@ def build_plan(
     render context consumed by `iter_song_windows`. Raises if a segment is unmarked."""
     out_dict = output_from_export(export)  # the shared export->output contract
     fps, w, h = out_dict["fps"], out_dict["width"], out_dict["height"]
-    gh, gw = fluid.grid_from_output(out_dict)
-    plan: list = []  # per segment: (dag, output_id, [field...], window_len)
+    plan: list = []  # per segment: (dag, output_id, [field...], window_len, (gh, gw))
     layer_sources: dict = {}  # layer number -> accumulated source dicts (for dye layout)
     total = 0
     for seg in sorted(segments, key=lambda s: float(s.get("start", 0.0))):
@@ -189,22 +205,70 @@ def build_plan(
             layer_sources.setdefault(f["layer"], []).extend(
                 f["params"].get("sources") or [f["params"].get("source", {})]
             )
-        plan.append((dag, oid, fields, window))
+        plan.append((dag, oid, fields, window, _grid_dims(dag)))
         total += window
     dye_layout = {
         n: fluid._dye_layout(srcs) for n, srcs in layer_sources.items()
     }  # n -> (modes, wrap)
+    # ONE ffmpeg spans the song and its rawvideo geometry is fixed at the first write, so
+    # every segment must arrive at one size — which is why `nativeShort` used to be withheld
+    # from the shared contract. Size the encoder from the plan instead of from a constant:
+    # the LARGEST segment grid. All-light song -> native (no resampling anywhere); all-fluid
+    # song -> the sim grid, byte-identical to before; mixed -> native, and only the fluid
+    # segments are upscaled. Largest, not "native if any segment is light", because
+    # `gridCells` is user-settable above the short side and would otherwise DOWNscale a
+    # light segment.
+    gh, gw = max(
+        (dims for *_, dims in plan),
+        key=lambda d: d[0] * d[1],
+        default=fluid.grid_from_output(out_dict),
+    )
+    # The persistent fields are a DIFFERENT size from the encoder and must stay so: they
+    # carry across segment boundaries, so they need ONE size for the whole song, and that
+    # size is the sim grid — never the encoder's (a mixed song would otherwise simulate at
+    # 4K). A fluid segment's own Dag resolves to this same grid, so the pre-seeded arrays
+    # still match what its DAG expects.
+    sim_h, sim_w = fluid.grid_from_output(out_dict)
     return {  # NB: the plan's DAGs hold resources — the caller must `close_plan(ctx)`
         "plan": plan,
         "dye_layout": dye_layout,
         "total": total,
-        "gh": gh,
+        "gh": gh,  # the ENCODER's rawvideo input size
         "gw": gw,
+        "sim_h": sim_h,  # the persistent fluid fields' grid
+        "sim_w": sim_w,
         "fps": fps,
         "w": w,
         "h": h,
         "crf": fluid.crf_from_output(out_dict),
     }
+
+
+def _to_encoder_size(blk: np.ndarray, gh: int, gw: int) -> np.ndarray:
+    """Bring one block to the encoder's fixed rawvideo size.
+
+    Decides on the block's ACTUAL shape, never on a size recorded earlier, so the invariant
+    cannot drift from what a producer really returned.
+
+    `INTER_NEAREST` is hardcoded, and it is allowed to be: the only blocks smaller than the
+    encoder input are sim-grid dye, which wants nearest ("upscale crisply" — the same choice
+    ffmpeg's `flags=neighbor` made when it did this job) and which arrives already flattened
+    to RGB. Video and montage segments render at native and pass straight through, so nothing
+    photographic is ever resampled here. If that ever stops being true, this comment is the
+    thing to revisit — a photographic upscale wants cubic or Lanczos, not nearest.
+
+    The RGBA branch is belt-and-braces: no current caller can reach it (the segments that
+    carry alpha are exactly the ones already at native size), but resampling straight alpha
+    would bleed colour out of transparent pixels, so flatten first if it ever happens.
+    """
+    if blk.shape[1:3] == (gh, gw):
+        return blk
+    if blk.shape[-1] == 4:
+        blk = fluid.flatten(blk)
+    out = np.empty((len(blk), gh, gw, blk.shape[-1]), np.uint8)
+    for i, frame in enumerate(blk):
+        cv2.resize(frame, (gw, gh), dst=out[i], interpolation=cv2.INTER_NEAREST)
+    return out
 
 
 def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
@@ -227,9 +291,10 @@ def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
     tells the UI it is still working, and on what. Optional, so the generator stays pure
     for the tests that just concatenate its windows."""
     dye_layout, gh, gw = ctx["dye_layout"], ctx["gh"], ctx["gw"]
+    sim_h, sim_w = ctx["sim_h"], ctx["sim_w"]
     fields_sim: dict = {}  # layer number -> persistent FluidSim (carries across segments)
     done = 0
-    for k, (dag, oid, fields, window) in enumerate(ctx["plan"]):
+    for k, (dag, oid, fields, window, _dims) in enumerate(ctx["plan"]):
         if should_cancel and should_cancel():
             return
         if on_segment:
@@ -243,8 +308,8 @@ def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
             inj = fluid.LayerInjector(f["params"], modes)
             if f["layer"] not in fields_sim:
                 fields_sim[f["layer"]] = fluid.FluidSim(
-                    gh,
-                    gw,
+                    sim_h,
+                    sim_w,
                     dissipation=inj.medium0("dissipation"),
                     vel_dissipation=inj.medium0("velocity_dissipation"),
                     viscosity=inj.medium0("viscosity"),
@@ -272,12 +337,12 @@ def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
             # here instead would cost a full extra pass over every frame for no difference.
             block = max(1, round(hd_block_seconds(ctx["w"], ctx["h"]) * ctx["fps"]))
             for a0, b0, _total, blk in dag.stream_blocks(oid, block):
-                yield done + a0, done + b0, blk
+                yield done + a0, done + b0, _to_encoder_size(blk, gh, gw)
             done += window
             continue
 
         # Advance ALL live fields over this window; capture each USED field's frames.
-        captured = {nid: np.empty((window, gh, gw, 3), np.uint8) for nid, _, _ in injectors}
+        captured = {nid: np.empty((window, sim_h, sim_w, 3), np.uint8) for nid, _, _ in injectors}
         for i in range(window):
             for _nid, layer_n, inj in injectors:
                 inj.apply(fields_sim[layer_n], i)
@@ -291,9 +356,14 @@ def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
         for nid, frames in captured.items():
             dag._video[nid] = frames
         styled = fluid.flatten(dag.video(oid))
-        a = done
+        # Chunk BEFORE resizing. Resizing the whole window would allocate it again at the
+        # encoder size — a 60 s window at 4K is ~50 GB, the exact allocation that took the
+        # machine down. One source window (sim grid, small) plus one destination block.
+        step = max(1, round(hd_block_seconds(ctx["w"], ctx["h"]) * ctx["fps"]))
+        for a0 in range(0, window, step):
+            b0 = min(a0 + step, window)
+            yield done + a0, done + b0, _to_encoder_size(styled[a0:b0], gh, gw)
         done += window
-        yield a, done, styled
 
 
 def render_song(
