@@ -506,7 +506,16 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
             )
             dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = Path(tempfile.mkdtemp(prefix="hdstylize-")) / "c.mp4"
-            fluid.render_mp4(styled, int(fps), tmp, out_w=styled.shape[2], out_h=styled.shape[1])
+            # An HD-regenerated stylize clip is a SOURCE the export then re-encodes, so it
+            # carries the export CRF — a preview-grade intermediate would cap the master.
+            fluid.render_mp4(
+                styled,
+                int(fps),
+                tmp,
+                out_w=styled.shape[2],
+                out_h=styled.shape[1],
+                crf=fluid.CRF_EXPORT,
+            )
             dest.write_bytes(tmp.read_bytes())
             try:
                 os.unlink(tmp)

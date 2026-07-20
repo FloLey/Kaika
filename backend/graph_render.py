@@ -1930,7 +1930,7 @@ def render(
         frames = dag.video(src)  # RGBA stays RGBA — render_mp4 composites it over black
         out_w = int(output.get("width", 0)) or None
         out_h = int(output.get("height", 0)) or None
-        fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h)
+        fluid.render_mp4(frames, dag.fps, out_path, out_w, out_h, crf=fluid.crf_from_output(output))
     render_cache.evict(paths.ANIM_DIR)  # bound the cache after adding a clip
     return url
 
@@ -1988,7 +1988,10 @@ def render_stream(
     scratch = paths.STREAM_DIR / render_id
     scratch.mkdir(parents=True, exist_ok=True)
     preview = scratch / "preview.mp4"
-    enc = fluid.StreamEncoder(preview, dag.fps, gw, gh, out_w, out_h)  # opens on first write
+    # opens on first write; the CRF rides in the output settings (see fluid.crf_from_output)
+    enc = fluid.StreamEncoder(
+        preview, dag.fps, gw, gh, out_w, out_h, crf=fluid.crf_from_output(output)
+    )
     wrote = False
     # A NAMED generator, closed explicitly in the finally: a cancel/error mid-stream
     # returns out of the for-loop, and stream_blocks' own finally (branch pools,

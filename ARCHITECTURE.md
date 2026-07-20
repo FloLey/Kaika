@@ -161,7 +161,14 @@ duplicate the card instead). Every modulatable port is either a `const` or a
   form: block streaming advances the same sim in ~5s chunks (block K+1's field
   *is* block K's — time can't be parallelised). Also owns the ffmpeg encoders
   (one-shot mp4 + a fragmented streaming encoder whose file is playable while it
-  grows). **Fire mode** (`params["fire"]`): a normalised temperature field rides
+  grows). Both go through `_encode_args`, which sets `-preset faster` (measured:
+  1.46x `medium` at a marginally better SSIM) and a **CRF that differs by
+  purpose** — `CRF_EXPORT` for renders, `CRF_DEFAULT` for previews. The export
+  value rides in the **`output` settings dict** (`song_render.output_from_export`,
+  the lockstep anchor for both HD paths), never read from `export` at the encoder:
+  `output_hash` folds that dict in whole, so changing the quality re-keys every HD
+  cache entry on its own — no `RENDER_VERSION` bump, no clip served at the old
+  setting. **Fire mode** (`params["fire"]`): a normalised temperature field rides
   the same solver — heat emitters (max-blend splats), buoyancy along a rotatable
   "up" (the fire card's `direction`), analytic quartic cooling, T-weighted
   vorticity confinement, blackbody rendering — so the fire card inherits the

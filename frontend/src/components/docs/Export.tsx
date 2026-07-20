@@ -39,6 +39,13 @@ export default function Export() {
         </li>
       </ul>
       <div className="note">
+        <strong>The export is encoded at a higher quality than the editor's previews.</strong> Cards
+        and segment previews are re-encoded on every edit and only ever watched at card size, so
+        they stay light; the final render is archived and watched full-screen, so it gets a
+        noticeably higher bitrate. Expect an export file roughly <strong>twice the size</strong> of
+        what the same segment's preview would suggest — that is the quality, not a bug.
+      </div>
+      <div className="note">
         The export is <strong>not</strong> the segment previews stitched together: the fluid
         simulation runs <strong>continuously across segment boundaries</strong> (each layer's
         velocity and dye carry through the cut; only the wiring rules swap), so transitions are

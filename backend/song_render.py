@@ -55,6 +55,12 @@ def output_from_export(export: dict) -> dict:
         "height": int(export.get("height", 1920)),
         "fps": int(export.get("fps", 24)),
         "gridCells": int(export.get("gridCells", 144)),
+        # An export is watched full-screen and archived, so it gets the quality CRF while
+        # the editor's previews stay light. It rides in the OUTPUT dict rather than being
+        # read from `export` at the encoder because `output_hash` folds this dict in
+        # whole — changing the quality therefore re-keys every HD cache entry on its own,
+        # with no RENDER_VERSION bump and no stale clip encoded at the old setting.
+        "crf": fluid.CRF_EXPORT,
     }
 
 
@@ -182,6 +188,7 @@ def build_plan(
         "fps": fps,
         "w": w,
         "h": h,
+        "crf": fluid.crf_from_output(out_dict),
     }
 
 
@@ -295,7 +302,9 @@ def render_song(
         shutil.rmtree(scratch, ignore_errors=True)
         scratch.mkdir(parents=True, exist_ok=True)
         silent = scratch / "video.mp4"
-        enc = fluid.StreamEncoder(silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"])
+        enc = fluid.StreamEncoder(
+            silent, ctx["fps"], ctx["gw"], ctx["gh"], ctx["w"], ctx["h"], crf=ctx["crf"]
+        )
         try:
             for _a, b, styled in iter_song_windows(ctx, should_cancel, on_segment=on_segment):
                 enc.write(styled)  # opens ffmpeg on the first window

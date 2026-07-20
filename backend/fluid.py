@@ -648,8 +648,38 @@ def simulate(params: dict, apply_bg: bool = True) -> tuple:
     return frames, clip.fps, (clip.gh, clip.gw)
 
 
+# libx264 knobs, measured rather than inherited. We used to pass neither, so every clip
+# got ffmpeg's defaults (`medium`, crf 23) by accident.
+#
+# `faster` beats `medium` on EVERY axis except file size on this content: 1.46x the
+# speed at +7% bitrate and a marginally BETTER SSIM (0.98241 vs 0.98218, measured on a
+# 4K clip against a lossless reference). The slow presets are actively pointless here —
+# `slow crf18` came out both slower AND slightly worse than `faster crf18`.
+#
+# CRF is the quality knob, and it is the one that should differ by purpose: an HD export
+# is watched full-screen and archived, a card preview is a thumbnail that streams to the
+# browser on every edit. 18 doubles the file for a real (if modest) gain; 23 keeps the
+# editor light.
+CRF_DEFAULT = 23  # previews, card clips, the legacy /fluid path
+CRF_EXPORT = 18  # what `song_render.output_from_export` puts in the output settings
+_PRESET = "faster"
+
+
+def crf_from_output(output: dict | None) -> int:
+    """The CRF an `output` settings dict asks for, defaulting to the preview quality.
+    `output_from_export` is the only producer of the export value, so the two HD paths
+    (whole song / single segment) cannot drift apart."""
+    return int((output or {}).get("crf") or CRF_DEFAULT)
+
+
 def _encode_args(
-    in_w: int, in_h: int, fps: int, out_w: int | None, out_h: int | None, channels: int = 3
+    in_w: int,
+    in_h: int,
+    fps: int,
+    out_w: int | None,
+    out_h: int | None,
+    channels: int = 3,
+    crf: int = CRF_DEFAULT,
 ) -> list:
     """The shared rawvideo -> libx264 ffmpeg args (one-shot and streaming encoders):
     yuv420p out, upscaled crisply to `out_w`x`out_h` (default 512px square, rounded even
@@ -672,12 +702,14 @@ def _encode_args(
             "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{in_w}x{in_h}", "-r", str(fps), "-i", "-",
             "-f", "lavfi", "-i", f"color=black:s={in_w}x{in_h}:r={fps}",
             "-filter_complex", f"[1:v][0:v]overlay=shortest=1,{scale}[v]",
-            "-map", "[v]", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-map", "[v]", "-an", "-c:v", "libx264",
+            "-preset", _PRESET, "-crf", str(int(crf)), "-pix_fmt", "yuv420p",
         ]  # fmt: skip
     return [
         "ffmpeg", "-y", "-v", "error",
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{in_w}x{in_h}", "-r", str(fps), "-i", "-",
-        "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-an", "-c:v", "libx264",
+        "-preset", _PRESET, "-crf", str(int(crf)), "-pix_fmt", "yuv420p",
         "-vf", scale,
     ]  # fmt: skip
 
@@ -688,6 +720,7 @@ def render_mp4(
     path: Path,
     out_w: int | None = None,
     out_h: int | None = None,
+    crf: int = CRF_DEFAULT,
 ) -> None:
     """Encode RGB frames to a web-playable h264 mp4 via system ffmpeg (one-shot).
 
@@ -701,7 +734,7 @@ def render_mp4(
     path.parent.mkdir(parents=True, exist_ok=True)
     # RGBA in is composited over black by ffmpeg (see `_encode_args`) — the caller no
     # longer has to `flatten` first.
-    cmd = _encode_args(w, h, fps, out_w, out_h, int(frames.shape[-1])) + [
+    cmd = _encode_args(w, h, fps, out_w, out_h, int(frames.shape[-1]), crf) + [
         "-movflags", "+faststart", str(path),
     ]  # fmt: skip
     proc = subprocess.run(cmd, input=frames.tobytes(), capture_output=True)
@@ -717,6 +750,7 @@ def open_stream_encoder(
     out_w: int | None = None,
     out_h: int | None = None,
     channels: int = 3,
+    crf: int = CRF_DEFAULT,
 ) -> "subprocess.Popen":
     """Open a persistent ffmpeg that encodes a CONTINUOUS rawvideo stream into `path`.
 
@@ -728,7 +762,7 @@ def open_stream_encoder(
     writes each block, then closes stdin and waits to finalize (see graph.render_stream).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = _encode_args(gw, gh, fps, out_w, out_h, channels) + [
+    cmd = _encode_args(gw, gh, fps, out_w, out_h, channels, crf) + [
         # ~1s GOPs with a keyframe at each fragment so partial reads decode cleanly.
         "-g", str(max(1, int(fps))), "-keyint_min", str(max(1, int(fps))), "-sc_threshold", "0",
         "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
@@ -781,8 +815,10 @@ class StreamEncoder:
         gh: int,
         out_w: int | None = None,
         out_h: int | None = None,
+        crf: int = CRF_DEFAULT,
     ):
         self._args = (path, fps, gw, gh, out_w, out_h)
+        self._crf = int(crf)
         self._enc: "subprocess.Popen | None" = None
         self._ch = 0  # set from the FIRST block; the input format is fixed at open
 
@@ -793,7 +829,7 @@ class StreamEncoder:
             # numpy flatten that used to happen here was the single biggest cost of a
             # 4K render. `bytes` is assumed already-RGB (the legacy callers).
             self._ch = 3 if isinstance(data, bytes) else int(data.shape[-1])
-            self._enc = open_stream_encoder(*self._args, channels=self._ch)
+            self._enc = open_stream_encoder(*self._args, channels=self._ch, crf=self._crf)
         if not isinstance(data, bytes) and int(data.shape[-1]) != self._ch:
             # A later block changed channel count — a whole-SONG export can follow a
             # montage segment (RGBA) with a fluid one (RGB dye-on-black). The input
