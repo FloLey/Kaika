@@ -120,6 +120,11 @@ the implementation lives in five modules:
   **`Dag`** resolver (memoized per-node video/emitter resolution), the per-type
   handler registries (`_VIDEO_HANDLERS` whole-clip, `_BLOCK_HANDLERS` streaming,
   `_EMITTER_HANDLERS` merge), and the entry points `render` / `render_stream`.
+  Each block producer memoizes **one** block so a diamond consumer computes it
+  once; `Dag.drop_stale_blocks(a)` (called by `stream_blocks` before every block)
+  frees the ones the playhead has passed. That matters for producers not pulled
+  every block — a montage slot after its cut — which otherwise each hold a full
+  block of frames until `close()` (~33 MB/frame at 4K, per slot).
   Their `output_id` may be an **output node** (render the video wired into it) or
   **any video producer directly** (fluid/combine/transform — the per-card live
   previews); `_render_target` is the one shared resolver of that contract, so the

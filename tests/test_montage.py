@@ -710,3 +710,48 @@ def test_an_entry_too_big_for_the_budget_is_not_written(monkeypatch, tmp_path):
     mm2, _f2, d2 = fluid_cache.frame_writer("small", (8, 64, 64, 4))
     assert mm2 is not None  # ordinary entries are unaffected
     d2()
+
+
+def test_a_played_out_slot_does_not_keep_its_last_block_of_frames(assets):
+    """Every producer memoizes its last block so a diamond consumer pulls it once, and
+    nothing ever dropped that memo. For a producer pulled EVERY block the memo is simply
+    overwritten — no leak. A montage slot is not: once its cut is over it is never pulled
+    again, so it sat on a full block of frames until `close()`. At 4K that is ~33 MB per
+    frame per slot; a 59 s chorus retained 5.7 GB, with RSS climbing linearly.
+
+    Six slots, six cuts: by the last block, only the slots still on screen may hold frames.
+    """
+    g = _montage_graph(assets, n_slots=6)
+    g["nodes"] = [
+        {**n, "data": {**n["data"], "rate": 6}} if n["id"] == "lfo" else n for n in g["nodes"]
+    ]
+    G.validate(g)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    built, live = 0, 0
+    for _a, _b, _total, _frames in dag.stream_blocks("o", 2):
+        built = max(built, len(dag._block_memos))
+        live = sum(1 for m in dag._block_memos if m["val"] is not None)
+    dag.close()
+    assert built >= 6, f"only {built} producers built — the fixture never reaches later slots"
+    # The montage, its trigger chain, and the slot(s) in the final block. Emphatically
+    # not one per slot played.
+    assert live <= 4, f"{live} producers still hold a block of frames at the end of the render"
+
+
+def test_a_diamond_consumer_still_pulls_one_block_once(assets, monkeypatch):
+    """The memo drop must not defeat what the memo is FOR: two consumers of the same
+    producer inside one block still compute it once."""
+    g = _montage_graph(assets, n_slots=1)
+    dag = G.Dag("job", SEG, g, NOAUDIO, OUT)
+    calls = []
+    inner = dag._block_producer("im1")
+    monkeypatch.setitem(dag._block_fns, "im1", inner)
+    produce = dag._block_producer("im1")
+    real_len = len(dag._block_memos)
+    a, b = 0, 4
+    f1, f2 = produce(a, b), produce(a, b)
+    calls.append(real_len)
+    assert f1 is f2, "the one-block memo no longer serves a second consumer"
+    dag.drop_stale_blocks(b)  # playhead moved past it
+    assert produce(a, b) is not f1, "a dropped block must be recomputed, not served as None"
+    dag.close()

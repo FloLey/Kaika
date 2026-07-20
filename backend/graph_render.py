@@ -188,6 +188,7 @@ class Dag:
         self._params: dict = {}
         self._resolver = None  # lazily-built shared value resolver (one per render)
         self._block_fns: dict = {}  # node_id -> produce(a, b) (block streaming)
+        self._block_memos: list = []  # every producer's one-block memo (drop_stale_blocks)
         self._executors: list = []  # per-combine branch pools, released by close()
         self._cache_writers: list = []  # discard() for incremental frame caches (cancel cleanup)
         self._closers: list = []  # persistent per-node resources (e.g. VideoClip decoders)
@@ -497,7 +498,31 @@ class Dag:
                 return cache["val"]
 
         self._block_fns[node_id] = produce
+        self._block_memos.append(cache)
         return produce
+
+    def drop_stale_blocks(self, a: int) -> None:
+        """Free every memoized block that ended at or before frame `a`.
+
+        The memo above exists so a diamond consumer pulling the same (a, b) twice
+        computes it once — it only ever needs the CURRENT block. Nothing dropped it,
+        though, so every producer held its last block until `close()`. A montage is
+        where that bites: one 4K RGBA block per slot, all alive at once, is gigabytes of
+        frames the playhead will never look at again (measured: 5.7 GB retained on a
+        59 s chorus, RSS climbing linearly with the segment). Producers are contract-
+        bound to be pulled contiguously front-to-back, so a block that ended at or
+        before the new block's start can never be asked for again.
+
+        Slot producers inside a montage are keyed in slot-LOCAL frames, so `a` compares
+        across coordinate systems for them and drops more than it strictly must. That is
+        deliberate and safe: a dropped block is RECOMPUTED on a re-pull (the key is
+        cleared with the value, so nothing is ever served a stale None), never wrong.
+        """
+        for memo in self._block_memos:
+            key = memo["key"]
+            if key is not None and key[1] <= a:
+                memo["key"] = None
+                memo["val"] = None
 
     def stream_blocks(self, output_id, block_frames):
         """Yield `(a, b, total, frames)` dye-on-transparent blocks for `output_id`.
@@ -515,6 +540,9 @@ class Dag:
             a = 0
             while a < total:
                 b = min(a + block_frames, total)
+                # Release the previous block's frames BEFORE allocating this one, so the
+                # peak is one block deep, not one block per producer.
+                self.drop_stale_blocks(a)
                 yield a, b, total, produce(a, b)
                 a = b
         finally:

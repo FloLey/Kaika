@@ -79,19 +79,31 @@ def _instrument() -> None:
 
 
 def _sampler(peak: dict, stop: threading.Event) -> None:
-    """Peak concurrent ffmpeg processes and their total RSS. Machine-wide, so close the
-    editor before trusting the absolute numbers — the trend is what matters."""
+    """Peak concurrent ffmpeg processes and their total RSS, plus OUR OWN RSS. The ffmpeg
+    count is machine-wide (close the editor before trusting the absolute numbers — the
+    trend is what matters); `self_rss_mb` is this pid only, and it is the number that
+    says whether the numpy buffers explode: a 4K RGBA block is ~32 MB per frame, so
+    holding every slot's frames at once shows up here and nowhere else."""
+    me = str(os.getpid())
     while not stop.is_set():
         try:
             out = subprocess.run(
-                ["ps", "ax", "-o", "rss=,command="], capture_output=True, text=True
+                ["ps", "ax", "-o", "pid=,rss=,command="], capture_output=True, text=True
             ).stdout
         except OSError:
             break
-        ff = [ln for ln in out.splitlines() if "ffmpeg" in ln]
+        ff, mine = [], 0
+        for ln in out.splitlines():
+            parts = ln.split(None, 2)
+            if len(parts) < 3 or not parts[1].isdigit():
+                continue
+            if parts[0] == me:
+                mine = int(parts[1])
+            elif "ffmpeg" in parts[2]:
+                ff.append(int(parts[1]))
         peak["procs"] = max(peak["procs"], len(ff))
-        rss = sum(int(ln.split()[0]) for ln in ff if ln.split()[0].isdigit()) / 1024
-        peak["rss_mb"] = max(peak["rss_mb"], round(rss))
+        peak["ffmpeg_rss_mb"] = max(peak["ffmpeg_rss_mb"], round(sum(ff) / 1024))
+        peak["self_rss_mb"] = max(peak["self_rss_mb"], round(mine / 1024))
         stop.wait(0.5)
 
 
@@ -145,7 +157,7 @@ def main() -> None:
     stale.unlink(missing_ok=True)
 
     _instrument()
-    peak = {"procs": 0, "rss_mb": 0}
+    peak = {"procs": 0, "ffmpeg_rss_mb": 0, "self_rss_mb": 0}
     stop = threading.Event()
     threading.Thread(target=_sampler, args=(peak, stop), daemon=True).start()
 
@@ -180,7 +192,8 @@ def main() -> None:
                 **{f"{k}_s": round(v, 1) for k, v in sorted(T.items())},
                 "unaccounted_s": round(wall - accounted, 1),
                 "peak_ffmpeg_procs": peak["procs"],
-                "peak_ffmpeg_rss_mb": peak["rss_mb"],
+                "peak_ffmpeg_rss_mb": peak["ffmpeg_rss_mb"],
+                "peak_self_rss_mb": peak["self_rss_mb"],
                 "url": url,
             },
             indent=2,
