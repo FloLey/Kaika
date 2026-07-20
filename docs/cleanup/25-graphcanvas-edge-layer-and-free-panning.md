@@ -8,11 +8,35 @@ flush, so the read *count* is verifiable here and the millisecond cost is not. T
 the structural claim and it scales with card count × event rate; a real browser profile
 would put a number on it, and nobody has one yet. Same caveat applies to item 2 below.
 
-**Item 2 (panning commits React state per pointermove) remains unmeasured and undone.** It
-is the same kind of claim from the same audit that got four of five perf findings wrong
-this wave. The in-repo precedent is suggestive — node dragging was deliberately moved to
-ref+tick with a comment saying why — but suggestive is not measured. Item 1
-(`<EdgeLayer>`) is readability and stands on its own.
+**Item 2 (panning commits React state per pointermove): CLOSED — measured in a real
+browser, not worth doing.**
+
+Profiled against the running app (Chrome, Playground segment, `getBoundingClientRect`
+instrumented, two independent background drags):
+
+| | |
+|---|---|
+| layout reads per pointermove | **5** |
+| cost per read | **0.01–0.025 ms** |
+| **total per pointermove** | **0.05–0.12 ms** |
+
+At ~60 pointermoves/second that is **3–7 ms per second of panning** — under 1% of the main
+thread. Moving pan off React state would save some fraction of that, for a gesture rewrite
+with real regression risk. The audit's reasoning was sound and the conclusion is still no.
+
+**What this also confirms is that the hoist in `2f7bb48` was the part that mattered.**
+Before it, reads per pointermove scaled with EDGE COUNT (11 edges → 22/move); a 40-edge
+graph would have been ~80 reads/move ≈ 2 ms/move ≈ 120 ms per second of panning, which is
+a real budget. After it the count is flat at 5 regardless of graph size, and card
+re-renders during a pan are 0 (`NodeCard`'s memo holds). The scaling term is gone; what
+remains is a constant too small to chase.
+
+⚠ Measured on a 3-card / 2-edge segment. That is fine for the *per-read cost* and for the
+*post-hoist flatness* (which is the claim), but the absolute totals on a 40-card graph were
+not measured directly — the argument is that neither term scales any more, not that a big
+graph was tested.
+
+Item 1 (`<EdgeLayer>`) is readability and stands on its own.
 
 **Original status note (superseded):**
 
