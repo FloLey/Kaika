@@ -16,6 +16,7 @@ from flask import Blueprint, jsonify
 
 from .. import db
 from .. import graph as graphmod
+from .. import graph_hash
 from .. import render_cache
 from .. import render_jobs
 from .. import song_render
@@ -475,25 +476,40 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
         prompt = str(d.get("prompt") or "flowers")
         inpaint = bool(d.get("inpaint", False))
         try:
-            frames, strength, fps, control = graphmod.stylize_source(
+            src_id, ctrl_id, strength, fps = graphmod.stylize_describe(
                 job_id, seg, graph, n["id"], stem_audio_path, render_output
             )
         except ValueError as e:  # not wired to a video — leave it passing through
             log.warning("export: stylize %s skipped (%s)", n.get("id"), e)
             continue
-        # content key from the actual rendered input + settings (the sim is cheap; the
-        # diffusion is what we cache). Version marker: bump whenever generation semantics
-        # change so stale clips regenerate (v2 = img2img anchor, v3 = control_scale 0.65).
-        sample = frames[:: max(1, len(frames) // 8)].tobytes()
+        # CHECK THE CACHE BEFORE DOING THE WORK. The key used to be a sample of the
+        # RENDERED input frames — which meant rendering the stylize input at export grid
+        # (measured 676 ms for a 15 s segment) purely to derive a key, then discarding
+        # every frame whenever the keyed clip already existed. `output_hash` describes the
+        # same thing from the graph: it covers the contributing DAG upstream of each input,
+        # the segment bounds, the output settings and RENDER_VERSION, and costs 0.1 ms.
+        #
+        # Version marker: bump whenever generation semantics change so stale clips
+        # regenerate (v2 = img2img anchor, v3 = control_scale 0.65, v4 = keyed on the
+        # graph hash rather than sampled frames — every key moves once).
+        inputs = "|".join(
+            graph_hash.output_hash(job_id, seg, graph, sid, render_output)
+            for sid in (src_id, ctrl_id)
+            if sid is not None
+        )
         key = hashlib.sha256(
-            f"v3|{imagegen.HD_MODEL}|{short}|{prompt}|{inpaint}|{round(strength, 3)}|"
-            f"{control is not None}".encode() + sample
+            f"v4|{imagegen.HD_MODEL}|{short}|{prompt}|{inpaint}|{round(strength, 3)}|"
+            f"{ctrl_id is not None}|{inputs}".encode()
         ).hexdigest()[:16]
         name = f"hd-stylize-{key}.mp4"
         dest = ASSETS_DIR / job_id / name
         url = f"/assets/{job_id}/{name}"
         if not dest.exists():
             log.info("export: HD stylize — %s", prompt[:48])
+            # only NOW is the expensive half worth running
+            frames, strength, fps, control = graphmod.stylize_source(
+                job_id, seg, graph, n["id"], stem_audio_path, render_output
+            )
             styled = imagegen.stylize_frames(
                 frames,
                 prompt,

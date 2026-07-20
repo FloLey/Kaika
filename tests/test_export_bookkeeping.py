@@ -117,3 +117,97 @@ def test_cancel_is_idempotent_and_never_404s(client):
     for target in (rid, rid, "never-existed"):
         r = client.post(f"/export/stream/{target}/cancel")
         assert r.status_code == 200 and r.get_json() == {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# The HD stylize cache key (step 19b)
+# --------------------------------------------------------------------------- #
+# The key moved from "a sample of the rendered input frames" to a graph hash, which is
+# what lets the export check the cache BEFORE rendering the input (676ms -> 0.1ms on a
+# 15s segment). The risk of that swap is entirely one-directional: a key that is too
+# STABLE serves a stale clip for an edited graph, silently and forever.
+
+
+def _stylize_graph(*, radius=0.08, prompt="flowers"):
+    from helpers import edge, graph_of, node
+
+    ports = {
+        k: {"binding": {"kind": "const", "value": v}}
+        for k, v in [("r", 0.27), ("g", 0.69), ("b", 1), ("emit", 0.5), ("radius", radius)]
+    }
+    return graph_of(
+        [
+            node("fl", "fluid", ports=ports),
+            node(
+                "sty",
+                "stylize",
+                prompt=prompt,
+                ports={"strength": {"binding": {"kind": "const", "value": 0.5}}},
+            ),
+            node("out", "output"),
+        ],
+        [edge("fl", "sty", "video"), edge("sty", "out", "video")],
+    )
+
+
+def _key_inputs(graph, seg, out_dict):
+    """What `_regenerate_hd_stylize` folds into the key, without the diffusion model."""
+    from backend import graph_hash
+    from backend.graph_render import stylize_describe
+    from helpers import no_audio
+
+    src_id, ctrl_id, strength, _fps = stylize_describe("j", seg, graph, "sty", no_audio, out_dict)
+    return (
+        strength,
+        ctrl_id,
+        graph_hash.output_hash("j", seg, graph, src_id, out_dict),
+    )
+
+
+def test_the_stylize_key_moves_when_its_upstream_does():
+    """An edit upstream of the stylize node changes what it would generate FROM, so the
+    cached clip must not be reused. This is the direction that matters: too-stable keys
+    serve a wrong clip; too-volatile keys merely re-render."""
+    from helpers import out
+
+    seg = {"start": 0.0, "end": 1.0, "signals": []}
+    o = out(width=192, height=192, fps=12)
+    a = _key_inputs(_stylize_graph(radius=0.08), seg, o)
+    b = _key_inputs(_stylize_graph(radius=0.20), seg, o)
+    assert a != b, "an upstream edit left the HD stylize key unchanged"
+
+
+def test_the_stylize_key_is_stable_for_an_unchanged_graph():
+    from helpers import out
+
+    seg = {"start": 0.0, "end": 1.0, "signals": []}
+    o = out(width=192, height=192, fps=12)
+    assert _key_inputs(_stylize_graph(), seg, o) == _key_inputs(_stylize_graph(), seg, o)
+
+
+def test_the_stylize_key_moves_with_the_segment_window():
+    """Same graph, different slice of the song — different frames, so a different clip."""
+    from helpers import out
+
+    o = out(width=192, height=192, fps=12)
+    g = _stylize_graph()
+    a = _key_inputs(g, {"start": 0.0, "end": 1.0, "signals": []}, o)
+    b = _key_inputs(g, {"start": 4.0, "end": 5.0, "signals": []}, o)
+    assert a != b, "the key ignores which part of the song it renders"
+
+
+def test_describe_is_consistent_with_what_the_render_returns():
+    """`stylize_describe` exists only to avoid calling `stylize_source`, so the values it
+    reports must be the ones the render would have produced. If they drift, the cache is
+    keyed on one thing and the clip generated with another."""
+    from backend.graph_render import stylize_describe, stylize_source
+    from helpers import no_audio, out
+
+    seg = {"start": 0.0, "end": 1.0, "signals": []}
+    o = out(width=192, height=192, fps=12)
+    g = _stylize_graph()
+    src_id, ctrl_id, strength, fps = stylize_describe("j", seg, g, "sty", no_audio, o)
+    frames, r_strength, r_fps, control = stylize_source("j", seg, g, "sty", no_audio, o)
+    assert (strength, fps) == (r_strength, r_fps)
+    assert (ctrl_id is not None) == (control is not None)
+    assert src_id == "fl" and len(frames) > 0

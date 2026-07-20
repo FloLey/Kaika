@@ -560,6 +560,28 @@ def resolve_node_points(job_id, segment, graph, node_id, stem_audio_path) -> dic
     return {"points": pts}
 
 
+def stylize_describe(job_id, segment, graph, node_id, stem_audio_path, output=None) -> tuple:
+    """Everything about a `stylize` node's inputs EXCEPT the pixels →
+    `(src_id, ctrl_id, strength, fps)`.
+
+    The cheap half of `stylize_source`. Opening a `Dag` and resolving one node's params is
+    not what costs — the `dag.video()` calls are: measured on a 15 s segment at export
+    grid, this is **0.1 ms against `stylize_source`'s 676 ms**.
+
+    That gap is the whole point. The HD export used to call `stylize_source`, sample the
+    rendered frames into a content key, and then throw every one of them away whenever the
+    keyed clip already existed. Splitting the describe half out lets the caller build the
+    key, check the cache, and only render on a miss.
+    """
+    with Dag(job_id, segment, graph, stem_audio_path, output or {}) as dag:
+        src = _video_source(graph, node_id, "video")
+        if src is None:
+            raise ValueError("stylize node has no video input wired")
+        ctrl = _video_source(graph, node_id, "control")
+        strength = float(np.mean(dag._fx_params(dag.nodes[node_id])["strength"]))
+        return src, ctrl, strength, dag.fps
+
+
 def stylize_source(job_id, segment, graph, node_id, stem_audio_path, output=None) -> tuple:
     """Render the clips feeding a `stylize` node → (frames, strength, fps, control).
     `frames` = the `video` input (the img2img base), `control` = the `control` input's frames
