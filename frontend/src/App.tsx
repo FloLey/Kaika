@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Asset, LyricLine, Segment } from "./lib/types";
+import type { Asset, LyricLine, OutputSettings, Segment } from "./lib/types";
 import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
 import UploadStep from "./components/upload/UploadStep";
@@ -13,10 +13,27 @@ import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
 import { EXPORT_DEFAULTS, withExportDefaults } from "./lib/export";
+import type { ExportSettings } from "./lib/export";
 import { useLogPoll } from "./lib/useLogPoll";
 import * as logbus from "./lib/logbus";
 import * as api from "./lib/api";
 import { createSaveChain } from "./lib/saveChain";
+
+// The persisted project shape, in ONE place. It was written out four times — the
+// autosave, the lyric-lines save, the fixture save, and (the dangerous one) the
+// `lastSaved` seed in openProject. That seed must serialise to EXACTLY what the autosave
+// would produce: too different and the app re-PUTs the moment a project opens, too
+// similar-but-not-equal and a real edit can be mistaken for already-saved. Four hand-kept
+// copies of a shape whose equality is load-bearing is a data bug waiting for someone to
+// add a field to three of them.
+function buildSavePayload(
+  step: string,
+  segments: Segment[],
+  output: OutputSettings,
+  exportSettings: ExportSettings
+) {
+  return { step, segments: serializeSegments(segments), output, export: exportSettings };
+}
 
 export default function App() {
   // projects | upload | processing | review | studio | error
@@ -79,12 +96,7 @@ export default function App() {
     // The equality guard moves in with them: scheduling a timer that decides to do nothing
     // is far cheaper than serialising the project to find out.
     const t = setTimeout(() => {
-      const payload = {
-        step,
-        segments: serializeSegments(segments),
-        output,
-        export: exportSettings,
-      };
+      const payload = buildSavePayload(step, segments, output, exportSettings);
       const jsonStr = JSON.stringify(payload);
       if (jsonStr === lastSaved.current) return;
       saveChain.current.supersedable(async () => {
@@ -113,7 +125,7 @@ export default function App() {
   const saveLyricLines = useCallback(
     async (lines: LyricLine[]) => {
       if (!job) return;
-      const base = { step, segments: serializeSegments(segments), output, export: exportSettings };
+      const base = buildSavePayload(step, segments, output, exportSettings);
       // `exclusive`: this payload carries lyric_lines the autosave payload lacks, so it
       // must never be skipped as superseded.
       return saveChain.current.exclusive(async () => {
@@ -131,7 +143,7 @@ export default function App() {
   // save chain so it can't interleave with an in-flight autosave.
   const saveFixture = useCallback(async (): Promise<api.FixtureExport> => {
     if (!job) throw new Error("no project open");
-    const payload = { step, segments: serializeSegments(segments), output, export: exportSettings };
+    const payload = buildSavePayload(step, segments, output, exportSettings);
     return saveChain.current.exclusive(async () => {
       await api.saveProject(job, payload);
       lastSaved.current = JSON.stringify(payload);
@@ -230,12 +242,7 @@ export default function App() {
       const mergedCount = segs.reduce((a, s) => a + s.signals.length, 0);
       lastSaved.current =
         mergedCount === loadedCount
-          ? JSON.stringify({
-              step: p.step || "studio",
-              segments: serializeSegments(segs),
-              output: loadedOutput,
-              export: loadedExport,
-            })
+          ? JSON.stringify(buildSavePayload(p.step || "studio", segs, loadedOutput, loadedExport))
           : "";
       setStep(p.step || "studio");
     } catch (e) {
