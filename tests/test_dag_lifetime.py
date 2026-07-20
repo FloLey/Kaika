@@ -174,8 +174,7 @@ def test_resolve_node_points_closes_its_dag(monkeypatch):
 
 def test_song_render_closes_every_planned_dag(monkeypatch, tmp_path):
     """`build_plan` opens one DAG per segment and they outlive it by design, so the drain
-    is an outer finally in `render_song`. It must also cover the CACHE-HIT early return,
-    which previously leaked a decoder per video card on every repeat export."""
+    is an outer finally in `render_song`."""
     monkeypatch.setattr(SR.paths, "ANIM_DIR", tmp_path)
     seg = {**SEG, "graph": _graph(), "finalOutputId": "o"}
     export = {**SR.EXPORT_DEFAULTS, "width": 64, "height": 64, "fps": 8}
@@ -188,12 +187,42 @@ def test_song_render_closes_every_planned_dag(monkeypatch, tmp_path):
     SR.close_plan(ctx)
     assert closed, "close_plan did not drain the planned DAGs"
 
-    # And the cache-hit path: pre-create the output so render_song returns early.
-    calls = _counting_close(monkeypatch)
+
+def test_song_render_cache_hit_opens_no_dag_at_all(monkeypatch, tmp_path):
+    """A repeat export must not pay for the plan it is not going to use.
+
+    This assertion used to be "the cache-hit return still drains the DAGs", because
+    `build_plan` ran BEFORE the existence check and the early return leaked a decoder per
+    video card. The fix inverted the order, so the guarantee is now the stronger one: on a
+    hit no Dag is constructed, and what is never opened cannot leak. Asserting the
+    PROPERTY rather than the drain call is also what keeps this honest — a future reorder
+    that reintroduces the eager plan fails here even if it remembers to close it.
+    """
+    monkeypatch.setattr(SR.paths, "ANIM_DIR", tmp_path)
+    seg = {**SEG, "graph": _graph(), "finalOutputId": "o"}
+    export = {**SR.EXPORT_DEFAULTS, "width": 64, "height": 64, "fps": 8}
     out = tmp_path / f"song_{SR._export_hash('job', [seg], [], export)}.mp4"
     out.write_bytes(b"x")
-    SR.render_song("job", [seg], [], export, NOAUDIO)
-    assert calls, "the cache-hit early return leaked every planned DAG"
+
+    opened = []
+    real_init = GR.Dag.__init__
+    monkeypatch.setattr(
+        GR.Dag, "__init__", lambda self, *a, **k: (opened.append(1), real_init(self, *a, **k))[1]
+    )
+    progress = []
+    url = SR.render_song(
+        "job", [seg], [], export, NOAUDIO, on_progress=lambda a, b, u: progress.append((a, b))
+    )
+
+    assert url is not None and not opened, f"the cache hit built {len(opened)} DAG(s)"
+    # ...and the frame total it reports still agrees with the one the plan would have
+    # computed. Checked against `build_plan` rather than a literal: the two derivations
+    # must not drift, and that is the actual risk of computing the total twice.
+    ctx = SR.build_plan("job", [seg], [], export, NOAUDIO)
+    try:
+        assert progress and progress[-1] == (ctx["total"], ctx["total"]), progress
+    finally:
+        SR.close_plan(ctx)
 
 
 def test_a_rendered_clip_is_unchanged_by_the_drain(monkeypatch, tmp_path):

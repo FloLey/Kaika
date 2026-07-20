@@ -31,7 +31,7 @@ import numpy as np
 
 from . import fluid, paths, render_cache
 from .graph_hash import RENDER_VERSION
-from .graph_render import Dag
+from .graph_render import Dag, _clip_dims
 
 log = logging.getLogger("kaika.export")
 
@@ -126,6 +126,21 @@ def close_plan(ctx: dict) -> None:
     idempotent), and tolerant of a partially-built ctx so it can run from a `finally`."""
     for entry in (ctx or {}).get("plan") or []:
         entry[0].close()
+
+
+def song_total_frames(segments: list, export: dict) -> int:
+    """The export's total frame count, WITHOUT building the plan.
+
+    `build_plan` computes the same sum, but only as a by-product of opening a Dag per
+    segment and resolving its fields — which is where signal extraction (STFT / HPSS /
+    beat-track) happens. The cache-hit path needs the number and nothing else, so it goes
+    through `_clip_dims`: the one place the 0.5 s duration floor lives, and already the
+    documented seam for exactly this (`render_stream`'s cache hit uses it the same way).
+    Deriving the floor a second time here is how the two quietly disagree.
+    """
+    out_dict = output_from_export(export)
+    fps = out_dict["fps"]
+    return sum(max(1, round(_clip_dims(seg, out_dict)[0] * fps)) for seg in segments)
 
 
 def build_plan(
@@ -253,19 +268,26 @@ def render_song(
     cancellation between segments returns None."""
     out_path = paths.ANIM_DIR / f"song_{_export_hash(job_id, segments, lyric_lines, export)}.mp4"
     url = f"/fluid/{out_path.name}"
-    ctx = build_plan(job_id, segments, lyric_lines, export, stem_audio_path)
-    # `build_plan` opens one DAG per segment, and each may hold ffmpeg decoders (a video /
-    # slideshow / stylize card registers clip.close on it). They outlive build_plan by
-    # design — `iter_song_windows` walks them — so they're drained here, in an OUTER
-    # finally that also covers the cache-hit early return below. That return leaked a
-    # decoder per video card on EVERY repeat export.
-    try:
-        if out_path.exists():  # identical export already rendered
-            render_cache.touch(out_path)
-            if on_progress:
-                on_progress(ctx["total"], ctx["total"], url)
-            return url
+    # CHECK THE CACHE BEFORE DOING THE WORK. `build_plan` opens a Dag per segment and
+    # resolves its fields, which runs full signal extraction (STFT / HPSS / beat-track)
+    # over every segment — minutes of work on a long song, and it used to run BEFORE this
+    # existence check, so re-exporting an unchanged project paid for it every time. The
+    # only thing the hit path wanted from it was the frame total, which `song_total_frames`
+    # derives from the segment bounds alone.
+    if out_path.exists():  # identical export already rendered
+        render_cache.touch(out_path)
+        if on_progress:
+            total = song_total_frames(segments, export)
+            on_progress(total, total, url)
+        return url
 
+    ctx = build_plan(job_id, segments, lyric_lines, export, stem_audio_path)
+    # Each Dag may hold ffmpeg decoders (a video / slideshow / stylize card registers
+    # clip.close on it), and they outlive build_plan by design — `iter_song_windows` walks
+    # them — so they're drained in this OUTER finally. It used to also cover a cache-hit
+    # early return that leaked a decoder per video card on every repeat export; that return
+    # now happens above, before any Dag exists, so there is nothing to leak on that path.
+    try:
         # Strip the "song_" underscore: the id names the scratch dir AND lands in the
         # progress preview URL, and /fluid/stream/<render_id>/… only serves alnum ids.
         render_id = out_path.stem.replace("_", "") + uuid.uuid4().hex[:8]
