@@ -448,6 +448,12 @@ deployment model changes:
 
 - **200 MB JSON body cap** (`app.py`): big graphs parse whole into RAM per
   request.
+- **Child-composition PREVIEW clips have uncomputable GC keys** — editing inside
+  an extract streams the child over its context window, a hash the sweep can't
+  recompute from the saved state (it doesn't know the breadcrumb's window).
+  Those clips survive on recency alone and then age out; a wrongly-swept one
+  rebuilds fast from the never-swept raw-frame cache. The clips the sweep DOES
+  protect exactly are every root's (`_hashes_from` walks the pool closure).
 - **`delete_project` leaves files until the next GC sweep** — reachability reaps
   them; deletion isn't immediate on disk.
 - **Cross-job asset reads**: a graph may reference `/assets/<other-job>/…`; the

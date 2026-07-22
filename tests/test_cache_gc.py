@@ -340,3 +340,60 @@ def test_sweep_refuses_when_the_data_dirs_move_under_it(monkeypatch, tmp_path):
 
     assert cache_gc.sweep(keep_recent_sec=0, now=9e9) == 0
     assert keeper.exists(), "the sweep deleted a file after its directories moved"
+
+
+def test_reachable_walks_the_composition_closure(wired):
+    """A root whose montage references child compositions must key with the pool —
+    an incomplete closure would compute DIFFERENT hashes than the render wrote,
+    and every live clip would read as junk."""
+    proj, lines, _ = wired
+    pool = proj["data"]["compositions"]
+    root_graph = {
+        "version": 30,
+        "nodes": [
+            {
+                "id": "mg",
+                "type": "montage",
+                "data": {
+                    "extracts": [{"id": "x1", "compositionId": "c-child"}],
+                    "manualBreakpoints": [],
+                    "disabledCuts": [],
+                    "threshold": 0.5,
+                    "hysteresis": 0.1,
+                    "ports": {},
+                },
+            },
+            {"id": "oA", "type": "output", "data": {}},
+        ],
+        "edges": [
+            {"id": "e", "source": "mg", "sourcePort": "out", "target": "oA", "targetPort": "video"}
+        ],
+    }
+    pool["c-root"]["graph"] = root_graph
+    pool["c-child"] = {
+        "id": "c-child",
+        "name": "child",
+        "graph": {
+            "version": 30,
+            "nodes": [
+                {"id": "b", "type": "backdrop", "data": {"color": "#204080", "ports": {}}},
+                {"id": "co", "type": "output", "data": {}},
+            ],
+            "edges": [
+                {
+                    "id": "e2",
+                    "source": "b",
+                    "sourcePort": "out",
+                    "target": "co",
+                    "targetPort": "video",
+                }
+            ],
+        },
+    }
+    seg = proj["data"]["segments"][0]
+    seg_with_lines = {**seg, "lyric_lines": lines}
+    with_pool = G.output_hash("proj1", seg_with_lines, root_graph, "oA", OUT, pool)
+    without_pool = G.output_hash("proj1", seg_with_lines, root_graph, "oA", OUT)
+    assert with_pool != without_pool  # the closure genuinely folds in
+    assert with_pool in cache_gc.reachable_hashes()  # …and the GC uses the pool form
+    assert without_pool not in cache_gc.reachable_hashes()

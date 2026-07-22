@@ -403,3 +403,66 @@ def test_every_window_of_a_mixed_song_matches_the_encoder_input():
     ctx = SR.build_plan("job", segs, pool, [], EXPORT, NOAUDIO)
     sizes = {w.shape[1:3] for _a, _b, w in SR.iter_song_windows(ctx)}
     assert sizes == {(ctx["gh"], ctx["gw"])}, f"mixed sizes reached one fixed encoder: {sizes}"
+
+
+def test_cached_lookup_misses_after_a_child_composition_edit(client, monkeypatch):
+    """The segment-HD cache key folds the composition CLOSURE: editing a child a
+    montage extract references must move the key — a stale answer here would offer
+    a master rendered from the old child."""
+    monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
+    root = {
+        "version": 30,
+        "nodes": [
+            {
+                "id": "mg",
+                "type": "montage",
+                "data": {
+                    "extracts": [{"id": "x1", "compositionId": "c1"}],
+                    "manualBreakpoints": [],
+                    "disabledCuts": [],
+                    "threshold": 0.5,
+                    "hysteresis": 0.1,
+                    "ports": {},
+                },
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [
+            {"id": "e", "source": "mg", "sourcePort": "out", "target": "o", "targetPort": "video"}
+        ],
+    }
+
+    def child(color):
+        return {
+            "c1": {
+                "id": "c1",
+                "name": "c1",
+                "graph": {
+                    "version": 30,
+                    "nodes": [
+                        {"id": "b", "type": "backdrop", "data": {"color": color, "ports": {}}},
+                        {"id": "co", "type": "output", "data": {}},
+                    ],
+                    "edges": [
+                        {
+                            "id": "e2",
+                            "source": "b",
+                            "sourcePort": "out",
+                            "target": "co",
+                            "targetPort": "video",
+                        }
+                    ],
+                },
+            }
+        }
+
+    body = {"job_id": "deadbeef", "segment": SEG, "graph": root, "compositions": child("#204080")}
+    err, ctx = EX._segment_request(body)
+    assert err is None
+    silent, _ = EX._hd_paths(*ctx)
+    silent.parent.mkdir(parents=True, exist_ok=True)
+    silent.write_bytes(b"x")
+    assert _cached(client, body).get_json()["url"] is not None
+
+    edited = {**body, "compositions": child("#3a7f2b")}
+    assert _cached(client, edited).get_json()["url"] is None  # child edit moved the key

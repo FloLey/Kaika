@@ -308,3 +308,119 @@ def test_export_hash_folds_the_root_composition():
     repointed = [{**segs[0], "rootCompositionId": "c-other"}]
     other = {"c-other": {**pool["c-s1"], "id": "c-other"}}
     assert SR._export_hash("job", repointed, other, [], EXPORT) != base
+
+
+def _leaf_backdrop(cid, color):
+    return {
+        "id": cid,
+        "name": cid,
+        "graph": {
+            "version": 30,
+            "nodes": [
+                {"id": "b", "type": "backdrop", "data": {"color": color, "ports": {}}},
+                {"id": f"{cid}-o", "type": "output", "data": {}},
+            ],
+            "edges": [_edge("b", f"{cid}-o", "video")],
+        },
+    }
+
+
+def _montage_root(*comp_ids, manual=()):
+    """A root graph: montage(extracts → comp_ids, manual cuts) → output."""
+    return {
+        "version": 30,
+        "nodes": [
+            {
+                "id": "mg",
+                "type": "montage",
+                "data": {
+                    "extracts": [
+                        {"id": f"x{i}", "compositionId": cid} for i, cid in enumerate(comp_ids)
+                    ],
+                    "manualBreakpoints": [{"id": f"bp{i}", "t": t} for i, t in enumerate(manual)],
+                    "disabledCuts": [],
+                    "threshold": 0.5,
+                    "hysteresis": 0.1,
+                    "ports": {},
+                },
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("mg", "o", "video")],
+    }
+
+
+def test_song_export_unrolls_a_montage_root(tmp_path, monkeypatch):
+    """End to end over the DAG: segment 2's root is a montage of two backdrop-leaf
+    compositions cut by a manual breakpoint — the export streams it (sim-free root),
+    stays gapless, and shows each child on its own side of the cut."""
+    monkeypatch.setattr(paths, "ASSETS_DIR", tmp_path)  # nothing decodes, but be tidy
+    segs = [
+        _seg("s1", 0.0, 1.0, _fluid_out(0.6)),
+        {
+            "id": "s2",
+            "start": 1.0,
+            "end": 2.0,
+            "signals": [],
+            "rootCompositionId": "c-root",
+        },
+    ]
+    pool = _pool(segs[:1])
+    pool["c-root"] = {
+        "id": "c-root",
+        "name": "s2",
+        "graph": _montage_root("ca", "cb", manual=(0.5,)),
+    }
+    pool["ca"] = _leaf_backdrop("ca", "#ff0000")
+    pool["cb"] = _leaf_backdrop("cb", "#0000ff")
+
+    ctx = SR.build_plan("job", segs, pool, [], EXPORT, NOAUDIO)
+    windows = list(SR.iter_song_windows(ctx))
+    at = 0
+    for a, b, w in windows:  # gapless, in order
+        assert a == at and b - a == w.shape[0]
+        at = b
+    assert at == ctx["total"]
+    # Segment 2 streams RGBA (sim-free root); its frames flip red→blue at the cut.
+    s2 = np.concatenate([w for a, b, w in windows if w.shape[-1] == 4], axis=0)
+    fps = EXPORT["fps"]
+    assert s2.shape[0] == fps  # the 1s window
+    mid_y, mid_x = s2.shape[1] // 2, s2.shape[2] // 2
+    assert s2[0, mid_y, mid_x, 0] > 200 and s2[0, mid_y, mid_x, 2] < 60  # red first
+    cut = round(0.5 * fps)
+    assert s2[cut, mid_y, mid_x, 2] > 200 and s2[cut, mid_y, mid_x, 0] < 60  # blue after
+
+
+def test_layer_continuity_stops_at_the_root_composition():
+    """The pinned rule: persistent-field (`layer`) continuity applies ONLY to fluids
+    in a segment's ROOT composition graph. A fluid inside a montage CHILD re-simulates
+    on the extract's local clock — segment 1's dye does NOT carry into it."""
+    child_fluid = {
+        "id": "cf",
+        "name": "cf",
+        "graph": {
+            "version": 30,
+            "nodes": [
+                _fluid("f2", 0.0),  # emits nothing — only inherited dye could show
+                {"id": "cf-o", "type": "output", "data": {}},
+            ],
+            "edges": [_edge("f2", "cf-o", "video")],
+        },
+    }
+    segs = [
+        _seg("s1", 0.0, 1.0, _fluid_out(0.6)),  # layer 1 emits for a second
+        {"id": "s2", "start": 1.0, "end": 2.0, "signals": [], "rootCompositionId": "c-root"},
+    ]
+    pool = _pool(segs[:1])
+    pool["c-root"] = {"id": "c-root", "name": "s2", "graph": _montage_root("cf")}
+    pool["cf"] = child_fluid
+
+    ctx = SR.build_plan("job", segs, pool, [], EXPORT, NOAUDIO)
+    frames = [w for _a, _b, w in SR.iter_song_windows(ctx)]
+    total = sum(f.shape[0] for f in frames)
+    assert total == ctx["total"]
+    # The child's fluid started from a BLANK field: nothing carried across the
+    # boundary (compare test_field_carries_across_boundary, where the same emit-0
+    # fluid in the ROOT graph inherits segment 1's dye).
+    s2_first = frames[-1][0] if frames[-1].shape[0] else frames[-1]
+    assert float(s2_first[..., :3].mean()) < 1.0
