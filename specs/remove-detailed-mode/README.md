@@ -1,7 +1,16 @@
 # Remove the "detailed" card view mode — compact only
 
-> **Status: NOT BUILT.** Design record for a refactor, not a description of shipped code.
-> Four steps, each a commit-sized unit that ends green (vitest + pytest + lint + `tsc`).
+> **Status: BUILT** — steps `8a0596a` (00), `ca34fd6` (01, GRAPH 28→29), `3416875` (02),
+> `f840fec` (03). 337 vitest / 715 pytest / lint / tsc green.
+>
+> One finding the research below missed, closed during step 00: the montage **duplicate**
+> warning ("two slots, same clip") was per-row-only with no roll-up, so compact-only would
+> have dropped it. Per the "compact must do everything" precondition, a duplicate roll-up
+> was added to the status line and the compact card (mirroring the black one). The
+> **shortfall** warning already had its compact roll-up, so it survived untouched.
+
+Design record for the refactor. Four steps, each a commit-sized unit that ends green
+(vitest + pytest + lint + `tsc`).
 
 ## Why
 
