@@ -12,20 +12,15 @@ export default function Cards() {
         image, video, slideshow, image gen, backdrop, lyrics), <strong>Compositing</strong>,{" "}
         <strong>Output</strong> (in data-flow order). Open a category and{" "}
         <strong>hover any item</strong> for a tip describing what it does and what it takes in →
-        puts out, then click to drop it. The canvas has <strong>two views</strong>, switched from
-        the toolbar: <strong>▦ detailed</strong> (the default — every card shows its full controls)
-        and <strong>▤ compact</strong> (just the name, a small live preview, and one input + one
-        output dot). <strong>Each view remembers its own card positions</strong> — arrange them
-        tight in compact and spread in detailed, and switching never scrambles either layout (cards
-        only move if they would overlap, and then as little as possible). The{" "}
-        <strong>✨ arrange</strong> toolbar button lays the view you're looking at out along the
-        data flow — sources left, output right — giving the cards room and untangling wire crossings
-        where it can (compact uses the same layout, just tighter). If the view holds a{" "}
-        <a href="#animation-montage">montage</a>, arrange also puts its <strong>slots</strong> in
-        the order its clips now read on screen — so re-ordering a montage is a matter of dragging
-        cards. That one is a real edit, not just tidying: the montage re-renders. Clicking arrange
-        again changes nothing. In compact view, <strong>click a card's body</strong> to open its
-        settings window:{" "}
+        puts out, then click to drop it. Every card shows as a <strong>compact tile</strong> — its
+        name, a small live preview, and one input + one output dot;{" "}
+        <strong>click a card's body</strong> to open its settings window and edit it. The{" "}
+        <strong>✨ arrange</strong> toolbar button lays the cards out along the data flow — sources
+        left, output right — giving them room and untangling wire crossings where it can. If the
+        view holds a <a href="#animation-montage">montage</a>, arrange also puts its{" "}
+        <strong>slots</strong> in the order its clips now read on screen — so re-ordering a montage
+        is a matter of dragging cards. That one is a real edit, not just tidying: the montage
+        re-renders. Clicking arrange again changes nothing. The settings window shows{" "}
         <strong>inputs &amp; controls on the left, a big live preview on the right</strong> (editing
         the graph live — <kbd>Esc</kbd>, the ✕, or a click outside closes it). The right-hand
         preview is tailored per card — the sim/composite, a value's pulse, an image/video in its
@@ -35,11 +30,10 @@ export default function Cards() {
         <em>output</em> card's render opens it big with a ★ mark-final toggle. Every card gets a{" "}
         <strong>default name</strong> (its type plus a counter — <em>fluid 1</em>, <em>fluid 2</em>
         …); <strong>double-click the title</strong> to rename it (on the canvas or in its settings
-        window), so you can find it again by name in every input dropdown. The <strong>▢/–</strong>{" "}
-        button in a card's title bar overrides the view for that one card (switching views clears
-        the overrides). Every card has a <strong>✕</strong> in its top-right corner to delete it
-        (which also removes its wires). The <em>output</em> card is the one exception — its body is
-        the live render preview, so it always shows in full.
+        window), so you can find it again by name in every input dropdown. Every card has a{" "}
+        <strong>✕</strong> in its top-right corner to delete it (which also removes its wires). The{" "}
+        <em>output</em> card is the one exception — its body is the live render preview, so it
+        always shows in full.
       </p>
       <p>
         Three more canvas tools: the canvas <strong>opens fitted</strong> (every card framed in
@@ -161,27 +155,23 @@ export default function Cards() {
       <h3>Wiring &amp; the [lo, hi] range</h3>
       <ul>
         <li>
-          <strong>Connect (detailed view)</strong> — drag from a card's output dot onto a specific
-          input port (or a fluid's video output onto the output card). You can also{" "}
-          <strong>drop the wire anywhere on a card</strong>: when the destination is obvious (an
-          output's video input, a combine's free slot, a fluid's positions, a card with a single
-          free port) it wires itself; otherwise the line parks on the card in <strong>gray</strong>{" "}
-          — connected, but not assigned to a port yet.
+          <strong>Connect</strong> — a card shows one input dot standing in for <em>all</em> its
+          inputs, so a wire dropped on it can't always know which one you mean. When the destination
+          is unambiguous (an output's video input, a combine's free slot, a fluid's positions, a
+          card with a single free port) it wires itself; otherwise the line{" "}
+          <strong>parks gray</strong> — connected, but not assigned to a port yet.
         </li>
         <li>
-          <strong>Connect (compact view)</strong> — a compact card shows one input dot standing in
-          for <em>all</em> its inputs, so a wire dropped on it can't know which one you mean: it
-          <strong> always parks gray</strong>. Open the card (click its body) and use each input's
-          dropdown to assign it. The dropdown has <strong>three sections</strong>: the gray wires
-          waiting on this card (<em>connected — unassigned</em>) on top, then sources already wired
-          to one of this card's inputs (<em>connected</em>), then <em>other</em> candidates. Pick
-          one and the gray line goes live. Choosing <em>— none —</em> sends a wire back to gray so
-          you can re-route it without redrawing it.
+          <strong>Assign a gray wire</strong> — open the card (click its body) and use each input's
+          dropdown. The dropdown has <strong>three sections</strong>: the gray wires waiting on this
+          card (<em>connected — unassigned</em>) on top, then sources already wired to one of this
+          card's inputs (<em>connected</em>), then <em>other</em> candidates. Pick one and the gray
+          line goes live. Choosing <em>— none —</em> sends a wire back to gray so you can re-route
+          it without redrawing it.
         </li>
         <li>
-          <strong>Compact cards keep their wires</strong> — every assigned inbound wire converges on
-          the single left dot and the output leaves from the single right dot. Expand the card (▢)
-          to wire a specific port directly.
+          <strong>Cards keep their wires tidy</strong> — every assigned inbound wire converges on
+          the single left dot and the output leaves from the single right dot.
         </li>
         <li>
           <strong>Animate a parameter</strong> — when a <em>signal</em> drives a parameter, its 0–1

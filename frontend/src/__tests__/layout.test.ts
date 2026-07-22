@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import { FLOW_GAPS, estimateCardSize, flowLayout, resolveOverlaps } from "../lib/graph/layout";
 import type { LayoutRect } from "../lib/graph/layout";
 
-// The per-view layout passes (v20). The user-facing contract under test:
-// resolveOverlaps NEVER moves a clean layout (switching views must not scramble a
-// hand-tuned arrangement) and always ends overlap-free; tighten packs cards closer
-// without creating overlaps. jsdom has no real layout, so these pure-geometry tests
-// carry the coverage — the DOM tests only check the wiring.
+// The layout passes. The user-facing contract under test: resolveOverlaps NEVER moves a
+// clean layout (a de-overlap must not scramble a hand-tuned arrangement) and always ends
+// overlap-free; flowLayout (✨ arrange) orders cards along the data flow, untangled. jsdom
+// has no real layout, so these pure-geometry tests carry the coverage — the DOM tests only
+// check the wiring.
 
 const overlapping = (rects: LayoutRect[], pos: Map<string, { x: number; y: number }>, gap = 16) => {
   const placed = rects.map((r) => ({ ...r, ...pos.get(r.id)! }));

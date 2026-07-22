@@ -361,33 +361,6 @@
   color: #fff;
   background: var(--petale);
 }
-/* minimize / restore toggle — same chrome as delete, neutral hover */
-.anim-node-min {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 6px;
-}
-.anim-node-min:hover {
-  color: var(--text);
-  background: var(--panel-2);
-}
-/* A card collapsed to just its header: no body, fully-rounded, shrink to content.
-   The header anchors sit on the left/right edges, vertically centered on the head
-   (reusing .anim-port-side), so all wires converge there. */
-.anim-node.min {
-  width: auto;
-  min-width: 130px;
-  max-width: 260px;
-}
-.anim-node.min .anim-node-head {
-  border-bottom: none;
-  border-radius: 12px;
-}
 .anim-min-anchor {
   pointer-events: auto;
 }
@@ -1379,8 +1352,7 @@
   }
 }
 
-/* Segmented copy control: "⧉ copy" label + butted prev/next buttons (same shape as
-   the .anim-viewmode segmented toggle). */
+/* Segmented copy control: "⧉ copy" label + butted prev/next buttons. */
 .rh-copy {
   display: inline-flex;
   align-items: center;
@@ -1804,9 +1776,6 @@
 }
 .node-settings .gc-port {
   display: none; /* port dots are meaningless without a canvas to wire on */
-}
-.node-settings .anim-node-min {
-  display: none; /* expand-on-canvas doesn't apply inside the modal */
 }
 .node-settings .anim-node-head {
   display: none; /* the modal header shows the name (rename lives there) */
@@ -2242,22 +2211,6 @@
 /* Compact optional start/end timestamps next to the URL (section-only download). */
 .asset-lib-yt .hz-input.asset-lib-yt-ts {
   flex: 0 0 52px;
-}
-
-/* ---- canvas view-mode switch ---------------------------------------------------- */
-.anim-viewmode {
-  display: inline-flex;
-  gap: 0;
-}
-.anim-viewmode .btn {
-  border-radius: 0;
-}
-.anim-viewmode .btn:first-child {
-  border-radius: 6px 0 0 6px;
-}
-.anim-viewmode .btn:last-child {
-  border-radius: 0 6px 6px 0;
-  margin-left: -1px;
 }
 
 /* ---- settings-window wiring panel ---------------------------------------------- */
