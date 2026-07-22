@@ -134,15 +134,15 @@ def test_rejects_an_output_wired_to_a_non_producer():
         graph.validate(g)
 
 
-def test_rejects_montage_slot_without_id():
+def test_rejects_montage_extract_without_a_reference():
     montage = {
         "id": "n-m",
         "type": "montage",
         "x": 0,
         "y": 0,
-        "data": {"inputs": [{"opacity": 1}]},
+        "data": {"extracts": [{"id": "x1"}]},  # no compositionId
     }
-    with pytest.raises(ValueError, match="slot with no id"):
+    with pytest.raises(ValueError, match="no composition reference"):
         graph.validate(_g(extra_nodes=[montage]))
 
 

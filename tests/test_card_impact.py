@@ -42,11 +42,14 @@ def stem_path(tmp_path_factory):
 def _frames(demo, stem):
     g = demo["graph"]
     graph.validate(g)
+    graph.validate_pool(demo.get("compositions"))
     seg = {"start": 0.0, "end": 1.0, "signals": demo["signals"]}
     if any(n.get("type") == "lyrics" for n in g["nodes"]):
         seg["lyric_lines"] = LINES
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
-    return graph.Dag("playground", seg, g, stem, OUT).video(out_id)
+    # A demo referencing child compositions (the montage) carries them in its own
+    # fixture slice — the pool the app would pass.
+    return graph.Dag("playground", seg, g, stem, OUT, pool=demo.get("compositions")).video(out_id)
 
 
 @pytest.mark.parametrize("demo", card_demo.DEMOS, ids=[d["key"] for d in card_demo.DEMOS])
@@ -136,9 +139,15 @@ def test_whole_clip_matches_the_block_stream(demo, stem_path):
     if any(n.get("type") == "lyrics" for n in g["nodes"]):
         seg["lyric_lines"] = LINES
     out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
-    whole = graph.Dag("playground", seg, g, stem_path, OUT).video(out_id)
+    pool = demo.get("compositions")
+    whole = graph.Dag("playground", seg, g, stem_path, OUT, pool=pool).video(out_id)
     streamed = np.concatenate(
-        [f for *_, f in graph.Dag("playground", seg, g, stem_path, OUT).stream_blocks(out_id, 3)]
+        [
+            f
+            for *_, f in graph.Dag("playground", seg, g, stem_path, OUT, pool=pool).stream_blocks(
+                out_id, 3
+            )
+        ]
     )
     assert_frames_close(
         whole,

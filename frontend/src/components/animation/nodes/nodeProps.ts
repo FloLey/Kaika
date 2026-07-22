@@ -58,6 +58,9 @@ export interface NodeCtx {
   // The project's composition pool — a montage card's extracts reference into it,
   // and render keys/POSTs carry the reachable slice so child edits re-render.
   compositions?: CompositionPool;
+  // Write access to the pool (immutably, like onGraphChange): the montage's "pick a
+  // video" creates a LEAF composition here and references it from an extract.
+  updateCompositions?: (updater: (pool: CompositionPool) => CompositionPool) => void;
   stems?: Record<string, StemInfo>;
   job?: string;
   output?: OutputSettings | null;

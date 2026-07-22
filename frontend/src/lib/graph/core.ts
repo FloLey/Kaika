@@ -105,30 +105,8 @@ export function rankedEdges(graph: Graph): (GraphEdge & { portRank?: number })[]
   });
 }
 
-// Whether a card's stream ends up in a montage SLOT (directly or through an FX /
-// combine chain). Mirrors backend `_feeds_a_montage`: a montage RE-TIMES its inputs
-// (local frame 0 lands on the cut), so an upstream video card ignores the song clock
-// — both when rendering and when previewing.
-export function feedsMontage(graph: Graph | undefined, nodeId: string): boolean {
-  if (!graph) return false;
-  const downstream = new Map<string, string[]>();
-  for (const e of graph.edges || []) {
-    if (isLooseEdge(e)) continue;
-    if (!downstream.has(e.source)) downstream.set(e.source, []);
-    downstream.get(e.source)!.push(e.target);
-  }
-  const byId = new Map((graph.nodes || []).map((n) => [n.id, n.type]));
-  const seen = new Set([nodeId]);
-  const stack = [...(downstream.get(nodeId) || [])];
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    if (byId.get(id) === "montage") return true;
-    stack.push(...(downstream.get(id) || []));
-  }
-  return false;
-}
+// (feedsMontage died with slot wiring: no video edge can end in a montage now —
+// its children are composition references.)
 
 // The "loose edge" sentinel targetPort: a wire dropped on a card whose destination
 // port couldn't be auto-resolved. Loose edges draw gray, carry NO binding, and are

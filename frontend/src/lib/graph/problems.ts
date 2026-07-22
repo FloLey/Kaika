@@ -74,25 +74,24 @@ export function problemsFor(
       out.push({ nodeId: n.id, message: "output has no input — wire a video producer into it" });
     }
 
-    // 3b. montage dead wiring: no video inputs -> can't render; an unwired trigger
-    // resolves to a constant 0 -> no cuts, only the first input ever plays.
+    // 3b. montage dead states: no extracts -> can't render; no cut SOURCE at all
+    // (unwired trigger AND no manual breakpoints) -> only the first extract plays.
     if (n.type === "montage") {
-      const wired = (n.data.inputs || []).some((s) =>
-        (graph.edges || []).some(
-          (e) => e.target === n.id && e.targetPort === s.id && e.targetPort !== LOOSE_PORT
-        )
-      );
-      if (!wired) {
+      const hasExtracts = (n.data.extracts || []).length > 0;
+      if (!hasExtracts) {
         out.push({
           nodeId: n.id,
-          message: "montage has no inputs — wire video cards into its slots",
+          message: "montage has no extracts — pick clips (or compositions) on the card",
         });
       }
       const trig = ports?.trigger?.binding;
-      if (wired && (!trig || trig.kind !== "node")) {
+      const hasCutSource =
+        (trig && trig.kind === "node") || (n.data.manualBreakpoints || []).length > 0;
+      if (hasExtracts && !hasCutSource) {
         out.push({
           nodeId: n.id,
-          message: "montage trigger has no signal — it never cuts, only the first input plays",
+          message:
+            "montage never cuts — wire a trigger signal or place manual breakpoints; only the first extract plays",
         });
       }
     }

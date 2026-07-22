@@ -38,7 +38,14 @@ from .graph_common import LOOSE_PORT, _nodes_of, resolve_signal
 #       and both channel counts, with zero values exceeding 1. Invisible, but not
 #       byte-identical, so the cached clips are invalidated rather than assumed
 #       equivalent (the same call v13 made).
-RENDER_VERSION = 15
+#  v16: the montage rebuilt on COMPOSITION EXTRACTS (specs/compositions step 03):
+#       slots-as-wired-ports became extracts referencing child compositions rendered
+#       in private recursive Dags; cuts became the live union of gate rises and
+#       manual breakpoints minus per-cut disables; the v12 montage-slot pre-roll
+#       exemption is deleted (a child composition's window IS the extract's, so
+#       sync="song" pre-rolls correctly inside it). Old montage clips are
+#       meaningless under the new semantics.
+RENDER_VERSION = 16
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
@@ -58,8 +65,10 @@ _SIGNAL_HASH_FIELDS = (
 
 
 # Cards whose `data.inputs` is a list of wired SLOTS ({id, …}); an unwired slot is
-# invisible to the render, so it must be invisible to the hash too.
-_SLOT_CARDS = ("montage", "combine")
+# invisible to the render, so it must be invisible to the hash too. (The montage
+# left this list with the extracts model — its children are data references, and
+# every extract is render-visible.)
+_SLOT_CARDS = ("combine",)
 
 
 def _wired_ports(graph: dict) -> set:

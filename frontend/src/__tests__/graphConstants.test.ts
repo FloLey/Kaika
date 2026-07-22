@@ -40,7 +40,10 @@ describe("graph constants", () => {
     // Cheap smoke: a generator bug that emitted empty tables would otherwise make every
     // graph "invalid" in ways that look like a graph bug, not a build bug.
     expect(VIDEO_PRODUCERS.size).toBeGreaterThan(10);
-    expect(SLOT_CARDS.has("montage") && SLOT_CARDS.has("combine")).toBe(true);
+    // Only combine takes wired slots now — the montage's extracts are data references
+    // into the composition pool, all render-visible, so it left SLOT_CARDS with them.
+    expect(SLOT_CARDS.has("combine")).toBe(true);
+    expect(SLOT_CARDS.has("montage")).toBe(false);
     // Order is significant — the backend hashes these positionally.
     expect(SIGNAL_HASH_FIELDS[0]).toBe("stemKey");
     expect(new Set(SIGNAL_HASH_FIELDS).size).toBe(SIGNAL_HASH_FIELDS.length);

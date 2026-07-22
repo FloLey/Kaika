@@ -1,33 +1,30 @@
-import { useMemo } from "react";
+import { useState } from "react";
 import NodeFrame, { Port } from "./NodeFrame";
 import { ParamRows } from "./FluidParamRow";
 import Ctl from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
 import StreamPreview from "./StreamPreview";
+import AssetLibrary from "../../assets/AssetLibrary";
 import { ctxAspect } from "../../../lib/output";
 import { useNodeData } from "./useNodeData";
 import { useMontageShortfall } from "./useMontageShortfall";
 import { dp2 } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { MONTAGE_PARAMS } from "../../../lib/nodeParams";
-import { defaultCardName } from "../nodeInputs";
-import {
-  addMontageInput,
-  fillMontageSlots,
-  removeMontageInput,
-  setMontageSlotSpan,
-} from "../../../lib/graphModel";
-import type { NodeProps } from "./nodeProps";
-import type { MontageData } from "../../../lib/types";
+import { leafComposition } from "../../../lib/compositions";
+import { addExtract, removeExtract, setExtractSpan } from "../../../lib/graphModel";
+import { jobIdOf, type NodeProps } from "./nodeProps";
+import type { Asset, MontageData } from "../../../lib/types";
 
-// The montage card: a rhythm-driven video SWITCHER. N ordered slot inputs (each fed
-// by a video card, optionally through FX); each rising edge of the `trigger` port
-// past the built-in hysteresis threshold CUTS to the next slot, whose input is
-// re-timed to start exactly at the cut — so an upstream video card's `start`
-// (in-point) lands on the beat. Rises beyond the input count are ignored: the last
-// input holds to the segment end. Wire signal → gate (divide = every Nth beat) →
-// trigger for musical cuts. Each row shows how long its slot lasts this segment,
-// so trimming the upstream clip to the right length is a read-off, not a guess.
+// The montage card: a rhythm-driven video SWITCHER over composition EXTRACTS. Each
+// extract references a child composition (the unit of reuse — a leaf is just
+// video → output, created by "pick a video"); the effective cut schedule — the live
+// union of the `trigger` port's rising edges and the manual breakpoints, minus the
+// individually disabled gate cuts — plays extract k on interval k, its child
+// re-timed so local frame 0 lands on the cut. Cuts beyond the extracts are ignored:
+// the last extract holds to the window end. Wire signal → gate (divide = every Nth
+// beat) → trigger for musical cuts. Each row shows how long its extract lasts, so
+// trimming the child's clip to the right length is a read-off, not a guess.
 export default function MontageNode({
   node,
   selected,
@@ -39,46 +36,31 @@ export default function MontageNode({
 }: NodeProps) {
   const d = node.data as MontageData;
   const set = useNodeData<MontageData>(node, onGraphChange);
+  const [picking, setPicking] = useState(false);
 
-  // Everything derived from the resolved cut schedule + asset durations lives in a shared
-  // hook, because the COMPACT card reads the same roll-up — the black warning must not
-  // vanish when a montage is collapsed (that is how it stayed invisible for a whole export).
-  const { inputs, wiredOrdinal, nWired, cuts, slotLabel, shortfall, shortRows, repeats } =
+  // Everything derived from the resolved cut schedule + the referenced compositions
+  // lives in a shared hook, because the COMPACT card reads the same roll-up — the
+  // black warning must not vanish when a montage is collapsed (that is how it stayed
+  // invisible for a whole export).
+  const { extracts, comps, cuts, extractLabel, shortfall, shortRows, repeats } =
     useMontageShortfall(node, ctx);
 
-  // What `+ fill` would do, for the button's label-in-a-tooltip and its disabled state.
-  // Same arithmetic as `fillMontageSlots`: the budget is one span unit per cut plus one
-  // for the opening slot; unwired slots (existing + about to be created) each get a card.
-  const fill = useMemo(() => {
-    const spent = inputs.reduce((sum, s) => sum + Math.max(1, Math.round(s.span || 1)), 0);
-    const toAdd = cuts ? Math.max(0, cuts.rises + 1 - spent) : 0;
-    const n = wiredOrdinal.filter((w) => w == null).length + toAdd; // empty slots + new ones
-    if (!n) {
-      return { n, title: cuts ? "every slot is already wired" : "no empty slot to fill" };
-    }
-    const slots = toAdd ? ` (${toAdd} new slot${toAdd === 1 ? "" : "s"})` : "";
-    const why = cuts
-      ? ` — enough for the ${cuts.rises} cuts`
-      : " — wire a trigger to size it to the cuts";
-    return {
-      n,
-      title: `create ${n} empty video card${n === 1 ? "" : "s"}${slots} and wire them to the empty slots${why}. Drop a clip on each afterwards.`,
-    };
-  }, [inputs, wiredOrdinal, cuts]);
+  // "Pick a video" = the leaf shortcut: mint a video→output composition in the pool
+  // and reference it from a new extract. Two writes from one click — the reference
+  // and the entry must land together, and neither updater can reach the other's
+  // state (the same pattern as Studio's first-edit root creation).
+  const pickVideo = (asset: Asset) => {
+    const comp = leafComposition(asset);
+    ctx?.updateCompositions?.((pool) => ({ ...pool, [comp.id]: comp }));
+    onGraphChange((g) => addExtract(g, node.id, comp.id));
+  };
 
-  // Duplicate roll-up: a slot fed by the same clip as an earlier slot replays that
-  // footage — from the same in-point it is frame-identical, which reads as the video
-  // looping instead of cutting (a silent export bug). The per-row `⧉` badge below shows
-  // the detail; this roll-up rides the status line so it survives on the compact card and
-  // in the modal too, exactly like the black roll-up beside it.
-  const dupRows = useMemo(() => {
-    // `repeats[i].row` is `first + 1` (raw index), so a slot's own number is `i + 1` in
-    // the same scheme — keep both sides consistent.
+  const dupRows = (() => {
     const rows = repeats
       .map((r, i) => (r ? { slot: i + 1, row: r.row, identical: r.identical } : null))
       .filter((r): r is { slot: number; row: number; identical: boolean } => r != null);
     return { n: rows.length, identical: rows.filter((r) => r.identical).length, rows };
-  }, [repeats]);
+  })();
 
   return (
     <NodeFrame
@@ -102,21 +84,19 @@ export default function MontageNode({
     >
       {/* The live switched output — the cuts landing exactly as they export. */}
       <StreamPreview node={node} ctx={ctx} aspect={ctxAspect(ctx)} />
-      {/* ONE status line: wiring + cuts + the black roll-up. The black used to sit in its
-          own second hint line; folding it in here (and turning the offending ROWS red
-          below) means the whole card reads as a single list. The roll-up still earns its
-          place — a ⚠ badge on one row out of 37 is missed, which is how an export once
-          shipped with black in it — it just no longer needs a block of its own. */}
+      {/* ONE status line: extracts + cuts + the black/duplicate roll-ups. A ⚠ badge on
+          one row out of 37 is missed — the roll-ups ride here so they survive on the
+          compact card and in the modal too. */}
       <div className="anim-fx-hint anim-slideshow-count">
-        {nWired}/{inputs.length} input{inputs.length === 1 ? "" : "s"} · cuts{" "}
+        {extracts.length} extract{extracts.length === 1 ? "" : "s"} · cuts{" "}
         <strong>{cuts ? cuts.rises : 0}×</strong>
         {shortRows.black > 0.05 && (
           <span
             className="anim-montage-short"
             title={
-              `${shortRows.n} slot${shortRows.n === 1 ? "" : "s"} short of material: ` +
-              `${shortRows.rows.map((r) => `slot ${r.row} (−${r.short.toFixed(1)}s)`).join(", ")}. ` +
-              "A slot with loop off goes BLACK once its clip runs out."
+              `${shortRows.n} extract${shortRows.n === 1 ? "" : "s"} short of material: ` +
+              `${shortRows.rows.map((r) => `extract ${r.row} (−${r.short.toFixed(1)}s)`).join(", ")}. ` +
+              "A clip with loop off goes BLACK once it runs out."
             }
           >
             {" · ⚠ "}
@@ -128,14 +108,15 @@ export default function MontageNode({
           <span
             className={"anim-montage-dup-roll" + (dupRows.identical > 0 ? " same" : "")}
             title={
-              `${dupRows.n} slot${dupRows.n === 1 ? "" : "s"} repeat an earlier clip: ` +
+              `${dupRows.n} extract${dupRows.n === 1 ? "" : "s"} repeat an earlier one: ` +
               `${dupRows.rows
                 .map(
                   (r) =>
-                    `slot ${r.slot} = slot ${r.row}${r.identical ? "" : " (different in-point)"}`
+                    `extract ${r.slot} = extract ${r.row}${r.identical ? "" : " (different in-point)"}`
                 )
                 .join(", ")}. ` +
-              "Two slots from the same clip and in-point play frame-identical — it reads as a loop, not a cut."
+              "Two extracts of the same footage from the same in-point play frame-identical — " +
+              "it reads as a loop, not a cut."
             }
           >
             {" · ⧉ "}
@@ -144,132 +125,82 @@ export default function MontageNode({
             </strong>
           </span>
         )}
-        <ArgInfo type="montage" k="inputs" />
+        <ArgInfo type="montage" k="extracts" />
       </div>
 
-      {/* In the settings modal the INPUTS panel already lists every slot with a source
-          dropdown — the only place wiring WORKS there, since drag is inert (STUB_HELPERS).
-          Rendering our own slot rows too was the "2 lists" the user hit. On canvas this is
-          the single, rich list; in the modal we collapse to a pointer + the montage-only
-          + fill. The header above (with the black roll-up) shows in both. */}
-      {ctx?.previewInPanel ? (
-        <div className="anim-combine-inputs">
-          <div className="anim-fx-hint">slots are wired in the INPUTS panel above ↑</div>
-          <button
-            className="btn sm anim-combine-add"
-            disabled={!fill.n}
-            title={fill.title}
-            onClick={() =>
-              onGraphChange((g) =>
-                fillMontageSlots(g, node.id, {
-                  cuts: cuts ? cuts.rises : null,
-                  nameFor: defaultCardName,
-                })
-              )
-            }
-          >
-            + fill
-          </button>
-        </div>
-      ) : (
-        <div className="anim-combine-inputs">
-          {inputs.map((slot, i) => {
-            const label = slotLabel(wiredOrdinal[i]);
-            const span = Math.max(1, Math.round(slot.span || 1));
-            const sf = shortfall(i, wiredOrdinal[i]);
-            // Red only when the slot actually goes BLACK: a LOOPING short slot is short but
-            // never dark, so it must not read as an error.
-            const goesBlack = sf != null && !sf.loop;
-            return (
-              <div className={"anim-combine-row" + (goesBlack ? " short" : "")} key={slot.id}>
-                <Port
-                  kind="in"
-                  flow="video"
-                  nodeId={node.id}
-                  portId={slot.id}
-                  portRef={helpers.portRef}
-                  title={`slot ${i + 1}${i === 0 ? " — plays from the segment start" : " — starts once the slots before it have spent their cuts"}`}
-                />
-                <span className="anim-combine-slot">slot {i + 1}</span>
-                <button
-                  className={"iconbtn anim-montage-span" + (span > 1 ? " on" : "")}
-                  title="cuts this slot swallows — its video plays that many gate intervals (click: ×1 → ×2 → ×3 → ×4)"
-                  onClick={() =>
-                    onGraphChange((g) =>
-                      setMontageSlotSpan(g, node.id, slot.id, span >= 4 ? 1 : span + 1)
-                    )
+      <div className="anim-combine-inputs">
+        {extracts.map((x, k) => {
+          const comp = comps[k];
+          const label = extractLabel(k);
+          const span = Math.max(1, Math.round(x.span || 1));
+          const sf = shortfall(k);
+          // Red only when the extract actually goes BLACK: a LOOPING short clip is
+          // short but never dark, so it must not read as an error.
+          const goesBlack = sf != null && !sf.loop;
+          return (
+            <div className={"anim-combine-row" + (goesBlack ? " short" : "")} key={x.id}>
+              <span className="anim-combine-slot" title={comp ? comp.name : undefined}>
+                {k + 1}. {comp ? comp.name : "⚠ missing composition"}
+              </span>
+              <button
+                className={"iconbtn anim-montage-span" + (span > 1 ? " on" : "")}
+                title="cuts this extract swallows — it plays that many intervals (click: ×1 → ×2 → ×3 → ×4)"
+                onClick={() =>
+                  onGraphChange((g) => setExtractSpan(g, node.id, x.id, span >= 4 ? 1 : span + 1))
+                }
+              >
+                ×{span}
+              </button>
+              {label && <span className="anim-montage-dur">{label}</span>}
+              {sf && (
+                <span
+                  className="anim-montage-short"
+                  title={
+                    `clip too short: only ${sf.avail.toFixed(1)}s left from its in-point ` +
+                    `for a ${sf.needed.toFixed(1)}s extract (${sf.short.toFixed(1)}s missing) — ` +
+                    (sf.loop
+                      ? "it loops back to the in-point"
+                      : `it goes BLACK for the last ${sf.short.toFixed(1)}s`) +
+                    ". Tick loop on the clip's video card (open the extract), turn the " +
+                    "extract's ×N down, or cut more often."
                   }
                 >
-                  ×{span}
-                </button>
-                {label && <span className="anim-montage-dur">{label}</span>}
-                {sf && (
-                  <span
-                    className="anim-montage-short"
-                    title={
-                      `clip too short: only ${sf.avail.toFixed(1)}s left from its in-point ` +
-                      `for a ${sf.needed.toFixed(1)}s slot (${sf.short.toFixed(1)}s missing) — ` +
-                      (sf.loop
-                        ? "it loops back to the in-point"
-                        : `the slot goes BLACK for the last ${sf.short.toFixed(1)}s`) +
-                      ". Tick loop on the video card to replay it, move the in-point earlier " +
-                      "(🎞 on the card), turn the slot's ×N down, or cut more often."
-                    }
-                  >
-                    ⚠ −{sf.short.toFixed(1)}s
-                  </span>
-                )}
-                {repeats[i] && (
-                  <span
-                    className={"anim-montage-dup" + (repeats[i]!.identical ? " same" : "")}
-                    title={
-                      repeats[i]!.identical
-                        ? `same clip as slot ${repeats[i]!.row}, from the same in-point — these ` +
-                          "two slots play identical frames, which looks like the video looping " +
-                          "instead of cutting. Move this one's in-point (🎞 on the video card) " +
-                          "or wire a different clip."
-                        : `same clip as slot ${repeats[i]!.row}, but from a different in-point — ` +
-                          "it shows another moment of the same footage. Fine if that's deliberate."
-                    }
-                  >
-                    ⧉ {repeats[i]!.row}
-                  </span>
-                )}
-                {inputs.length > 1 && (
-                  <button
-                    className="iconbtn anim-combine-rm"
-                    onClick={() => onGraphChange((g) => removeMontageInput(g, node.id, slot.id))}
-                    title="remove slot"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          <button
-            className="btn sm anim-combine-add"
-            onClick={() => onGraphChange((g) => addMontageInput(g, node.id))}
-          >
-            + slot
-          </button>
-          <button
-            className="btn sm anim-combine-add"
-            disabled={!fill.n}
-            title={fill.title}
-            onClick={() =>
-              onGraphChange((g) =>
-                fillMontageSlots(g, node.id, {
-                  cuts: cuts ? cuts.rises : null,
-                  nameFor: defaultCardName,
-                })
-              )
-            }
-          >
-            + fill
-          </button>
-        </div>
-      )}
+                  ⚠ −{sf.short.toFixed(1)}s
+                </span>
+              )}
+              {repeats[k] && (
+                <span
+                  className={"anim-montage-dup" + (repeats[k]!.identical ? " same" : "")}
+                  title={
+                    repeats[k]!.identical
+                      ? `same footage as extract ${repeats[k]!.row}, from the same in-point — ` +
+                        "these two play identical frames, which looks like the video looping " +
+                        "instead of cutting. Change this one's in-point or pick another clip."
+                      : `same footage as extract ${repeats[k]!.row}, but from a different ` +
+                        "in-point — it shows another moment. Fine if that's deliberate."
+                  }
+                >
+                  ⧉ {repeats[k]!.row}
+                </span>
+              )}
+              <button
+                className="iconbtn anim-combine-rm"
+                onClick={() => onGraphChange((g) => removeExtract(g, node.id, x.id))}
+                title="remove extract (the composition stays in the pool)"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })}
+        <button
+          className="btn sm anim-combine-add"
+          onClick={() => setPicking(true)}
+          title="pick a clip from the project library — creates a video→output composition and adds an extract playing it"
+        >
+          + video
+        </button>
+      </div>
 
       <div className="anim-static">
         <Ctl
@@ -300,6 +231,15 @@ export default function MontageNode({
         onGraphChange={onGraphChange}
         onDetach={onDetach}
       />
+      {picking && (
+        <AssetLibrary
+          jobId={jobIdOf(ctx?.job)}
+          kind="video"
+          onPick={pickVideo}
+          pickLabel={`${extracts.length} extract${extracts.length === 1 ? "" : "s"}`}
+          onClose={() => setPicking(false)}
+        />
+      )}
     </NodeFrame>
   );
 }

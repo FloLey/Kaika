@@ -1,5 +1,4 @@
 import { videoClipSrc } from "../../../lib/assetPreview";
-import { feedsMontage } from "../../../lib/graphModel";
 import type { NodeCtx } from "./nodeProps";
 import type { BoxImagePreview, BoxVideoPreview } from "./BoxPad";
 import type { ImageData, VideoData } from "../../../lib/types";
@@ -13,32 +12,14 @@ import type { ImageData, VideoData } from "../../../lib/types";
 export function buildVideoPreview(
   d: VideoData,
   ctx?: NodeCtx,
-  nodeId?: string
+  _nodeId?: string
 ): BoxVideoPreview | undefined {
   if (!d.assetUrl) return undefined;
   const speedBinding = d.ports?.speed?.binding;
   const speed = speedBinding?.kind === "const" ? Number(speedBinding.value) : 1;
-  // A montage input has NO song clock: the montage restarts it at its in-point on
-  // each cut, and the card can't know where its slot falls. Preview it free-running
-  // from the in-point (looping) rather than parked at the song position — which, on
-  // a clip shorter than the segment's offset, showed a frozen last frame.
-  const inMontage = !!nodeId && feedsMontage(ctx?.graph, nodeId);
-  if (inMontage) {
-    return {
-      // Just the seconds the montage plays, cut server-side — and the file already
-      // starts at the in-point, so `start` is 0 here (offsetting again would skip).
-      src: videoClipSrc(d.assetUrl, d.start),
-      fit: d.fit,
-      sync: "segment",
-      start: 0,
-      speed,
-      loop: true,
-      segStart: ctx?.segStart ?? 0,
-      crop: { x: d.crop_x ?? 0, y: d.crop_y ?? 0, w: d.crop_w ?? 1, h: d.crop_h ?? 1 },
-      clock: ctx?.groupClock,
-      playing: false, // free-run: the montage owns this clip's timing, not the transport
-    };
-  }
+  // (The old feeds-a-montage free-run special case died with slot wiring: a clip
+  // inside a montage now lives in its own LEAF composition, whose editing view has
+  // no montage downstream — the card previews on its own sync like any other.)
   return {
     // The lightweight preview copy — never the raw 4K asset (see lib/assetPreview).
     src: videoClipSrc(d.assetUrl, d.start),

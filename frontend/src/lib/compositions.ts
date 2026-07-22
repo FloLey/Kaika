@@ -9,8 +9,9 @@
 
 import { normalizeGraph } from "./graph/normalize";
 import { referencedCompositionIds } from "./graph/core";
+import { connectVideo, emptyGraph, outputNode, videoNode } from "./graphModel";
 import { cloneSignals, mkSegId, mkSigId, rid } from "./segments";
-import type { Composition, CompositionPool, Graph, Segment } from "./types";
+import type { Asset, Composition, CompositionPool, Graph, Segment } from "./types";
 
 export function mkCompId() {
   return rid("comp");
@@ -43,6 +44,26 @@ export function hydrateCompositions(raw: RawCompositionPool): CompositionPool {
 
 export function createComposition(name: string, graph: Graph): Composition {
   return { id: mkCompId(), name, graph };
+}
+
+// The LEAF composition — the minimal one: video card → output. "Pick a video" in the
+// montage strip is a shortcut that creates exactly this; opening it shows just the
+// video card. The video card is created on the SEGMENT clock (sync:"segment"): a
+// leaf plays from its in-point at the cut, and staying off the song clock is what
+// keeps the composition window-INsensitive — retiming the trigger reuses its cached
+// frames (backend `_window_sensitive`).
+export function leafComposition(asset: Pick<Asset, "url" | "name" | "kind">): Composition {
+  const video = videoNode(80, 40);
+  video.data = { ...video.data, assetUrl: asset.url, sync: "segment" };
+  const out = outputNode(420, 40);
+  const graph = connectVideo(
+    { ...emptyGraph(), nodes: [video, out] },
+    video.id,
+    "out",
+    out.id,
+    "video"
+  );
+  return { id: mkCompId(), name: asset.name || "clip", graph };
 }
 
 // The output node a composition's product renders from: its explicit `outputId`

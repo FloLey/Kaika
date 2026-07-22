@@ -77,7 +77,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",
     crop: "Select which part of the SOURCE clip is used: drag a corner to cut a region out of the frame, drag the rectangle to move it. Only that region gets fitted into the box — pick the part that matters when the clip is too wide/tall for the format.",
     fit: "cover = fill the box, cropping overflow; contain = fit inside, letterboxed; stretch = distort to the box.",
-    sync: "song = the playhead follows the whole song's clock; segment = it restarts at this segment. Ignored when the card feeds a Montage — the montage restarts the clip at its in-point on each cut.",
+    sync: "song = the playhead follows the whole song's clock; segment = it restarts at this segment's (or, inside a montage extract, that extract's) start. A montage's picked clips are created on the segment clock so they start at their in-point on the cut.",
     start: "Start offset into the source clip, in seconds.",
     speed: "Playback rate — 1 = normal, 2 = twice as fast, 0.5 = half speed.",
     loop: "Loop the clip if it's shorter than the window instead of freezing on its last frame.",
@@ -331,13 +331,13 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
   },
   montage: {
     trigger:
-      "Each RISING edge of this signal past the threshold CUTS to the next slot's video, restarted from its in-point. Wire signal → gate (use divide for every Nth beat) → here for musical cuts.",
+      "Each RISING edge of this signal past the threshold CUTS to the next extract, its composition restarted at the cut. Wire signal → gate (use divide for every Nth beat) → here for musical cuts; manual breakpoints add cuts by hand and combine with these.",
     opacity: "Layer transparency — wire a signal to fade the montage with the music.",
-    threshold: "The trigger level that counts as a cut: rising past it starts the next slot.",
+    threshold: "The trigger level that counts as a cut: rising past it starts the next extract.",
     hysteresis:
       "Dead band under the threshold — the trigger must fall below it before it can cut again (no machine-gunning).",
-    inputs:
-      "One video per slot, played in order — slot 1 from the segment start, each next slot from its cut. ×N makes a slot swallow N cuts (its video plays through N gate intervals). Set each clip's in-point on its video card (🎞); the row shows the slot's start – end window in segment seconds. A card feeding a slot can feed nothing else — duplicate it if needed. + fill builds the whole rig at once: it adds the slots the cut count needs, then drops an empty video card on each unwired slot, already wired — you only have to drop a clip on each.",
+    extracts:
+      "One composition per extract, played in order — extract 1 from the window start, each next one from its cut. + video picks a clip from the library (it becomes a tiny video→output composition you can open and edit); ×N makes an extract swallow N cuts. The row shows the extract's start – end window in seconds. The same composition can be referenced by several extracts — editing it updates them all.",
   },
   scope: {
     in: "The value to monitor — it passes straight through, unchanged.",

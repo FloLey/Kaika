@@ -48,68 +48,43 @@ export default function Fx() {
       <h3 id="animation-montage">Montage — cutting clips to the beat</h3>
       <p>
         The <strong>montage</strong> card (Compositing) is made for recap videos: a pile of little
-        clips cut to a song's rhythm. It holds N ordered <strong>slots</strong>, each fed by a{" "}
-        <a href="#animation-sources">Video</a> card (with any FX in between). The{" "}
-        <strong>trigger</strong> port decides the cuts: each rising edge past the threshold switches
-        to the next slot, and that slot's input is <strong>re-timed to start at the cut</strong> —
-        so the clip begins exactly at its in-point, on the beat. Slot 1 plays from the segment
-        start; when the cuts run out of inputs, the <strong>last input holds</strong> to the end of
-        the segment. A slot's <strong>×N</strong> button makes it swallow N cuts — its video plays
-        through N gate intervals before the montage moves on, so one longer clip can cover two beats
-        while the rest keep cutting fast.
+        clips cut to a song's rhythm. It holds N ordered <strong>extracts</strong>, each playing a{" "}
+        <strong>composition</strong> — a small animation of its own that ends in an output. The
+        simplest composition is just a clip: <strong>+ video</strong> picks one from the{" "}
+        <a href="#assets">asset library</a> and wraps it (video → output) for you. The cut schedule
+        plays extract 1 from the window start; each cut switches to the next, its composition{" "}
+        <strong>re-timed to start at the cut</strong> — a clip begins exactly at its in-point, on
+        the beat. When the cuts outrun the extracts, the <strong>last one holds</strong> to the end.
+        An extract's <strong>×N</strong> button makes it swallow N cuts, so one longer clip can
+        cover two beats while the rest keep cutting fast. The same composition can appear in several
+        extracts (or several montages) — edit it once and every reference follows.
       </p>
       <p>
-        The musical wiring: add a <strong>signal</strong> card (beat, or a drum onset), feed it
-        through a <a href="#animation-modulators">gate</a> — its <em>divide</em> keeps every Nth
-        pulse, so <em>divide 4</em> cuts every fourth beat — and wire the gate into the montage's{" "}
-        <em>trigger</em>. To cut on musical <em>transitions</em> instead of a steady beat, insert a{" "}
-        <strong>change</strong> card before the gate (signal → change → gate): the gate then fires
-        when the music <em>shifts</em>, not when it's merely loud. Each slot row shows its{" "}
-        <strong>start – end window</strong> in segment seconds (computed from the trigger), so you
-        can read the timeline straight off the card. Pick <em>where</em> each clip starts with the
-        🎞 in-point picker on its video card; the montage takes care of the length.
-      </p>
-      <p>
-        <strong>Building the rig in one click — + fill.</strong> Once the trigger is wired, the card
-        knows how many cuts the segment makes, so <strong>+ fill</strong> does the whole setup: it
-        adds however many slots the cut count calls for, then drops an <em>empty video card</em> on
-        every unwired slot, already wired in. All that's left is dropping a clip on each (or picking
-        one with its 📚). The new cards land in a column beside the montage — ✨ arrange tidies them
-        further. Without a trigger the cut count is unknown, so it only fills the slots you've added
-        yourself. The reverse gesture exists too: from the <a href="#assets">asset library</a>,
-        clicking a clip drops its card on the canvas.
-      </p>
-      <p>
-        Each slot's clip always starts at <strong>its in-point</strong> when the cut lands — a video
-        card's <em>sync</em> setting is ignored inside a montage, since the montage owns the timing
-        (otherwise a clip shorter than the segment's position in the song would sit frozen on its
-        last frame). Its preview on the card free-runs for the same reason.
+        <strong>Where the cuts come from — two live sources.</strong> The <em>trigger</em> port is
+        the musical one: add a <strong>signal</strong> card (beat, or a drum onset), feed it through
+        a <a href="#animation-modulators">gate</a> — its <em>divide</em> keeps every Nth pulse, so{" "}
+        <em>divide 4</em> cuts every fourth beat — and wire it into <em>trigger</em>; every rising
+        edge past the threshold is a cut, recomputed live as you tune the signal. To cut on musical{" "}
+        <em>transitions</em> instead of a steady beat, insert a <strong>change</strong> card before
+        the gate. <strong>Manual breakpoints</strong> are the hand-placed ones; the montage cuts on
+        the union of both, and any single gate cut can be <em>disabled</em> (it stays visible,
+        greyed, so you can see where it came from — it just no longer cuts). Each extract row shows
+        its <strong>start – end window</strong> in seconds, so you can read the timeline straight
+        off the card.
       </p>
       <p>
         <strong>Two warnings per row, and a total on the card.</strong> <strong>⚠ −1.2s</strong>{" "}
-        means the clip is shorter than its slot — from its in-point there isn't enough material.
-        With <em>loop</em> on it replays from the in-point; with <em>loop</em> off{" "}
-        <strong>the slot goes black</strong> for the missing seconds, which is deliberate: a frozen
-        still reads as a broken render, black reads as "you are short here". The card's header
-        totals it (<strong>⚠ 1 slot short — 1.2s black</strong>) because a badge on one row out of
-        thirty is not a warning anyone finds — a real export shipped with 1.2s of black in it for
-        exactly that reason. <strong>⧉ 3</strong> means this slot plays a clip slot 3 already used:
-        from the same in-point the two play <em>identical frames</em>, which on screen looks like
-        the video looping rather than cutting — the badge turns red for that case, and stays grey
-        when the in-points differ (another moment of the same footage, often deliberate). Both are
-        read-offs, not errors: nothing stops you.
-      </p>
-      <p>
-        <strong>Reading the order off the canvas.</strong> Hit <strong>✨ arrange</strong> and the
-        clips are stacked in slot order, slot 1 at the top, right of their montage — so the column
-        reads exactly as the film plays and no wire crosses another. Arrange is layout only: it
-        never re-orders the slots themselves.
-      </p>
-      <p>
-        One rule: a card feeding a montage slot can't <em>also</em> feed something else (another
-        slot, a combine, an output) — the montage restarts its inputs' clocks, so a shared card
-        would be pulled two ways. Duplicate the card instead; the editor tells you when this
-        happens.
+        means the extract's clip is shorter than its window — from its in-point there isn't enough
+        material. With <em>loop</em> on (on the video card inside the composition) it replays; with{" "}
+        <em>loop</em> off <strong>it goes black</strong> for the missing seconds, which is
+        deliberate: a frozen still reads as a broken render, black reads as "you are short here".
+        The card's header totals it (<strong>⚠ 1.2s black</strong>) because a badge on one row out
+        of thirty is not a warning anyone finds — a real export shipped with 1.2s of black in it for
+        exactly that reason. <strong>⧉ 3</strong> means this extract plays footage extract 3 already
+        used: from the same in-point the two play <em>identical frames</em>, which on screen looks
+        like the video looping rather than cutting — the badge turns red for that case, and stays
+        grey when the in-points differ (another moment of the same footage, often deliberate). Both
+        are read-offs, not errors: nothing stops you.
       </p>
 
       <h3 id="animation-transform">Transform — warping the video</h3>

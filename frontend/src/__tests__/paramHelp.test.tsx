@@ -16,7 +16,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   fluid: 7, // enabled/radial/wrap + source ports (medium group collapsed by default)
   points: 0,
   combine: 5, // mode + 4 medium (merge is the default mode)
-  montage: 5, // inputs (slot summary) + threshold + hysteresis + opacity/trigger ports
+  montage: 5, // extracts (strip summary) + threshold + hysteresis + opacity/trigger ports
   output: 1, // the HD-render button's "?" (the video in/out ports use title tooltips)
   color: 3, // mode + intensity/opacity (swatch default; rgb rows hidden)
   math: 1, // op (mix hidden unless op==="mix")
@@ -108,7 +108,7 @@ const INLINE_ARGS: Record<string, string[]> = {
   math: ["op", "mix"],
   change: ["gain", "attack", "release", "direction"],
   combine: ["mode", "dissipation", "velocity_dissipation", "viscosity", "vorticity"],
-  montage: ["threshold", "hysteresis", "inputs"],
+  montage: ["threshold", "hysteresis", "extracts"],
   imagegen: ["model"],
 };
 

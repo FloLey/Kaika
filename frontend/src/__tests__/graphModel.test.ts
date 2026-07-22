@@ -1,16 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
+  addExtract,
+  removeExtract,
+  moveExtract,
+  setExtractComposition,
+  setExtractSpan,
+  setExtractInPoint,
+  addManualBreakpoint,
+  moveManualBreakpoint,
+  removeManualBreakpoint,
+  toggleAutoCut,
   addAssetCard,
-  fillMontageSlots,
-  rankedEdges,
-  flowLayout,
-  FLOW_GAPS,
-  estimateCardSize,
   montageNode,
-  setMontageSlotSpan,
   signalNode,
-  gateNode,
-  changeNode,
   outputNode,
   fluidNode,
   emptyGraph,
@@ -56,10 +58,10 @@ import {
   VIDEO_PRODUCERS,
   VIDEO_SOURCES,
 } from "../lib/graphModel";
-import { defaultCardName } from "../components/animation/nodeInputs";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments } from "../lib/segments";
 import { createComposition, hydrateCompositions, splitAt } from "../lib/compositions";
+import { cutMarks, effectiveCuts, montageStarts } from "../lib/montageCuts";
 import type {
   CombineData,
   MontageNode,
@@ -1110,187 +1112,128 @@ describe("addAssetCard (library click → card on the canvas)", () => {
   });
 });
 
-describe("fillMontageSlots (+ fill on the montage card)", () => {
-  // A montage plus a wired trigger, so `validate` has something renderable to chew on.
+describe("montage extract & breakpoint mutations", () => {
   const withMontage = () => {
     const mg = montageNode(600, 200);
     return { mg, g: { ...emptyGraph(), nodes: [mg] } as Graph };
   };
-  const slotsOf = (g: Graph, id: string) =>
-    (g.nodes.find((n) => n.id === id) as MontageNode).data.inputs;
-  const cardsFor = (g: Graph, id: string) => slotsOf(g, id).map((s) => videoSource(g, id, s.id));
+  const dataOf = (g: Graph, id: string) => (g.nodes.find((n) => n.id === id) as MontageNode).data;
 
-  it("sizes the fill to the cuts: one slot per cut plus the opening one", () => {
+  it("addExtract appends a reference; removeExtract drops it (the composition stays a pool concern)", () => {
     const { mg, g } = withMontage();
-    const next = fillMontageSlots(g, mg.id, { cuts: 7 });
-    expect(slotsOf(next, mg.id)).toHaveLength(8); // 7 cuts → 8 played slots
-    expect(next.nodes.filter((n) => n.type === "video")).toHaveLength(8);
-    expect(cardsFor(next, mg.id).every(Boolean)).toBe(true);
+    let next = addExtract(g, mg.id, "comp-a");
+    next = addExtract(next, mg.id, "comp-b");
+    expect(dataOf(next, mg.id).extracts.map((x) => x.compositionId)).toEqual(["comp-a", "comp-b"]);
+    const first = dataOf(next, mg.id).extracts[0];
+    next = removeExtract(next, mg.id, first.id);
+    expect(dataOf(next, mg.id).extracts.map((x) => x.compositionId)).toEqual(["comp-b"]);
+    expect(next.edges).toEqual(g.edges); // references are DATA — no edges involved
   });
 
-  it("counts an existing ×N slot as N cuts of budget", () => {
+  it("moveExtract reorders within bounds; setExtractComposition re-points", () => {
     const { mg, g } = withMontage();
-    const spanned = setMontageSlotSpan(g, mg.id, slotsOf(g, mg.id)[0].id, 4);
-    // montageNode starts with 2 slots; ×4 on the first = 5 units already, 6 needed.
-    const next = fillMontageSlots(spanned, mg.id, { cuts: 5 });
-    expect(slotsOf(next, mg.id)).toHaveLength(3);
+    let next = ["a", "b", "c"].reduce((gr, cid) => addExtract(gr, mg.id, cid), g);
+    const ids = dataOf(next, mg.id).extracts.map((x) => x.id);
+    next = moveExtract(next, mg.id, ids[2], 0);
+    expect(dataOf(next, mg.id).extracts.map((x) => x.compositionId)).toEqual(["c", "a", "b"]);
+    next = moveExtract(next, mg.id, ids[2], 99); // clamped to the end
+    expect(dataOf(next, mg.id).extracts.map((x) => x.compositionId)).toEqual(["a", "b", "c"]);
+    next = setExtractComposition(next, mg.id, ids[0], "z");
+    expect(dataOf(next, mg.id).extracts.map((x) => x.compositionId)).toEqual(["z", "b", "c"]);
   });
 
-  it("wires each new card to a DISTINCT slot on its 'out' port", () => {
+  it("span/inPoint stay ABSENT at their defaults so untouched extracts hash identically", () => {
     const { mg, g } = withMontage();
-    const next = fillMontageSlots(g, mg.id, { cuts: 4 });
-    const sources = cardsFor(next, mg.id);
-    expect(new Set(sources).size).toBe(sources.length); // no card serves two slots
-    expect(next.edges.every((e) => e.sourcePort === "out")).toBe(true);
-    expect(next.edges.every((e) => e.target === mg.id)).toBe(true);
+    let next = addExtract(g, mg.id, "comp-a");
+    const id = dataOf(next, mg.id).extracts[0].id;
+    next = setExtractSpan(next, mg.id, id, 3);
+    expect(dataOf(next, mg.id).extracts[0].span).toBe(3);
+    next = setExtractSpan(next, mg.id, id, 1);
+    expect("span" in dataOf(next, mg.id).extracts[0]).toBe(false);
+    next = setExtractInPoint(next, mg.id, id, 2.5);
+    expect(dataOf(next, mg.id).extracts[0].inPoint).toBe(2.5);
+    next = setExtractInPoint(next, mg.id, id, 0);
+    expect("inPoint" in dataOf(next, mg.id).extracts[0]).toBe(false);
   });
 
-  it("keeps the slot-exclusivity rule the backend enforces", () => {
+  it("manual breakpoints stay sorted through add/move, and remove by id", () => {
     const { mg, g } = withMontage();
-    const next = fillMontageSlots(g, mg.id, { cuts: 6 });
-    expect(() => validate(next)).not.toThrow();
+    let next = addManualBreakpoint(g, mg.id, 4.0);
+    next = addManualBreakpoint(next, mg.id, 1.5);
+    expect(dataOf(next, mg.id).manualBreakpoints.map((b) => b.t)).toEqual([1.5, 4.0]);
+    const first = dataOf(next, mg.id).manualBreakpoints[0];
+    next = moveManualBreakpoint(next, mg.id, first.id, 9.0);
+    expect(dataOf(next, mg.id).manualBreakpoints.map((b) => b.t)).toEqual([4.0, 9.0]);
+    next = removeManualBreakpoint(next, mg.id, first.id);
+    expect(dataOf(next, mg.id).manualBreakpoints.map((b) => b.t)).toEqual([4.0]);
+    expect(addManualBreakpoint(next, mg.id, 0)).toBe(next); // t=0 is the window start, not a cut
   });
 
-  it("leaves already-wired slots alone", () => {
+  it("toggleAutoCut round-trips within the tolerance (a moved cut re-enables)", () => {
     const { mg, g } = withMontage();
-    const filled = fillMontageSlots(g, mg.id, { cuts: 2 });
-    const before = cardsFor(filled, mg.id);
-    const again = fillMontageSlots(filled, mg.id, { cuts: 2 });
-    expect(again).toBe(filled); // nothing to do → the very same graph (no undo entry)
-    expect(cardsFor(again, mg.id)).toEqual(before);
-  });
-
-  it("adds no slot when the cut count is unknown, but still fills the empty ones", () => {
-    const { mg, g } = withMontage();
-    const next = fillMontageSlots(g, mg.id, { cuts: null });
-    expect(slotsOf(next, mg.id)).toHaveLength(2); // the montage's own two, none added
-    expect(next.nodes.filter((n) => n.type === "video")).toHaveLength(2);
-  });
-
-  it("names each card uniquely (the fold every single-add call site gets wrong)", () => {
-    const { mg, g } = withMontage();
-    const nameFor = (gr: Graph, type: string) => defaultCardName(gr, type);
-    const next = fillMontageSlots(g, mg.id, { cuts: 4, nameFor });
-    const names = next.nodes.filter((n) => n.type === "video").map((n) => n.name);
-    expect(new Set(names).size).toBe(names.length);
-    expect(names).toEqual(["video 1", "video 2", "video 3", "video 4", "video 5"]);
-  });
-
-  it("stacks the cards in a column beside the montage, never overlapping", () => {
-    const { mg, g } = withMontage();
-    const next = fillMontageSlots(g, mg.id, { cuts: 3 });
-    const cards = next.nodes.filter((n) => n.type === "video");
-    expect(new Set(cards.map((n) => n.x)).size).toBe(1); // one column...
-    expect(cards[0].x).toBeLessThan(mg.x); // ...on the input side
-    expect(new Set(cards.map((n) => n.y)).size).toBe(cards.length);
+    const tol = 0.5 / 24;
+    let next = toggleAutoCut(g, mg.id, 2.0, tol);
+    expect(dataOf(next, mg.id).disabledCuts).toEqual([2.0]);
+    // toggling at a float-noisy time inside the tolerance clears the SAME entry
+    next = toggleAutoCut(next, mg.id, 2.0 + tol / 2, tol);
+    expect(dataOf(next, mg.id).disabledCuts).toEqual([]);
+    // outside the tolerance it is a different cut
+    next = toggleAutoCut(next, mg.id, 2.0, tol);
+    next = toggleAutoCut(next, mg.id, 3.0, tol);
+    expect(dataOf(next, mg.id).disabledCuts).toEqual([2.0, 3.0]);
   });
 
   it("does not mutate the graph it is given", () => {
     const { mg, g } = withMontage();
     const before = JSON.stringify(g);
-    fillMontageSlots(g, mg.id, { cuts: 5 });
+    addExtract(g, mg.id, "comp-a");
+    addManualBreakpoint(g, mg.id, 2.0);
     expect(JSON.stringify(g)).toBe(before);
-  });
-
-  it("ignores an id that is not a montage", () => {
-    const { g } = withMontage();
-    expect(fillMontageSlots(g, "nope", { cuts: 3 })).toBe(g);
   });
 });
 
-describe("✨ arrange lays a montage's clips out in SLOT order", () => {
-  // A montage fed by 5 video cards, slot k ← card k. `+ fill` wires them in order.
-  const rig = () => {
-    let g = { ...emptyGraph(), nodes: [montageNode(900, 300)] } as Graph;
-    const mgId = g.nodes[0].id;
-    g = fillMontageSlots(g, mgId, { cuts: 4 });
-    const slots = (g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs;
-    const feeders = slots.map((s: { id: string }) => videoSource(g, mgId, s.id) as string);
-    return { g, mgId, feeders };
-  };
-  // Run the real arrange pass and read the cards back top-to-bottom.
-  const arrangeTopDown = (g: Graph, ids: string[]) => {
-    const rects = g.nodes.map((n) => ({
-      id: n.id,
-      x: n.x,
-      y: n.y,
-      ...estimateCardSize(n.type, "detailed"),
-    }));
-    const pos = flowLayout(rects, rankedEdges(g), FLOW_GAPS.detailed);
-    return ids.slice().sort((a, b) => pos.get(a)!.y - pos.get(b)!.y);
-  };
+describe("montageCuts (the schedule mirror of backend _effective_cuts)", () => {
+  const base = { manualBreakpoints: [], disabledCuts: [] };
 
-  it("stacks the feeders in slot order, whatever their starting positions", () => {
-    const { g, feeders } = rig();
-    // Scatter them: card 1 at the bottom, card 5 at the top — the shuffle that used to
-    // survive the arrange and cross every wire.
-    const scattered = {
-      ...g,
-      nodes: g.nodes.map((n) => {
-        const k = feeders.indexOf(n.id);
-        return k < 0 ? n : { ...n, y: 5000 - k * 700 };
-      }),
-    };
-    expect(arrangeTopDown(scattered, feeders)).toEqual(feeders);
-  });
-
-  it("never touches the slot order itself — arrange stays a layout-only action", () => {
-    const { g, mgId, feeders } = rig();
-    const before = (g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs;
-    const rects = g.nodes.map((n) => ({
-      id: n.id,
-      x: n.x,
-      y: n.y,
-      ...estimateCardSize(n.type, "detailed"),
-    }));
-    flowLayout(rects, rankedEdges(g), FLOW_GAPS.detailed);
-    expect((g.nodes.find((n) => n.id === mgId) as MontageNode).data.inputs).toBe(before);
-    expect(before.map((s: { id: string }) => videoSource(g, mgId, s.id))).toEqual(feeders);
-  });
-
-  it("rankedEdges tags each slot edge with its index and leaves the rest alone", () => {
-    const { g, mgId, feeders } = rig();
-    const ranked = rankedEdges(g);
-    for (const [i, src] of feeders.entries()) {
-      const e = ranked.find((x) => x.source === src && x.target === mgId);
-      expect(e?.portRank).toBe(i);
-    }
-    // A graph with no slot card gets its edges back untouched (same array).
-    const plain = { ...emptyGraph(), nodes: [videoNode(0, 0)], edges: [] } as Graph;
-    expect(rankedEdges(plain)).toBe(plain.edges);
-  });
-
-  it("orders the cards even when their wires cross several columns", () => {
-    // The real-project shape that 5446fcc missed: a trigger chain (signal → gate →
-    // change → montage) pushes the montage three columns right, so every clip's wire
-    // spans several columns and gets split through invisible dummy corridors. Ranking
-    // only the node ADJACENT to the montage sorted those corridors while the cards
-    // themselves kept their scrambled rows — 38 crossed wires, "video 23" on top.
-    const { g, feeders } = rig();
-    const chain = [signalNode({ id: "sig-1" }, 0, 0), gateNode(0, 0), changeNode(0, 0)];
-    const mg = g.nodes.find((n) => n.type === "montage")!;
-    const deep: Graph = {
-      ...g,
-      nodes: [
-        ...g.nodes.map((n) => {
-          const k = feeders.indexOf(n.id);
-          return k < 0 ? n : { ...n, y: 5000 - k * 700 }; // scattered, worst case
-        }),
-        ...chain,
-      ],
-      edges: [
-        ...g.edges,
-        { id: "e1", source: chain[0].id, sourcePort: "out", target: chain[1].id, targetPort: "in" },
-        { id: "e2", source: chain[1].id, sourcePort: "out", target: chain[2].id, targetPort: "in" },
-        { id: "e3", source: chain[2].id, sourcePort: "out", target: mg.id, targetPort: "trigger" },
+  it("unions gate rises and manual breakpoints, sorted and frame-deduped", () => {
+    const data = {
+      ...base,
+      manualBreakpoints: [
+        { id: "b1", t: 1.0 },
+        { id: "b2", t: 3.0 },
       ],
     };
-    expect(arrangeTopDown(deep, feeders)).toEqual(feeders);
+    // gate rises at frames 48 and 72 (24fps: 2.0s and 3.0s) — 72 collides with b2.
+    expect(effectiveCuts([48, 72], data, 24, 240)).toEqual([24, 48, 72]);
   });
 
-  it("is stable: arranging twice lays the cards out identically", () => {
-    const { g, feeders } = rig();
-    const once = arrangeTopDown(g, feeders);
-    expect(arrangeTopDown(g, feeders)).toEqual(once);
+  it("a disabled entry silences the gate cut within half a frame — and only that one", () => {
+    const data = { ...base, disabledCuts: [2.0 + 0.4 / 24] }; // inside the half-frame band
+    expect(effectiveCuts([48, 96], data, 24, 240)).toEqual([96]);
+    const marks = cutMarks([48, 96], data, 24, 240);
+    expect(marks.map((m) => [m.frame, m.source, m.disabled])).toEqual([
+      [48, "gate", true], // still VISIBLE — provenance — just not cutting
+      [96, "gate", false],
+    ]);
+  });
+
+  it("clamps cuts inside (0, nframes) and keeps manual ids on their marks", () => {
+    const data = {
+      ...base,
+      manualBreakpoints: [
+        { id: "b1", t: 0.001 },
+        { id: "b2", t: 99 },
+      ],
+    };
+    expect(effectiveCuts([], data, 24, 240)).toEqual([]); // frame 0 and past-the-end drop out
+    const inRange = { ...base, manualBreakpoints: [{ id: "b1", t: 2 }] };
+    expect(cutMarks([], inRange, 24, 240)[0].breakpointId).toBe("b1");
+  });
+
+  it("montageStarts mirrors the span-consumption rule (holds when cuts run dry)", () => {
+    expect(montageStarts([10, 20, 30], [1, 1, 1, 1])).toEqual([0, 10, 20, 30]);
+    expect(montageStarts([10, 20, 30], [2, 1])).toEqual([0, 20]); // ×2 swallows two cuts
+    expect(montageStarts([10], [1, 1, 1])).toEqual([0, 10]); // extract 3 never starts
+    expect(montageStarts([], [1, 1])).toEqual([0]);
   });
 });

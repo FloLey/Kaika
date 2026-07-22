@@ -82,7 +82,12 @@ def test_cached_slot_render_is_much_cheaper_than_cold(tmp_path, monkeypatch):
 
     def render():
         return graph.Dag(
-            "playground", {**_SEG, "signals": demo["signals"]}, g, no_audio, _OUT
+            "playground",
+            {**_SEG, "signals": demo["signals"]},
+            g,
+            no_audio,
+            _OUT,
+            pool=demo.get("compositions"),
         ).video(out_id)
 
     cold_frames, cold = timed("montage cold", render)

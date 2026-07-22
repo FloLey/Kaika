@@ -8,13 +8,7 @@ import { FLUID_PARAM_KEYS } from "../fluidParams.js";
 import { slideshowKind } from "../imageCount";
 import { NODE_PARAMS } from "../nodeParams";
 import { FLUID_PARAMS, coercePorts, mkInputId, mkSlotId } from "./core";
-import {
-  COLOR_STOPS_DEFAULT,
-  COMBINE_MEDIUM,
-  GRAPH_VERSION,
-  combineSlot,
-  montageSlot,
-} from "./factories";
+import { COLOR_STOPS_DEFAULT, COMBINE_MEDIUM, GRAPH_VERSION, combineSlot } from "./factories";
 import type {
   Binding,
   ColorData,
@@ -125,21 +119,54 @@ const portsFor =
   (type: string): Coerce =>
   (v) =>
     coercePorts(type, v as Record<string, FluidPort> | undefined);
-// Montage slots: ordered {id, span?} anchors (a video edge targets a slot by its id).
-// Keep saved ids (edges point at them); drop malformed rows; seed two empty slots.
-// `span` (cuts the slot swallows) survives only when a whole number ≥ 2 — a span of 1
-// stays ABSENT so untouched graphs keep their exact shape (and output hash).
-const montageSlots: Coerce = (v) =>
-  Array.isArray(v) && v.length
-    ? v.map((s) => {
-        const r = s as { id?: string; span?: unknown };
-        const span =
-          typeof r.span === "number" && Number.isFinite(r.span) && Math.round(r.span) >= 2
-            ? Math.min(16, Math.round(r.span))
-            : undefined;
-        return span ? { id: r.id || mkSlotId(), span } : { id: r.id || mkSlotId() };
-      })
-    : [montageSlot(), montageSlot()];
+// Montage extracts: ordered {id, compositionId, span?, inPoint?} references into the
+// composition pool. Keep saved ids (stable identity for the UI/cache); drop rows
+// without a composition reference (they render nothing and hash as dangling).
+// `span` survives only when a whole number ≥ 2, `inPoint` only when > 0 — the
+// defaults stay ABSENT so untouched graphs keep their exact shape (and output hash).
+const montageExtracts: Coerce = (v) =>
+  Array.isArray(v)
+    ? v
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+        .filter((r) => typeof r.compositionId === "string" && r.compositionId)
+        .map((r) => {
+          const span =
+            typeof r.span === "number" && Number.isFinite(r.span) && Math.round(r.span) >= 2
+              ? Math.min(16, Math.round(r.span))
+              : undefined;
+          const inPoint =
+            typeof r.inPoint === "number" && Number.isFinite(r.inPoint) && r.inPoint > 0
+              ? r.inPoint
+              : undefined;
+          return {
+            id: typeof r.id === "string" && r.id ? r.id : mkSlotId(),
+            compositionId: r.compositionId as string,
+            ...(span ? { span } : {}),
+            ...(inPoint ? { inPoint } : {}),
+          };
+        })
+    : [];
+
+// Manual breakpoints: {id, t} rows in composition-local seconds, kept sorted so the
+// timeline and the hash see one canonical order.
+const manualBreakpoints: Coerce = (v) =>
+  Array.isArray(v)
+    ? v
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+        .filter((r) => typeof r.t === "number" && Number.isFinite(r.t) && r.t > 0)
+        .map((r) => ({
+          id: typeof r.id === "string" && r.id ? r.id : mkSlotId(),
+          t: r.t as number,
+        }))
+        .sort((a, b) => a.t - b.t)
+    : [];
+
+const numberList: Coerce = (v) =>
+  Array.isArray(v)
+    ? v
+        .filter((x): x is number => typeof x === "number" && Number.isFinite(x))
+        .sort((a, b) => a - b)
+    : [];
 
 // One row per node type whose data is a flat field bag: field -> coercer. A saved
 // field passes through when valid, else the default; unknown saved fields are
@@ -242,7 +269,9 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     ports: portsFor("slideshow"),
   },
   montage: {
-    inputs: montageSlots,
+    extracts: montageExtracts,
+    manualBreakpoints,
+    disabledCuts: numberList,
     threshold: num(0.5),
     hysteresis: num(0.1),
     ports: portsFor("montage"),
@@ -342,6 +371,12 @@ export function normalizeGraph(graph: Graph): Graph {
   // retired sentinel and let the filter drop them — a v5 transform's data would
   // otherwise be mis-coerced into the new card.
   const preFxRemoval = (graph.version ?? 0) < 10;
+  // v30: the montage rebuilt on composition extracts. A pre-v30 montage carries the
+  // slot-ports shape (wired video inputs), which cannot be lifted — the slots' upstream
+  // chains live in the same flat graph, not in the pool. The v21 precedent: rename to a
+  // retired sentinel and let the unknown-type filter drop it (edges included). Decision
+  // 2 (specs/compositions) allows the loss; the app opens clean instead of half-broken.
+  const preExtracts = (graph.version ?? 0) < 30;
   const mapped = graph.nodes.map((node): GraphNode => {
     let n =
       legacy && node.type === "color" ? ({ ...node, type: "grade" } as unknown as GraphNode) : node;
@@ -350,6 +385,9 @@ export function normalizeGraph(graph: Graph): Graph {
     }
     if (preFxRemoval && n.type === "transform") {
       n = { ...n, type: "transform-legacy" } as unknown as GraphNode;
+    }
+    if (preExtracts && n.type === "montage") {
+      n = { ...n, type: "montage-legacy" } as unknown as GraphNode;
     }
     // v29: the detailed view is gone, so per-view compact coords (cx/cy, v20) fold into
     // the one canonical x/y. A card last arranged in compact keeps that layout; one only

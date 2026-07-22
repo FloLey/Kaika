@@ -398,23 +398,37 @@ export interface SlideshowData {
   hysteresis: number; // dead band so a hovering trigger can't machine-gun images
   ports: Record<string, FluidPort>;
 }
-// One montage input slot — its id is the targetPort the slot's video edge wires to
-// (combine-slot convention). All per-clip data (in-point, crop, speed…) lives on the
-// upstream card. `span` is how many trigger cuts the slot swallows (default 1; a ×2
-// slot plays through two gate intervals) — kept ABSENT at 1 so untouched graphs
-// hash identically.
-export interface MontageSlot {
+// One montage EXTRACT — a reference (by id) to a child composition in the pool,
+// played on the k-th interval of the cut schedule. All per-clip data (in-point,
+// crop, speed…) lives inside the child composition; the extract adds only its
+// scheduling knobs. `span` is how many effective cuts the extract swallows
+// (default 1; a ×2 extract plays through two intervals) — kept ABSENT at 1 so
+// untouched graphs hash identically. `inPoint` (seconds into the child's local
+// clock at the cut, absent = 0) subsumes specs/montage-resume: "resume where the
+// previous occurrence left off" = set the in-point there.
+export interface MontageExtract {
   id: string;
+  compositionId: string;
   span?: number;
+  inPoint?: number;
 }
-// The montage switcher (video récap use-case): N wired video inputs, cut in ORDER by
-// the `trigger` port — each rising edge past the built-in hysteresis threshold starts
-// the NEXT slot, whose input is RE-TIMED to begin at the cut (an upstream video card's
-// in-point lands exactly on the beat). Rises beyond the input count are ignored: the
-// last input holds to the segment end. Each slot's upstream chain must be exclusive
-// to it (block streaming re-times the producer — validate enforces this).
+// A manual breakpoint — a cut placed by hand on the montage timeline, in seconds
+// LOCAL to the composition's window (0 = window start), so nesting stays coherent.
+export interface ManualBreakpoint {
+  id: string;
+  t: number;
+}
+// The montage switcher (video récap use-case): N extracts, each referencing a child
+// composition rendered over the extract's window, cut in ORDER by the effective cut
+// schedule — the live union of the `trigger` port's rising edges (through the
+// built-in hysteresis threshold) and the manual breakpoints, minus the individually
+// DISABLED gate cuts (`disabledCuts`, local seconds, matched at ±half a frame — a
+// cut that moved re-enables). Cuts beyond the extracts are ignored: the last extract
+// holds to the window end. Backend mirror: graph_render._effective_cuts.
 export interface MontageData {
-  inputs: MontageSlot[];
+  extracts: MontageExtract[];
+  manualBreakpoints: ManualBreakpoint[];
+  disabledCuts: number[];
   threshold: number; // trigger level the built-in gate switches around
   hysteresis: number; // dead band so a hovering trigger can't machine-gun cuts
   ports: Record<string, FluidPort>;

@@ -50,5 +50,4 @@ export const SIGNAL_HASH_FIELDS: readonly string[] = [
 // invisible to the render, so it must be invisible to the hash too.
 export const SLOT_CARDS: ReadonlySet<string> = new Set([
   "combine",
-  "montage",
 ]);

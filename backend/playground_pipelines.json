@@ -4902,27 +4902,6 @@
           "targetPort": "trigger"
         },
         {
-          "id": "e1",
-          "source": "v1",
-          "target": "mt",
-          "sourcePort": "out",
-          "targetPort": "s1"
-        },
-        {
-          "id": "e2",
-          "source": "v2",
-          "target": "mt",
-          "sourcePort": "out",
-          "targetPort": "s2"
-        },
-        {
-          "id": "e3",
-          "source": "v3",
-          "target": "mt",
-          "sourcePort": "out",
-          "targetPort": "s3"
-        },
-        {
           "id": "e4",
           "source": "mt",
           "target": "out",
@@ -4931,111 +4910,6 @@
         }
       ],
       "nodes": [
-        {
-          "x": 60,
-          "y": 60,
-          "id": "v1",
-          "data": {
-            "fit": "cover",
-            "loop": true,
-            "sync": "segment",
-            "box_h": 1,
-            "box_w": 1,
-            "box_x": 0,
-            "box_y": 0,
-            "ports": {
-              "speed": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              }
-            },
-            "start": 0,
-            "crop_h": 1,
-            "crop_w": 1,
-            "crop_x": 0,
-            "crop_y": 0,
-            "assetUrl": "/assets/playground/clip1.mp4"
-          },
-          "type": "video"
-        },
-        {
-          "x": 60,
-          "y": 460,
-          "id": "v2",
-          "data": {
-            "fit": "cover",
-            "loop": true,
-            "sync": "segment",
-            "box_h": 1,
-            "box_w": 1,
-            "box_x": 0,
-            "box_y": 0,
-            "ports": {
-              "speed": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              }
-            },
-            "start": 0,
-            "crop_h": 1,
-            "crop_w": 1,
-            "crop_x": 0,
-            "crop_y": 0,
-            "assetUrl": "/assets/playground/clip2.mp4"
-          },
-          "type": "video"
-        },
-        {
-          "x": 60,
-          "y": 860,
-          "id": "v3",
-          "data": {
-            "fit": "cover",
-            "loop": true,
-            "sync": "segment",
-            "box_h": 1,
-            "box_w": 1,
-            "box_x": 0,
-            "box_y": 0,
-            "ports": {
-              "speed": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              }
-            },
-            "start": 0,
-            "crop_h": 1,
-            "crop_w": 1,
-            "crop_x": 0,
-            "crop_y": 0,
-            "assetUrl": "/assets/playground/clip3.mp4"
-          },
-          "type": "video"
-        },
         {
           "x": 390,
           "y": 60,
@@ -5070,19 +4944,24 @@
                 }
               }
             },
-            "inputs": [
+            "extracts": [
               {
-                "id": "s1"
+                "id": "x1",
+                "compositionId": "comp-demo-montage-1"
               },
               {
-                "id": "s2"
+                "id": "x2",
+                "compositionId": "comp-demo-montage-2"
               },
               {
-                "id": "s3"
+                "id": "x3",
+                "compositionId": "comp-demo-montage-3"
               }
             ],
             "threshold": 0.5,
-            "hysteresis": 0.1
+            "hysteresis": 0.1,
+            "disabledCuts": [],
+            "manualBreakpoints": []
           },
           "type": "montage"
         },
@@ -5096,7 +4975,195 @@
           "type": "output"
         }
       ],
-      "version": 27
+      "version": 30
+    },
+    "compositions": {
+      "comp-demo-montage-1": {
+        "id": "comp-demo-montage-1",
+        "name": "clip 1",
+        "graph": {
+          "edges": [
+            {
+              "id": "v1-e",
+              "source": "v1",
+              "target": "v1-out",
+              "sourcePort": "out",
+              "targetPort": "video"
+            }
+          ],
+          "nodes": [
+            {
+              "x": 80,
+              "y": 40,
+              "id": "v1",
+              "data": {
+                "fit": "cover",
+                "loop": true,
+                "sync": "segment",
+                "box_h": 1,
+                "box_w": 1,
+                "box_x": 0,
+                "box_y": 0,
+                "ports": {
+                  "speed": {
+                    "binding": {
+                      "kind": "const",
+                      "value": 1
+                    }
+                  },
+                  "opacity": {
+                    "binding": {
+                      "kind": "const",
+                      "value": 1
+                    }
+                  }
+                },
+                "start": 0,
+                "crop_h": 1,
+                "crop_w": 1,
+                "crop_x": 0,
+                "crop_y": 0,
+                "assetUrl": "/assets/playground/clip1.mp4"
+              },
+              "type": "video"
+            },
+            {
+              "x": 420,
+              "y": 40,
+              "id": "v1-out",
+              "data": {
+                "title": "preview"
+              },
+              "type": "output"
+            }
+          ],
+          "version": 30
+        }
+      },
+      "comp-demo-montage-2": {
+        "id": "comp-demo-montage-2",
+        "name": "clip 2",
+        "graph": {
+          "edges": [
+            {
+              "id": "v2-e",
+              "source": "v2",
+              "target": "v2-out",
+              "sourcePort": "out",
+              "targetPort": "video"
+            }
+          ],
+          "nodes": [
+            {
+              "x": 80,
+              "y": 40,
+              "id": "v2",
+              "data": {
+                "fit": "cover",
+                "loop": true,
+                "sync": "segment",
+                "box_h": 1,
+                "box_w": 1,
+                "box_x": 0,
+                "box_y": 0,
+                "ports": {
+                  "speed": {
+                    "binding": {
+                      "kind": "const",
+                      "value": 1
+                    }
+                  },
+                  "opacity": {
+                    "binding": {
+                      "kind": "const",
+                      "value": 1
+                    }
+                  }
+                },
+                "start": 0,
+                "crop_h": 1,
+                "crop_w": 1,
+                "crop_x": 0,
+                "crop_y": 0,
+                "assetUrl": "/assets/playground/clip2.mp4"
+              },
+              "type": "video"
+            },
+            {
+              "x": 420,
+              "y": 40,
+              "id": "v2-out",
+              "data": {
+                "title": "preview"
+              },
+              "type": "output"
+            }
+          ],
+          "version": 30
+        }
+      },
+      "comp-demo-montage-3": {
+        "id": "comp-demo-montage-3",
+        "name": "clip 3",
+        "graph": {
+          "edges": [
+            {
+              "id": "v3-e",
+              "source": "v3",
+              "target": "v3-out",
+              "sourcePort": "out",
+              "targetPort": "video"
+            }
+          ],
+          "nodes": [
+            {
+              "x": 80,
+              "y": 40,
+              "id": "v3",
+              "data": {
+                "fit": "cover",
+                "loop": true,
+                "sync": "segment",
+                "box_h": 1,
+                "box_w": 1,
+                "box_x": 0,
+                "box_y": 0,
+                "ports": {
+                  "speed": {
+                    "binding": {
+                      "kind": "const",
+                      "value": 1
+                    }
+                  },
+                  "opacity": {
+                    "binding": {
+                      "kind": "const",
+                      "value": 1
+                    }
+                  }
+                },
+                "start": 0,
+                "crop_h": 1,
+                "crop_w": 1,
+                "crop_x": 0,
+                "crop_y": 0,
+                "assetUrl": "/assets/playground/clip3.mp4"
+              },
+              "type": "video"
+            },
+            {
+              "x": 420,
+              "y": 40,
+              "id": "v3-out",
+              "data": {
+                "title": "preview"
+              },
+              "type": "output"
+            }
+          ],
+          "version": 30
+        }
+      }
     }
   },
   {

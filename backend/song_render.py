@@ -221,7 +221,7 @@ def build_plan(
         if not comp or not oid:
             raise ValueError(f"segment {seg.get('id')} has no final output marked")
         seg2 = {**seg, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
-        dag = Dag(job_id, seg2, comp["graph"], stem_audio_path, out_dict)
+        dag = Dag(job_id, seg2, comp["graph"], stem_audio_path, out_dict, pool=compositions)
         fields = dag.field_layers(oid)
         window = max(1, round(dag.duration * fps))
         for f in fields:

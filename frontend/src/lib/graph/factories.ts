@@ -25,7 +25,7 @@ import type {
   CombineSlot,
   FluidNode,
   MontageNode,
-  MontageSlot,
+  MontageExtract,
   ChangeNode,
   GateNode,
   Graph,
@@ -187,7 +187,13 @@ export function fluidNode(x: number, y: number): FluidNode {
 //       per-view `cx/cy` (v20) fold into the one canonical `x/y` (a card last arranged
 //       compact keeps that layout). No RENDER_VERSION impact — outputHash never read
 //       these. normalizeGraph does the fold + strip, idempotently.
-export const GRAPH_VERSION = 29;
+//  v30: the montage REBUILT on composition extracts (specs/compositions step 03):
+//       `inputs` (wired slots) became `extracts` (references into the composition
+//       pool) + `manualBreakpoints`/`disabledCuts`. Pre-v30 montage nodes are
+//       DROPPED by normalizeGraph (the v21 precedent — the old slot shape cannot be
+//       resurrected; decision 2 allows the loss), their edges with them.
+//       RENDER_VERSION 16 accompanies it.
+export const GRAPH_VERSION = 30;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
@@ -438,7 +444,10 @@ export function slideshowNode(x: number, y: number): SlideshowNode {
 // The rhythm-driven video switcher: ordered slot inputs (a video edge targets a slot
 // by its id, combine-style), cut in sequence by the `trigger` port's rising edges.
 // All per-clip data lives on the upstream cards; the slot is just an ordered anchor.
-export const montageSlot = (): MontageSlot => ({ id: mkSlotId() });
+export const montageExtract = (compositionId: string): MontageExtract => ({
+  id: mkSlotId(),
+  compositionId,
+});
 
 export function montageNode(x: number, y: number): MontageNode {
   return {
@@ -447,7 +456,9 @@ export function montageNode(x: number, y: number): MontageNode {
     x,
     y,
     data: {
-      inputs: [montageSlot(), montageSlot()],
+      extracts: [],
+      manualBreakpoints: [],
+      disabledCuts: [],
       threshold: 0.5,
       hysteresis: 0.1,
       ports: coercePorts("montage", undefined),

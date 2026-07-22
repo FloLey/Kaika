@@ -179,14 +179,18 @@ def write_synthetic_stems(job_id: str, duration: float) -> dict:
 # Segments + analysis cache
 # --------------------------------------------------------------------------- #
 def build_segments(demos: list[dict]) -> tuple[list[dict], dict]:
-    """`(segments, compositions)`: one composition per demo — stable id derived from
-    the card key, so the additive sync and a reseed agree — and one segment
-    referencing it by `rootCompositionId`. `outputId` is left unset: every demo
-    graph carries exactly one output, which `final_output_id` resolves."""
+    """`(segments, compositions)`: one ROOT composition per demo — stable id derived
+    from the card key, so the additive sync and a reseed agree — and one segment
+    referencing it by `rootCompositionId`. A demo whose graph references CHILD
+    compositions (the montage's extracts) carries them in its own `compositions`
+    slice; they merge into the pool under their own stable ids. `outputId` is left
+    unset: every demo graph carries exactly one output, which `final_output_id`
+    resolves."""
     segs, pool = [], {}
     for i, d in enumerate(demos):
         cid = f"comp-demo-{d['key']}"
         pool[cid] = {"id": cid, "name": d["label"], "graph": d["graph"]}
+        pool.update(d.get("compositions") or {})
         segs.append(
             {
                 "id": f"seg-{i}",
@@ -281,7 +285,7 @@ def _build(db, *, render: bool, log=lambda _m="": None) -> str:
             payload = {**seg, "lyric_lines": lines}
             g = _root_graph(seg, pool)
             out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
-            url = graph.render(JOB_ID, payload, g, stem_audio_path, OUTPUT, out_id)
+            url = graph.render(JOB_ID, payload, g, stem_audio_path, OUTPUT, out_id, pool=pool)
             log(f"  • {seg['label']:<22} {url}")
     return JOB_ID
 
@@ -307,6 +311,7 @@ def _append_missing_demos(db) -> list[str]:
         # (its segment was deleted) is simply reclaimed by the fixture's graph.
         cid = f"comp-demo-{d['key']}"
         pool[cid] = {"id": cid, "name": d["label"], "graph": d["graph"]}
+        pool.update(d.get("compositions") or {})
         segments.append(
             {
                 "id": f"seg-{uuid.uuid4().hex[:8]}",
@@ -377,6 +382,8 @@ def export_playground() -> dict:
     row = db.get_project(JOB_ID)
     if row is None:
         raise LookupError(f"no '{JOB_ID}' project in the DB — open the Playground once first")
+    from .compositions import composition_closure, referenced_composition_ids
+
     label_to_key = {label: key for key, label in card_demo.CARD_LABELS.items()}
     pool = row["data"].get("compositions") or {}
     out = []
@@ -394,7 +401,17 @@ def export_playground() -> dict:
             n.get("data", {}).get("signalId") for n in graph["nodes"] if n.get("type") == "signal"
         }
         signals = [sig for sig in s.get("signals", []) if sig.get("id") in referenced]
-        out.append({"key": key, "label": s["label"], "signals": signals, "graph": graph})
+        entry = {"key": key, "label": s["label"], "signals": signals, "graph": graph}
+        # A demo referencing child compositions (the montage) carries its reachable
+        # slice, so the fixture stays self-contained and the seed round-trips it.
+        refs = {
+            cid: comp
+            for cid, comp in composition_closure(pool, referenced_composition_ids(graph))
+            if comp is not None
+        }
+        if refs:
+            entry["compositions"] = refs
+        out.append(entry)
     exported = {e["key"] for e in out}
     prior = (
         json.loads(card_demo.PIPELINES_PATH.read_text())

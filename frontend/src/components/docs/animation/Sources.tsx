@@ -109,8 +109,9 @@ export default function Sources() {
         <li>
           <strong>Click to drop a card.</strong> Opened from the bottom bar, clicking any asset adds
           its card — <em>video</em> or <em>image</em> — straight onto the canvas, already pointing
-          at that file. The library stays open, so building a montage is one click per clip; the new
-          cards stack in a column under your existing graph.
+          at that file; the new cards stack in a column under your existing graph. (For a montage,
+          use the card's own <strong>+ video</strong> instead — it picks from this same library and
+          the modal stays open, one click per clip.)
         </li>
         <li>
           <strong>Adding.</strong> Drop a file on an image/video card, browse from the card, or

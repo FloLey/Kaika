@@ -104,9 +104,10 @@ by construction) and releasing a played-out extract is `childDag.close()`.
   node or a `video`/`slideshow` with `sync=="song"`):
   - sensitive child → rendered over its true absolute window
     `{start: t0 − inPoint, end: t1, signals: host}`; window in the key.
-  - insensitive child (leaf videos, const/LFO generative) → LOCAL time over a
-    canonical window; key is window-free, so retiming the trigger re-renders nothing
-    (today's slot-cache behavior preserved).
+  - insensitive child (leaf videos, const/LFO generative) → the HOST window
+    (extended by the in-point), so the key never moves with the trigger: retiming
+    re-renders only extracts that GREW past their cached run, appending renders
+    only the new one, and a shared composition is cached once across extracts.
 - `output_hash` gains the recursive closure of referenced compositions, so editing a
   child busts the root's clip, and `cache_gc` can recompute keep-sets from the DB.
 - Leaf video cards are created `sync:"segment"`, so the `montage_slot` pre-roll
@@ -123,7 +124,7 @@ by construction) and releasing a played-out extract is `childDag.close()`.
 |---|---|---|
 | [`01`](01-composition-pool.md) ✅ `9ed15ff` | The pool: persistence + plumbing, no visible change | db, routes, segments.ts, compositions.ts, App/Studio, song_render, cache_gc, seed |
 | [`02`](02-pool-aware-hashing.md) ✅ | Pool-aware hashing, validation, render requests | graph_hash, graph_validate, animation routes, hash.ts, SignalData.ref |
-| `03` | Extracts: data model + recursive render + minimal card UI | GRAPH_VERSION bump, graph_render rebuild, RENDER_VERSION 16 |
+| [`03`](03-extracts-recursive-render.md) ✅ | Extracts: data model + recursive render + minimal card UI | GRAPH 30, RENDER 16, graph_render rebuild, fixture format |
 | `04` | Navigation: breadcrumb + per-composition canvas | Studio nav stack, NodeCtx window |
 | `05` | The horizontal montage editor (strip + live pane) | MontageEditor.tsx |
 | `06` | Breakpoints timeline (provenance colors, per-cut disable) | BreakpointTimeline.tsx |

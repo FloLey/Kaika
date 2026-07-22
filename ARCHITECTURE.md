@@ -153,12 +153,15 @@ A node graph has three edge flows: **value** (0..1 curves into modulatable
 ports, each mapped through a per-port `[lo, hi]` range), **points** (emitter
 position sets into a fluid's — or fire/lightning/rain's — `positions`, full
 specs so animate-points paths/gates ride along), and **video** (frame streams
-into combines/montage slots/outputs, including the optional refracted input of
-waves/rain). The **montage** card is the one video consumer that RE-TIMES its
-inputs: slot k's producer is pulled with slot-local frame ranges (its clock
-starts 0 at the cut), so each slot's upstream chain must be **exclusive** to it
-— validate rejects a card feeding a montage slot and anything else (both sides;
-duplicate the card instead). Every modulatable port is either a `const` or a
+into combines/outputs, including the optional refracted input of waves/rain).
+The **montage** card consumes no video edges: its children are **composition
+extracts** — data references into the project's composition pool, each rendered
+in a private recursive `Dag` over the extract's window (local frame 0 lands on
+the cut) and cut on the live union of the trigger's gate rises and the manual
+breakpoints, minus per-cut disables. Exclusivity holds by construction (each
+extract owns its own child Dag), so the old slot-exclusivity validation rule is
+gone; the pool-level rule is **acyclicity** (`validate_pool` — a composition
+must not contain itself). Every modulatable port is either a `const` or a
 `{nodeId, lo, hi}` binding — kept in lockstep with a matching edge (the
 **binding↔edge invariant**, enforced by the frontend mutation helpers).
 
@@ -242,14 +245,15 @@ GPU box can never bounce a request back out.
    `fluid.params_hash(params)` — *physics only* — so a downstream-only edit
    (colour, layer opacity, lyrics tweak) reuses the expensive sim and re-runs
    only the cheap per-frame ops. Memory-mapped for cheap block slicing, with an
-   incremental writer for streaming renders. The **montage** stores its slots
-   here too, under `montage-<slot hash>-<gh>x<gw>` (`_montage_slot_key`): a slot's
-   frames live in its own LOCAL time, so the key covers only that slot's upstream
-   chain (an `output_hash` rooted at the slot's source) plus the frame size —
-   *not* where the cut lands or how long the slot lasts. Appending a slot renders
-   only the new one; retiming the trigger re-renders nothing (a slot that grew
-   *longer* than its cached run is the one exception). Bounded by the same LRU +
-   age caps; the reachability sweep never touches this directory.
+   incremental writer for streaming renders. The **montage** stores its extracts
+   here too, under `comp-<hash>-<gh>x<gw>`: the key is `output_hash` over the
+   CHILD composition rendered in its context window. A window-INsensitive child
+   (no signal/lyrics node, no `sync:"song"` clip — `_window_sensitive`) keys on
+   the HOST window, so appending an extract renders only the new one and
+   retiming the trigger re-renders only extracts that grew past their cached
+   run; a sensitive child keys on its true absolute window (same composition at
+   two windows = two renders — the contextual time base, by design). Bounded by
+   the same LRU + age caps; the reachability sweep never touches this directory.
 2. **Encoded clips** — `render_cache.py`, `data/fluid/<hash>.mp4`. Keyed by
    `output_hash`; LRU + age caps as a **backstop**.
 3. **The reachability sweep** — `cache_gc.py`, the *primary* cleaner. After each
@@ -450,11 +454,11 @@ deployment model changes:
   GC then keeps that file alive under the referencing project.
 - **`_gate_curve` is a per-frame Python loop** — O(frames) per gate node per
   export; profile before optimizing.
-- **An upstream sim's OWN raw-frame cache never commits under a montage** — the
-  montage's slot-local pulls stop before `nframes`, so `_sim_blocks` discards the
-  partial file. The montage caches each slot's finished frames itself instead
-  (`_montage_slot_key`, see Caching), so the re-simulation happens once rather
-  than once per edit.
+- **A sim inside a montage extract's child never commits its OWN raw-frame
+  cache** — the extract's pulls stop at the extract window, so the child sim's
+  writer discards its partial file. The montage caches each extract's finished
+  frames itself instead (`comp-<hash>` entries, see Caching), so the
+  re-simulation happens once rather than once per edit.
 
 ## Where to read more
 

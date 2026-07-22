@@ -444,6 +444,7 @@ export default function Studio({
                 graph={activeComp?.graph ?? null}
                 finalOutputId={activeComp?.outputId}
                 compositions={compositions}
+                updateCompositions={setCompositions}
                 stems={stems}
                 job={job}
                 output={output}

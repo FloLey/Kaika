@@ -78,64 +78,28 @@ def _check_bindings(graph: dict, nodes: dict) -> None:
                 _validate_binding(key, (port or {}).get("binding") or {}, nodes)
 
 
-def _check_slot_ids(combines: list, montages: list) -> None:
-    """Every combine/montage input slot carries an id — the targetPort a video edge
-    wires to. An id-less slot is invisible to the renderer AND to the hash."""
-    for card in (*combines, *montages):
+def _check_slot_ids(combines: list) -> None:
+    """Every combine input slot carries an id — the targetPort a video edge wires to.
+    An id-less slot is invisible to the renderer AND to the hash. (Montage slots died
+    with the extracts model; its exclusivity check died with them — each extract owns
+    a PRIVATE child Dag, so the property holds by construction.)"""
+    for card in combines:
         for slot in card.get("data", {}).get("inputs", []):
             if not slot.get("id"):
                 raise ValueError(f"{card['type']} '{card['id']}' has an input slot with no id")
 
 
-def _check_montage_exclusivity(graph: dict, nodes: dict, montages: list) -> None:
-    """Each montage slot's upstream chain is EXCLUSIVE to that slot.
-
-    Block streaming memoizes ONE producer per node and the montage pulls it with
-    slot-local frame ranges (graph_render._montage_block), so a card feeding a montage
-    slot AND any other consumer would receive conflicting ranges — reject with a clear
-    message instead of corrupting a stateful sim mid-stream. (Value bindings are exempt:
-    curves resolve purely, full-segment.)
-    """
-    if not montages:
-        return
-    # Video-flow edges: a video producer's output is only ever consumed as video, so any
-    # non-loose edge whose SOURCE is a producer-typed node qualifies.
-    vid_edges = [
-        e
-        for e in graph.get("edges", [])
-        if e.get("targetPort") != LOOSE_PORT
-        and nodes.get(e.get("source"), {}).get("type") in VIDEO_PRODUCERS
-    ]
-    back: dict[str, list[str]] = {}
-    for e in vid_edges:
-        back.setdefault(e["target"], []).append(e["source"])
+def _check_montage_extracts(montages: list) -> None:
+    """Every montage extract references a composition — a blank reference renders
+    nothing and hashes as dangling, so refuse it at the boundary with a clear
+    message. (Whether the id RESOLVES is checked at render time against the pool:
+    a preview of one composition must not 400 on another's half-built card.)"""
     for mg in montages:
-        for slot in mg.get("data", {}).get("inputs", []):
-            src = _video_source(graph, mg["id"], slot.get("id"))
-            if src is None:
-                continue
-            closure: set = set()
-            stack = [src]
-            while stack:
-                n = stack.pop()
-                if n not in closure:
-                    closure.add(n)
-                    stack.extend(back.get(n, ()))
-            for e in vid_edges:
-                if e.get("source") not in closure:
-                    continue
-                is_slot_edge = (
-                    e["source"] == src
-                    and e.get("target") == mg["id"]
-                    and e.get("targetPort") == slot.get("id")
+        for ex in mg.get("data", {}).get("extracts", []):
+            if not isinstance(ex, dict) or not ex.get("compositionId"):
+                raise ValueError(
+                    f"montage '{mg['id']}' has an extract with no composition reference"
                 )
-                if not is_slot_edge and e.get("target") not in closure:
-                    bad = nodes.get(e["source"], {}).get("type", "?")
-                    raise ValueError(
-                        f"the '{bad}' card feeding a montage slot also feeds another "
-                        f"consumer — a montage re-times its inputs, so each slot's "
-                        f"chain must be exclusive to it; duplicate the card instead"
-                    )
 
 
 def _check_merge_sources(graph: dict, nodes: dict, combines: list) -> None:
@@ -186,8 +150,8 @@ def validate(graph: dict, output_id: str | None = None) -> None:
 
     _check_outputs(graph, nodes, output_id)
     _check_bindings(graph, nodes)
-    _check_slot_ids(combines, montages)
-    _check_montage_exclusivity(graph, nodes, montages)
+    _check_slot_ids(combines)
+    _check_montage_extracts(montages)
     _check_merge_sources(graph, nodes, combines)
     _check_acyclic(graph, nodes)
 

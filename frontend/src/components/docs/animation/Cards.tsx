@@ -16,11 +16,9 @@ export default function Cards() {
         name, a small live preview, and one input + one output dot;{" "}
         <strong>click a card's body</strong> to open its settings window and edit it. The{" "}
         <strong>✨ arrange</strong> toolbar button lays the cards out along the data flow — sources
-        left, output right — giving them room and untangling wire crossings where it can. If the
-        view holds a <a href="#animation-montage">montage</a>, arrange also puts its{" "}
-        <strong>slots</strong> in the order its clips now read on screen — so re-ordering a montage
-        is a matter of dragging cards. That one is a real edit, not just tidying: the montage
-        re-renders. Clicking arrange again changes nothing. The settings window shows{" "}
+        left, output right — giving them room and untangling wire crossings where it can (a{" "}
+        <a href="#animation-montage">montage</a>'s extracts are re-ordered on the card itself, not
+        by moving cards). Clicking arrange again changes nothing. The settings window shows{" "}
         <strong>inputs &amp; controls on the left, a big live preview on the right</strong> (editing
         the graph live — <kbd>Esc</kbd>, the ✕, or a click outside closes it). The right-hand
         preview is tailored per card — the sim/composite, a value's pulse, an image/video in its

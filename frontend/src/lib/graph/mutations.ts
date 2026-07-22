@@ -2,8 +2,16 @@
 // binding<->edge invariant (01 §3.3): wiring a value source writes BOTH the port
 // binding and the edge; removing a node resets any binding that pointed at it.
 
-import { LOOSE_PORT, isLooseEdge, mkEdgeId, mkInputId, portsOf, videoSource } from "./core";
-import { combineSlot, imageNode, montageSlot, videoNode } from "./factories";
+import {
+  LOOSE_PORT,
+  isLooseEdge,
+  mkEdgeId,
+  mkInputId,
+  mkSlotId,
+  portsOf,
+  videoSource,
+} from "./core";
+import { combineSlot, imageNode, montageExtract, videoNode } from "./factories";
 import { nodeParam } from "../nodeParams";
 import type { Binding, CombineMedium, CombineNode, Graph, GraphNode, MontageNode } from "../types";
 
@@ -141,8 +149,10 @@ export function setCombineLayer(graph: Graph, combineId: string, layer: number):
   return patchCombine(graph, combineId, (d) => ({ ...d, layer }));
 }
 
-// Montage slots (combine-slot convention: a video edge targets a slot by its id).
-// Removing a slot also drops its edge, keeping the graph clean.
+// Montage extracts & breakpoints. Extracts are DATA references into the composition
+// pool — no wiring — so none of these touch edges; removing an extract never deletes
+// the composition it references (pool lifecycle is the prune step's job). Breakpoint
+// times are composition-LOCAL seconds (0 = window start).
 const patchMontage = (
   graph: Graph,
   montageId: string,
@@ -154,95 +164,136 @@ const patchMontage = (
   ),
 });
 
-export function addMontageInput(graph: Graph, montageId: string): Graph {
-  return patchMontage(graph, montageId, (d) => ({ ...d, inputs: [...d.inputs, montageSlot()] }));
+export function addExtract(graph: Graph, montageId: string, compositionId: string): Graph {
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    extracts: [...d.extracts, montageExtract(compositionId)],
+  }));
 }
-// A slot's span = how many trigger cuts it swallows (its video plays that many gate
-// intervals). Stored only when ≥ 2 — span 1 stays absent so an untouched slot keeps
-// its exact persisted shape (and the output hash).
-export function setMontageSlotSpan(
+
+export function removeExtract(graph: Graph, montageId: string, extractId: string): Graph {
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    extracts: d.extracts.filter((x) => x.id !== extractId),
+  }));
+}
+
+// Reorder an extract to `toIndex` (clamped) — the strip's drag-reorder.
+export function moveExtract(
   graph: Graph,
   montageId: string,
-  slotId: string,
+  extractId: string,
+  toIndex: number
+): Graph {
+  return patchMontage(graph, montageId, (d) => {
+    const from = d.extracts.findIndex((x) => x.id === extractId);
+    if (from < 0) return d;
+    const to = Math.max(0, Math.min(d.extracts.length - 1, Math.round(toIndex)));
+    if (to === from) return d;
+    const extracts = [...d.extracts];
+    const [x] = extracts.splice(from, 1);
+    extracts.splice(to, 0, x);
+    return { ...d, extracts };
+  });
+}
+
+// Point an existing extract at another composition (the reuse picker).
+export function setExtractComposition(
+  graph: Graph,
+  montageId: string,
+  extractId: string,
+  compositionId: string
+): Graph {
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    extracts: d.extracts.map((x) => (x.id === extractId ? { ...x, compositionId } : x)),
+  }));
+}
+
+// An extract's span = how many effective cuts it swallows. Stored only when ≥ 2 —
+// span 1 stays absent so an untouched extract keeps its exact persisted shape (and
+// the output hash).
+export function setExtractSpan(
+  graph: Graph,
+  montageId: string,
+  extractId: string,
   span: number
 ): Graph {
   const clamped = Math.min(16, Math.max(1, Math.round(span)));
   return patchMontage(graph, montageId, (d) => ({
     ...d,
-    inputs: d.inputs.map((s) =>
-      s.id === slotId ? (clamped >= 2 ? { id: s.id, span: clamped } : { id: s.id }) : s
-    ),
+    extracts: d.extracts.map((x) => {
+      if (x.id !== extractId) return x;
+      const { span: _drop, ...rest } = x;
+      return clamped >= 2 ? { ...rest, span: clamped } : rest;
+    }),
   }));
 }
 
-export function removeMontageInput(graph: Graph, montageId: string, slotId: string): Graph {
-  const g = patchMontage(graph, montageId, (d) => ({
-    ...d,
-    inputs: d.inputs.filter((s) => s.id !== slotId),
-  }));
-  return {
-    ...g,
-    edges: g.edges.filter((e) => !(e.target === montageId && e.targetPort === slotId)),
-  };
-}
-
-// Fill a montage: create one empty Video card per unwired slot and wire it in — the
-// inverse of picking clips from the library. Building a 12-cut montage by hand meant
-// "+ slot" eleven times, then twelve rounds of drop-a-card-and-drag-a-wire.
-//
-// `cuts` = how many cuts the trigger makes this segment. The first slot plays from 0 to
-// the first cut and then one slot per cut, so the budget is `cuts + 1` SPAN UNITS — an
-// existing ×2 slot already covers two of them (mirrors `_montage_starts`). Missing slots
-// are appended to reach that budget. `cuts == null` (no trigger wired, or /resolve hasn't
-// answered yet) means we don't know the count: fill the existing empty slots and add none.
-//
-// New cards land in a column to the LEFT of the montage — its inputs come from that side —
-// centred on it, spaced by `cardH`. `nameFor` is injected rather than imported because
-// `defaultCardName` lives in components/ and lib/ must not depend on it; it is applied
-// per card against the graph that already holds the previously named ones, since it
-// dedupes on names already present (calling it N times on one snapshot yields "video 1"
-// N times).
-export function fillMontageSlots(
+// The in-point: seconds into the child's local clock at the cut (montage-resume's
+// "align it" writes this). Stored only when > 0, same absent-default rule as span.
+export function setExtractInPoint(
   graph: Graph,
   montageId: string,
-  opts: {
-    cuts?: number | null;
-    cardH?: number;
-    nameFor?: (g: Graph, type: string) => string;
-  } = {}
+  extractId: string,
+  inPoint: number
 ): Graph {
-  const montage = graph.nodes.find((n) => n.id === montageId && n.type === "montage");
-  if (!montage) return graph;
-  const { cuts = null, cardH = 356, nameFor } = opts;
+  const t = Math.max(0, inPoint);
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    extracts: d.extracts.map((x) => {
+      if (x.id !== extractId) return x;
+      const { inPoint: _drop, ...rest } = x;
+      return t > 0 ? { ...rest, inPoint: t } : rest;
+    }),
+  }));
+}
 
-  let g = graph;
-  if (cuts != null) {
-    const budget = Math.max(1, Math.round(cuts) + 1);
-    const spent = () =>
-      ((g.nodes.find((n) => n.id === montageId) as MontageNode).data.inputs || []).reduce(
-        (sum, s) => sum + Math.max(1, Math.round(s.span || 1)),
-        0
-      );
-    // Bounded by `budget` so a bad `cuts` can never spin: each pass adds exactly one unit.
-    for (let guard = 0; spent() < budget && guard < budget; guard++)
-      g = addMontageInput(g, montageId);
-  }
+export function addManualBreakpoint(graph: Graph, montageId: string, t: number): Graph {
+  if (!(t > 0)) return graph;
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    manualBreakpoints: [...d.manualBreakpoints, { id: mkSlotId(), t }].sort((a, b) => a.t - b.t),
+  }));
+}
 
-  const empty = ((g.nodes.find((n) => n.id === montageId) as MontageNode).data.inputs || []).filter(
-    (s) => !videoSource(g, montageId, s.id)
-  );
-  if (!empty.length) return graph; // nothing to do — leave the graph (and undo) untouched
+export function moveManualBreakpoint(
+  graph: Graph,
+  montageId: string,
+  breakpointId: string,
+  t: number
+): Graph {
+  if (!(t > 0)) return graph;
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    manualBreakpoints: d.manualBreakpoints
+      .map((bp) => (bp.id === breakpointId ? { ...bp, t } : bp))
+      .sort((a, b) => a.t - b.t),
+  }));
+}
 
-  // Centre the column on the montage so short fills sit beside it rather than below.
-  const top = montage.y - ((empty.length - 1) * cardH) / 2;
-  const x = montage.x - 260; // one card width + a gutter
-  empty.forEach((slot, i) => {
-    const card = videoNode(x, Math.round(top + i * cardH));
-    const named = nameFor ? { ...card, name: nameFor(g, card.type) } : card;
-    g = { ...g, nodes: [...g.nodes, named] };
-    g = connectVideo(g, named.id, "out", montageId, slot.id);
+export function removeManualBreakpoint(
+  graph: Graph,
+  montageId: string,
+  breakpointId: string
+): Graph {
+  return patchMontage(graph, montageId, (d) => ({
+    ...d,
+    manualBreakpoints: d.manualBreakpoints.filter((bp) => bp.id !== breakpointId),
+  }));
+}
+
+// Toggle one GATE cut on/off: clicking a gate marker stores/clears a `disabledCuts`
+// exception at that time. Matching is by tolerance (the caller passes half a frame,
+// 0.5/fps — the same rule the render applies), so toggling twice round-trips even if
+// the stored second differs by float noise, and a cut that MOVED re-enables itself.
+export function toggleAutoCut(graph: Graph, montageId: string, t: number, tol: number): Graph {
+  return patchMontage(graph, montageId, (d) => {
+    const kept = d.disabledCuts.filter((x) => Math.abs(x - t) > tol);
+    const disabledCuts =
+      kept.length === d.disabledCuts.length ? [...d.disabledCuts, t].sort((a, b) => a - b) : kept;
+    return { ...d, disabledCuts };
   });
-  return g;
 }
 
 // Drop a library asset onto the canvas as its own card (image or video, per `kind`),
@@ -375,10 +426,12 @@ export function resolveDropPort(graph: Graph, targetId: string, flow: string): s
   if (!node) return null;
   if (flow === "video") {
     if (node.type === "output") return videoSource(graph, targetId, "video") ? null : "video";
-    if (node.type === "combine" || node.type === "montage") {
+    if (node.type === "combine") {
       const free = node.data.inputs.find((s) => !videoSource(graph, targetId, s.id));
       return free ? free.id : null;
     }
+    // montage: extracts are DATA references, not wired slots — a dropped video wire
+    // has nowhere to land (its only inbound wiring is the value ports).
     // waves/rain refract an optional video input (the pool floor / liquid bed).
     if (node.type === "waves" || node.type === "rain")
       return videoSource(graph, targetId, "video") ? null : "video";
