@@ -113,103 +113,129 @@ export default function MontageNode({
         <ArgInfo type="montage" k="inputs" />
       </div>
 
-      <div className="anim-combine-inputs">
-        {inputs.map((slot, i) => {
-          const label = slotLabel(wiredOrdinal[i]);
-          const span = Math.max(1, Math.round(slot.span || 1));
-          const sf = shortfall(i, wiredOrdinal[i]);
-          // Red only when the slot actually goes BLACK: a LOOPING short slot is short but
-          // never dark, so it must not read as an error.
-          const goesBlack = sf != null && !sf.loop;
-          return (
-            <div className={"anim-combine-row" + (goesBlack ? " short" : "")} key={slot.id}>
-              <Port
-                kind="in"
-                flow="video"
-                nodeId={node.id}
-                portId={slot.id}
-                portRef={helpers.portRef}
-                title={`slot ${i + 1}${i === 0 ? " — plays from the segment start" : " — starts once the slots before it have spent their cuts"}`}
-              />
-              <span className="anim-combine-slot">slot {i + 1}</span>
-              <button
-                className={"iconbtn anim-montage-span" + (span > 1 ? " on" : "")}
-                title="cuts this slot swallows — its video plays that many gate intervals (click: ×1 → ×2 → ×3 → ×4)"
-                onClick={() =>
-                  onGraphChange((g) =>
-                    setMontageSlotSpan(g, node.id, slot.id, span >= 4 ? 1 : span + 1)
-                  )
-                }
-              >
-                ×{span}
-              </button>
-              {label && <span className="anim-montage-dur">{label}</span>}
-              {sf && (
-                <span
-                  className="anim-montage-short"
-                  title={
-                    `clip too short: only ${sf.avail.toFixed(1)}s left from its in-point ` +
-                    `for a ${sf.needed.toFixed(1)}s slot (${sf.short.toFixed(1)}s missing) — ` +
-                    (sf.loop
-                      ? "it loops back to the in-point"
-                      : `the slot goes BLACK for the last ${sf.short.toFixed(1)}s`) +
-                    ". Tick loop on the video card to replay it, move the in-point earlier " +
-                    "(🎞 on the card), turn the slot's ×N down, or cut more often."
-                  }
-                >
-                  ⚠ −{sf.short.toFixed(1)}s
-                </span>
-              )}
-              {repeats[i] && (
-                <span
-                  className={"anim-montage-dup" + (repeats[i]!.identical ? " same" : "")}
-                  title={
-                    repeats[i]!.identical
-                      ? `same clip as slot ${repeats[i]!.row}, from the same in-point — these ` +
-                        "two slots play identical frames, which looks like the video looping " +
-                        "instead of cutting. Move this one's in-point (🎞 on the video card) " +
-                        "or wire a different clip."
-                      : `same clip as slot ${repeats[i]!.row}, but from a different in-point — ` +
-                        "it shows another moment of the same footage. Fine if that's deliberate."
-                  }
-                >
-                  ⧉ {repeats[i]!.row}
-                </span>
-              )}
-              {inputs.length > 1 && (
+      {/* In the settings modal the INPUTS panel already lists every slot with a source
+          dropdown — the only place wiring WORKS there, since drag is inert (STUB_HELPERS).
+          Rendering our own slot rows too was the "2 lists" the user hit. On canvas this is
+          the single, rich list; in the modal we collapse to a pointer + the montage-only
+          + fill. The header above (with the black roll-up) shows in both. */}
+      {ctx?.previewInPanel ? (
+        <div className="anim-combine-inputs">
+          <div className="anim-fx-hint">slots are wired in the INPUTS panel above ↑</div>
+          <button
+            className="btn sm anim-combine-add"
+            disabled={!fill.n}
+            title={fill.title}
+            onClick={() =>
+              onGraphChange((g) =>
+                fillMontageSlots(g, node.id, {
+                  cuts: cuts ? cuts.rises : null,
+                  nameFor: defaultCardName,
+                })
+              )
+            }
+          >
+            + fill
+          </button>
+        </div>
+      ) : (
+        <div className="anim-combine-inputs">
+          {inputs.map((slot, i) => {
+            const label = slotLabel(wiredOrdinal[i]);
+            const span = Math.max(1, Math.round(slot.span || 1));
+            const sf = shortfall(i, wiredOrdinal[i]);
+            // Red only when the slot actually goes BLACK: a LOOPING short slot is short but
+            // never dark, so it must not read as an error.
+            const goesBlack = sf != null && !sf.loop;
+            return (
+              <div className={"anim-combine-row" + (goesBlack ? " short" : "")} key={slot.id}>
+                <Port
+                  kind="in"
+                  flow="video"
+                  nodeId={node.id}
+                  portId={slot.id}
+                  portRef={helpers.portRef}
+                  title={`slot ${i + 1}${i === 0 ? " — plays from the segment start" : " — starts once the slots before it have spent their cuts"}`}
+                />
+                <span className="anim-combine-slot">slot {i + 1}</span>
                 <button
-                  className="iconbtn anim-combine-rm"
-                  onClick={() => onGraphChange((g) => removeMontageInput(g, node.id, slot.id))}
-                  title="remove slot"
+                  className={"iconbtn anim-montage-span" + (span > 1 ? " on" : "")}
+                  title="cuts this slot swallows — its video plays that many gate intervals (click: ×1 → ×2 → ×3 → ×4)"
+                  onClick={() =>
+                    onGraphChange((g) =>
+                      setMontageSlotSpan(g, node.id, slot.id, span >= 4 ? 1 : span + 1)
+                    )
+                  }
                 >
-                  ✕
+                  ×{span}
                 </button>
-              )}
-            </div>
-          );
-        })}
-        <button
-          className="btn sm anim-combine-add"
-          onClick={() => onGraphChange((g) => addMontageInput(g, node.id))}
-        >
-          + slot
-        </button>
-        <button
-          className="btn sm anim-combine-add"
-          disabled={!fill.n}
-          title={fill.title}
-          onClick={() =>
-            onGraphChange((g) =>
-              fillMontageSlots(g, node.id, {
-                cuts: cuts ? cuts.rises : null,
-                nameFor: defaultCardName,
-              })
-            )
-          }
-        >
-          + fill
-        </button>
-      </div>
+                {label && <span className="anim-montage-dur">{label}</span>}
+                {sf && (
+                  <span
+                    className="anim-montage-short"
+                    title={
+                      `clip too short: only ${sf.avail.toFixed(1)}s left from its in-point ` +
+                      `for a ${sf.needed.toFixed(1)}s slot (${sf.short.toFixed(1)}s missing) — ` +
+                      (sf.loop
+                        ? "it loops back to the in-point"
+                        : `the slot goes BLACK for the last ${sf.short.toFixed(1)}s`) +
+                      ". Tick loop on the video card to replay it, move the in-point earlier " +
+                      "(🎞 on the card), turn the slot's ×N down, or cut more often."
+                    }
+                  >
+                    ⚠ −{sf.short.toFixed(1)}s
+                  </span>
+                )}
+                {repeats[i] && (
+                  <span
+                    className={"anim-montage-dup" + (repeats[i]!.identical ? " same" : "")}
+                    title={
+                      repeats[i]!.identical
+                        ? `same clip as slot ${repeats[i]!.row}, from the same in-point — these ` +
+                          "two slots play identical frames, which looks like the video looping " +
+                          "instead of cutting. Move this one's in-point (🎞 on the video card) " +
+                          "or wire a different clip."
+                        : `same clip as slot ${repeats[i]!.row}, but from a different in-point — ` +
+                          "it shows another moment of the same footage. Fine if that's deliberate."
+                    }
+                  >
+                    ⧉ {repeats[i]!.row}
+                  </span>
+                )}
+                {inputs.length > 1 && (
+                  <button
+                    className="iconbtn anim-combine-rm"
+                    onClick={() => onGraphChange((g) => removeMontageInput(g, node.id, slot.id))}
+                    title="remove slot"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <button
+            className="btn sm anim-combine-add"
+            onClick={() => onGraphChange((g) => addMontageInput(g, node.id))}
+          >
+            + slot
+          </button>
+          <button
+            className="btn sm anim-combine-add"
+            disabled={!fill.n}
+            title={fill.title}
+            onClick={() =>
+              onGraphChange((g) =>
+                fillMontageSlots(g, node.id, {
+                  cuts: cuts ? cuts.rises : null,
+                  nameFor: defaultCardName,
+                })
+              )
+            }
+          >
+            + fill
+          </button>
+        </div>
+      )}
 
       <div className="anim-static">
         <Ctl

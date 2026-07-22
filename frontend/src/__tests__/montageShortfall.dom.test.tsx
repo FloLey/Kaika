@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, fireEvent } from "@testing-library/react";
 import AnimationCanvas from "../components/animation/AnimationCanvas";
 import {
   emptyGraph,
@@ -130,6 +130,21 @@ describe("Montage — a slot short of material", () => {
       />
     );
     await waitFor(() => expect(queryByText(/black/i)).toBeNull());
+  });
+
+  it("in the settings modal, the montage body does NOT re-list the slots", async () => {
+    // The "2 lists" the user actually saw: opening a compact montage shows the modal's
+    // INPUTS panel (a slot row per input, with a source dropdown — the only wiring that
+    // WORKS there, drag being inert) AND the montage's own rich slot list. On canvas the
+    // rich list is the single list; in the modal it must step aside for the INPUTS panel.
+    const g = { ...oneShortSlot(false), viewMode: "compact" as const };
+    const { container, findByText, getByRole } = mount(g);
+    fireEvent.click(container.querySelector(".anim-compact-body")!);
+    const dialog = getByRole("dialog");
+    expect(dialog.querySelector(".port-connections")).toBeTruthy(); // INPUTS panel owns wiring
+    expect(dialog.querySelectorAll(".anim-combine-row").length).toBe(0); // no duplicate list
+    await findByText(/wired in the INPUTS panel/i); // a pointer to where they moved
+    await findByText(/6\.0s black/); // the warning still shows in the header (curve is async)
   });
 
   it("stays quiet when the clip covers its slot", async () => {
