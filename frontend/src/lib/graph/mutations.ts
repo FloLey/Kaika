@@ -349,11 +349,8 @@ export function removeNode(graph: Graph, nodeId: string): Graph {
     });
   const edges = graph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
   const out: Graph = { ...graph, nodes, edges };
-  // Drop the removed node from the view-override set (no stale ids) — and from the
-  // legacy expand/minimize sets, in case a save is mutated before normalizeGraph ran.
-  if (Array.isArray(graph.viewOverrides) && graph.viewOverrides.includes(nodeId)) {
-    out.viewOverrides = graph.viewOverrides.filter((id) => id !== nodeId);
-  }
+  // Drop the removed node from the legacy expand/minimize sets, in case a save is
+  // mutated before normalizeGraph strips them. (viewOverrides is gone as of v29.)
   if (Array.isArray(graph.expanded) && graph.expanded.includes(nodeId)) {
     out.expanded = graph.expanded.filter((id) => id !== nodeId);
   }

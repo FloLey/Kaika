@@ -155,11 +155,10 @@ describe("compact cards (jsdom)", () => {
   });
 });
 
-// Card positions (still cx/cy this step — step 01 folds them into x/y). Every card is
-// compact, so the canvas renders from cx/cy (falling back to x/y when absent) and a
-// drag commits cx/cy.
+// One coordinate set (x/y): the canvas renders from it, and drag/arrange write straight
+// to it. The per-view cx/cy is gone (folded into x/y by the v29 migration).
 describe("card positions (jsdom)", () => {
-  const gate = (id: string, pos: { x: number; y: number; cx?: number; cy?: number }) => ({
+  const gate = (id: string, pos: { x: number; y: number }) => ({
     id,
     type: "gate",
     data: { threshold: 0.5, hysteresis: 0.1, invert: false },
@@ -167,10 +166,7 @@ describe("card positions (jsdom)", () => {
   });
   const twoCards = () => ({
     version: 29,
-    nodes: [
-      gate("n-a", { x: 0, y: 0, cx: 100, cy: 50 }),
-      gate("n-b", { x: 400, y: 0, cx: 160, cy: 50 }),
-    ],
+    nodes: [gate("n-a", { x: 100, y: 50 }), gate("n-b", { x: 160, y: 50 })],
     edges: [],
     view: { tx: 0, ty: 0, scale: 1 },
   });
@@ -179,13 +175,13 @@ describe("card positions (jsdom)", () => {
     return { left: el.style.left, top: el.style.top };
   };
 
-  it("renders cards at their compact coords", () => {
+  it("renders cards at their x/y", () => {
     const seg = { ...baseSegment, graph: twoCards() } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
     expect(wrapperPos(container, "n-a")).toEqual({ left: "100px", top: "50px" });
   });
 
-  it("a drag commits the position", () => {
+  it("a drag commits the position to x/y", () => {
     const onGraphChange = vi.fn();
     const seg = { ...baseSegment, graph: twoCards() } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
@@ -204,14 +200,15 @@ describe("card positions (jsdom)", () => {
     });
     expect(onGraphChange).toHaveBeenCalledTimes(1);
     const moved = onGraphChange.mock.calls[0][0].nodes.find((n: { id: string }) => n.id === "n-a");
-    expect(moved).toMatchObject({ cx: 150, cy: 80 }); // moved by +50/+30
+    expect(moved).toMatchObject({ x: 150, y: 80 }); // moved by +50/+30
+    expect("cx" in moved).toBe(false); // no per-view coord any more
   });
 
   it("✨ arrange commits one layout update", () => {
     const onGraphChange = vi.fn();
     // Two cards stacked on the same spot — arrange must separate them.
     const graph = twoCards();
-    graph.nodes[1] = gate("n-b", { x: 400, y: 0, cx: 100, cy: 50 });
+    graph.nodes[1] = gate("n-b", { x: 100, y: 50 });
     const seg = { ...baseSegment, graph } as Segment;
     const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
     fireEvent.click(getByText("✨ arrange"));
@@ -219,6 +216,6 @@ describe("card positions (jsdom)", () => {
     const committed = onGraphChange.mock.calls[0][0];
     const a = committed.nodes.find((n: { id: string }) => n.id === "n-a");
     const b = committed.nodes.find((n: { id: string }) => n.id === "n-b");
-    expect(a.cx === b.cx && a.cy === b.cy).toBe(false); // no longer stacked
+    expect(a.x === b.x && a.y === b.y).toBe(false); // no longer stacked
   });
 });

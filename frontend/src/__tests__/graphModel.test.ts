@@ -858,73 +858,73 @@ describe("graph.expanded (persisted, non-rendering)", () => {
   });
 });
 
-describe("v16 migration: view modes (legacy minimized/expanded stripped)", () => {
-  // A pre-v16 save carrying either legacy view-state field: both are stripped and
-  // NO viewMode is set — old saves open in the detailed view (the new default).
-  const preV16 = () => {
+describe("v29 migration: the detailed view is removed", () => {
+  // A save carrying any view-mode field: viewMode/viewOverrides (v16), the legacy
+  // expanded/minimized sets, and per-view cx/cy (v20) are all stripped/folded.
+  const withCoords = (cx: number, cy: number) => {
     const { g, fluidId, outId, srcId } = wiredGraph();
-    return { g: { ...g, version: 12 } as Graph, fluidId, outId, srcId };
+    return {
+      g: {
+        ...g,
+        version: 20,
+        nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, x: 0, y: 0, cx, cy } : n)),
+      } as Graph,
+      fluidId,
+      outId,
+      srcId,
+    };
   };
 
-  it("strips a legacy minimized set (old saves open detailed)", () => {
-    const { g, fluidId } = preV16();
-    const out = normalizeGraph({ ...g, minimized: [fluidId] });
-    expect("minimized" in out).toBe(false);
-    expect("expanded" in out).toBe(false);
-    expect(out.viewMode).toBeUndefined(); // absent = detailed
+  it("folds a node's compact cx/cy into its canonical x/y and drops cx/cy", () => {
+    const { g, fluidId } = withCoords(12.5, -7);
+    const out = normalizeGraph(g);
+    const kept = out.nodes.find((n) => n.id === fluidId)! as unknown as Record<string, number>;
+    expect(kept.x).toBe(12.5);
+    expect(kept.y).toBe(-7);
+    expect("cx" in kept).toBe(false);
+    expect("cy" in kept).toBe(false);
     expect(out.version).toBe(GRAPH_VERSION);
   });
 
-  it("strips a v13-15 expanded set", () => {
-    const { g, srcId } = preV16();
-    const out = normalizeGraph({ ...g, version: 14, expanded: [srcId] });
-    expect("expanded" in out).toBe(false);
-    expect(out.viewMode).toBeUndefined();
-  });
-
-  it("prunes viewOverrides to live node ids and keeps viewMode", () => {
-    const { g, srcId } = wiredGraph();
-    const out = normalizeGraph({ ...g, viewMode: "compact", viewOverrides: [srcId, "gone-node"] });
-    expect(out.viewMode).toBe("compact");
-    expect(out.viewOverrides).toEqual([srcId]);
-  });
-
-  it("is idempotent (normalizing twice returns the same object)", () => {
-    const { g, fluidId } = preV16();
-    const once = normalizeGraph({ ...g, minimized: [fluidId] });
-    expect(normalizeGraph(once)).toBe(once);
-  });
-
-  it("removeNode prunes the removed id from viewOverrides", () => {
-    const { g, srcId } = wiredGraph();
-    const withMode = { ...g, viewMode: "compact" as const, viewOverrides: [srcId] };
-    const out = removeNode(withMode, srcId);
-    expect(out.viewOverrides).toEqual([]);
-  });
-});
-
-describe("per-view card positions (v20): node cx/cy", () => {
-  it("cx/cy survive normalizeGraph (node-level, like `name`)", () => {
+  it("keeps a card's x/y when it was only ever seen in detailed (no cx/cy)", () => {
     const { g, fluidId } = wiredGraph();
     const saved = {
       ...g,
-      version: 19,
-      nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, cx: 12.5, cy: -7 } : n)),
+      version: 20,
+      nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, x: 40, y: 90 } : n)),
     };
-    const out = normalizeGraph(saved);
-    const kept = out.nodes.find((n) => n.id === fluidId)!;
-    expect(kept.cx).toBe(12.5);
-    expect(kept.cy).toBe(-7);
-    expect(out.version).toBe(GRAPH_VERSION);
-    expect(normalizeGraph(out)).toBe(out); // idempotent after the restamp
+    const kept = normalizeGraph(saved).nodes.find((n) => n.id === fluidId)!;
+    expect(kept.x).toBe(40);
+    expect(kept.y).toBe(90);
   });
 
-  it("does NOT change the render hash (moving cards in either view is cache-free)", () => {
+  it("drops viewMode, viewOverrides, and the legacy expanded/minimized sets", () => {
+    const { g, srcId, fluidId } = wiredGraph();
+    const out = normalizeGraph({
+      ...g,
+      viewMode: "compact",
+      viewOverrides: [srcId],
+      expanded: [fluidId],
+      minimized: [srcId],
+    });
+    for (const k of ["viewMode", "viewOverrides", "expanded", "minimized"]) {
+      expect(k in out).toBe(false);
+    }
+    expect(out.version).toBe(GRAPH_VERSION);
+  });
+
+  it("is idempotent (normalizing twice returns the same object)", () => {
+    const { g } = withCoords(5, 6);
+    const once = normalizeGraph(g);
+    expect(normalizeGraph(once)).toBe(once);
+  });
+
+  it("does NOT change the render hash — card positions are cache-free", () => {
     const { g, outId, fluidId } = wiredGraph();
     const h1 = outputHash(g, outId, "job", 0, 8, []);
     const moved = {
       ...g,
-      nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, x: 999, y: 999, cx: 1, cy: 2 } : n)),
+      nodes: g.nodes.map((n) => (n.id === fluidId ? { ...n, x: 999, y: 999 } : n)),
     };
     expect(outputHash(moved, outId, "job", 0, 8, [])).toBe(h1);
   });

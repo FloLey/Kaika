@@ -351,6 +351,15 @@ export function normalizeGraph(graph: Graph): Graph {
     if (preFxRemoval && n.type === "transform") {
       n = { ...n, type: "transform-legacy" } as unknown as GraphNode;
     }
+    // v29: the detailed view is gone, so per-view compact coords (cx/cy, v20) fold into
+    // the one canonical x/y. A card last arranged in compact keeps that layout; one only
+    // ever seen in detailed (no cx/cy) keeps its x/y. Idempotent — cx/cy is absent after.
+    const pv = n as GraphNode & { cx?: number; cy?: number };
+    if (pv.cx != null || pv.cy != null) {
+      const { cx, cy, ...rest } = pv;
+      n = { ...rest, x: cx ?? pv.x, y: cy ?? pv.y } as GraphNode;
+      changed = true;
+    }
     if (n !== node) changed = true;
     const d = (n.data || {}) as Record<string, unknown>;
 
@@ -466,23 +475,21 @@ export function normalizeGraph(graph: Graph): Graph {
     return true;
   });
   if (edges.length !== (graph.edges || []).length) changed = true;
-  // v16: canvas view MODES. `viewMode` ("detailed" when absent — the classic default)
-  // + `viewOverrides` (cards displayed opposite to the mode) replace both legacy sets:
-  // pre-v13 `minimized` and v13-15 `expanded` are STRIPPED — old saves open in the
-  // detailed view, matching the new default. Overrides are pruned to live node ids.
-  let viewOverrides = graph.viewOverrides;
-  if (Array.isArray(viewOverrides)) {
-    const pruned = viewOverrides.filter((id) => liveIds.has(id));
-    if (pruned.length !== viewOverrides.length) {
-      viewOverrides = pruned;
-      changed = true;
-    }
-  }
+  // v29: the detailed view is gone, so the view-MODE fields go with it. `viewMode`
+  // (v16), `viewOverrides` (v16) and the legacy `expanded`/`minimized` (pre-v16) are all
+  // stripped — every card is compact now, so there is nothing to remember. cx/cy folded
+  // into x/y per node above.
+  const vg = graph as Graph & { viewMode?: unknown; viewOverrides?: unknown };
+  if (vg.viewMode !== undefined || vg.viewOverrides !== undefined) changed = true;
   if (graph.expanded !== undefined || graph.minimized !== undefined) changed = true; // strip legacy
   if (graph.version !== GRAPH_VERSION) changed = true; // re-stamp after migrating
   if (!changed) return graph;
-  const out: Graph = { ...graph, version: GRAPH_VERSION, nodes, edges };
-  if (viewOverrides !== undefined) out.viewOverrides = viewOverrides;
+  const out = { ...graph, version: GRAPH_VERSION, nodes, edges } as Graph & {
+    viewMode?: unknown;
+    viewOverrides?: unknown;
+  };
+  delete out.viewMode;
+  delete out.viewOverrides;
   delete out.expanded;
   delete out.minimized;
   return out;

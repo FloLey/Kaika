@@ -157,7 +157,12 @@ export function fluidNode(x: number, y: number): FluidNode {
 //       input re-timed to start at its cut. Pure addition — no migration.
 //  v28: ADDED the change card — a value modulator emitting its input's smoothed
 //       |derivative| (units/sec), for gating on musical change. Pure addition.
-export const GRAPH_VERSION = 28;
+//  v29: REMOVED the detailed card view — every non-output card is compact now. The
+//       view-mode fields go: `viewMode`/`viewOverrides` (v16) are dropped, and the
+//       per-view `cx/cy` (v20) fold into the one canonical `x/y` (a card last arranged
+//       compact keeps that layout). No RENDER_VERSION impact — outputHash never read
+//       these. normalizeGraph does the fold + strip, idempotently.
+export const GRAPH_VERSION = 29;
 
 export function emptyGraph(): Graph {
   return { version: GRAPH_VERSION, nodes: [], edges: [], view: { tx: 0, ty: 0, scale: 1 } };
