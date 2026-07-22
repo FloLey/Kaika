@@ -31,6 +31,7 @@ interface GraphEditorOpts {
   finalOutputId?: string; // the composition's ★-final output mark
   compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
   updateCompositions?: NodeCtx["updateCompositions"]; // pool writes ("pick a video" → leaf)
+  enterExtract?: NodeCtx["enterExtract"]; // breadcrumb descent into an extract's child
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -51,6 +52,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     finalOutputId,
     compositions,
     updateCompositions,
+    enterExtract,
     stems,
     job,
     output,
@@ -300,6 +302,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       segment,
       compositions,
       updateCompositions,
+      enterExtract,
       stems,
       job,
       output,
@@ -324,6 +327,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       segment,
       compositions,
       updateCompositions,
+      enterExtract,
       stems,
       job,
       output,

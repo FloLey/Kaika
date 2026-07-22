@@ -445,3 +445,34 @@
 .seg-rail-fixmsg.err {
   color: var(--err, #e07a7a);
 }
+
+/* ---- composition breadcrumb (segment ▸ extract 3 · clip ▸ …) ---------------- */
+/* Rides inside .section-title, so it inherits the mono/letter-spacing look; the
+   crumbs are real buttons (every ancestor is a click back up). */
+.comp-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.comp-breadcrumb .crumb {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted transparent;
+  transition: color 0.15s;
+}
+.comp-breadcrumb .crumb:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+.comp-breadcrumb .crumb-here {
+  color: var(--text);
+}
+.comp-breadcrumb .crumb-up {
+  margin-left: 10px;
+}

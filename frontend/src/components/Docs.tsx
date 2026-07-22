@@ -32,6 +32,7 @@ export const DOC_SECTION_IDS = [
   "animation-fx",
   "animation-combine",
   "animation-montage",
+  "animation-compositions",
   "animation-transform",
   "animation-lookfx",
   "animation-stylize",

@@ -42,8 +42,24 @@ export default function MontageNode({
   // lives in a shared hook, because the COMPACT card reads the same roll-up — the
   // black warning must not vanish when a montage is collapsed (that is how it stayed
   // invisible for a whole export).
-  const { extracts, comps, cuts, extractLabel, shortfall, shortRows, repeats } =
+  const { extracts, comps, cuts, fps, extractLabel, shortfall, shortRows, repeats } =
     useMontageShortfall(node, ctx);
+
+  // "Open" descends into the extract's child composition (a breadcrumb frame).
+  // The card owns the cut schedule, so IT computes the extract's absolute window;
+  // an extract past the cuts (or with no schedule yet) opens on the whole window.
+  const openExtract = (k: number) => {
+    if (!ctx?.enterExtract || !ctx.segment) return;
+    const seg = ctx.segment;
+    let start = seg.start;
+    let end = seg.end;
+    if (cuts && k < cuts.starts.length) {
+      const endF = k + 1 < cuts.starts.length ? cuts.starts[k + 1] : cuts.total;
+      start = seg.start + cuts.starts[k] / fps;
+      end = seg.start + endF / fps;
+    }
+    ctx.enterExtract(node.id, extracts[k].id, { start, end });
+  };
 
   // "Pick a video" = the leaf shortcut: mint a video→output composition in the pool
   // and reference it from a new extract. Two writes from one click — the reference
@@ -182,6 +198,15 @@ export default function MontageNode({
                 >
                   ⧉ {repeats[k]!.row}
                 </span>
+              )}
+              {comp && ctx?.enterExtract && (
+                <button
+                  className="iconbtn anim-extract-open"
+                  onClick={() => openExtract(k)}
+                  title="open this extract's composition — edit what it plays (breadcrumb takes you back up)"
+                >
+                  ▸
+                </button>
               )}
               <button
                 className="iconbtn anim-combine-rm"

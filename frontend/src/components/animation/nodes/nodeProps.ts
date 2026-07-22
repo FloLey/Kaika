@@ -61,6 +61,14 @@ export interface NodeCtx {
   // Write access to the pool (immutably, like onGraphChange): the montage's "pick a
   // video" creates a LEAF composition here and references it from an extract.
   updateCompositions?: (updater: (pool: CompositionPool) => CompositionPool) => void;
+  // Descend into a montage extract's child composition (the breadcrumb pushes a
+  // frame). The card passes the extract's absolute song window — it owns the cut
+  // schedule; Studio only follows.
+  enterExtract?: (
+    montageNodeId: string,
+    extractId: string,
+    window: { start: number; end: number }
+  ) => void;
   stems?: Record<string, StemInfo>;
   job?: string;
   output?: OutputSettings | null;

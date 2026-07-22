@@ -87,6 +87,20 @@ export default function Fx() {
         are read-offs, not errors: nothing stops you.
       </p>
 
+      <h3 id="animation-compositions">Compositions — opening an extract</h3>
+      <p>
+        Every extract plays a <strong>composition</strong>: a small animation graph of its own,
+        ending in an output. Hit an extract's <strong>▸ open</strong> and the canvas descends into
+        it — the header becomes a breadcrumb (<em>segment ▸ extract 3 · clip ▸ …</em>), and the
+        transport plays <strong>just that extract's slice</strong> of the song, so what you hear
+        while editing is exactly what plays under the cut. A picked clip opens as a single video
+        card (edit its in-point, crop, loop there); an extract can also hold a full animation —
+        fluids, lyrics, even <em>another montage</em>, any depth down. Click any crumb (or{" "}
+        <strong>↩ up</strong>) to come back. Because extracts <em>reference</em> compositions, the
+        same one can appear in several places — editing it inside one extract updates every other
+        reference the moment you return.
+      </p>
+
       <h3 id="animation-transform">Transform — warping the video</h3>
       <p>
         The <strong>transform</strong> card (Compositing) takes a video stream and warps it: drop it

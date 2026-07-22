@@ -104,17 +104,51 @@ export default function Studio({
     () => segments.find((s) => s.id === activeSegId) || null,
     [segments, activeSegId]
   );
-  // The active segment's root composition — where its animation graph lives now.
-  // null until the first graph edit creates one (setActiveGraph below).
-  const activeComp =
-    (activeSeg?.rootCompositionId && compositions[activeSeg.rootCompositionId]) || null;
+
+  // ---- composition navigation (the breadcrumb) --------------------------------
+  // Exactly ONE composition is on screen: the segment's root, or — after "open"
+  // on a montage extract — a child, any depth down. Each frame snapshots the
+  // extract's absolute song WINDOW at entry (computed by the montage card from
+  // its cut schedule): the child edits can't move the parent's cuts (the trigger
+  // lives in the parent), so the snapshot stays true while you're inside, and the
+  // transport/previews below simply follow the current window.
+  interface NavFrame {
+    compositionId: string;
+    label: string; // "extract 3 · clip name" — the breadcrumb text
+    window: { start: number; end: number }; // absolute song seconds
+  }
+  const [navStack, setNavStack] = useState<NavFrame[]>([]);
+  useEffect(() => setNavStack([]), [activeSegId]); // a new segment starts at its root
+  const navFrame = navStack.length ? navStack[navStack.length - 1] : null;
+  const currentCompId = navFrame?.compositionId ?? activeSeg?.rootCompositionId;
+  const activeComp = (currentCompId && compositions[currentCompId]) || null;
+  // A frame whose composition vanished (deleted in another view) pops itself.
+  useEffect(() => {
+    if (navFrame && !compositions[navFrame.compositionId]) {
+      setNavStack((s) => s.slice(0, -1));
+    }
+  }, [navFrame, compositions]);
+
   // No segment selected → the window is the whole track, so the full mix can play
   // before any segment exists. Fall back to the audio element's own duration when
   // the `duration` prop isn't known yet (otherwise winEnd=0 loops instantly = silence).
+  // Inside an extract, the window IS the extract's: the transport plays just that
+  // slice of the song, so the live view scrubs against the right bars.
   const [mediaDuration, setMediaDuration] = useState(0);
-  const winStart = activeSeg ? activeSeg.start : 0;
-  const winEnd = activeSeg ? activeSeg.end : duration || mediaDuration || 0;
+  const winStart = navFrame ? navFrame.window.start : activeSeg ? activeSeg.start : 0;
+  const winEnd = navFrame
+    ? navFrame.window.end
+    : activeSeg
+      ? activeSeg.end
+      : duration || mediaDuration || 0;
   const segLen = Math.max(0.001, winEnd - winStart);
+  // What the canvas edits: the host segment, re-windowed to the current frame —
+  // every consumer (previews, render keys, signal resolution) reads start/end +
+  // signals off ctx.segment, so re-windowing here drives them all at once.
+  const viewSegment = useMemo(
+    () => (activeSeg && navFrame ? { ...activeSeg, start: winStart, end: winEnd } : activeSeg),
+    [activeSeg, navFrame, winStart, winEnd]
+  );
 
   // The audio engine + transport (full-mix clock, per-signal registry, play/seek/
   // solo/volume) lives in this hook; Studio just wires its output into the view.
@@ -139,9 +173,40 @@ export default function Studio({
   const selectSegment = useCallback(
     (id: string) => {
       resetTransport();
+      setNavStack([]); // back to the root even when re-clicking the same segment
       setActiveSegId(id);
     },
     [resetTransport, setActiveSegId]
+  );
+
+  // "Open" on a montage extract: descend into its child composition. The card
+  // computes the window (it owns the cut schedule) and hands it over.
+  const enterExtract = useCallback(
+    (montageNodeId: string, extractId: string, window: { start: number; end: number }) => {
+      const comp = activeComp;
+      if (!comp) return;
+      const mg = comp.graph.nodes.find((n) => n.id === montageNodeId && n.type === "montage");
+      const extracts = mg?.type === "montage" ? mg.data.extracts : [];
+      const idx = extracts.findIndex((x) => x.id === extractId);
+      const child = idx >= 0 ? compositions[extracts[idx].compositionId] : undefined;
+      if (!child) return;
+      resetTransport();
+      setNavStack((s) => [
+        ...s,
+        { compositionId: child.id, label: `extract ${idx + 1} · ${child.name}`, window },
+      ]);
+    },
+    [activeComp, compositions, resetTransport]
+  );
+
+  // The breadcrumb: click the segment crumb (depth -1) or any ancestor frame to
+  // pop back to it.
+  const navTo = useCallback(
+    (depth: number) => {
+      resetTransport();
+      setNavStack((s) => s.slice(0, Math.max(0, depth)));
+    },
+    [resetTransport]
   );
 
   // ---- per-segment signal edits --------------------------------------------
@@ -182,42 +247,46 @@ export default function Studio({
     [editActiveSignals, registerAudio]
   );
 
-  // The animation graph lives on the segment's root composition in the pool; patch it
-  // and let App's autosave persist pool + segments together. The FIRST edit of a
-  // segment with no animation creates its root composition and points the segment at
-  // it — two state updates from one discrete event (the reference and the entry must
-  // land together, and neither setter can reach the other's state).
+  // The animation graph lives on the CURRENT composition in the pool (the root, or
+  // the child the breadcrumb points at); patch it and let App's autosave persist
+  // pool + segments together. The FIRST edit of a segment with no animation creates
+  // its root composition and points the segment at it — two state updates from one
+  // discrete event (the reference and the entry must land together, and neither
+  // setter can reach the other's state). A NESTED composition always exists (an
+  // extract references it), so creation only ever happens at the root.
   const setActiveGraph = useCallback(
     (graph: Graph) => {
-      const rootId = activeSeg?.rootCompositionId;
-      if (rootId && compositions[rootId]) {
-        setCompositions((pool) => ({ ...pool, [rootId]: { ...pool[rootId], graph } }));
+      if (currentCompId && compositions[currentCompId]) {
+        setCompositions((pool) => ({
+          ...pool,
+          [currentCompId]: { ...pool[currentCompId], graph },
+        }));
         return;
       }
-      if (!activeSeg) return;
+      if (!activeSeg || navFrame) return;
       const comp = createComposition(activeSeg.label, graph);
       setCompositions((pool) => ({ ...pool, [comp.id]: comp }));
       setSegments((prev) =>
         prev.map((s) => (s.id === activeSeg.id ? { ...s, rootCompositionId: comp.id } : s))
       );
     },
-    [activeSeg, compositions, setCompositions, setSegments]
+    [activeSeg, navFrame, currentCompId, compositions, setCompositions, setSegments]
   );
 
   // Mark (or clear, with an empty id) the composition's "final" output — the one
-  // the export stage renders. Lives on the composition now (`outputId`), same
-  // autosave path as a graph edit. An OutputNode toggles this via ctx.setFinalOutput.
+  // the export stage renders (for the root) or the extract plays (for a child).
+  // Lives on the composition (`outputId`), same autosave path as a graph edit. An
+  // OutputNode toggles this via ctx.setFinalOutput.
   const setFinalOutput = useCallback(
     (nodeId: string) => {
-      const rootId = activeSeg?.rootCompositionId;
-      if (!rootId) return; // no composition yet — nothing to mark
+      if (!currentCompId) return; // no composition yet — nothing to mark
       setCompositions((pool) =>
-        pool[rootId]
-          ? { ...pool, [rootId]: { ...pool[rootId], outputId: nodeId || undefined } }
+        pool[currentCompId]
+          ? { ...pool, [currentCompId]: { ...pool[currentCompId], outputId: nodeId || undefined } }
           : pool
       );
     },
-    [activeSeg, setCompositions]
+    [currentCompId, setCompositions]
   );
 
   // Copy the current segment's card layout (its root composition) onto an ADJACENT
@@ -307,10 +376,37 @@ export default function Studio({
         />
         <div className="results-head">
           <span className="section-title">
-            {activeSeg ? activeSeg.label.toUpperCase() : "FULL TRACK"}
-            {/* The active tab already names the mode, so only the (informative) "by
-                track" nuance of the signals tab is worth spelling out in the title. */}
-            {tab === "signals" ? " · EXTRACT SIGNALS BY TRACK" : ""}
+            {navStack.length ? (
+              // The breadcrumb: segment ▸ extract 3 · clip ▸ … — every ancestor is a
+              // click back up; exactly one composition's graph is on screen at a time.
+              <span className="comp-breadcrumb">
+                <button className="crumb" onClick={() => navTo(0)}>
+                  {activeSeg?.label.toUpperCase()}
+                </button>
+                {navStack.map((f, i) => (
+                  <span key={`${f.compositionId}-${i}`}>
+                    {" ▸ "}
+                    {i === navStack.length - 1 ? (
+                      <span className="crumb-here">{f.label}</span>
+                    ) : (
+                      <button className="crumb" onClick={() => navTo(i + 1)}>
+                        {f.label}
+                      </button>
+                    )}
+                  </span>
+                ))}
+                <button className="btn sm crumb-up" onClick={() => navTo(navStack.length - 1)}>
+                  ↩ up
+                </button>
+              </span>
+            ) : (
+              <>
+                {activeSeg ? activeSeg.label.toUpperCase() : "FULL TRACK"}
+                {/* The active tab already names the mode, so only the (informative) "by
+                    track" nuance of the signals tab is worth spelling out in the title. */}
+                {tab === "signals" ? " · EXTRACT SIGNALS BY TRACK" : ""}
+              </>
+            )}
           </span>
           <div className="controls">
             {/* Segment ACTIONS — kept visually distinct from the transport cluster. */}
@@ -327,9 +423,10 @@ export default function Studio({
                   Final export ▸
                 </button>
               )}
-              {tab === "animation" && (
+              {tab === "animation" && !navFrame && (
                 // One segmented control: copy this segment's card layout onto the
                 // previous / next neighbour. Each side disables at its end of the track.
+                // Hidden inside an extract — copying is a segment-root affair.
                 <span className="rh-copy" role="group" aria-label="copy layout to a neighbour">
                   <span className="rh-copy-label">⧉ copy</span>
                   <button
@@ -437,14 +534,18 @@ export default function Studio({
                 );
               }
             )
-          : activeSeg && (
+          : activeSeg &&
+            viewSegment && (
               <AnimationCanvas
-                key={activeSeg.id}
-                segment={activeSeg}
+                // Keyed per COMPOSITION: entering an extract remounts the canvas
+                // (fresh selection/undo — history is per composition).
+                key={currentCompId || activeSeg.id}
+                segment={viewSegment}
                 graph={activeComp?.graph ?? null}
                 finalOutputId={activeComp?.outputId}
                 compositions={compositions}
                 updateCompositions={setCompositions}
+                enterExtract={enterExtract}
                 stems={stems}
                 job={job}
                 output={output}

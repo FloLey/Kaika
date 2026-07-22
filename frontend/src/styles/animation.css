@@ -3008,3 +3008,11 @@
   text-transform: none;
   letter-spacing: 0;
 }
+
+/* "open this extract" — the drill-in chevron on a montage extract row. */
+.anim-extract-open {
+  color: var(--muted);
+}
+.anim-extract-open:hover {
+  color: var(--text);
+}

@@ -125,7 +125,7 @@ by construction) and releasing a played-out extract is `childDag.close()`.
 | [`01`](01-composition-pool.md) ✅ `9ed15ff` | The pool: persistence + plumbing, no visible change | db, routes, segments.ts, compositions.ts, App/Studio, song_render, cache_gc, seed |
 | [`02`](02-pool-aware-hashing.md) ✅ | Pool-aware hashing, validation, render requests | graph_hash, graph_validate, animation routes, hash.ts, SignalData.ref |
 | [`03`](03-extracts-recursive-render.md) ✅ | Extracts: data model + recursive render + minimal card UI | GRAPH 30, RENDER 16, graph_render rebuild, fixture format |
-| `04` | Navigation: breadcrumb + per-composition canvas | Studio nav stack, NodeCtx window |
+| [`04`](04-breadcrumb-navigation.md) ✅ | Navigation: breadcrumb + per-composition canvas | Studio nav stack, window snapshot, viewSegment |
 | `05` | The horizontal montage editor (strip + live pane) | MontageEditor.tsx |
 | `06` | Breakpoints timeline (provenance colors, per-cut disable) | BreakpointTimeline.tsx |
 | `07` | DAG sharing: reuse picker, cycle refusal, refcounts, orphan prune | compositions.ts, validate_pool |
