@@ -128,7 +128,7 @@ by construction) and releasing a played-out extract is `childDag.close()`.
 | [`04`](04-breadcrumb-navigation.md) ✅ | Navigation: breadcrumb + per-composition canvas | Studio nav stack, window snapshot, viewSegment |
 | [`05`](05-montage-editor.md) ✅ | The horizontal montage editor (strip + live pane) | MontageEditor.tsx, enterMontage frame |
 | [`06`](06-breakpoints-timeline.md) ✅ | Breakpoints timeline (provenance colors, per-cut disable) | BreakpointTimeline.tsx |
-| `07` | DAG sharing: reuse picker, cycle refusal, refcounts, orphan prune | compositions.ts, validate_pool |
+| [`07`](07-dag-sharing.md) ✅ | DAG sharing: reuse picker, cycle refusal, refcounts, orphan prune | compositions.ts, refCounts ctx, prune-on-save |
 | `08` | Export + cache hardening (layer rule, GC safety, RSS bound) | song_render, cache_gc tests |
 | `09` | Docs & polish sweep | ARCHITECTURE, guide, montage-resume note |
 

@@ -102,6 +102,73 @@ export function reachableSlice(
   return out;
 }
 
+// Would referencing `childId` from inside `hostId`'s graph close a CYCLE — i.e.
+// is `hostId` reachable from `childId` (or the same composition)? The reuse
+// picker filters these out at the source; backend `validate_pool` 400s as the
+// belt-and-braces (a cyclic reference would recurse forever at render time).
+export function wouldCycle(pool: CompositionPool, hostId: string, childId: string): boolean {
+  if (hostId === childId) return true;
+  const seen = new Set<string>();
+  const stack = [childId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === hostId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const c = pool[id];
+    if (c) stack.push(...referencedCompositionIds(c.graph));
+  }
+  return false;
+}
+
+// How many places reference each composition: segment roots + every montage
+// extract across the pool. Drives the reuse picker's "used ×N" and the
+// last-reference confirm before an extract removal.
+export function refCounts(
+  pool: CompositionPool,
+  segments: Pick<Segment, "rootCompositionId">[]
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const bump = (id?: string) => {
+    if (id) counts[id] = (counts[id] || 0) + 1;
+  };
+  for (const s of segments) bump(s.rootCompositionId);
+  // Per-EXTRACT, not per referenced id: two extracts of one composition are two
+  // places (referencedCompositionIds is a set and would fold them).
+  for (const comp of Object.values(pool)) {
+    for (const n of comp.graph.nodes || []) {
+      if (n.type !== "montage") continue;
+      for (const ex of n.data.extracts || []) bump(ex.compositionId);
+    }
+  }
+  return counts;
+}
+
+// Drop every composition unreachable from the segments' roots (through extract
+// references, recursively). Removing a reference never deletes a composition
+// other references still reach; the LAST reference going away is what orphans
+// it — the ✕ confirm says so before it happens. Returns the SAME object when
+// nothing is orphaned, so callers can save/compare by identity.
+export function pruneOrphans(
+  pool: CompositionPool,
+  segments: Pick<Segment, "rootCompositionId">[]
+): CompositionPool {
+  const reachable = new Set<string>();
+  const stack = segments.map((s) => s.rootCompositionId).filter((id): id is string => !!id);
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (reachable.has(id)) continue;
+    reachable.add(id);
+    const c = pool[id];
+    if (c) stack.push(...referencedCompositionIds(c.graph));
+  }
+  const ids = Object.keys(pool);
+  if (ids.every((id) => reachable.has(id))) return pool;
+  const out: CompositionPool = {};
+  for (const id of ids) if (reachable.has(id)) out[id] = pool[id];
+  return out;
+}
+
 // A segment's root composition, or null while it has no animation.
 export function rootCompositionOf(
   seg: Pick<Segment, "rootCompositionId"> | null | undefined,

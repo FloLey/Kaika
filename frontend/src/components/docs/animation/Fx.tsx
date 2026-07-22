@@ -105,6 +105,15 @@ export default function Fx() {
         same one can appear in several places — editing it inside one extract updates every other
         reference the moment you return.
       </p>
+      <p>
+        <strong>Sharing.</strong> The editor's <strong>⟳ reuse</strong> lists every composition in
+        the project with a <em>used ×N</em> count; picking one adds an extract referencing it — one
+        edit, N places updated. Anything that would make a composition contain itself (its
+        ancestors, itself) is hidden from the list: cycles are refused at the source. Removing an
+        extract never deletes a composition other references still reach; removing the <em>last</em>{" "}
+        reference asks first, because the orphan is cleaned up on the next save. Double-click the
+        breadcrumb's current name to rename the open composition.
+      </p>
 
       <h3 id="animation-transform">Transform — warping the video</h3>
       <p>

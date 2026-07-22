@@ -30,6 +30,8 @@ interface GraphEditorOpts {
   graph?: Graph | null; // the active composition's graph (null = none built yet)
   finalOutputId?: string; // the composition's ★-final output mark
   compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
+  compositionId?: NodeCtx["compositionId"]; // the composition this editor edits
+  refCounts?: NodeCtx["refCounts"]; // "used ×N" per composition
   updateCompositions?: NodeCtx["updateCompositions"]; // pool writes ("pick a video" → leaf)
   enterExtract?: NodeCtx["enterExtract"]; // breadcrumb descent into an extract's child
   enterMontage?: NodeCtx["enterMontage"]; // a montage compact body opens the editor
@@ -52,6 +54,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     graph: rawGraph,
     finalOutputId,
     compositions,
+    compositionId,
+    refCounts,
     updateCompositions,
     enterExtract,
     enterMontage,
@@ -303,6 +307,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     () => ({
       segment,
       compositions,
+      compositionId,
+      refCounts,
       updateCompositions,
       enterExtract,
       enterMontage,
@@ -329,6 +335,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [
       segment,
       compositions,
+      compositionId,
+      refCounts,
       updateCompositions,
       enterExtract,
       enterMontage,

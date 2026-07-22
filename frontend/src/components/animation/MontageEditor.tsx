@@ -10,8 +10,9 @@ import { useNodeData } from "./nodes/useNodeData";
 import { dp2 } from "./nodes/nodeConstants";
 import { argHelp } from "../../lib/paramHelp";
 import { ctxAspect } from "../../lib/output";
+import ConfirmDialog from "../../ui/ConfirmDialog";
 import { videoThumbSrc } from "../../lib/assetPreview";
-import { leafComposition } from "../../lib/compositions";
+import { leafComposition, wouldCycle } from "../../lib/compositions";
 import {
   addExtract,
   moveExtract,
@@ -72,6 +73,32 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
   // Strip drag-reorder: plain HTML5 drag, dropping on a tile moves the dragged
   // extract to that index (moveExtract clamps).
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+
+  // "⟳ reuse": reference an EXISTING composition from a new extract — the DAG
+  // sharing gesture. Anything that would make this composition contain itself
+  // (directly or transitively) is filtered OUT at the source; the backend's
+  // validate_pool 400s as the belt-and-braces.
+  const [reusing, setReusing] = useState(false);
+  const pool = ctx.compositions || {};
+  const reusable = Object.values(pool).filter(
+    (c) => !ctx.compositionId || !wouldCycle(pool, ctx.compositionId, c.id)
+  );
+
+  // Removing the LAST reference orphans the composition (the save-time prune
+  // collects it) — say so before it happens. Other references keep it alive, so
+  // those removals don't ask.
+  const [confirmRemove, setConfirmRemove] = useState<{ extractId: string; name: string } | null>(
+    null
+  );
+  const removeOne = (k: number) => {
+    const comp = comps[k];
+    const uses = comp ? (ctx.refCounts?.[comp.id] ?? 0) : 0;
+    if (comp && uses <= 1) {
+      setConfirmRemove({ extractId: extracts[k].id, name: comp.name });
+    } else {
+      onGraphChange((g) => removeExtract(g, node.id, extracts[k].id));
+    }
+  };
 
   return (
     <div className="montage-editor">
@@ -171,8 +198,12 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
                 )}
                 <button
                   className="iconbtn anim-combine-rm"
-                  title="remove extract (the composition stays in the pool)"
-                  onClick={() => onGraphChange((g) => removeExtract(g, node.id, x.id))}
+                  title={
+                    comp && (ctx.refCounts?.[comp.id] ?? 0) > 1
+                      ? `remove extract — "${comp.name}" stays (used in ${ctx.refCounts![comp.id]} places)`
+                      : "remove extract"
+                  }
+                  onClick={() => removeOne(k)}
                 >
                   ✕
                 </button>
@@ -187,7 +218,39 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
         >
           + video
         </button>
+        <button
+          className="montage-tile montage-tile-add"
+          onClick={() => setReusing(true)}
+          title="reference an EXISTING composition — the same one can play in several extracts; editing it updates them all"
+        >
+          ⟳ reuse
+        </button>
       </div>
+
+      {reusing && (
+        <div className="montage-reuse" role="dialog" aria-label="reuse a composition">
+          <div className="anim-fx-hint">
+            reuse a composition — ancestors are hidden (a composition can't contain itself)
+            <button className="iconbtn" onClick={() => setReusing(false)} title="close">
+              ✕
+            </button>
+          </div>
+          {reusable.length === 0 && <div className="anim-fx-hint">nothing reusable yet</div>}
+          {reusable.map((c) => (
+            <button
+              key={c.id}
+              className="montage-reuse-row"
+              onClick={() => {
+                onGraphChange((g) => addExtract(g, node.id, c.id));
+                setReusing(false);
+              }}
+            >
+              <span className="montage-reuse-name">{c.name}</span>
+              <span className="montage-reuse-uses">used ×{ctx.refCounts?.[c.id] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Both cut sources on one strip, provenance always visible: gate cuts click
           off/on (they stay greyed, never hidden), manual cuts place/drag/delete.
@@ -256,6 +319,20 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={!!confirmRemove}
+        message={`This is the last reference to “${confirmRemove?.name}” — removing the extract will delete the composition on the next save.`}
+        confirmLabel="Remove"
+        danger
+        onConfirm={() => {
+          if (confirmRemove) {
+            const id = confirmRemove.extractId;
+            onGraphChange((g) => removeExtract(g, node.id, id));
+          }
+          setConfirmRemove(null);
+        }}
+        onCancel={() => setConfirmRemove(null)}
+      />
       {picking && (
         <AssetLibrary
           jobId={jobIdOf(ctx.job)}

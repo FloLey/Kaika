@@ -16,6 +16,8 @@ interface AnimationCanvasProps {
   graph?: Graph | null; // the active composition's graph (null = none built yet)
   finalOutputId?: string; // the composition's ★-final output mark
   compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
+  compositionId?: NodeCtx["compositionId"]; // the composition this canvas edits
+  refCounts?: NodeCtx["refCounts"]; // "used ×N" per composition
   updateCompositions?: NodeCtx["updateCompositions"]; // pool writes ("pick a video" → leaf)
   enterExtract?: NodeCtx["enterExtract"]; // breadcrumb descent into an extract's child
   enterMontage?: NodeCtx["enterMontage"]; // a montage compact body opens the editor
@@ -53,6 +55,8 @@ export default function AnimationCanvas({
   graph: compGraph,
   finalOutputId,
   compositions,
+  compositionId,
+  refCounts,
   updateCompositions,
   enterExtract,
   enterMontage,
@@ -94,6 +98,8 @@ export default function AnimationCanvas({
     graph: compGraph,
     finalOutputId,
     compositions,
+    compositionId,
+    refCounts,
     updateCompositions,
     enterExtract,
     enterMontage,

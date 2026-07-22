@@ -79,6 +79,15 @@ describe("outputHash × composition pool", () => {
     expect(key(montage("c-gone"), {})).not.toBe(key(montage(), {}));
   });
 
+  it("editing a SHARED child busts every referencing root (the propagation contract)", () => {
+    const rootA = montage("shared");
+    const rootB = montage("shared");
+    const pool = { shared: comp("shared", backdrop()) };
+    const edited = { shared: comp("shared", backdrop("#3a7f2b")) };
+    expect(key(rootA, edited)).not.toBe(key(rootA, pool));
+    expect(key(rootB, edited)).not.toBe(key(rootB, pool));
+  });
+
   it("the child's ★ output mark moves the key", () => {
     const g = montage("c1");
     expect(key(g, { c1: comp("c1", backdrop(), "o") })).not.toBe(

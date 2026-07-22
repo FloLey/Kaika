@@ -14,7 +14,7 @@ import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
 import { STEM_META, seedSignal } from "../../lib/segments";
-import { copyLayout, createComposition } from "../../lib/compositions";
+import { copyLayout, createComposition, refCounts as poolRefCounts } from "../../lib/compositions";
 import type {
   CompositionPool,
   Graph,
@@ -151,6 +151,13 @@ export default function Studio({
       ? activeSeg.end
       : duration || mediaDuration || 0;
   const segLen = Math.max(0.001, winEnd - winStart);
+  // "used ×N" per composition (segment roots + extracts) — the reuse picker's
+  // indicator and the last-reference confirm read it through ctx.
+  const compRefCounts = useMemo(
+    () => poolRefCounts(compositions, segments),
+    [compositions, segments]
+  );
+
   // What the canvas edits: the host segment, re-windowed to the current frame —
   // every consumer (previews, render keys, signal resolution) reads start/end +
   // signals off ctx.segment, so re-windowing here drives them all at once.
@@ -245,6 +252,25 @@ export default function Studio({
     },
     [resetTransport]
   );
+
+  // Double-click the CURRENT crumb to rename the open composition — a shared
+  // composition's name is how the reuse picker and every referencing strip tile
+  // identify it, so it's editable where you're already looking at it.
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
+  const commitRename = useCallback(() => {
+    const name = renameDraft?.trim();
+    setRenameDraft(null);
+    if (!name || !navFrame || navFrame.kind !== "comp" || !currentCompId) return;
+    setCompositions((pool) =>
+      pool[currentCompId] ? { ...pool, [currentCompId]: { ...pool[currentCompId], name } } : pool
+    );
+    // The frame label snapshots the name at entry — follow the rename.
+    setNavStack((s) =>
+      s.map((f, i) =>
+        i === s.length - 1 ? { ...f, label: f.label.replace(/·[^·]*$/, `· ${name}`) } : f
+      )
+    );
+  }, [renameDraft, navFrame, currentCompId, setCompositions]);
 
   // ---- per-segment signal edits --------------------------------------------
   const editActiveSignals = useCallback(
@@ -424,7 +450,33 @@ export default function Studio({
                   <span key={`${f.compositionId}-${i}`}>
                     {" ▸ "}
                     {i === navStack.length - 1 ? (
-                      <span className="crumb-here">{f.label}</span>
+                      renameDraft != null && f.kind === "comp" ? (
+                        <input
+                          className="crumb-rename"
+                          value={renameDraft}
+                          autoFocus
+                          onChange={(e) => setRenameDraft(e.target.value)}
+                          onBlur={commitRename}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitRename();
+                            if (e.key === "Escape") setRenameDraft(null);
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="crumb-here"
+                          title={
+                            f.kind === "comp"
+                              ? "double-click to rename this composition"
+                              : undefined
+                          }
+                          onDoubleClick={() =>
+                            f.kind === "comp" && setRenameDraft(activeComp?.name || "")
+                          }
+                        >
+                          {f.label}
+                        </span>
+                      )
                     ) : (
                       <button className="crumb" onClick={() => navTo(i + 1)}>
                         {f.label}
@@ -581,6 +633,8 @@ export default function Studio({
                 graph={activeComp?.graph ?? null}
                 finalOutputId={activeComp?.outputId}
                 compositions={compositions}
+                compositionId={currentCompId}
+                refCounts={compRefCounts}
                 updateCompositions={setCompositions}
                 enterExtract={enterExtract}
                 enterMontage={enterMontage}

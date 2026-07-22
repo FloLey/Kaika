@@ -58,6 +58,12 @@ export interface NodeCtx {
   // The project's composition pool — a montage card's extracts reference into it,
   // and render keys/POSTs carry the reachable slice so child edits re-render.
   compositions?: CompositionPool;
+  // The composition the canvas is currently editing (the breadcrumb's top) — the
+  // reuse picker filters out anything that would make IT contain itself.
+  compositionId?: string;
+  // How many places reference each composition (segment roots + extracts) — the
+  // "used ×N" indicator and the last-reference confirm read this.
+  refCounts?: Record<string, number>;
   // Write access to the pool (immutably, like onGraphChange): the montage's "pick a
   // video" creates a LEAF composition here and references it from an extract.
   updateCompositions?: (updater: (pool: CompositionPool) => CompositionPool) => void;

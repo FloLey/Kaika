@@ -11,7 +11,7 @@ import LogsPanel from "./components/LogsPanel";
 import SettingsModal from "./components/SettingsModal";
 import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
-import { hydrateCompositions, splitAt } from "./lib/compositions";
+import { hydrateCompositions, pruneOrphans, splitAt } from "./lib/compositions";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
 import { EXPORT_DEFAULTS, withExportDefaults } from "./lib/export";
 import type { ExportSettings } from "./lib/export";
@@ -39,7 +39,10 @@ function buildSavePayload(
     segments: serializeSegments(segments),
     // The pool is already pure JSON (hydration normalizes it); it rides the same
     // payload as the segments that reference it, so the two can't save out of step.
-    compositions,
+    // Orphans (nothing reachable from any segment's root) are pruned FROM THE
+    // PAYLOAD, not from the state: an in-session undo that restores the last
+    // reference finds the composition still in memory and simply saves it again.
+    compositions: pruneOrphans(compositions, segments),
     output,
     export: exportSettings,
   };
@@ -242,7 +245,9 @@ export default function App() {
       setEnvelopeTimes(p.envelope_times || []);
       const segs = hydrateSegments(p.segments, p.stems || {});
       setSegments(segs);
-      const pool = hydrateCompositions(p.compositions);
+      // Orphans from past sessions (references removed after their last save)
+      // are collected on the way in.
+      const pool = pruneOrphans(hydrateCompositions(p.compositions), segs);
       setCompositions(pool);
       setActiveSegId(segs[0]?.id || null);
       const loadedOutput = withOutputDefaults(p.output);
