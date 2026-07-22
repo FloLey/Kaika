@@ -338,6 +338,8 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
       "Dead band under the threshold — the trigger must fall below it before it can cut again (no machine-gunning).",
     extracts:
       "One composition per extract, played in order — extract 1 from the window start, each next one from its cut. + video picks a clip from the library (it becomes a tiny video→output composition you can open and edit); ×N makes an extract swallow N cuts. The row shows the extract's start – end window in seconds. The same composition can be referenced by several extracts — editing it updates them all.",
+    breakpoints:
+      "The two cut sources, one strip: GATE cuts (from the wired trigger, recomputed live as you tune the signal) and MANUAL cuts. Click empty space to place a manual cut; drag one to move it, click one to delete it. Click a gate cut to disable just that one — it stays visible, greyed, so its origin reads; a disabled cut that MOVES (threshold edit) re-enables itself.",
   },
   scope: {
     in: "The value to monitor — it passes straight through, unchanged.",

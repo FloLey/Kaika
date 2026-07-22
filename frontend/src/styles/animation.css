@@ -3119,3 +3119,58 @@
   flex-direction: column;
   gap: 10px;
 }
+
+/* ---- the breakpoints timeline (montage editor) ------------------------------ */
+.bp-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bp-rail {
+  position: relative;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: copy; /* "click to place a manual cut" */
+}
+.bp-mark {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 4px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.bp-gate {
+  background: #22d3ee; /* the gate's colour — cuts born from the music */
+}
+.bp-gate.off {
+  background: transparent;
+  border-left: 2px dashed #22d3ee66; /* still visible (provenance), just not cutting */
+  width: 0;
+}
+.bp-manual {
+  background: #fbbf24; /* the hand-placed colour */
+  cursor: grab;
+}
+.bp-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bp-key {
+  display: inline-block;
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+}
+.bp-key-gate {
+  background: #22d3ee;
+}
+.bp-key-manual {
+  background: #fbbf24;
+}

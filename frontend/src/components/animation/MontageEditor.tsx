@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BreakpointTimeline from "./BreakpointTimeline";
 import StreamPreview from "./nodes/StreamPreview";
 import InputPicker from "./InputPicker";
 import AssetLibrary from "../assets/AssetLibrary";
@@ -187,6 +188,19 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
           + video
         </button>
       </div>
+
+      {/* Both cut sources on one strip, provenance always visible: gate cuts click
+          off/on (they stay greyed, never hidden), manual cuts place/drag/delete.
+          The extract boundaries above redraw live off the same schedule. */}
+      {cuts && (
+        <BreakpointTimeline
+          montageId={node.id}
+          marks={cuts.marks}
+          fps={fps}
+          total={cuts.total}
+          onGraphChange={onGraphChange}
+        />
+      )}
 
       <div className="montage-editor-body">
         <div className="montage-live">

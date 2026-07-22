@@ -127,7 +127,7 @@ by construction) and releasing a played-out extract is `childDag.close()`.
 | [`03`](03-extracts-recursive-render.md) ✅ | Extracts: data model + recursive render + minimal card UI | GRAPH 30, RENDER 16, graph_render rebuild, fixture format |
 | [`04`](04-breadcrumb-navigation.md) ✅ | Navigation: breadcrumb + per-composition canvas | Studio nav stack, window snapshot, viewSegment |
 | [`05`](05-montage-editor.md) ✅ | The horizontal montage editor (strip + live pane) | MontageEditor.tsx, enterMontage frame |
-| `06` | Breakpoints timeline (provenance colors, per-cut disable) | BreakpointTimeline.tsx |
+| [`06`](06-breakpoints-timeline.md) ✅ | Breakpoints timeline (provenance colors, per-cut disable) | BreakpointTimeline.tsx |
 | `07` | DAG sharing: reuse picker, cycle refusal, refcounts, orphan prune | compositions.ts, validate_pool |
 | `08` | Export + cache hardening (layer rule, GC safety, RSS bound) | song_render, cache_gc tests |
 | `09` | Docs & polish sweep | ARCHITECTURE, guide, montage-resume note |
