@@ -155,8 +155,9 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
 - `GET /jobs/<job_id>` — poll a background job: `{state: running|done|error, step,
   error, result}`.
 - `GET /projects` · `GET|PUT|DELETE /projects/<job_id>` — list / load / autosave
-  / delete a project (segments + per-segment isolation edits live in Postgres).
-  `POST /playground` ensures the seeded demo project exists.
+  / delete a project (segments, the **composition pool** they reference, and
+  per-segment isolation edits live in Postgres). `POST /playground` ensures the
+  seeded demo project exists.
 - `GET /audio/<job>/<stem>` (Range/seek) · `GET /spectrogram/<job>/<stem>`.
 - `POST /upload-asset/<job>` · `POST /asset-from-youtube/<job>` ·
   `GET /assets/<job>` · `DELETE /assets/<job>/<id>` — the per-project image/video
@@ -165,7 +166,8 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
   knobs above → `{curve, times}` (the Studio calls this, debounced). `POST
   /resolve` returns one value node's curve (the Scope card's live view).
 - `POST /animate/stream` — `{job_id, segment:{start,end,signals,lyric_lines},
-  graph, output, output_id}` → resolves that output's node graph and renders it
+  graph, output, output_id, compositions?}` (the pool slice any montage extract
+  reaches) → resolves that output's node graph and renders it
   in **streaming blocks** (a growing, playable preview after ~one block). Returns
   `{render_id}`; poll `GET /animate/stream/<id>`, stop with `POST
   /animate/stream/<id>/cancel` (the UI cancels on every edit). `POST /animate` is

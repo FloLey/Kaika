@@ -137,8 +137,12 @@ or the executor's dispatch.
    label to `backend/card_demo.py` `CARD_LABELS`, build the pipeline in the live
    Playground, then capture it into `playground_pipelines.json` with either the
    **💾 save fixture** button (top of the Playground's CARDS rail) or
-   `make export-playground` (never hand-edit that file). `test_card_impact.py`
-   renders every pipeline and fails on a missing/blank one. Once the fixture has
+   `make export-playground` (never hand-edit that file). A demo whose graph
+   references child compositions (the montage's extracts) carries its reachable
+   slice in a per-entry `compositions` key — the export writes it, the seed
+   merges it back under stable `comp-demo-…` ids. `test_card_impact.py`
+   renders every pipeline (with its slice as the pool) and fails on a
+   missing/blank one. Once the fixture has
    the demo, LIVE playgrounds pick it up additively on their next open
    (`ensure_playground` appends segments for cards the rail lacks, by label —
    no destructive `make seed-playground` needed; that stays the force-rebuild).

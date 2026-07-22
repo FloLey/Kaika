@@ -123,7 +123,7 @@ the implementation lives in five modules:
   Each block producer memoizes **one** block so a diamond consumer computes it
   once; `Dag.drop_stale_blocks(a)` (called by `stream_blocks` before every block)
   frees the ones the playhead has passed. That matters for producers not pulled
-  every block — a montage slot after its cut — which otherwise each hold a full
+  every block — a montage extract after its cut — which otherwise each hold a full
   block of frames until `close()` (~33 MB/frame at 4K, per slot).
   Their `output_id` may be an **output node** (render the video wired into it) or
   **any video producer directly** (fluid/combine/transform — the per-card live
@@ -433,6 +433,11 @@ So a UI slider's range can never drift from what the render maps.
 - **Version bumps**: `RENDER_VERSION` (`backend/graph_hash.py`) when render
   *semantics* change; `GRAPH_VERSION` (`lib/graph/factories.ts`) + a
   `normalizeGraph` migration when the persisted graph *shape* changes.
+- **The composition pool is ACYCLIC**: a composition must never contain itself
+  through montage extracts, directly or transitively — the reuse picker filters
+  it at the source (`lib/compositions.wouldCycle`), `validate_pool` 400s it at
+  the boundary. And the pool is pruned to what segments reach on save/load
+  (`pruneOrphans`), never in the in-memory state.
 - **Tests patch `backend.paths`** for data dirs — render code reads
   `paths.ANIM_DIR` etc. late-bound, so there is exactly one patch point.
 - **`/logs` must never log** — it would feed the log stream it serves.

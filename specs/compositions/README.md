@@ -1,7 +1,10 @@
 # Compositions — a DAG of nested, shared compositions
 
-> **Status: IN PROGRESS** — step files below land one commit each, every commit green
-> (pytest + vitest + lint + `tsc --noEmit`) and leaving the app usable.
+> **Status: BUILT** — steps `9ed15ff` (01), `5a8402d` (02), `2478fe1` (03, GRAPH 30 +
+> RENDER 16), `9d6d803` (04), `d9fcb8f` (05), `02da545` (06), `61be1a9` (07),
+> `2f8dd54` (08), + the docs sweep (09). Every commit green (pytest + vitest +
+> lint + `tsc --noEmit`); the Playground reseeded and re-exported through the
+> new path along the way.
 
 Design record for the montage rework: replace "one node graph per segment" with a
 **pool of compositions** addressed by id. A *composition* is a small graph ending in an
@@ -130,7 +133,7 @@ by construction) and releasing a played-out extract is `childDag.close()`.
 | [`06`](06-breakpoints-timeline.md) ✅ | Breakpoints timeline (provenance colors, per-cut disable) | BreakpointTimeline.tsx |
 | [`07`](07-dag-sharing.md) ✅ | DAG sharing: reuse picker, cycle refusal, refcounts, orphan prune | compositions.ts, refCounts ctx, prune-on-save |
 | [`08`](08-export-cache-hardening.md) ✅ | Export + cache hardening (layer rule, GC safety) | song_render, cache_gc, export_segment tests |
-| `09` | Docs & polish sweep | ARCHITECTURE, guide, montage-resume note |
+| `09` ✅ | Docs & polish sweep | ARCHITECTURE, README, DEVELOPMENT, guide, montage-resume note |
 
 Cleanup mandate (user): delete aggressively in the same commit that makes code dead —
 no compat layers, no just-in-case code. Each step file records what was removed.

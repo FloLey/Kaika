@@ -1,8 +1,17 @@
 # Montage — resume a repeated clip instead of restarting it
 
-> **Status: NOT BUILT.** This is the design record for a feature, not a description of
-> shipped code. Two parts, sized very differently — part 1 is small and safe, part 2 is a
-> real feature with a version bump. Part 1 can ship without part 2.
+> **Status: SUBSUMED by `specs/compositions/` (the extracts rework, 2026-07-23).**
+> The montage no longer has slots — it has extracts referencing child
+> compositions — and the two parts of this spec landed as different shapes:
+> **Part 1** (detect and warn) became the duplicate roll-up reading through the
+> extracts' LEAF compositions (same clip in two extracts is flagged whether they
+> are two pool entries or one shared composition — `useMontageShortfall`'s
+> `repeats`). **Part 2** (the "align it" offset) became `extract.inPoint` —
+> seconds into the child's local clock at the cut, byte-exact-equivalent to the
+> leaf's video `start` (pinned by `test_extract_in_point_offsets_the_child`);
+> "resume where the previous occurrence left off" = set the in-point there. The
+> per-slot local-time cache this spec had to design around is gone; the prose
+> below describes the pre-extracts world and is kept as the historical record.
 
 ## The problem
 
