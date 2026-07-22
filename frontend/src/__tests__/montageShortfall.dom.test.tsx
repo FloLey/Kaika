@@ -80,17 +80,56 @@ describe("Montage — a slot short of material", () => {
     expect(badge.getAttribute("title")).not.toMatch(/goes BLACK/);
   });
 
-  it("totals the black on the CARD, so it is not one badge among dozens of rows", async () => {
-    const { findByText } = mount(oneShortSlot(false));
-    const summary = await findByText(/1 slot short/i);
+  it("totals the black in the ONE header line, not a second block", async () => {
+    // A ⚠ badge on one row out of 37 was missed — an export shipped with black. The
+    // roll-up now rides the single status line; its detail (which slots) is the title.
+    const { findByTitle } = mount(oneShortSlot(false));
+    const summary = await findByTitle(/short of material/i);
     expect(summary.textContent).toMatch(/6\.0s black/);
+    expect(summary.getAttribute("title")).toMatch(/slot 1 \(−6\.0s\)/);
   });
 
-  it("counts a looping short slot as short but NOT as black", async () => {
-    const { findByText } = mount(oneShortSlot(true));
-    const summary = await findByText(/1 slot short/i);
-    expect(summary.textContent).toMatch(/0\.0s black/);
-    expect(summary.textContent).toMatch(/\+1 looping/);
+  it("turns the offending ROW red when it goes black, so the list itself warns", async () => {
+    const { findByTitle } = mount(oneShortSlot(false));
+    const badge = await findByTitle(/clip too short/i);
+    const row = badge.closest(".anim-combine-row");
+    expect(row?.className).toContain("short"); // the whole line is loud, not just the badge
+  });
+
+  it("does NOT count a looping short slot as black — no header roll-up, no red row", async () => {
+    const { findByTitle, queryByTitle } = mount(oneShortSlot(true));
+    // Its own row still flags it (it loops, which is fine), but it is not an export defect:
+    const badge = await findByTitle(/clip too short/i);
+    expect(badge.getAttribute("title")).toMatch(/loops back/);
+    expect(badge.closest(".anim-combine-row")?.className).not.toContain("short");
+    // and it contributes 0s of black, so the header shows no black roll-up at all.
+    expect(queryByTitle(/short of material/i)).toBeNull();
+  });
+
+  it("still warns about black when the montage is COLLAPSED (compact view)", async () => {
+    // The bug the user actually hit: a compact montage renders CompactCard, which had only
+    // a thumbnail — every warning lived in the full card. So on a busy timeline (cards
+    // collapsed to fit) the "Xs black" warning was invisible, and an export shipped with a
+    // black hole. The compact card must surface the same roll-up.
+    const g = { ...oneShortSlot(false), viewMode: "compact" as const };
+    const { findByText, queryByTitle } = mount(g);
+    const warn = await findByText(/6\.0s black/);
+    expect(warn.getAttribute("title")).toMatch(/goes BLACK/);
+    // and it is genuinely the COMPACT card — the full per-row list is not rendered.
+    expect(queryByTitle(/clip too short/i)).toBeNull();
+  });
+
+  it("a collapsed montage whose clip merely loops shows no black ribbon", async () => {
+    const g = { ...oneShortSlot(true), viewMode: "compact" as const };
+    const { queryByText } = render(
+      <AnimationCanvas
+        segment={{ ...segment, graph: g }}
+        job="j"
+        assets={ASSETS}
+        onGraphChange={() => {}}
+      />
+    );
+    await waitFor(() => expect(queryByText(/black/i)).toBeNull());
   });
 
   it("stays quiet when the clip covers its slot", async () => {

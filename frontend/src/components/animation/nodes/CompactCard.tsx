@@ -3,6 +3,7 @@ import NodeFrame, { MultiAnchor } from "./NodeFrame";
 import CompactPreview from "./CompactPreview";
 import NodeSettingsModal from "../NodeSettingsModal";
 import { chromeFor } from "./registry";
+import MontageCompactWarning from "./MontageCompactWarning";
 import { cardInputs } from "../nodeInputs";
 import { stemColor } from "../../../lib/segments";
 import { isLooseEdge } from "../../../lib/graphModel";
@@ -126,6 +127,9 @@ export default function CompactCard({
           onClick={() => setSettingsOpen(true)}
         >
           <CompactPreview node={node} ctx={ctx} accent={accent} />
+          {/* A montage's black-hole warning must survive being collapsed — see the
+              component. Other card types have nothing to surface here yet. */}
+          {node.type === "montage" && <MontageCompactWarning node={node} ctx={ctx} />}
         </button>
       </NodeFrame>
       {settingsOpen && (

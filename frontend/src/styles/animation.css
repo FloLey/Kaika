@@ -403,6 +403,7 @@
   padding: 0; /* the body button owns its own padding so its hover fills the card */
 }
 .anim-compact-body {
+  position: relative; /* anchors the montage black-hole warning badge */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -423,6 +424,23 @@
 .anim-compact-body .anim-mini-spark {
   height: 26px;
   pointer-events: none; /* clicks land on the body button */
+}
+/* The montage's "X s black" warning on a COLLAPSED card — a ribbon along the bottom so it
+   reads at a glance without expanding the card. Loud on purpose: a hidden export defect. */
+.anim-compact-warn {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 6px;
+  font: 600 10px/1.4 var(--mono);
+  color: #fff;
+  background: var(--danger, #d9534f);
+  border-radius: 0 0 12px 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none; /* the click still opens settings */
 }
 .anim-compact-swatch {
   width: 100%;
@@ -1984,6 +2002,14 @@
 }
 .anim-combine-row > .gc-port {
   flex: none;
+}
+/* A slot whose clip runs out with loop off goes BLACK in the render. Make the row itself
+   loud — a per-row ⚠ badge was missed in a 37-row list (an export shipped with black in
+   it), so the whole line carries the warning now, not just its badge. */
+.anim-combine-row.short {
+  background: color-mix(in srgb, var(--danger, #d9534f) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--danger, #d9534f);
+  border-radius: 3px;
 }
 .anim-combine-slot {
   flex: none;
