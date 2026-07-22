@@ -14,7 +14,7 @@ whole-song HD export. Flask JSON API (`:5000`) + React/Vite (`:5173`) + Postgres
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Dev workflow + checklists: add a param, add a node card |
 | [`README.md`](README.md) | Setup, run, API surface, storage |
 | `frontend/src/components/docs/` | The in-app **user guide** (`/?doc=<section>`), one file per section behind a thin `Docs.tsx`; every "?" in the UI deep-links into it — update it when user-facing behavior changes (a test guards its anchors) |
-| [`specs/`](specs/) | Design records per feature wave — the *why* of work that SHIPPED, not a roadmap. One folder per wave |
+| [`specs/`](specs/) | **All specs live here** — design records per feature, whether shipped or not yet built. One folder per wave. An unbuilt spec says so at its top |
 | [`specs/generative-cards/`](specs/generative-cards/) | The six shipped generative cards (waves…clouds). The code diverged from these specs — the README says how |
 | [`specs/cleanup/`](specs/cleanup/) | The code-quality series, waves 1–2 (`00`–`15`), done |
 | [`specs/ai-stylize/`](specs/ai-stylize/) | The AI Stylize wave — **the one exception in `specs/`: only half of it was built.** Its README carries the per-step status; trust that, not the step prose |
