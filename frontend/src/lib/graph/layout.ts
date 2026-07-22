@@ -398,33 +398,3 @@ export function flowLayout(
   for (const [id, p] of pos) pos.set(id, { x: p.x + dx, y: p.y + dy });
   return pos;
 }
-
-// Pack cards closer (the compact-view ✨ arrange): scale every card's CENTER toward
-// the arrangement's bbox center — relative order and rough shape survive — then
-// de-overlap so nothing ends up closer than `gap`. With small compact cards the net
-// effect is "same picture, much tighter".
-export function tighten(
-  rects: LayoutRect[],
-  gap = 16,
-  factor = 0.5
-): Map<string, { x: number; y: number }> {
-  if (rects.length < 2) return new Map(rects.map((r) => [r.id, { x: r.x, y: r.y }]));
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const r of rects) {
-    minX = Math.min(minX, r.x + r.w / 2);
-    minY = Math.min(minY, r.y + r.h / 2);
-    maxX = Math.max(maxX, r.x + r.w / 2);
-    maxY = Math.max(maxY, r.y + r.h / 2);
-  }
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-  const scaled = rects.map((r) => ({
-    ...r,
-    x: cx + (r.x + r.w / 2 - cx) * factor - r.w / 2,
-    y: cy + (r.y + r.h / 2 - cy) * factor - r.h / 2,
-  }));
-  return resolveOverlaps(scaled, gap);
-}

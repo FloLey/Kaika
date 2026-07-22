@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  FLOW_GAPS,
-  estimateCardSize,
-  flowLayout,
-  resolveOverlaps,
-  tighten,
-} from "../lib/graph/layout";
+import { FLOW_GAPS, estimateCardSize, flowLayout, resolveOverlaps } from "../lib/graph/layout";
 import type { LayoutRect } from "../lib/graph/layout";
 
 // The per-view layout passes (v20). The user-facing contract under test:
@@ -76,35 +70,6 @@ describe("resolveOverlaps", () => {
       { id: "b", x: 50, y: 50, w: 200, h: 80 },
     ];
     expect(overlapping(rects, resolveOverlaps(rects))).toEqual([]);
-  });
-});
-
-describe("tighten", () => {
-  it("packs a spread layout closer without creating overlaps", () => {
-    // A detailed-spaced arrangement, then compact-sized cards: lots of dead space.
-    const rects: LayoutRect[] = [
-      { id: "a", x: 0, y: 0, w: 200, h: 80 },
-      { id: "b", x: 500, y: 0, w: 200, h: 80 },
-      { id: "c", x: 0, y: 600, w: 200, h: 80 },
-      { id: "d", x: 500, y: 600, w: 200, h: 80 },
-    ];
-    const pos = tighten(rects);
-    expect(overlapping(rects, pos)).toEqual([]);
-    const span = (p: Map<string, { x: number; y: number }>) => {
-      const xs = rects.map((r) => p.get(r.id)!.x);
-      const ys = rects.map((r) => p.get(r.id)!.y);
-      return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
-    };
-    const before = new Map(rects.map((r) => [r.id, { x: r.x, y: r.y }]));
-    expect(span(pos)).toBeLessThan(span(before));
-    // Relative order survives the packing.
-    expect(pos.get("a")!.x).toBeLessThan(pos.get("b")!.x);
-    expect(pos.get("a")!.y).toBeLessThan(pos.get("c")!.y);
-  });
-
-  it("leaves a single card alone", () => {
-    const rects: LayoutRect[] = [{ id: "solo", x: 42, y: 7, w: 200, h: 80 }];
-    expect(tighten(rects).get("solo")).toEqual({ x: 42, y: 7 });
   });
 });
 

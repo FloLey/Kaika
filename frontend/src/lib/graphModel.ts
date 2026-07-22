@@ -8,7 +8,7 @@
 //   graph/normalize  normalizeGraph — schema-driven migration of older saves
 //   graph/validate   validate / outputRenderable (§3.7), contributing-subgraph walk
 //   graph/hash       outputHash — the per-output render-POST gate (§3.6)
-//   graph/layout     de-overlap / tighten passes for the per-view card positions
+//   graph/layout     de-overlap + flow-layout passes for the card positions
 
 export {
   mkNodeId,
@@ -91,7 +91,7 @@ export {
   renameNode,
 } from "./graph/mutations";
 export { normalizeGraph } from "./graph/normalize";
-export { resolveOverlaps, tighten, flowLayout, estimateCardSize, FLOW_GAPS } from "./graph/layout";
+export { resolveOverlaps, flowLayout, estimateCardSize, FLOW_GAPS } from "./graph/layout";
 export type { LayoutRect, CardSize, FlowGaps } from "./graph/layout";
 export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/validate";
 export { outputHash, upstreamKey } from "./graph/hash";
