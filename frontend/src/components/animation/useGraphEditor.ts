@@ -32,6 +32,7 @@ interface GraphEditorOpts {
   compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
   updateCompositions?: NodeCtx["updateCompositions"]; // pool writes ("pick a video" → leaf)
   enterExtract?: NodeCtx["enterExtract"]; // breadcrumb descent into an extract's child
+  enterMontage?: NodeCtx["enterMontage"]; // a montage compact body opens the editor
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -53,6 +54,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     compositions,
     updateCompositions,
     enterExtract,
+    enterMontage,
     stems,
     job,
     output,
@@ -303,6 +305,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       compositions,
       updateCompositions,
       enterExtract,
+      enterMontage,
       stems,
       job,
       output,
@@ -328,6 +331,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       compositions,
       updateCompositions,
       enterExtract,
+      enterMontage,
       stems,
       job,
       output,

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import GraphCanvas from "./GraphCanvas";
+import MontageEditor from "./MontageEditor";
 import Palette from "./Palette";
 import renderAnimNode from "./renderAnimNode";
 import { MinimizeContext } from "./nodes/minimizeContext";
@@ -17,6 +18,10 @@ interface AnimationCanvasProps {
   compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
   updateCompositions?: NodeCtx["updateCompositions"]; // pool writes ("pick a video" → leaf)
   enterExtract?: NodeCtx["enterExtract"]; // breadcrumb descent into an extract's child
+  enterMontage?: NodeCtx["enterMontage"]; // a montage compact body opens the editor
+  // When set (a "montage" breadcrumb frame), the stage renders the MONTAGE EDITOR
+  // for this node instead of the graph canvas — same graph state, richer surface.
+  montageEditorNodeId?: string;
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -50,6 +55,8 @@ export default function AnimationCanvas({
   compositions,
   updateCompositions,
   enterExtract,
+  enterMontage,
+  montageEditorNodeId,
   stems,
   job,
   output,
@@ -89,6 +96,7 @@ export default function AnimationCanvas({
     compositions,
     updateCompositions,
     enterExtract,
+    enterMontage,
     stems,
     job,
     output,
@@ -151,6 +159,20 @@ export default function AnimationCanvas({
       y: (h / 2 - v.ty) / v.scale - 70 + n * 24,
     };
   }, [graph]);
+
+  // A "montage" breadcrumb frame: the stage IS the montage editor (strip + live
+  // view + wiring rail). Same graph state and ctx as the canvas — only the surface
+  // changes; Studio pops the frame if the node vanishes.
+  const editorNode = montageEditorNodeId
+    ? graph.nodes.find((n) => n.id === montageEditorNodeId && n.type === "montage")
+    : undefined;
+  if (editorNode) {
+    return (
+      <div className="anim-wrap">
+        <MontageEditor node={editorNode} ctx={ctx} onGraphChange={applyUpdater} />
+      </div>
+    );
+  }
 
   return (
     <div className="anim-wrap">

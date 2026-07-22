@@ -113,8 +113,12 @@ export default function Studio({
   // lives in the parent), so the snapshot stays true while you're inside, and the
   // transport/previews below simply follow the current window.
   interface NavFrame {
+    // "comp" = a child composition's canvas; "montage" = the montage EDITOR over a
+    // montage card of the frame's composition (same composition, richer surface).
+    kind: "comp" | "montage";
     compositionId: string;
-    label: string; // "extract 3 · clip name" — the breadcrumb text
+    montageNodeId?: string; // montage frames only
+    label: string; // "extract 3 · clip name" / the montage's name — the breadcrumb text
     window: { start: number; end: number }; // absolute song seconds
   }
   const [navStack, setNavStack] = useState<NavFrame[]>([]);
@@ -122,11 +126,16 @@ export default function Studio({
   const navFrame = navStack.length ? navStack[navStack.length - 1] : null;
   const currentCompId = navFrame?.compositionId ?? activeSeg?.rootCompositionId;
   const activeComp = (currentCompId && compositions[currentCompId]) || null;
-  // A frame whose composition vanished (deleted in another view) pops itself.
+  // A frame whose composition — or, for a montage frame, whose montage card —
+  // vanished (deleted in another view) pops itself.
   useEffect(() => {
-    if (navFrame && !compositions[navFrame.compositionId]) {
-      setNavStack((s) => s.slice(0, -1));
-    }
+    if (!navFrame) return;
+    const comp = compositions[navFrame.compositionId];
+    const gone =
+      !comp ||
+      (navFrame.kind === "montage" &&
+        !comp.graph.nodes.some((n) => n.id === navFrame.montageNodeId && n.type === "montage"));
+    if (gone) setNavStack((s) => s.slice(0, -1));
   }, [navFrame, compositions]);
 
   // No segment selected → the window is the whole track, so the full mix can play
@@ -193,10 +202,38 @@ export default function Studio({
       resetTransport();
       setNavStack((s) => [
         ...s,
-        { compositionId: child.id, label: `extract ${idx + 1} · ${child.name}`, window },
+        {
+          kind: "comp",
+          compositionId: child.id,
+          label: `extract ${idx + 1} · ${child.name}`,
+          window,
+        },
       ]);
     },
     [activeComp, compositions, resetTransport]
+  );
+
+  // A montage card's compact body opens the MONTAGE EDITOR — its own breadcrumb
+  // level over the SAME composition and window (the strip + live view + wiring
+  // rail want the full canvas area, not a modal).
+  const enterMontage = useCallback(
+    (montageNodeId: string) => {
+      const comp = activeComp;
+      if (!comp) return;
+      const mg = comp.graph.nodes.find((n) => n.id === montageNodeId && n.type === "montage");
+      if (!mg) return;
+      setNavStack((s) => [
+        ...s,
+        {
+          kind: "montage",
+          compositionId: comp.id,
+          montageNodeId,
+          label: mg.name || "montage",
+          window: { start: winStart, end: winEnd },
+        },
+      ]);
+    },
+    [activeComp, winStart, winEnd]
   );
 
   // The breadcrumb: click the segment crumb (depth -1) or any ancestor frame to
@@ -546,6 +583,10 @@ export default function Studio({
                 compositions={compositions}
                 updateCompositions={setCompositions}
                 enterExtract={enterExtract}
+                enterMontage={enterMontage}
+                montageEditorNodeId={
+                  navFrame?.kind === "montage" ? navFrame.montageNodeId : undefined
+                }
                 stems={stems}
                 job={job}
                 output={output}

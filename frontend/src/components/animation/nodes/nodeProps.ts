@@ -69,6 +69,10 @@ export interface NodeCtx {
     extractId: string,
     window: { start: number; end: number }
   ) => void;
+  // Open the MONTAGE EDITOR for a montage card (its own breadcrumb level:
+  // segment ▸ montage). When present, a montage's compact body opens this instead
+  // of the settings modal — the editor is the card's full surface.
+  enterMontage?: (montageNodeId: string) => void;
   stems?: Record<string, StemInfo>;
   job?: string;
   output?: OutputSettings | null;

@@ -72,31 +72,36 @@ function renderStudio() {
 }
 
 describe("composition breadcrumb", () => {
-  it("opens an extract's child, re-windows the transport, and climbs back up", async () => {
+  it("montage body → editor; a tile's ▸ → its child; crumbs climb back up", async () => {
     const r = renderStudio();
     fireEvent.click(r.getByText("create animation"));
-    // At the root: the montage renders compact; its full card (extract rows) lives
-    // in the settings modal.
+    // At the root: the montage renders compact; its body opens the MONTAGE EDITOR
+    // (a breadcrumb level of its own — no modal).
     fireEvent.click(r.container.querySelector(".anim-compact-body")!);
-    const dialog = r.getByRole("dialog");
-    // Wait for the cut schedule (async /resolve) — the status line shows "cuts 1×"
-    // once the trigger curve lands, and only then does "open" know the window.
-    await waitFor(() => expect(dialog.textContent).toMatch(/cuts\s*1×/));
-    fireEvent.click(dialog.querySelectorAll(".anim-extract-open")[1]);
+    const editor = await waitFor(() => {
+      const el = r.container.querySelector(".montage-editor");
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    expect(r.getByText(/montage/, { selector: ".crumb-here" })).toBeTruthy();
+    // The strip: one tile per extract (+ the trailing "+ video").
+    expect(editor.querySelectorAll(".montage-tile:not(.montage-tile-add)").length).toBe(2);
 
-    // Down one level: breadcrumb names the extract + child; the canvas now shows
-    // the LEAF composition (a single video card), and the transport window is the
+    // Wait for the cut schedule (async /resolve) — only then does ▸ know the window.
+    await waitFor(() => expect(editor.textContent).toMatch(/cuts\s*1×/));
+    fireEvent.click(editor.querySelectorAll(".anim-extract-open")[1]);
+
+    // Down one more level: breadcrumb names the extract + child; the canvas now
+    // shows the LEAF composition (its two cards), and the transport window is the
     // extract's slice — 4s..8s, so the timeline maxes at 4.
     await waitFor(() => expect(r.getByText(/extract 2 · clip B/)).toBeTruthy());
-    // …and the canvas remounted onto the LEAF: exactly its two cards (video +
-    // output), the root's montage/lfo gone.
     expect(r.container.querySelectorAll(".gc-node-pos").length).toBe(2);
     const timeline = r.container.querySelector(".seg-timeline") as HTMLInputElement;
     expect(Number(timeline.max)).toBeCloseTo(4, 5);
     // copy-to-neighbour is a segment-root affair — hidden while nested.
     expect(r.container.querySelector(".rh-copy")).toBeNull();
 
-    // The segment crumb climbs back to the root: montage card again, full window.
+    // The segment crumb climbs all the way back: root canvas, full window.
     fireEvent.click(r.getByText("VERSE"));
     await waitFor(() =>
       expect(
@@ -104,5 +109,6 @@ describe("composition breadcrumb", () => {
       ).toBeCloseTo(8, 5)
     );
     expect(r.container.querySelector(".comp-breadcrumb")).toBeNull();
+    expect(r.container.querySelector(".montage-editor")).toBeNull();
   });
 });

@@ -48,7 +48,12 @@ export default function Fx() {
       <h3 id="animation-montage">Montage — cutting clips to the beat</h3>
       <p>
         The <strong>montage</strong> card (Compositing) is made for recap videos: a pile of little
-        clips cut to a song's rhythm. It holds N ordered <strong>extracts</strong>, each playing a{" "}
+        clips cut to a song's rhythm. Clicking its tile opens the <strong>montage editor</strong> —
+        a full-screen surface of its own (a breadcrumb level: <em>segment ▸ montage</em>): the strip
+        of extracts runs across the top (drag a tile to re-order; 🎬 swaps its clip), the live
+        switched output plays large below, slaved to the transport — scrub and you see the extract
+        under the playhead with the audio it will play under — and the trigger wiring + threshold
+        sit on the right. It holds N ordered <strong>extracts</strong>, each playing a{" "}
         <strong>composition</strong> — a small animation of its own that ends in an output. The
         simplest composition is just a clip: <strong>+ video</strong> picks one from the{" "}
         <a href="#assets">asset library</a> and wraps it (video → output) for you. The cut schedule

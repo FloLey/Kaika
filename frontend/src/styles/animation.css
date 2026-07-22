@@ -3016,3 +3016,106 @@
 .anim-extract-open:hover {
   color: var(--text);
 }
+
+/* ---- the montage editor (segment ▸ montage — a full-area breadcrumb level) ---- */
+.montage-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-height: 420px;
+}
+/* The extract strip: tiles side by side, scrolling horizontally past the viewport. */
+.montage-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.montage-tile {
+  flex: 0 0 148px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  cursor: grab;
+  font-size: 11px;
+  color: var(--muted);
+}
+.montage-tile.short {
+  border-color: #f87171;
+}
+.montage-tile.unused {
+  opacity: 0.55;
+}
+.montage-tile-thumb {
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0006;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.montage-tile-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.montage-tile-anim {
+  font-size: 22px;
+  color: var(--muted);
+}
+.montage-tile-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.montage-tile-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 14px;
+}
+.montage-tile-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.montage-tile-add {
+  flex: 0 0 92px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-style: dashed;
+  color: var(--muted);
+}
+.montage-tile-add:hover {
+  color: var(--text);
+}
+/* Live view left (grows), wiring rail right. */
+.montage-editor-body {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.montage-live {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.montage-live .anim-output-well {
+  max-width: 560px;
+}
+.montage-rail {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

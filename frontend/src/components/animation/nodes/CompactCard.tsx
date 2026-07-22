@@ -123,8 +123,18 @@ export default function CompactCard({
         <button
           type="button"
           className="anim-compact-body"
-          title="open settings"
-          onClick={() => setSettingsOpen(true)}
+          title={
+            node.type === "montage" && ctx?.enterMontage
+              ? "open the montage editor"
+              : "open settings"
+          }
+          onClick={() =>
+            // A montage's full surface is the EDITOR (its own breadcrumb level) —
+            // the modal stays the fallback where no navigation exists (tests, stubs).
+            node.type === "montage" && ctx?.enterMontage
+              ? ctx.enterMontage(node.id)
+              : setSettingsOpen(true)
+          }
         >
           <CompactPreview node={node} ctx={ctx} accent={accent} />
           {/* A montage's black-hole warning must survive being collapsed — see the
