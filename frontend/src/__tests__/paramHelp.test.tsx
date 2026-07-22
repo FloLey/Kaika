@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ARG_HELP, argHelp } from "../lib/paramHelp";
 import { NODE_PARAMS } from "../lib/nodeParams";
 import Docs, { DOC_SECTION_IDS } from "../components/Docs";
-import renderAnimNode from "../components/animation/renderAnimNode";
 import { paletteSpecs } from "../components/animation/nodes/registry";
 import type { NodeCtx, NodeHelpers } from "../components/animation/nodes/nodeProps";
 
@@ -181,7 +180,20 @@ describe("per-argument help catalog", () => {
         segment: { start: 0, end: 8 },
         onGraphChange: () => {},
       } as unknown as NodeCtx;
-      const html = renderToStaticMarkup(renderAnimNode(node, HELPERS, ctx));
+      // Render the FULL card directly — the surface the settings modal shows. On the
+      // canvas every card is compact (a preview that opens the modal), so the '?' badges
+      // live on `spec.Component`, which is exactly what this invariant is about.
+      const Card = spec.Component;
+      const html = renderToStaticMarkup(
+        <Card
+          node={node}
+          ctx={ctx}
+          helpers={HELPERS}
+          selected={false}
+          onGraphChange={() => {}}
+          onDelete={() => {}}
+        />
+      );
       const badges = (html.match(/role="note"/g) || []).length; // one per Info badge
       // No `?? 0` fallback: an unlisted card is caught by the accounting test above, and
       // silently expecting zero is how a help-less card used to pass.

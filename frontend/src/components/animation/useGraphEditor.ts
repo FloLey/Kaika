@@ -207,23 +207,15 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
-  // View modes (v16): the canvas is globally "detailed" (classic full cards — the
-  // default) or "compact" (name + preview), switched from the toolbar and persisted
-  // as `graph.viewMode`. `graph.viewOverrides` lists cards displayed OPPOSITE to the
-  // mode (▢/– per card); switching modes clears the overrides — a clean flip. Both
-  // are top-level graph fields, so outputHash never sees them (toggling can't bust
-  // the render cache). Downstream consumers (ctx.minimized, MinimizeContext,
-  // renderAnimNode) keep receiving the derived COMPACT set, so their contract is
-  // unchanged; `toggleMinimize` (kept name) flips override membership.
-  const viewMode = graph.viewMode || "detailed";
+  // One view: every non-output card is compact (name + preview; its body opens the
+  // settings modal). Output alone renders full — its body IS the render preview.
+  // `graph.view*` fields (v16 viewMode/viewOverrides, v20 cx/cy) are legacy and get
+  // folded away by normalizeGraph; nothing here reads viewMode any more.
 
   // What GraphCanvas renders: in compact mode, positions come from cx/cy (per-view
   // positions, v20). Everything the canvas does (drag, marquee, fit) just works in
   // display space; `applyDisplayUpdater` below translates its commits back.
-  const displayGraph = useMemo(
-    () => (viewMode === "compact" ? toDisplay(graph) : graph),
-    [graph, viewMode]
-  );
+  const displayGraph = useMemo(() => toDisplay(graph), [graph]);
 
   // The updater handed to position-bearing callers (GraphCanvas, Palette adds, node
   // ctx): run the updater in DISPLAY space, then land position writes on the active
@@ -235,7 +227,6 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const applyDisplayUpdater = useCallback(
     (updater: (g: Graph) => Graph) => {
       applyUpdater((g) => {
-        if ((g.viewMode || "detailed") !== "compact") return updater(g);
         const disp = toDisplay(g);
         const next = updater(disp);
         if (next === disp) return g;
@@ -253,50 +244,12 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater]
   );
 
-  const overrides = useMemo(
-    () => new Set<string>(graph.viewOverrides || []),
-    [graph.viewOverrides]
-  );
-  // `output` never compacts — its body IS the live render preview — so it's excluded
-  // here at the source (NodeFrame also hides its toggle) rather than special-cased
-  // by every consumer of the compact set.
+  // The set of cards rendered compact: every card EXCEPT output, whose body is the
+  // live render preview and always shows full. renderAnimNode makes the same call at
+  // the source; this set feeds the shared NodeFrame chrome.
   const minimized = useMemo(
-    () =>
-      new Set(
-        graph.nodes
-          .filter(
-            (n) =>
-              n.type !== "output" &&
-              (viewMode === "compact" ? !overrides.has(n.id) : overrides.has(n.id))
-          )
-          .map((n) => n.id)
-      ),
-    [graph.nodes, viewMode, overrides]
-  );
-  const toggleMinimize = useCallback(
-    (id: string) => {
-      applyUpdater((g) => {
-        const cur = new Set(g.viewOverrides || []);
-        if (cur.has(id)) cur.delete(id);
-        else cur.add(id);
-        return { ...g, viewOverrides: [...cur] };
-      });
-    },
-    [applyUpdater]
-  );
-  // The toolbar mode switch: flip the whole canvas and drop the per-card exceptions.
-  // `layoutForMode` derives the target view's positions (see its comment) — one
-  // commit, one undo step, and only cards that would overlap actually move.
-  const setViewMode = useCallback(
-    (mode: "detailed" | "compact") => {
-      applyUpdater((g) => ({
-        ...g,
-        nodes: layoutForMode(g.nodes, mode),
-        viewMode: mode,
-        viewOverrides: [],
-      }));
-    },
-    [applyUpdater]
+    () => new Set(graph.nodes.filter((n) => n.type !== "output").map((n) => n.id)),
+    [graph.nodes]
   );
 
   // ✨ arrange: lay the CURRENT view out along the data flow (flowLayout — columns
@@ -308,12 +261,11 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     (measured: Map<string, { w: number; h: number }>) => {
       applyDisplayUpdater((g) => {
         if (g.nodes.length < 2) return g;
-        const mode = g.viewMode || "detailed";
         const rects: LayoutRect[] = g.nodes.map((n) => {
-          const s = measured.get(n.id) || estimateCardSize(n.type, mode);
+          const s = measured.get(n.id) || estimateCardSize(n.type, "compact");
           return { id: n.id, x: n.x, y: n.y, w: s.w, h: s.h };
         });
-        const pos = flowLayout(rects, rankedEdges(g), FLOW_GAPS[mode]);
+        const pos = flowLayout(rects, rankedEdges(g), FLOW_GAPS["compact"]);
         const nodes = g.nodes.map((n) => {
           const p = pos.get(n.id);
           return p && (p.x !== n.x || p.y !== n.y) ? { ...n, x: p.x, y: p.y } : n;
@@ -415,10 +367,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
 
   // Provided to every NodeFrame's minimize/restore button + title rename; a stable
   // key feeds GraphCanvas so edges re-anchor on toggle.
-  const minimizeCtx = useMemo(
-    () => ({ minimized, toggle: toggleMinimize, mode: viewMode, rename: renameCard }),
-    [minimized, toggleMinimize, viewMode, renameCard]
-  );
+  const minimizeCtx = useMemo(() => ({ minimized, rename: renameCard }), [minimized, renameCard]);
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 
   const onDetach = useCallback(
@@ -496,8 +445,6 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     ctx,
     minimizeCtx,
     minimizedKey,
-    viewMode,
-    setViewMode,
     onConnect,
     onCardDrop,
     onEdgeDelete,

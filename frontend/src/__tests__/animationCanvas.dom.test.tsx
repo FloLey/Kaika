@@ -96,13 +96,12 @@ describe("undo/redo toolbar (jsdom)", () => {
   });
 });
 
-// v16 view modes: the canvas is globally "detailed" (default — classic full cards)
-// or "compact" (name + preview + settings modal on body click); `viewOverrides`
-// lists cards displayed OPPOSITE to the mode; the toolbar switch flips the mode
-// and clears the overrides.
-describe("view modes: detailed | compact (jsdom)", () => {
-  const gateGraph = (viewMode?: "detailed" | "compact", viewOverrides: string[] = []) => ({
-    version: 16,
+// One view: every non-output card is compact (name + preview; body click opens the
+// settings modal). Output is the exception — its body IS the render preview, so it
+// always shows full. There is no detailed/compact toggle and no per-card expand.
+describe("compact cards (jsdom)", () => {
+  const gateGraph = () => ({
+    version: 29,
     nodes: [
       {
         id: "n-g",
@@ -113,74 +112,66 @@ describe("view modes: detailed | compact (jsdom)", () => {
       },
     ],
     edges: [],
-    ...(viewMode ? { viewMode } : {}),
-    viewOverrides,
     view: { tx: 0, ty: 0, scale: 1 },
   });
 
-  it("DETAILED is the default: full cards on canvas, no compact bodies", () => {
+  it("a non-output card renders compact, with no full controls on the canvas", () => {
     const seg = { ...baseSegment, graph: gateGraph() } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
-    expect(container.querySelector(".anim-compact-body")).toBeNull();
-    expect(container.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0);
+    expect(container.querySelector(".anim-compact-body")).toBeTruthy();
+    expect(container.querySelector('input[type="range"]')).toBeNull();
   });
 
-  it("compact mode renders compact; clicking the body opens the settings modal", () => {
-    const seg = { ...baseSegment, graph: gateGraph("compact") } as Segment;
+  it("clicking the body opens the settings modal with the full card inside", () => {
+    const seg = { ...baseSegment, graph: gateGraph() } as Segment;
     const { container, getByRole } = render(
       <AnimationCanvas segment={seg} onGraphChange={() => {}} />
     );
-    const body = container.querySelector(".anim-compact-body");
-    expect(body).toBeTruthy();
-    expect(container.querySelector('input[type="range"]')).toBeNull(); // no full controls on canvas
-    fireEvent.click(body!);
+    fireEvent.click(container.querySelector(".anim-compact-body")!);
     const dialog = getByRole("dialog"); // the settings modal (portal to body)
     expect(dialog.className).toContain("node-settings");
-    expect(dialog.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0); // full card inside
+    expect(dialog.querySelectorAll('input[type="range"]').length).toBeGreaterThan(0);
   });
 
-  it("overrides display a card OPPOSITE to the mode", () => {
-    // compact mode + override -> that card renders FULL
-    const seg = { ...baseSegment, graph: gateGraph("compact", ["n-g"]) } as Segment;
+  it("the output card is never compact — it shows its full body", () => {
+    const graph = {
+      version: 29,
+      nodes: [{ id: "n-o", type: "output", x: 0, y: 0, data: {} }],
+      edges: [],
+      view: { tx: 0, ty: 0, scale: 1 },
+    };
+    const seg = { ...baseSegment, graph } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
-    expect(container.querySelector(".anim-compact-body")).toBeNull();
-    // detailed mode + override -> that card renders COMPACT
-    const seg2 = { ...baseSegment, graph: gateGraph("detailed", ["n-g"]) } as Segment;
-    const { container: c2 } = render(<AnimationCanvas segment={seg2} onGraphChange={() => {}} />);
-    expect(c2.querySelector(".anim-compact-body")).toBeTruthy();
+    // no compact body for output; its render well IS its body
+    expect(container.querySelector('[data-node-id="n-o"] .anim-compact-body')).toBeNull();
+    expect(container.querySelector('[data-node-id="n-o"] .anim-output-well')).toBeTruthy();
   });
 
-  it("the toolbar switch commits the mode and clears overrides", () => {
-    const onGraphChange = vi.fn();
-    const seg = { ...baseSegment, graph: gateGraph("detailed", ["n-g"]) } as Segment;
-    const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
-    fireEvent.click(getByText("▤ compact"));
-    expect(onGraphChange).toHaveBeenCalledTimes(1);
-    const committed = onGraphChange.mock.calls[0][0];
-    expect(committed.viewMode).toBe("compact");
-    expect(committed.viewOverrides).toEqual([]); // a mode switch is a clean flip
+  it("has no detailed/compact view toggle in the toolbar", () => {
+    const seg = { ...baseSegment, graph: gateGraph() } as Segment;
+    const { queryByText } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    expect(queryByText("▦ detailed")).toBeNull();
+    expect(queryByText("▤ compact")).toBeNull();
   });
 });
 
-// v20 per-view positions: x/y is the DETAILED position, cx/cy the COMPACT one. The
-// canvas renders whichever set matches the mode, and a compact drag lands on cx/cy —
-// the detailed layout never moves underneath it.
-describe("per-view card positions (v20, jsdom)", () => {
+// Card positions (still cx/cy this step — step 01 folds them into x/y). Every card is
+// compact, so the canvas renders from cx/cy (falling back to x/y when absent) and a
+// drag commits cx/cy.
+describe("card positions (jsdom)", () => {
   const gate = (id: string, pos: { x: number; y: number; cx?: number; cy?: number }) => ({
     id,
     type: "gate",
     data: { threshold: 0.5, hysteresis: 0.1, invert: false },
     ...pos,
   });
-  const twoCards = (viewMode: "detailed" | "compact") => ({
-    version: 20,
+  const twoCards = () => ({
+    version: 29,
     nodes: [
       gate("n-a", { x: 0, y: 0, cx: 100, cy: 50 }),
       gate("n-b", { x: 400, y: 0, cx: 160, cy: 50 }),
     ],
     edges: [],
-    viewMode,
-    viewOverrides: [],
     view: { tx: 0, ty: 0, scale: 1 },
   });
   const wrapperPos = (container: HTMLElement, id: string) => {
@@ -188,19 +179,15 @@ describe("per-view card positions (v20, jsdom)", () => {
     return { left: el.style.left, top: el.style.top };
   };
 
-  it("renders cards at cx/cy in compact mode and x/y in detailed", () => {
-    const seg = { ...baseSegment, graph: twoCards("compact") } as Segment;
+  it("renders cards at their compact coords", () => {
+    const seg = { ...baseSegment, graph: twoCards() } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
     expect(wrapperPos(container, "n-a")).toEqual({ left: "100px", top: "50px" });
-
-    const seg2 = { ...baseSegment, graph: twoCards("detailed") } as Segment;
-    const { container: c2 } = render(<AnimationCanvas segment={seg2} onGraphChange={() => {}} />);
-    expect(wrapperPos(c2, "n-a")).toEqual({ left: "0px", top: "0px" });
   });
 
-  it("a compact drag commits cx/cy and leaves the detailed x/y untouched", () => {
+  it("a drag commits the position", () => {
     const onGraphChange = vi.fn();
-    const seg = { ...baseSegment, graph: twoCards("compact") } as Segment;
+    const seg = { ...baseSegment, graph: twoCards() } as Segment;
     const { container } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
     const head = container.querySelector('.gc-node-pos[data-node-id="n-a"] .anim-node-head')!;
     // jsdom's fireEvent drops clientX on pointer events — dispatch natives (they
@@ -217,15 +204,13 @@ describe("per-view card positions (v20, jsdom)", () => {
     });
     expect(onGraphChange).toHaveBeenCalledTimes(1);
     const moved = onGraphChange.mock.calls[0][0].nodes.find((n: { id: string }) => n.id === "n-a");
-    expect(moved).toMatchObject({ cx: 150, cy: 80, x: 0, y: 0 }); // compact moved, detailed didn't
-    const other = onGraphChange.mock.calls[0][0].nodes.find((n: { id: string }) => n.id === "n-b");
-    expect(other).toMatchObject({ cx: 160, cy: 50, x: 400, y: 0 }); // untouched card kept as-is
+    expect(moved).toMatchObject({ cx: 150, cy: 80 }); // moved by +50/+30
   });
 
-  it("✨ arrange commits one layout update for the current view", () => {
+  it("✨ arrange commits one layout update", () => {
     const onGraphChange = vi.fn();
-    // Two compact cards stacked on the same spot — arrange must separate them.
-    const graph = twoCards("compact");
+    // Two cards stacked on the same spot — arrange must separate them.
+    const graph = twoCards();
     graph.nodes[1] = gate("n-b", { x: 400, y: 0, cx: 100, cy: 50 });
     const seg = { ...baseSegment, graph } as Segment;
     const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
@@ -235,27 +220,5 @@ describe("per-view card positions (v20, jsdom)", () => {
     const a = committed.nodes.find((n: { id: string }) => n.id === "n-a");
     const b = committed.nodes.find((n: { id: string }) => n.id === "n-b");
     expect(a.cx === b.cx && a.cy === b.cy).toBe(false); // no longer stacked
-    expect(a.x).toBe(0); // the OTHER view's layout is untouched
-    expect(b.x).toBe(400);
-  });
-
-  it("switching to detailed de-overlaps stacked x/y (the compact-built pipeline fix)", () => {
-    const onGraphChange = vi.fn();
-    const graph = twoCards("compact");
-    // Both cards share the same DETAILED spot (built while compact, seeded alike).
-    graph.nodes = [
-      gate("n-a", { x: 0, y: 0, cx: 0, cy: 0 }),
-      gate("n-b", { x: 0, y: 0, cx: 300, cy: 0 }),
-    ];
-    const seg = { ...baseSegment, graph } as Segment;
-    const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
-    fireEvent.click(getByText("▦ detailed"));
-    const committed = onGraphChange.mock.calls[0][0];
-    expect(committed.viewMode).toBe("detailed");
-    const a = committed.nodes.find((n: { id: string }) => n.id === "n-a");
-    const b = committed.nodes.find((n: { id: string }) => n.id === "n-b");
-    expect(a.x === b.x && a.y === b.y).toBe(false); // pulled apart
-    expect(a.cx).toBe(0); // compact layout untouched
-    expect(b.cx).toBe(300);
   });
 });

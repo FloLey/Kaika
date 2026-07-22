@@ -427,20 +427,33 @@
 }
 /* The montage's "X s black" warning on a COLLAPSED card — a ribbon along the bottom so it
    reads at a glance without expanding the card. Loud on purpose: a hidden export defect. */
-.anim-compact-warn {
+/* Roll-up badges stacked at the bottom of a compact montage tile (black shortfall,
+   duplicate clip). One wrapper so two warnings don't overlap on bottom:0. */
+.anim-compact-warns {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none; /* the click still opens settings */
+}
+.anim-compact-warn {
   padding: 2px 6px;
   font: 600 10px/1.4 var(--mono);
   color: #fff;
   background: var(--danger, #d9534f);
-  border-radius: 0 0 12px 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none; /* the click still opens settings */
+}
+/* The duplicate roll-up is muted (soft: different in-point, often deliberate) unless
+   `.same` (frame-identical — reads as a loop). Only the last badge rounds the corner. */
+.anim-compact-warn:not(.same).anim-compact-dup {
+  background: var(--muted, #888);
+}
+.anim-compact-warns > .anim-compact-warn:last-child {
+  border-radius: 0 0 12px 12px;
 }
 .anim-compact-swatch {
   width: 100%;
@@ -2043,6 +2056,18 @@
   color: var(--danger, #d9534f);
   white-space: nowrap;
   cursor: help;
+}
+/* "⧉ N repeats" on the status line — the duplicate roll-up beside the black one. Muted
+   when the in-points differ, red (`.same`) when frame-identical (reads as a loop). */
+.anim-montage-dup-roll {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.anim-montage-dup-roll.same {
+  color: var(--danger, #d9534f);
 }
 /* "⧉ 1" — this slot plays a clip an earlier slot already used. Muted when the
    in-points differ (often deliberate), red when they match: identical frames, which

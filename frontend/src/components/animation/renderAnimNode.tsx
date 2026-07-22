@@ -20,10 +20,10 @@ export default function renderAnimNode(
     onGraphChange: ctx.onGraphChange ?? (() => {}),
     onDelete: () => ctx.onDeleteNode?.(node.id),
   };
-  // The default view: a compact card (header + live preview + consolidated wire
-  // anchors; its body opens the settings modal). `output` is the exception — its
-  // body IS the live render preview, so compacting it would kill the pipeline UX.
-  if (ctx.minimized && ctx.minimized.has(node.id) && node.type !== "output") {
+  // Every card is compact (header + live preview + consolidated wire anchors; its body
+  // opens the settings modal). `output` is the one exception — its body IS the live
+  // render preview, so it always shows full.
+  if (node.type !== "output") {
     return (
       <CompactCard
         node={node}

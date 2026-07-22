@@ -62,8 +62,6 @@ export default function AnimationCanvas({
     ctx,
     minimizeCtx,
     minimizedKey,
-    viewMode,
-    setViewMode,
     onConnect,
     onCardDrop,
     onEdgeDelete,
@@ -143,8 +141,6 @@ export default function AnimationCanvas({
         isFullscreen={isFullscreen}
         onToggleFullscreen={onToggleFullscreen}
         onGraphChange={applyUpdater}
-        viewMode={viewMode}
-        onSetViewMode={graph.nodes.length ? setViewMode : null}
         onReorganize={graph.nodes.length > 1 ? onReorganize : null}
         onFitView={graph.nodes.length ? () => fitRef.current?.() : null}
         problems={problems}

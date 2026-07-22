@@ -20,10 +20,7 @@ interface PaletteProps {
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onGraphChange: (updater: (g: Graph) => Graph) => void;
-  viewMode?: "detailed" | "compact";
-  onSetViewMode?: ((mode: "detailed" | "compact") => void) | null;
-  // ✨ arrange the current view's cards (null with fewer than two cards): detailed
-  // spreads overlapping cards apart, compact packs them closer.
+  // ✨ arrange the cards along the data flow (null with fewer than two cards).
   onReorganize?: (() => void) | null;
   // Fit the view to every card (null while the graph is empty).
   onFitView?: (() => void) | null;
@@ -66,8 +63,6 @@ export default function Palette({
   isFullscreen,
   onToggleFullscreen,
   onGraphChange,
-  viewMode,
-  onSetViewMode,
   onReorganize,
   onFitView,
   problems = [],
@@ -281,36 +276,11 @@ export default function Palette({
         // lays out the one you're looking at along the data flow, untangling wires.
         <button
           className="btn sm"
-          title={
-            viewMode === "compact"
-              ? "Arrange — lay the cards out along the data flow with the wires untangled (compact keeps them close)"
-              : "Arrange — lay the cards out along the data flow, roomy and with the wires untangled"
-          }
+          title="Arrange — lay the cards out along the data flow with the wires untangled"
           onClick={onReorganize}
         >
           ✨ arrange
         </button>
-      )}
-      {onSetViewMode && (
-        // The canvas view-mode switch: detailed (classic full cards) vs compact
-        // (name + preview). Flipping clears the per-card ▢/– overrides — a clean
-        // flip; you can still override individual cards inside either mode.
-        <div className="anim-viewmode" role="group" aria-label="card view mode">
-          <button
-            className={"btn sm" + (viewMode !== "compact" ? " on" : "")}
-            title="Detailed view — every card shows its full controls on the canvas"
-            onClick={() => onSetViewMode("detailed")}
-          >
-            ▦ detailed
-          </button>
-          <button
-            className={"btn sm" + (viewMode === "compact" ? " on" : "")}
-            title="Compact view — name + live preview; click a card's body for its settings"
-            onClick={() => onSetViewMode("compact")}
-          >
-            ▤ compact
-          </button>
-        </div>
       )}
       {onOpenOutput && (
         <button

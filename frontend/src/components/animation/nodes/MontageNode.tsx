@@ -66,6 +66,20 @@ export default function MontageNode({
     };
   }, [inputs, wiredOrdinal, cuts]);
 
+  // Duplicate roll-up: a slot fed by the same clip as an earlier slot replays that
+  // footage — from the same in-point it is frame-identical, which reads as the video
+  // looping instead of cutting (a silent export bug). The per-row `⧉` badge below shows
+  // the detail; this roll-up rides the status line so it survives on the compact card and
+  // in the modal too, exactly like the black roll-up beside it.
+  const dupRows = useMemo(() => {
+    // `repeats[i].row` is `first + 1` (raw index), so a slot's own number is `i + 1` in
+    // the same scheme — keep both sides consistent.
+    const rows = repeats
+      .map((r, i) => (r ? { slot: i + 1, row: r.row, identical: r.identical } : null))
+      .filter((r): r is { slot: number; row: number; identical: boolean } => r != null);
+    return { n: rows.length, identical: rows.filter((r) => r.identical).length, rows };
+  }, [repeats]);
+
   return (
     <NodeFrame
       node={node}
@@ -108,6 +122,26 @@ export default function MontageNode({
             {" · ⚠ "}
             <strong>{shortRows.black.toFixed(1)}s black</strong>
             {shortRows.looping > 0 && ` (+${shortRows.looping} loop)`}
+          </span>
+        )}
+        {dupRows.n > 0 && (
+          <span
+            className={"anim-montage-dup-roll" + (dupRows.identical > 0 ? " same" : "")}
+            title={
+              `${dupRows.n} slot${dupRows.n === 1 ? "" : "s"} repeat an earlier clip: ` +
+              `${dupRows.rows
+                .map(
+                  (r) =>
+                    `slot ${r.slot} = slot ${r.row}${r.identical ? "" : " (different in-point)"}`
+                )
+                .join(", ")}. ` +
+              "Two slots from the same clip and in-point play frame-identical — it reads as a loop, not a cut."
+            }
+          >
+            {" · ⧉ "}
+            <strong>
+              {dupRows.n} repeat{dupRows.n === 1 ? "" : "s"}
+            </strong>
           </span>
         )}
         <ArgInfo type="montage" k="inputs" />

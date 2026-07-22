@@ -316,7 +316,7 @@ describe("CompactCard", () => {
     renderToStaticMarkup(
       React.createElement(
         MinimizeContext.Provider,
-        { value: { minimized: new Set([node.id]), toggle: () => {} } },
+        { value: { minimized: new Set([node.id]) } },
         React.createElement(CompactCard, {
           node,
           helpers,
@@ -332,7 +332,6 @@ describe("CompactCard", () => {
     expect(html).toContain("anim-node-fluid"); // card chrome kept
     expect(html).toContain("compact"); // compact-view class (body = preview only)
     expect(html).toContain("fluid"); // header title kept
-    expect(html).toContain("▢"); // expand-on-canvas button
     expect(html).toContain('data-port="out"'); // single output anchor
     // inbound wires (force + r) consolidate onto ONE input anchor
     expect(html).toMatch(/data-port="(force|r)"/);

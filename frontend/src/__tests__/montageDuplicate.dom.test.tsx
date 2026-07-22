@@ -8,7 +8,8 @@ import type { Graph, Segment } from "../lib/types";
 // Two montage slots fed by the SAME clip replay the same footage; from the same
 // in-point they are frame-identical, which on screen looks like the video looping
 // instead of cutting. It played wrong and silently — the shortfall warning only ever
-// watched clip LENGTH. These pin that the card now says so.
+// watched clip LENGTH. These pin that the card now says so, via the header roll-up that
+// rides the compact card (the montage's per-row list is settings-modal only).
 
 vi.mock("../lib/api", async (orig) => ({
   ...(await orig<typeof import("../lib/api")>()),
@@ -37,21 +38,24 @@ const mount = (g: Graph) =>
   render(<AnimationCanvas segment={{ ...segment, graph: g }} onGraphChange={() => {}} />);
 
 describe("Montage — a clip used by two slots is flagged", () => {
-  it("flags the second slot, naming the row it repeats, when the frames are identical", () => {
-    const { getByTitle } = mount(twoSlots(["/assets/j/same.mp4", "/assets/j/same.mp4"], [0, 0]));
-    const badge = getByTitle(/same clip as slot 1, from the same in-point/i);
-    expect(badge.textContent).toContain("1"); // points at the row it duplicates
-    expect(badge.className).toContain("same"); // the loud variant
+  it("rolls up the repeat, naming the slot it duplicates, when the frames are identical", () => {
+    const { getByText } = mount(twoSlots(["/assets/j/same.mp4", "/assets/j/same.mp4"], [0, 0]));
+    const badge = getByText(/1 repeat/i);
+    const span = badge.closest("span")!;
+    expect(span.getAttribute("title")).toMatch(/slot 2 = slot 1/i); // points at the row it duplicates
+    expect(span.getAttribute("title")).not.toMatch(/different in-point/i); // same in-point
+    expect(span.className).toContain("same"); // the loud variant (frame-identical)
   });
 
-  it("flags it softly when the in-points differ — another moment of the same footage", () => {
-    const { getByTitle } = mount(twoSlots(["/assets/j/same.mp4", "/assets/j/same.mp4"], [0, 4]));
-    const badge = getByTitle(/different in-point/i);
-    expect(badge.className).not.toContain("same");
+  it("marks it soft when the in-points differ — another moment of the same footage", () => {
+    const { getByText } = mount(twoSlots(["/assets/j/same.mp4", "/assets/j/same.mp4"], [0, 4]));
+    const span = getByText(/1 repeat/i).closest("span")!;
+    expect(span.getAttribute("title")).toMatch(/different in-point/i);
+    expect(span.className).not.toContain("same");
   });
 
   it("says nothing when the two slots hold different clips", () => {
-    const { queryByTitle } = mount(twoSlots(["/assets/j/a.mp4", "/assets/j/b.mp4"], [0, 0]));
-    expect(queryByTitle(/same clip as slot/i)).toBeNull();
+    const { queryByText } = mount(twoSlots(["/assets/j/a.mp4", "/assets/j/b.mp4"], [0, 0]));
+    expect(queryByText(/repeat/i)).toBeNull();
   });
 });

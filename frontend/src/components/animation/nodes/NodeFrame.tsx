@@ -127,7 +127,7 @@ export default function NodeFrame({
   compact = false,
   children,
 }: NodeFrameProps) {
-  const { minimized: minSet, toggle, mode, rename } = useContext(MinimizeContext);
+  const { minimized: minSet, rename } = useContext(MinimizeContext);
   // Inline rename: double-click the title → an <input> seeded with the current name
   // (or the type fallback), committed on Enter/blur, cancelled on Escape. Only when a
   // `rename` handler is present (on-canvas + in the open card; read-only in tests).
@@ -142,12 +142,10 @@ export default function NodeFrame({
     if (editing) rename?.(node.id, draft);
     setEditing(false);
   };
-  // Collapse STATE vs body VISUALS: `stateMin` is whether the editor holds this card
-  // compact (drives the toggle button's glyph/title); `isMin` is whether THIS frame
-  // hides its body. CompactCard passes minimized={false} so its preview body shows
-  // while the toggle still reads "expand"; full cards pass nothing (state == visuals).
-  const stateMin = !!(minSet && minSet.has && minSet.has(node.id));
-  const isMin = minimized !== undefined ? minimized : stateMin;
+  // Whether THIS frame hides its body. CompactCard passes minimized={false} so its
+  // preview body shows; full cards (output) pass nothing, falling back to the compact
+  // set — which output is never in, so its body always shows.
+  const isMin = minimized !== undefined ? minimized : !!minSet?.has(node.id);
   return (
     <div
       className={
@@ -197,29 +195,6 @@ export default function NodeFrame({
         </span>
         <span className="anim-node-head-right">
           {headExtra}
-          {/* output never compacts (its body IS the render preview) — no toggle. */}
-          {toggle && node.type !== "output" && (
-            <button
-              className="anim-node-min no-drag"
-              title={
-                stateMin
-                  ? mode === "compact"
-                    ? "expand this card (override the compact view)"
-                    : "restore this card to the detailed view"
-                  : mode === "compact"
-                    ? "return this card to the compact view"
-                    : "compact this card (override the detailed view)"
-              }
-              aria-label={stateMin ? "expand card" : "collapse card"}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggle(node.id);
-              }}
-            >
-              {stateMin ? "▢" : "–"}
-            </button>
-          )}
           {onDelete && (
             <button
               className="anim-node-del no-drag"

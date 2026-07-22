@@ -1,14 +1,12 @@
 import { createContext } from "react";
 
 // The compact-view state. AnimationCanvas provides it; the shared NodeFrame consumes
-// it to render the per-card ▢/– override button (so node components need no changes).
-// `minimized` is the DERIVED compact set (mode + overrides already applied);
-// `mode` is the canvas view mode, so the button can word its tooltip. Default is a
-// no-op so NodeFrame still works without a provider (e.g. in tests).
+// it. `minimized` is the set of cards rendered compact (every non-output card, now
+// that the detailed view is gone) — NodeFrame reads it only to know a card is in the
+// compact set; there is no longer a per-card toggle. Default is a no-op so NodeFrame
+// still works without a provider (e.g. in tests).
 export interface MinimizeCtx {
   minimized: Set<string>;
-  toggle: (id: string) => void;
-  mode?: "detailed" | "compact";
   // Rename a card (node-level `name`). NodeFrame's title is double-click-editable and
   // saves through this, so no per-card threading. Optional — a no-op default keeps
   // NodeFrame working without a provider (tests) and makes the title read-only there.
@@ -17,5 +15,4 @@ export interface MinimizeCtx {
 
 export const MinimizeContext = createContext<MinimizeCtx>({
   minimized: new Set<string>(),
-  toggle: () => {},
 });
