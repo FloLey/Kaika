@@ -55,12 +55,7 @@ function oneShortSlot(loop: boolean): Graph {
 
 const mount = (g: Graph) =>
   render(
-    <AnimationCanvas
-      segment={{ ...segment, graph: g }}
-      job="j"
-      assets={ASSETS}
-      onGraphChange={() => {}}
-    />
+    <AnimationCanvas segment={segment} graph={g} job="j" assets={ASSETS} onGraphChange={() => {}} />
   );
 
 // The per-row list (red rows, per-row "clip too short" badges) was a detailed-canvas
@@ -101,7 +96,8 @@ describe("Montage — a slot short of material", () => {
     const g = { ...oneShortSlot(true), viewMode: "compact" as const };
     const { queryByText } = render(
       <AnimationCanvas
-        segment={{ ...segment, graph: g }}
+        segment={segment}
+        graph={g}
         job="j"
         assets={ASSETS}
         onGraphChange={() => {}}
@@ -129,7 +125,8 @@ describe("Montage — a slot short of material", () => {
     const long: Asset[] = [{ ...ASSETS[0], duration: 30 }];
     const { queryByTitle } = render(
       <AnimationCanvas
-        segment={{ ...segment, graph: oneShortSlot(false) }}
+        segment={segment}
+        graph={oneShortSlot(false)}
         job="j"
         assets={long}
         onGraphChange={() => {}}

@@ -67,7 +67,8 @@ describe("undo/redo toolbar (jsdom)", () => {
     const [graph, setGraph] = useState<Graph | undefined>(undefined);
     return (
       <AnimationCanvas
-        segment={{ ...baseSegment, graph } as Segment}
+        segment={baseSegment}
+        graph={graph}
         onGraphChange={(g: Graph) => {
           onCommit(g);
           setGraph(g);
@@ -100,32 +101,33 @@ describe("undo/redo toolbar (jsdom)", () => {
 // settings modal). Output is the exception — its body IS the render preview, so it
 // always shows full. There is no detailed/compact toggle and no per-card expand.
 describe("compact cards (jsdom)", () => {
-  const gateGraph = () => ({
-    version: 29,
-    nodes: [
-      {
-        id: "n-g",
-        type: "gate",
-        x: 0,
-        y: 0,
-        data: { threshold: 0.5, hysteresis: 0.1, invert: false },
-      },
-    ],
-    edges: [],
-    view: { tx: 0, ty: 0, scale: 1 },
-  });
+  const gateGraph = () =>
+    ({
+      version: 29,
+      nodes: [
+        {
+          id: "n-g",
+          type: "gate",
+          x: 0,
+          y: 0,
+          data: { threshold: 0.5, hysteresis: 0.1, invert: false },
+        },
+      ],
+      edges: [],
+      view: { tx: 0, ty: 0, scale: 1 },
+    }) as unknown as Graph;
 
   it("a non-output card renders compact, with no full controls on the canvas", () => {
-    const seg = { ...baseSegment, graph: gateGraph() } as Segment;
-    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    const { container } = render(
+      <AnimationCanvas segment={baseSegment} graph={gateGraph()} onGraphChange={() => {}} />
+    );
     expect(container.querySelector(".anim-compact-body")).toBeTruthy();
     expect(container.querySelector('input[type="range"]')).toBeNull();
   });
 
   it("clicking the body opens the settings modal with the full card inside", () => {
-    const seg = { ...baseSegment, graph: gateGraph() } as Segment;
     const { container, getByRole } = render(
-      <AnimationCanvas segment={seg} onGraphChange={() => {}} />
+      <AnimationCanvas segment={baseSegment} graph={gateGraph()} onGraphChange={() => {}} />
     );
     fireEvent.click(container.querySelector(".anim-compact-body")!);
     const dialog = getByRole("dialog"); // the settings modal (portal to body)
@@ -139,17 +141,19 @@ describe("compact cards (jsdom)", () => {
       nodes: [{ id: "n-o", type: "output", x: 0, y: 0, data: {} }],
       edges: [],
       view: { tx: 0, ty: 0, scale: 1 },
-    };
-    const seg = { ...baseSegment, graph } as Segment;
-    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    } as unknown as Graph;
+    const { container } = render(
+      <AnimationCanvas segment={baseSegment} graph={graph} onGraphChange={() => {}} />
+    );
     // no compact body for output; its render well IS its body
     expect(container.querySelector('[data-node-id="n-o"] .anim-compact-body')).toBeNull();
     expect(container.querySelector('[data-node-id="n-o"] .anim-output-well')).toBeTruthy();
   });
 
   it("has no detailed/compact view toggle in the toolbar", () => {
-    const seg = { ...baseSegment, graph: gateGraph() } as Segment;
-    const { queryByText } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    const { queryByText } = render(
+      <AnimationCanvas segment={baseSegment} graph={gateGraph()} onGraphChange={() => {}} />
+    );
     expect(queryByText("▦ detailed")).toBeNull();
     expect(queryByText("▤ compact")).toBeNull();
   });
@@ -164,27 +168,30 @@ describe("card positions (jsdom)", () => {
     data: { threshold: 0.5, hysteresis: 0.1, invert: false },
     ...pos,
   });
-  const twoCards = () => ({
-    version: 29,
-    nodes: [gate("n-a", { x: 100, y: 50 }), gate("n-b", { x: 160, y: 50 })],
-    edges: [],
-    view: { tx: 0, ty: 0, scale: 1 },
-  });
+  const twoCards = () =>
+    ({
+      version: 29,
+      nodes: [gate("n-a", { x: 100, y: 50 }), gate("n-b", { x: 160, y: 50 })],
+      edges: [],
+      view: { tx: 0, ty: 0, scale: 1 },
+    }) as unknown as Graph;
   const wrapperPos = (container: HTMLElement, id: string) => {
     const el = container.querySelector(`.gc-node-pos[data-node-id="${id}"]`) as HTMLElement;
     return { left: el.style.left, top: el.style.top };
   };
 
   it("renders cards at their x/y", () => {
-    const seg = { ...baseSegment, graph: twoCards() } as Segment;
-    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={() => {}} />);
+    const { container } = render(
+      <AnimationCanvas segment={baseSegment} graph={twoCards()} onGraphChange={() => {}} />
+    );
     expect(wrapperPos(container, "n-a")).toEqual({ left: "100px", top: "50px" });
   });
 
   it("a drag commits the position to x/y", () => {
     const onGraphChange = vi.fn();
-    const seg = { ...baseSegment, graph: twoCards() } as Segment;
-    const { container } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
+    const { container } = render(
+      <AnimationCanvas segment={baseSegment} graph={twoCards()} onGraphChange={onGraphChange} />
+    );
     const head = container.querySelector('.gc-node-pos[data-node-id="n-a"] .anim-node-head')!;
     // jsdom's fireEvent drops clientX on pointer events — dispatch natives (they
     // bubble to React's delegated pointerdown; move/up hit the window listeners).
@@ -208,9 +215,10 @@ describe("card positions (jsdom)", () => {
     const onGraphChange = vi.fn();
     // Two cards stacked on the same spot — arrange must separate them.
     const graph = twoCards();
-    graph.nodes[1] = gate("n-b", { x: 100, y: 50 });
-    const seg = { ...baseSegment, graph } as Segment;
-    const { getByText } = render(<AnimationCanvas segment={seg} onGraphChange={onGraphChange} />);
+    graph.nodes[1] = gate("n-b", { x: 100, y: 50 }) as unknown as Graph["nodes"][number];
+    const { getByText } = render(
+      <AnimationCanvas segment={baseSegment} graph={graph} onGraphChange={onGraphChange} />
+    );
     fireEvent.click(getByText("✨ arrange"));
     expect(onGraphChange).toHaveBeenCalledTimes(1);
     const committed = onGraphChange.mock.calls[0][0];

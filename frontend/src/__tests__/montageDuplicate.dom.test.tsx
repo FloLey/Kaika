@@ -35,7 +35,7 @@ function twoSlots(urls: [string, string], starts: [number, number]): Graph {
 }
 
 const mount = (g: Graph) =>
-  render(<AnimationCanvas segment={{ ...segment, graph: g }} onGraphChange={() => {}} />);
+  render(<AnimationCanvas segment={segment} graph={g} onGraphChange={() => {}} />);
 
 describe("Montage — a clip used by two slots is flagged", () => {
   it("rolls up the repeat, naming the slot it duplicates, when the frames are identical", () => {

@@ -38,7 +38,8 @@ describe("Output card — an already-rendered HD is offered, not re-rendered", (
     findSegmentHdRender.mockResolvedValue({ url: "/fluid/hd-abc-orig.mp4", audio: true });
     const { findByTitle } = render(
       <AnimationCanvas
-        segment={{ ...segment, graph: graphWithOutput() }}
+        segment={segment}
+        graph={graphWithOutput()}
         job="deadbeef"
         onGraphChange={() => {}}
       />
@@ -57,7 +58,8 @@ describe("Output card — an already-rendered HD is offered, not re-rendered", (
     findSegmentHdRender.mockResolvedValue({ url: null });
     const { queryByTitle } = render(
       <AnimationCanvas
-        segment={{ ...segment, graph: graphWithOutput() }}
+        segment={segment}
+        graph={graphWithOutput()}
         job="deadbeef"
         onGraphChange={() => {}}
       />

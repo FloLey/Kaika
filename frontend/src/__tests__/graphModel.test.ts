@@ -58,7 +58,8 @@ import {
 } from "../lib/graphModel";
 import { defaultCardName } from "../components/animation/nodeInputs";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
-import { hydrateSegments, serializeSegments, splitAt } from "../lib/segments";
+import { hydrateSegments, serializeSegments } from "../lib/segments";
+import { createComposition, hydrateCompositions, splitAt } from "../lib/compositions";
 import type {
   CombineData,
   MontageNode,
@@ -563,20 +564,27 @@ describe("segments graph persistence + split (01 §3.8)", () => {
       STEMS
     )[0];
     const sigId = seg0.signals[0].id;
-    // attach a graph that references the signal
-    seg0.graph = { ...emptyGraph(), nodes: [signalNode(seg0.signals[0], 0, 0)] };
+    // attach a composition whose graph references the signal
+    const comp = createComposition(seg0.label, {
+      ...emptyGraph(),
+      nodes: [signalNode(seg0.signals[0], 0, 0)],
+    });
+    seg0.rootCompositionId = comp.id;
+    const pool = { [comp.id]: comp };
 
     const round = hydrateSegments(serializeSegments([seg0]), STEMS)[0];
-    expect(round.graph).toEqual(seg0.graph);
+    const roundPool = hydrateCompositions(JSON.parse(JSON.stringify(pool)));
+    // the composition reference + id survived the round-trip (stable ids)
+    expect(round.rootCompositionId).toBe(comp.id);
+    expect(roundPool[comp.id].graph).toEqual(comp.graph);
     // the stored signal id survived hydrate, so the graph ref still resolves.
     expect(round.signals.some((s) => s.id === sigId)).toBe(true);
-    expect((round.graph!.nodes[0].data as SignalData).signalId).toBe(sigId);
-    expect(
-      round.signals.some((s) => s.id === (round.graph!.nodes[0].data as SignalData).signalId)
-    ).toBe(true);
+    const ref = (roundPool[comp.id].graph.nodes[0].data as SignalData).signalId;
+    expect(ref).toBe(sigId);
+    expect(round.signals.some((s) => s.id === ref)).toBe(true);
   });
 
-  it("splitAt gives the cloned half fresh ids + remaps its graph, with distinct graph objects", () => {
+  it("splitAt gives the cloned half fresh ids + its OWN composition, remapped", () => {
     const seg = hydrateSegments(
       [
         {
@@ -588,18 +596,28 @@ describe("segments graph persistence + split (01 §3.8)", () => {
       ],
       STEMS
     )[0];
-    seg.graph = { ...emptyGraph(), nodes: [signalNode(seg.signals[0], 0, 0)] };
+    const comp = createComposition(seg.label, {
+      ...emptyGraph(),
+      nodes: [signalNode(seg.signals[0], 0, 0)],
+    });
+    seg.rootCompositionId = comp.id;
 
-    const [a, b] = splitAt([seg], 5);
-    // two halves do not share a graph object
-    expect(a.graph).not.toBe(b.graph);
+    const res = splitAt([seg], { [comp.id]: comp }, 5);
+    const [a, b] = res.segments;
+    // the two halves reference DISTINCT compositions
+    expect(a.rootCompositionId).toBe(comp.id);
+    expect(b.rootCompositionId).toBeDefined();
+    expect(b.rootCompositionId).not.toBe(comp.id);
+    const aGraph = res.pool[a.rootCompositionId!].graph;
+    const bGraph = res.pool[b.rootCompositionId!].graph;
+    expect(aGraph).not.toBe(bGraph);
     // first half keeps its original signal id + a valid ref
-    expect((a.graph!.nodes[0].data as SignalData).signalId).toBe(seg.signals[0].id);
-    expect(a.signals.some((s) => s.id === (a.graph!.nodes[0].data as SignalData).signalId)).toBe(
+    expect((aGraph.nodes[0].data as SignalData).signalId).toBe(seg.signals[0].id);
+    expect(a.signals.some((s) => s.id === (aGraph.nodes[0].data as SignalData).signalId)).toBe(
       true
     );
     // second half got fresh signal ids AND a remapped graph (no dangling ref)
-    const bRef = (b.graph!.nodes[0].data as SignalData).signalId;
+    const bRef = (bGraph.nodes[0].data as SignalData).signalId;
     expect(bRef).not.toBe(seg.signals[0].id);
     expect(b.signals.some((s) => s.id === bRef)).toBe(true);
   });

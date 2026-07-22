@@ -6,7 +6,7 @@
 // shaping keys), so the working types are intentionally loose `any` records.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { Graph, Segment, Signal, StemInfo } from "./types";
+import type { Segment, Signal, StemInfo } from "./types";
 
 type AnyRec = Record<string, any>;
 type StemsMap = Record<string, StemInfo> | null | undefined;
@@ -28,8 +28,7 @@ export interface RawSegment {
   start: number;
   end: number;
   signals?: RawSignal[];
-  graph?: Graph | null;
-  finalOutputId?: string;
+  rootCompositionId?: string;
 }
 
 export const LABELS = [
@@ -76,8 +75,9 @@ export function stemColor(stemKey?: string): string {
 // Globally-unique ids. A plain session counter is NOT safe here: it resets on
 // every page load / HMR while stored ids persist, so a freshly added item would
 // collide with a resumed one — and an id collision makes edits hit every
-// colliding item at once. UUIDs avoid that entirely.
-function rid(prefix: string): string {
+// colliding item at once. UUIDs avoid that entirely. (Exported for the other id
+// families — compositions.ts mints `comp-…` with it.)
+export function rid(prefix: string): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
   }
@@ -243,13 +243,10 @@ export function hydrateSegments(raw: RawSegment[] | null | undefined, stems: Ste
       s.signals && s.signals.length
         ? withDefaults(hydrateSignals(s.signals), stems)
         : defaultSignals(stems),
-    // Keep the stored graph as-is. Its node ids stay stable too (each segment
-    // owns its own graph, so they never collide across segments). null = no
-    // animation built yet.
-    graph: s.graph || null,
-    // The "final" output node id survives the reload alongside the graph (node
-    // ids are stable), so the export stage's per-segment mark persists.
-    finalOutputId: s.finalOutputId,
+    // The composition reference survives the reload verbatim — composition ids
+    // are stable (compositions.ts), so the pool entry it names still exists.
+    // undefined = no animation built yet.
+    rootCompositionId: s.rootCompositionId,
   }));
 }
 
@@ -261,25 +258,16 @@ export function serializeSegments(segments: Segment[]): RawSegment[] {
     end: s.end,
     label: s.label,
     signals: serializeSignals(s.signals),
-    // The graph is a plain JSON object — carry it untouched (null if absent).
-    graph: s.graph || null,
-    // Persist the marked "final" output (undefined until one is marked).
-    finalOutputId: s.finalOutputId,
+    // Persist the composition reference (undefined until an animation exists);
+    // the graph itself autosaves with the pool.
+    rootCompositionId: s.rootCompositionId,
   }));
-}
-
-// Deep-copy a pure-JSON graph (structuredClone with a JSON-roundtrip fallback
-// for envs that lack it — graphs are pure JSON).
-function cloneGraph(graph: Graph | null | undefined): Graph | null {
-  if (!graph) return null;
-  return typeof structuredClone === "function"
-    ? structuredClone(graph)
-    : (JSON.parse(JSON.stringify(graph)) as Graph);
 }
 
 // Copy a signal list with fresh ids (so a split's two halves are independent),
 // also reporting the old->new id mapping so a copied graph can be remapped.
-function cloneSignals(signals: Signal[] | null | undefined): {
+// (Exported for compositions.ts, whose split/copy clone a composition onto them.)
+export function cloneSignals(signals: Signal[] | null | undefined): {
   signals: Signal[];
   idMap: Record<string, string>;
 } {
@@ -292,89 +280,11 @@ function cloneSignals(signals: Signal[] | null | undefined): {
   return { signals: out, idMap };
 }
 
-// Rewrite a graph's signal-node references through an id map; deep-copy so the
-// two halves of a split don't share one object. Unknown ids pass through (they
-// will read as "missing" later — the executor treats them as a flat 0).
-function remapGraphSignals(
-  graph: Graph | null | undefined,
-  idMap: Record<string, string>
-): Graph | null {
-  if (!graph) return null;
-  const g = cloneGraph(graph) as Graph;
-  for (const n of g.nodes) {
-    if (n.type === "signal" && idMap[n.data.signalId]) {
-      n.data.signalId = idMap[n.data.signalId];
-    }
-  }
-  return g;
-}
-
-// Split the segment that contains `t` into two at `t` (no-op near an edge). The
-// second half gets fresh signal ids (independent) and a graph remapped onto
-// them; the first half keeps its ids but gets a DISTINCT graph object so the two
-// halves never share-mutate (01 §3.8).
-export function splitAt(segments: Segment[], t: number): Segment[] {
-  const out: Segment[] = [];
-  for (const s of segments) {
-    if (t > s.start + 0.5 && t < s.end - 0.5) {
-      out.push({ ...s, end: t, graph: cloneGraph(s.graph) });
-      const { signals, idMap } = cloneSignals(s.signals);
-      out.push({
-        ...s,
-        id: mkSegId(),
-        start: t,
-        signals,
-        graph: remapGraphSignals(s.graph, idMap),
-      });
-    } else {
-      out.push(s);
-    }
-  }
-  return out;
-}
-
-// Copy a source segment's whole card layout (its animation graph) onto `target`,
-// returning the updated target. The graph's `signal` cards are rewired to the TARGET's
-// signals: each referenced band is matched to an existing target signal (same stem +
-// frequency range + feature) or, if absent, cloned onto the target — so the copied
-// pipeline drives THIS segment instead of pointing back at the source's signals. The
-// fluid / fx / modulator cards and all their wiring carry over verbatim. The "final"
-// output marker carries over too: node ids are preserved by the deep copy, so the
-// source's finalOutputId points at the matching output node in the copied graph.
-export function copyLayout(source: Segment, target: Segment): Segment {
-  const srcGraph = source.graph;
-  if (!srcGraph || !srcGraph.nodes?.length) return target;
-  const key = (s: Signal) => `${s.stemKey}|${s.minHz}|${s.maxHz}|${s.feature}`;
-  const srcById = new Map(source.signals.map((s) => [s.id, s]));
-  const byKey = new Map(target.signals.map((s) => [key(s), s]));
-  const idMap: Record<string, string> = {};
-  const added: Signal[] = [];
-  for (const n of srcGraph.nodes) {
-    if (n.type !== "signal") continue;
-    const sig = srcById.get(n.data.signalId);
-    if (!sig) continue; // dangling reference — leave it (reads as silent)
-    const match = byKey.get(key(sig));
-    if (match) {
-      idMap[sig.id] = match.id;
-    } else {
-      const clone = { ...sig, id: mkSigId() };
-      added.push(clone);
-      byKey.set(key(sig), clone);
-      idMap[sig.id] = clone.id;
-    }
-  }
-  return {
-    ...target,
-    signals: added.length ? [...target.signals, ...added] : target.signals,
-    graph: remapGraphSignals(srcGraph, idMap),
-    finalOutputId: source.finalOutputId,
-  };
-}
-
 // Merge segment `id` into its previous neighbor (delete the boundary before it).
-// The earlier segment keeps its graph (its signals are unchanged, so its
-// references stay valid); the later segment's graph falls away with the
-// spliced-out segment. This is the defined behavior (01 §3.8) — no remap needed.
+// The earlier segment keeps its composition (its signals are unchanged, so its
+// references stay valid); the later segment's composition reference falls away
+// with the spliced-out segment — the pool entry lingers as an orphan until the
+// pool prune (compositions wave step 07) collects it. No remap needed.
 export function mergeWithPrev(segments: Segment[], id: string): Segment[] {
   const i = segments.findIndex((s) => s.id === id);
   if (i <= 0) return segments;

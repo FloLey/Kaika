@@ -7,7 +7,7 @@ import type {
   SyntheticEvent,
 } from "react";
 import { fmtTime } from "../../lib/mel";
-import { LABELS, labelColor, splitAt, mergeWithPrev, moveBoundary } from "../../lib/segments";
+import { LABELS, labelColor, mergeWithPrev, moveBoundary } from "../../lib/segments";
 import type { Segment } from "../../lib/types";
 
 // Step 2 — review and edit the proposed split before opening the studio.
@@ -21,6 +21,9 @@ interface ReviewStepProps {
   duration: number;
   segments: Segment[];
   setSegments: Dispatch<SetStateAction<Segment[]>>;
+  // Splitting clones the segment's composition (both project halves change), so
+  // the handler lives in App where the pool's setter is.
+  onSplitAt: (t: number) => void;
   vocalEnvelope: number[];
   envelopeTimes: number[];
   onValidate: () => void;
@@ -33,6 +36,7 @@ export default function ReviewStep({
   duration,
   segments,
   setSegments,
+  onSplitAt,
   vocalEnvelope,
   envelopeTimes,
   onValidate,
@@ -85,7 +89,7 @@ export default function ReviewStep({
     window.addEventListener("pointerup", up);
   }
 
-  const splitHere = () => setSegments((segs) => splitAt(segs, cur));
+  const splitHere = () => onSplitAt(cur);
 
   // Vocal-activity envelope as a stretched polyline.
   const envPath = (() => {
@@ -147,7 +151,7 @@ export default function ReviewStep({
         className="rail"
         ref={railRef}
         onClick={(e) => seekTo(timeAtX(e.clientX))}
-        onDoubleClick={(e) => setSegments((segs) => splitAt(segs, timeAtX(e.clientX)))}
+        onDoubleClick={(e) => onSplitAt(timeAtX(e.clientX))}
       >
         <img className="rail-img" src={specUrl} alt="full mix" draggable={false} />
         <svg className="rail-env" viewBox="0 0 1000 100" preserveAspectRatio="none">

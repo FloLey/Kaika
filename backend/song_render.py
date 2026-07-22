@@ -31,6 +31,7 @@ import cv2
 import numpy as np
 
 from . import fluid, paths, render_cache
+from .compositions import final_output_id, root_composition
 from .config import ENCODE_TIMEOUT
 from .graph_hash import RENDER_VERSION
 from .graph_render import Dag, _clip_dims, _grid_dims
@@ -101,17 +102,19 @@ def export_audio_path(job_id: str, export: dict, stem_audio_path):
     return audio
 
 
-def _export_hash(job_id, segments, lyric_lines, export) -> str:
+def _export_hash(job_id, segments, compositions, lyric_lines, export) -> str:
     """Content key for a whole-song export (so an identical re-export is a cache hit).
     Folds RENDER_VERSION like output_hash does, so a render-semantics bump invalidates
     stale HD exports instead of serving them as cache hits."""
     payload = {
-        # v2: sim-free segments render at native size instead of on the sim grid (the
-        # master used to be a nearest-neighbour upscale). RENDER_VERSION is deliberately
-        # NOT bumped: it is folded into `output_hash` for every render including previews,
-        # whose pixels are untouched — bumping it would evict a whole project's cache for a
-        # change confined to the HD paths. This local counter is the right scope.
-        "v": 2,
+        # v3: graphs live in the composition pool, referenced by rootCompositionId —
+        # the payload folds each segment's root composition (graph + resolved output),
+        # so an edit anywhere reachable still moves the key. v2: sim-free segments
+        # render at native size instead of on the sim grid. RENDER_VERSION is
+        # deliberately NOT bumped for either: it is folded into `output_hash` for every
+        # render including previews, whose pixels are untouched — bumping it would evict
+        # a whole project's cache for a change confined to the HD paths.
+        "v": 3,
         "render_version": RENDER_VERSION,
         "job_id": job_id,
         "export": export,
@@ -120,9 +123,10 @@ def _export_hash(job_id, segments, lyric_lines, export) -> str:
             {
                 "start": s.get("start"),
                 "end": s.get("end"),
-                "final": s.get("finalOutputId"),
                 "signals": s.get("signals"),
-                "graph": s.get("graph"),
+                "root": s.get("rootCompositionId"),
+                "final": final_output_id(root_composition(compositions, s)),
+                "graph": (root_composition(compositions, s) or {}).get("graph"),
             }
             for s in segments
         ],
@@ -182,11 +186,13 @@ def song_total_frames(segments: list, export: dict) -> int:
 
 
 def build_plan(
-    job_id: str, segments: list, lyric_lines: list, export: dict, stem_audio_path
-) -> dict:
+    job_id: str, segments: list, compositions: dict, lyric_lines: list, export: dict,
+    stem_audio_path
+) -> dict:  # fmt: skip
     """Resolve every segment's DAG + final-output fields ONCE (signal extraction happens
     here) and the per-layer dye layout — the UNION of edge-modes across every segment
-    that feeds a layer, so a persistent field's dye layers cover them all. Returns the
+    that feeds a layer, so a persistent field's dye layers cover them all. Each segment's
+    graph resolves through the composition pool (`rootCompositionId`). Returns the
     render context consumed by `iter_song_windows`. Raises if a segment is unmarked."""
     out_dict = output_from_export(export)  # the shared export->output contract
     fps, w, h = out_dict["fps"], out_dict["width"], out_dict["height"]
@@ -194,11 +200,12 @@ def build_plan(
     layer_sources: dict = {}  # layer number -> accumulated source dicts (for dye layout)
     total = 0
     for seg in sorted(segments, key=lambda s: float(s.get("start", 0.0))):
-        oid = seg.get("finalOutputId")
-        if not oid:
+        comp = root_composition(compositions, seg)
+        oid = final_output_id(comp)
+        if not comp or not oid:
             raise ValueError(f"segment {seg.get('id')} has no final output marked")
         seg2 = {**seg, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
-        dag = Dag(job_id, seg2, seg["graph"], stem_audio_path, out_dict)
+        dag = Dag(job_id, seg2, comp["graph"], stem_audio_path, out_dict)
         fields = dag.field_layers(oid)
         window = max(1, round(dag.duration * fps))
         for f in fields:
@@ -369,6 +376,7 @@ def iter_song_windows(ctx: dict, should_cancel=None, on_segment=None):
 def render_song(
     job_id: str,
     segments: list,
+    compositions: dict,
     lyric_lines: list,
     export: dict,
     stem_audio_path,
@@ -378,7 +386,8 @@ def render_song(
     should_cancel=None,
 ) -> str | None:
     """Render the whole song to one continuous HD mp4 (video + muxed audio) and return
-    its URL. `segments` each carry `graph`, `start`, `end`, `signals`, `finalOutputId`.
+    its URL. `segments` each carry `start`, `end`, `signals`, `rootCompositionId`; the
+    graphs live in `compositions` (the pool).
     `on_segment(index, count, label)` fires as each segment starts — frame progress lands
     only once per segment (one window per yield), so the counter can sit still for minutes
     and then leap; this is the signal that says it is still working, and on what. It is a
@@ -387,7 +396,8 @@ def render_song(
 
     See the module docstring for the continuous-field model. Cached by content hash;
     cancellation between segments returns None."""
-    out_path = paths.ANIM_DIR / f"song_{_export_hash(job_id, segments, lyric_lines, export)}.mp4"
+    h = _export_hash(job_id, segments, compositions, lyric_lines, export)
+    out_path = paths.ANIM_DIR / f"song_{h}.mp4"
     url = f"/fluid/{out_path.name}"
     # CHECK THE CACHE BEFORE DOING THE WORK. `build_plan` opens a Dag per segment and
     # resolves its fields, which runs full signal extraction (STFT / HPSS / beat-track)
@@ -402,7 +412,7 @@ def render_song(
             on_progress(total, total, url)
         return url
 
-    ctx = build_plan(job_id, segments, lyric_lines, export, stem_audio_path)
+    ctx = build_plan(job_id, segments, compositions, lyric_lines, export, stem_audio_path)
     # Each Dag may hold ffmpeg decoders (a video / slideshow / stylize card registers
     # clip.close on it), and they outlive build_plan by design — `iter_song_windows` walks
     # them — so they're drained in this OUTER finally. It used to also cover a cache-hit

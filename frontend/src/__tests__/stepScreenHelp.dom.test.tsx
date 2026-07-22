@@ -31,6 +31,7 @@ describe("step screens explain themselves", () => {
       <ExportStep
         job="j1"
         segments={[]}
+        compositions={{}}
         exportSettings={{ ...EXPORT_DEFAULTS, width: 1080, height: 1920 }}
         setExportSettings={() => {}}
         output={canvas}
@@ -49,6 +50,7 @@ describe("step screens explain themselves", () => {
       <ExportStep
         job="j1"
         segments={[]}
+        compositions={{}}
         exportSettings={{ ...EXPORT_DEFAULTS, width: 1080, height: 1920 }}
         setExportSettings={() => {}}
         output={canvas}

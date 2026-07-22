@@ -177,10 +177,11 @@ def test_song_render_closes_every_planned_dag(monkeypatch, tmp_path):
     """`build_plan` opens one DAG per segment and they outlive it by design, so the drain
     is an outer finally in `render_song`."""
     monkeypatch.setattr(SR.paths, "ANIM_DIR", tmp_path)
-    seg = {**SEG, "graph": _graph(), "finalOutputId": "o"}
+    seg = {**SEG, "rootCompositionId": "c1"}
+    pool = {"c1": {"id": "c1", "name": "s", "graph": _graph(), "outputId": "o"}}
     export = {**SR.EXPORT_DEFAULTS, "width": 64, "height": 64, "fps": 8}
 
-    ctx = SR.build_plan("job", [seg], [], export, NOAUDIO)
+    ctx = SR.build_plan("job", [seg], pool, [], export, NOAUDIO)
     closed = []
     for dag, *_ in ctx["plan"]:
         dag._closers.append(lambda: closed.append(1))
@@ -200,9 +201,10 @@ def test_song_render_cache_hit_opens_no_dag_at_all(monkeypatch, tmp_path):
     that reintroduces the eager plan fails here even if it remembers to close it.
     """
     monkeypatch.setattr(SR.paths, "ANIM_DIR", tmp_path)
-    seg = {**SEG, "graph": _graph(), "finalOutputId": "o"}
+    seg = {**SEG, "rootCompositionId": "c1"}
+    pool = {"c1": {"id": "c1", "name": "s", "graph": _graph(), "outputId": "o"}}
     export = {**SR.EXPORT_DEFAULTS, "width": 64, "height": 64, "fps": 8}
-    out = tmp_path / f"song_{SR._export_hash('job', [seg], [], export)}.mp4"
+    out = tmp_path / f"song_{SR._export_hash('job', [seg], pool, [], export)}.mp4"
     out.write_bytes(b"x")
 
     opened = []
@@ -212,14 +214,14 @@ def test_song_render_cache_hit_opens_no_dag_at_all(monkeypatch, tmp_path):
     )
     progress = []
     url = SR.render_song(
-        "job", [seg], [], export, NOAUDIO, on_progress=lambda a, b, u: progress.append((a, b))
+        "job", [seg], pool, [], export, NOAUDIO, on_progress=lambda a, b, u: progress.append((a, b))
     )
 
     assert url is not None and not opened, f"the cache hit built {len(opened)} DAG(s)"
     # ...and the frame total it reports still agrees with the one the plan would have
     # computed. Checked against `build_plan` rather than a literal: the two derivations
     # must not drift, and that is the actual risk of computing the total twice.
-    ctx = SR.build_plan("job", [seg], [], export, NOAUDIO)
+    ctx = SR.build_plan("job", [seg], pool, [], export, NOAUDIO)
     try:
         assert progress and progress[-1] == (ctx["total"], ctx["total"]), progress
     finally:

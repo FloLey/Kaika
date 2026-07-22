@@ -53,18 +53,32 @@ export interface Signal {
 }
 
 // A contiguous time range [start, end] owning a list of signals and (optionally)
-// an animation graph. `graph` is null when no animation has been built yet.
-// `finalOutputId` is the id of the output node marked "final" for this segment —
-// the one the Final export stage renders (undefined until the user marks one).
+// a reference into the project's composition pool. `rootCompositionId` is
+// undefined while no animation has been built yet; the graph itself lives in the
+// pool (see Composition below), never on the segment.
 export interface Segment {
   id: string;
   label: string;
   start: number;
   end: number;
   signals: Signal[];
-  graph?: Graph | null;
-  finalOutputId?: string;
+  rootCompositionId?: string;
 }
+
+// A composition: a graph ending in an `output` card, producing a video — the unit
+// of editing and reuse (specs/compositions). Lives in the project-level pool,
+// addressed by a STABLE id (preserved across reloads — graph node ids are only
+// unique within one composition). `outputId` marks which output card is its
+// product (the export renders it); when absent, the sole output card resolves.
+export interface Composition {
+  id: string;
+  name: string;
+  graph: Graph;
+  outputId?: string;
+}
+
+// The pool itself — what `data.compositions` holds and the autosave round-trips.
+export type CompositionPool = Record<string, Composition>;
 
 // ---- value-source binding ----------------------------------------------------
 // A fluid param port is a constant value, or a value-source node whose 0..1 curve

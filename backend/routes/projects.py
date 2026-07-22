@@ -63,6 +63,7 @@ def project_get(job_id: str):
             "step": row["step"],
             "stems": data.get("stems", {}),
             "segments": data.get("segments", []),
+            "compositions": data.get("compositions") or {},
             "output": data.get("output") or {},
             "export": data.get("export") or {},
             "assets": data.get("assets") or [],
@@ -102,6 +103,7 @@ def project_save(job_id: str):
     ok = db.save_segments(
         job_id,
         body.get("segments", []),
+        compositions=body.get("compositions"),
         step=body.get("step"),
         title=body.get("title"),
         output=body.get("output"),

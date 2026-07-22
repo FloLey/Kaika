@@ -55,15 +55,12 @@ def one_segment_project(monkeypatch, tmp_path):
             {"id": "e", "source": "b", "sourcePort": "out", "target": "o", "targetPort": "video"}
         ],
     }
-    seg = {
-        "id": "s1",
-        "start": 0.0,
-        "end": 1.0,
-        "signals": [],
-        "graph": graph,
-        "finalOutputId": "o",
+    seg = {"id": "s1", "start": 0.0, "end": 1.0, "signals": [], "rootCompositionId": "c1"}
+    pool = {"c1": {"id": "c1", "name": "s1", "graph": graph, "outputId": "o"}}
+    row = {
+        "job_id": "abcd1234",
+        "data": {"segments": [seg], "compositions": pool, "output": {}, "export": {}},
     }
-    row = {"job_id": "abcd1234", "data": {"segments": [seg], "output": {}, "export": {}}}
     monkeypatch.setattr(db, "get_project", lambda jid: row if jid == "abcd1234" else None)
     monkeypatch.setattr(EX, "ANALYSIS_DIR", tmp_path)
     (tmp_path / "abcd1234.json").write_text(json.dumps({"lyric_lines": []}))
@@ -122,7 +119,7 @@ def test_the_slot_is_shared_between_song_and_segment_exports(
         seg_req = {
             "job_id": "abcd1234",
             "segment": {"id": "s1", "start": 0.0, "end": 1.0, "signals": []},
-            "graph": one_segment_project["data"]["segments"][0]["graph"],
+            "graph": one_segment_project["data"]["compositions"]["c1"]["graph"],
             "output_id": "o",
         }
         assert client.post("/export/segment", json=seg_req).status_code == 409

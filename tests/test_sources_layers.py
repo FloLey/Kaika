@@ -298,17 +298,18 @@ def test_reachable_assets_collects_image_video_urls(monkeypatch):
     proj = {
         "job_id": "proj1",
         "data": {
-            "segments": [
-                {
+            "compositions": {
+                "c1": {
+                    "id": "c1",
                     "graph": {
                         "nodes": [
                             {"type": "image", "data": {"assetUrl": "/assets/proj1/aaa.png"}},
                             {"type": "video", "data": {"assetUrl": "/assets/proj1/bbb.mp4"}},
                             {"type": "fluid", "data": {}},
                         ]
-                    }
+                    },
                 }
-            ]
+            }
         },
     }
     monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
@@ -323,8 +324,9 @@ def test_reachable_assets_collects_imagegen_slideshow(monkeypatch):
     proj = {
         "job_id": "proj1",
         "data": {
-            "segments": [
-                {
+            "compositions": {
+                "c1": {
+                    "id": "c1",
                     "graph": {
                         "nodes": [
                             {
@@ -334,9 +336,9 @@ def test_reachable_assets_collects_imagegen_slideshow(monkeypatch):
                                 },
                             },
                         ]
-                    }
+                    },
                 }
-            ]
+            }
         },
     }
     monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])
@@ -351,8 +353,9 @@ def test_reachable_assets_collects_slideshow_items(monkeypatch):
     proj = {
         "job_id": "proj1",
         "data": {
-            "segments": [
-                {
+            "compositions": {
+                "c1": {
+                    "id": "c1",
                     "graph": {
                         "nodes": [
                             {
@@ -369,9 +372,9 @@ def test_reachable_assets_collects_slideshow_items(monkeypatch):
                                 },
                             },
                         ]
-                    }
+                    },
                 }
-            ]
+            }
         },
     }
     monkeypatch.setattr(cache_gc.db, "get_projects_full", lambda: [proj])

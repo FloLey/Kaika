@@ -12,10 +12,14 @@ URL = "/assets/ab12cd34/stylize-test.mp4"
 
 
 def _segments():
-    return [
-        {
-            "id": "seg1",
-            "label": "AI Stylize",
+    return [{"id": "seg1", "label": "AI Stylize", "rootCompositionId": "c1"}]
+
+
+def _pool():
+    return {
+        "c1": {
+            "id": "c1",
+            "name": "AI Stylize",
             "graph": {
                 "version": 22,
                 "nodes": [
@@ -26,7 +30,7 @@ def _segments():
                 "edges": [],
             },
         }
-    ]
+    }
 
 
 def test_persist_asset_url_lands_on_the_node(live_db):
@@ -36,10 +40,10 @@ def test_persist_asset_url_lands_on_the_node(live_db):
     db.delete_project(job)
     db.create_project(job, title="t", source="s", duration=1.0, fmin=20, has_lyrics=False, stems={})
     try:
-        db.save_segments(job, _segments())
+        db.save_segments(job, _segments(), compositions=_pool())
         _persist_asset_url(job, "st", URL)
-        seg = db.get_project(job)["data"]["segments"][0]
-        by_id = {n["id"]: n for n in seg["graph"]["nodes"]}
+        comp = db.get_project(job)["data"]["compositions"]["c1"]
+        by_id = {n["id"]: n for n in comp["graph"]["nodes"]}
         assert by_id["st"]["data"]["assetUrl"] == URL
         assert "assetUrl" not in by_id["st2"]["data"]  # non-stylize node untouched
     finally:
@@ -56,10 +60,10 @@ def test_persist_asset_url_survives_missing_project_and_node(live_db):
     db.delete_project(job)
     db.create_project(job, title="t", source="s", duration=1.0, fmin=20, has_lyrics=False, stems={})
     try:
-        db.save_segments(job, _segments())
+        db.save_segments(job, _segments(), compositions=_pool())
         _persist_asset_url(job, "deleted-mid-job", URL)  # node gone: graph left as-is
-        seg = db.get_project(job)["data"]["segments"][0]
-        assert {n["id"]: n for n in seg["graph"]["nodes"]}["st"]["data"][
+        comp = db.get_project(job)["data"]["compositions"]["c1"]
+        assert {n["id"]: n for n in comp["graph"]["nodes"]}["st"]["data"][
             "assetUrl"
         ] == "/assets/old.mp4"
     finally:

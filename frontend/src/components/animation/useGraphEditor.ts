@@ -19,14 +19,16 @@ import { nodeParam } from "../../lib/nodeParams";
 import type { Graph, GraphEdge, LyricLine, OutputSettings, Segment } from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
 
-// The animation editor "brain": graph state (normalized from segment.graph), the
+// The animation editor "brain": graph state (the active composition's graph), the
 // selection, the mutation handlers (connect / delete / minimize), and the assembled
 // `ctx` handed to every node card. AnimationCanvas is then just the view (refs,
 // fullscreen, layout). This is the seam to grow — new editor features (undo, node
 // templates, …) add here without threading props through the component tree.
 
 interface GraphEditorOpts {
-  segment: Segment;
+  segment: Segment; // the host segment: time window + signals (the graph is NOT on it)
+  graph?: Graph | null; // the active composition's graph (null = none built yet)
+  finalOutputId?: string; // the composition's ★-final output mark
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -36,13 +38,15 @@ interface GraphEditorOpts {
   onSaveLyricLines?: NodeCtx["onSaveLyricLines"];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;
-  commitGraph: (g: Graph) => void; // lifts the whole graph to segment.graph
-  setFinalOutput?: NodeCtx["setFinalOutput"]; // mark/clear this segment's final output
+  commitGraph: (g: Graph) => void; // lifts the whole graph to the composition pool
+  setFinalOutput?: NodeCtx["setFinalOutput"]; // mark/clear the composition's final output
 }
 
 export function useGraphEditor(opts: GraphEditorOpts) {
   const {
     segment,
+    graph: rawGraph,
+    finalOutputId,
     stems,
     job,
     output,
@@ -56,10 +60,10 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     setFinalOutput,
   } = opts;
 
-  // A stable graph object: segment.graph when present, else a fresh empty graph.
-  // normalizeGraph migrates older saves so every fluid node carries the current
-  // param ports — otherwise wiring those ports silently fails.
-  const graph = useMemo(() => normalizeGraph(segment.graph || emptyGraph()), [segment.graph]);
+  // A stable graph object: the composition's graph when present, else a fresh empty
+  // graph. normalizeGraph migrates older saves so every fluid node carries the
+  // current param ports — otherwise wiring those ports silently fails.
+  const graph = useMemo(() => normalizeGraph(rawGraph || emptyGraph()), [rawGraph]);
 
   // Selection is a SET of ids so several cards (and/or an edge) can be active at
   // once — that's what makes "move a group in one go" possible. It holds node ids
@@ -304,8 +308,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       groupPlaying,
       segStart: segment.start,
       minimized, // the compact set -> renderAnimNode swaps in CompactCard
-      finalOutputId: segment.finalOutputId, // which output the OutputNode shows as "final"
-      setFinalOutput, // OutputNode marks itself final for this segment
+      finalOutputId, // which output the OutputNode shows as "final" (composition.outputId)
+      setFinalOutput, // OutputNode marks itself final for this composition
       onGraphChange: applyUpdater,
       onDetach,
       onDeleteNode,
@@ -324,6 +328,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       groupClock,
       groupPlaying,
       minimized,
+      finalOutputId,
       setFinalOutput,
       applyUpdater,
       onDetach,

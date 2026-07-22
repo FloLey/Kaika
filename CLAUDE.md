@@ -18,6 +18,7 @@ whole-song HD export. Flask JSON API (`:5000`) + React/Vite (`:5173`) + Postgres
 | [`specs/generative-cards/`](specs/generative-cards/) | The six shipped generative cards (waves…clouds). The code diverged from these specs — the README says how |
 | [`specs/cleanup/`](specs/cleanup/) | The code-quality series, waves 1–2 (`00`–`15`), done |
 | [`specs/ai-stylize/`](specs/ai-stylize/) | The AI Stylize wave — **the one exception in `specs/`: only half of it was built.** Its README carries the per-step status; trust that, not the step prose |
+| [`specs/compositions/`](specs/compositions/) | The composition-DAG montage rework — **IN PROGRESS**; the README carries the per-step status and the locked decisions |
 | [`docs/`](docs/) | Only LIVING things: open backlogs, changelogs, archives. Nothing finished belongs here |
 | [`docs/cleanup/`](docs/cleanup/) | The code-quality backlog, wave 3 (`16`–`28`) — **open**. Each step records what was deliberately **not** done and why |
 | [`docs/generative-cards/`](docs/generative-cards/) | 21 UNBUILT card proposals (`07`–`27`) — a backlog nobody has committed to |

@@ -53,18 +53,35 @@ def _fluid_out(emit, rgb=(1.0, 0.3, 0.2)):
 
 
 def _seg(sid, start, end, graph, oid="o"):
+    # The graph rides on the seg dict only for the tests' own convenience (solo Dag
+    # renders); build_plan reads it through the pool (`_pool`) like the app does.
     return {
         "id": sid,
         "start": start,
         "end": end,
         "signals": [],
         "graph": graph,
+        "rootCompositionId": f"c-{sid}",
         "finalOutputId": oid,
     }
 
 
+def _pool(segs):
+    """The composition pool the segments reference (one root composition each)."""
+    return {
+        f"c-{s['id']}": {
+            "id": f"c-{s['id']}",
+            "name": s["id"],
+            "graph": s["graph"],
+            "outputId": s.get("finalOutputId"),
+        }
+        for s in segs
+        if s.get("graph") is not None
+    }
+
+
 def _render(segs, export=EXPORT):
-    ctx = SR.build_plan("job", segs, [], export, NOAUDIO)
+    ctx = SR.build_plan("job", segs, _pool(segs), [], export, NOAUDIO)
     frames = np.concatenate([w for _a, _b, w in SR.iter_song_windows(ctx)], axis=0)
     return ctx, frames
 
@@ -147,9 +164,11 @@ def test_progress_preview_url_is_servable(tmp_path, monkeypatch):
     (tmp_path / "fluid").mkdir()
 
     urls: list[str] = []
+    segs = [_seg("s1", 0.0, 0.4, _fluid_out(0.6))]
     SR.render_song(
         "job",
-        [_seg("s1", 0.0, 0.4, _fluid_out(0.6))],
+        segs,
+        _pool(segs),
         [],
         EXPORT,
         NOAUDIO,
@@ -164,11 +183,19 @@ def test_progress_preview_url_is_servable(tmp_path, monkeypatch):
 
 
 def test_build_plan_rejects_unmarked_segment():
-    segs = [
-        {"id": "s1", "start": 0.0, "end": 1.0, "signals": [], "graph": _fluid_out(0.5)}
-    ]  # no finalOutputId
+    # No composition reference at all — the segment has no animation to render.
+    segs = [{"id": "s1", "start": 0.0, "end": 1.0, "signals": []}]
     with pytest.raises(ValueError):
-        SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+        SR.build_plan("job", segs, {}, [], EXPORT, NOAUDIO)
+
+    # A composition with TWO outputs and no mark is genuinely ambiguous (a single
+    # unmarked output resolves on its own — `final_output_id`'s sole-output fallback).
+    two = _fluid_out(0.5)
+    two["nodes"].append({"id": "o2", "type": "output", "data": {}})
+    two["edges"].append(_edge("f1", "o2", "video"))
+    segs = [_seg("s1", 0.0, 1.0, two, oid=None)]
+    with pytest.raises(ValueError):
+        SR.build_plan("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
 
 
 def test_each_segment_announces_itself_before_it_is_rendered():
@@ -180,7 +207,7 @@ def test_each_segment_announces_itself_before_it_is_rendered():
     once the long wait is already over.
     """
     segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 2.0, _fluid_out(0.3))]
-    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    ctx = SR.build_plan("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
     seen = []
     windows = 0
     # noqa B023: the lambda is invoked SYNCHRONOUSLY inside the loop, so reading the
@@ -200,7 +227,7 @@ def test_each_segment_announces_itself_before_it_is_rendered():
 def test_the_generator_stays_usable_without_the_callback():
     """It's optional — the tests that just concatenate windows must not have to care."""
     segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6))]
-    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    ctx = SR.build_plan("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
     assert len(list(SR.iter_song_windows(ctx))) == 1
 
 
@@ -223,7 +250,7 @@ def test_a_sim_free_segment_is_streamed_not_held_whole():
     it. A segment with no field to inject has no reason to be held whole: it streams."""
     # Longer than one block: hd_block_seconds caps at 5 s, so a 12 s segment must split.
     segs = [_seg("s1", 0.0, 12.0, _backdrop_out())]
-    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    ctx = SR.build_plan("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
     windows = list(SR.iter_song_windows(ctx))
     assert len(windows) > 1, "a sim-free segment still renders as one whole-clip window"
     biggest = max(w.shape[0] for _a, _b, w in windows)
@@ -241,7 +268,7 @@ def test_streaming_a_sim_free_segment_renders_the_same_pixels():
     from backend import fluid as F
 
     segs = [_seg("s1", 0.0, 2.0, _backdrop_out("#3a7f2b"))]
-    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    ctx = SR.build_plan("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
     streamed = np.concatenate([F.flatten(w) for _a, _b, w in SR.iter_song_windows(ctx)], axis=0)
 
     dag, oid = ctx["plan"][0][0], ctx["plan"][0][1]
@@ -254,7 +281,7 @@ def test_a_mixed_song_keeps_both_paths_and_stays_gapless():
     """A song can mix a fluid segment (held whole, RGB) with a sim-free one (streamed,
     RGBA). The frame ranges must still tile the song exactly, in order."""
     segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.6)), _seg("s2", 1.0, 3.0, _backdrop_out())]
-    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    ctx = SR.build_plan("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
     windows = list(SR.iter_song_windows(ctx))
     assert windows[0][2].shape[-1] == 3  # the fluid segment: one flattened window
     assert any(w.shape[-1] == 4 for _a, _b, w in windows[1:])  # the streamed one: RGBA
@@ -263,3 +290,21 @@ def test_a_mixed_song_keeps_both_paths_and_stays_gapless():
         assert a == at and b - a == w.shape[0]
         at = b
     assert at == ctx["total"]
+
+
+def test_export_hash_folds_the_root_composition():
+    """The export key must move when a segment's root composition is edited — the
+    graphs live in the pool now, so hashing the segment list alone would serve a
+    stale master after any animation edit."""
+    segs = [_seg("s1", 0.0, 1.0, _fluid_out(0.5))]
+    pool = _pool(segs)
+    base = SR._export_hash("job", segs, pool, [], EXPORT)
+
+    edited = _pool(segs)
+    edited["c-s1"]["graph"]["nodes"][0]["data"]["static"]["points"] = [[0.1, 0.1]]
+    assert SR._export_hash("job", segs, edited, [], EXPORT) != base
+
+    # …and re-pointing the segment at a different composition moves it too.
+    repointed = [{**segs[0], "rootCompositionId": "c-other"}]
+    other = {"c-other": {**pool["c-s1"], "id": "c-other"}}
+    assert SR._export_hash("job", repointed, other, [], EXPORT) != base

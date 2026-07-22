@@ -112,14 +112,15 @@ def _persist_asset_url(job_id: str, node_id: str, url: str) -> None:
         if row is None:
             return
         segments = row["data"]["segments"]
+        pool = row["data"].get("compositions") or {}
         hit = False
-        for seg in segments:
-            for n in (seg.get("graph") or {}).get("nodes", []):
+        for comp in pool.values():
+            for n in ((comp or {}).get("graph") or {}).get("nodes", []):
                 if n.get("id") == node_id and n.get("type") == "stylize":
                     n.setdefault("data", {})["assetUrl"] = url
                     hit = True
         if hit:
-            db.save_segments(job_id, segments)
+            db.save_segments(job_id, segments, compositions=pool)
             log.info("stylize: persisted %s onto node %s", url, node_id)
     except Exception:  # noqa: BLE001 — never fail the job at the finish line
         log.warning("stylize: could not persist assetUrl onto node %s", node_id, exc_info=True)

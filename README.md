@@ -231,8 +231,9 @@ on restart).
 ## Storage
 
 - **Postgres** `projects` table: editable tree (segments, labels, boundaries,
-  per-segment stem edits **and animation graph**, plus project-wide **output**
-  settings) as JSONB + listing columns.
+  per-segment stem edits, the **composition pool** — every animation graph,
+  addressed by id and referenced from segments via `rootCompositionId` — plus
+  project-wide **output** settings) as JSONB + listing columns.
 - **Filesystem** under `data/` (gitignored): `uploads/`, `separated/`,
   `spectrograms/` per `job_id`, `assets/<job>/` (image/video layer assets,
   content-addressed), plus `analysis/<job>.json` (vocal envelope + aligned

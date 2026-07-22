@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Asset, LyricLine, OutputSettings, Segment } from "./lib/types";
+import type { Asset, CompositionPool, LyricLine, OutputSettings, Segment } from "./lib/types";
 import type { UploadResult, SegmentProposal } from "./lib/api";
 import ProjectList from "./components/ProjectList";
 import UploadStep from "./components/upload/UploadStep";
@@ -11,6 +11,7 @@ import LogsPanel from "./components/LogsPanel";
 import SettingsModal from "./components/SettingsModal";
 import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
+import { hydrateCompositions, splitAt } from "./lib/compositions";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
 import { EXPORT_DEFAULTS, withExportDefaults } from "./lib/export";
 import type { ExportSettings } from "./lib/export";
@@ -29,10 +30,19 @@ import { createSaveChain } from "./lib/saveChain";
 function buildSavePayload(
   step: string,
   segments: Segment[],
+  compositions: CompositionPool,
   output: OutputSettings,
   exportSettings: ExportSettings
 ) {
-  return { step, segments: serializeSegments(segments), output, export: exportSettings };
+  return {
+    step,
+    segments: serializeSegments(segments),
+    // The pool is already pure JSON (hydration normalizes it); it rides the same
+    // payload as the segments that reference it, so the two can't save out of step.
+    compositions,
+    output,
+    export: exportSettings,
+  };
 }
 
 export default function App() {
@@ -54,6 +64,9 @@ export default function App() {
   >({});
 
   const [segments, setSegments] = useState<Segment[]>([]);
+  // The composition pool — every animation graph in the project, addressed by id;
+  // segments (and later montage extracts) reference into it. Saves with segments.
+  const [compositions, setCompositions] = useState<CompositionPool>({});
   const [vocalEnvelope, setVocalEnvelope] = useState<number[]>([]);
   const [envelopeTimes, setEnvelopeTimes] = useState<number[]>([]);
   const [lyricLines, setLyricLines] = useState<LyricLine[]>([]);
@@ -96,7 +109,7 @@ export default function App() {
     // The equality guard moves in with them: scheduling a timer that decides to do nothing
     // is far cheaper than serialising the project to find out.
     const t = setTimeout(() => {
-      const payload = buildSavePayload(step, segments, output, exportSettings);
+      const payload = buildSavePayload(step, segments, compositions, output, exportSettings);
       const jsonStr = JSON.stringify(payload);
       if (jsonStr === lastSaved.current) return;
       saveChain.current.supersedable(async () => {
@@ -113,7 +126,7 @@ export default function App() {
       });
     }, 800);
     return () => clearTimeout(t);
-  }, [segments, step, job, output, exportSettings]);
+  }, [segments, compositions, step, job, output, exportSettings]);
 
   // ---- lyric line edits ------------------------------------------------------
   // Rewriting line TEXT (the wedding-lyrics flow) keeps the aligned timings. The
@@ -125,7 +138,7 @@ export default function App() {
   const saveLyricLines = useCallback(
     async (lines: LyricLine[]) => {
       if (!job) return;
-      const base = buildSavePayload(step, segments, output, exportSettings);
+      const base = buildSavePayload(step, segments, compositions, output, exportSettings);
       // `exclusive`: this payload carries lyric_lines the autosave payload lacks, so it
       // must never be skipped as superseded.
       return saveChain.current.exclusive(async () => {
@@ -134,7 +147,7 @@ export default function App() {
         lastSaved.current = JSON.stringify(base); // autosave needn't re-PUT this state
       });
     },
-    [job, step, segments, output, exportSettings]
+    [job, step, segments, compositions, output, exportSettings]
   );
 
   // ---- playground 💾 save fixture -------------------------------------------
@@ -143,13 +156,13 @@ export default function App() {
   // save chain so it can't interleave with an in-flight autosave.
   const saveFixture = useCallback(async (): Promise<api.FixtureExport> => {
     if (!job) throw new Error("no project open");
-    const payload = buildSavePayload(step, segments, output, exportSettings);
+    const payload = buildSavePayload(step, segments, compositions, output, exportSettings);
     return saveChain.current.exclusive(async () => {
       await api.saveProject(job, payload);
       lastSaved.current = JSON.stringify(payload);
       return api.exportPlaygroundFixture();
     });
-  }, [job, step, segments, output, exportSettings]);
+  }, [job, step, segments, compositions, output, exportSettings]);
 
   // ---- new track: upload + propose -----------------------------------------
   async function handleUpload({
@@ -202,6 +215,7 @@ export default function App() {
       if (segData.duration) setDuration(segData.duration);
       lastSaved.current = "";
       setSegments(hydrateSegments(segData.segments, data.stems));
+      setCompositions({}); // a fresh project has no animations yet
       setStep("review");
     } catch (e) {
       if ((e as DOMException)?.name === "AbortError") return; // we walked away; not an error
@@ -228,6 +242,8 @@ export default function App() {
       setEnvelopeTimes(p.envelope_times || []);
       const segs = hydrateSegments(p.segments, p.stems || {});
       setSegments(segs);
+      const pool = hydrateCompositions(p.compositions);
+      setCompositions(pool);
       setActiveSegId(segs[0]?.id || null);
       const loadedOutput = withOutputDefaults(p.output);
       setOutput(loadedOutput);
@@ -242,7 +258,9 @@ export default function App() {
       const mergedCount = segs.reduce((a, s) => a + s.signals.length, 0);
       lastSaved.current =
         mergedCount === loadedCount
-          ? JSON.stringify(buildSavePayload(p.step || "studio", segs, loadedOutput, loadedExport))
+          ? JSON.stringify(
+              buildSavePayload(p.step || "studio", segs, pool, loadedOutput, loadedExport)
+            )
           : "";
       setStep(p.step || "studio");
     } catch (e) {
@@ -271,9 +289,22 @@ export default function App() {
     setStep("studio");
   }
 
+  // Splitting touches BOTH halves of the project state (the second half gets a
+  // cloned composition), so the handler lives here where both setters are; the
+  // review screen's other edits (move/merge) stay pure segment updaters.
+  const splitSegmentsAt = useCallback(
+    (t: number) => {
+      const res = splitAt(segments, compositions, t);
+      setSegments(() => res.segments);
+      setCompositions(res.pool);
+    },
+    [segments, compositions]
+  );
+
   function toProjects() {
     abortPoll(); // leaving the flow stops any upload/segment poll still running
     setSegments([]);
+    setCompositions({});
     setActiveSegId(null);
     setJob(null);
     setError("");
@@ -361,6 +392,7 @@ export default function App() {
           duration={duration}
           segments={segments}
           setSegments={setSegments}
+          onSplitAt={splitSegmentsAt}
           vocalEnvelope={vocalEnvelope}
           envelopeTimes={envelopeTimes}
           onValidate={validateSplit}
@@ -372,6 +404,8 @@ export default function App() {
         <Studio
           segments={segments}
           setSegments={setSegments}
+          compositions={compositions}
+          setCompositions={setCompositions}
           activeSegId={activeSegId ?? undefined}
           setActiveSegId={setActiveSegId}
           stems={stems}
@@ -394,6 +428,7 @@ export default function App() {
         <ExportStep
           job={job ?? undefined}
           segments={segments}
+          compositions={compositions}
           exportSettings={exportSettings}
           setExportSettings={setExportSettings}
           output={output}

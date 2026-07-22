@@ -123,13 +123,12 @@ export default function OutputNode({
         start: segment.start,
         end: segment.end,
         signals: segment.signals,
-        finalOutputId,
         lyric_lines: lyricLines,
       },
       graph,
       output_id: node.id,
     };
-  }, [jobId, graph, segment, finalOutputId, lyricLines, node.id]);
+  }, [jobId, graph, segment, lyricLines, node.id]);
 
   function startHd() {
     const body = hdBody();

@@ -13,8 +13,10 @@ import VolumeControl from "./VolumeControl";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
-import { STEM_META, seedSignal, copyLayout } from "../../lib/segments";
+import { STEM_META, seedSignal } from "../../lib/segments";
+import { copyLayout, createComposition } from "../../lib/compositions";
 import type {
+  CompositionPool,
   Graph,
   OutputSettings as OutputSettingsT,
   Segment,
@@ -25,6 +27,8 @@ import type {
 interface StudioProps {
   segments: Segment[];
   setSegments: (updater: (prev: Segment[]) => Segment[]) => void;
+  compositions: CompositionPool;
+  setCompositions: (updater: (prev: CompositionPool) => CompositionPool) => void;
   activeSegId?: string;
   setActiveSegId: (id: string) => void;
   stems: Record<string, StemInfo>;
@@ -54,6 +58,8 @@ interface StudioProps {
 export default function Studio({
   segments,
   setSegments,
+  compositions,
+  setCompositions,
   activeSegId,
   setActiveSegId,
   stems,
@@ -98,6 +104,10 @@ export default function Studio({
     () => segments.find((s) => s.id === activeSegId) || null,
     [segments, activeSegId]
   );
+  // The active segment's root composition — where its animation graph lives now.
+  // null until the first graph edit creates one (setActiveGraph below).
+  const activeComp =
+    (activeSeg?.rootCompositionId && compositions[activeSeg.rootCompositionId]) || null;
   // No segment selected → the window is the whole track, so the full mix can play
   // before any segment exists. Fall back to the audio element's own duration when
   // the `duration` prop isn't known yet (otherwise winEnd=0 loops instantly = silence).
@@ -172,47 +182,70 @@ export default function Studio({
     [editActiveSignals, registerAudio]
   );
 
-  // The animation graph is a whole-segment field (segment.graph); patch it and let
-  // App's autosave persist it alongside signals.
+  // The animation graph lives on the segment's root composition in the pool; patch it
+  // and let App's autosave persist pool + segments together. The FIRST edit of a
+  // segment with no animation creates its root composition and points the segment at
+  // it — two state updates from one discrete event (the reference and the entry must
+  // land together, and neither setter can reach the other's state).
   const setActiveGraph = useCallback(
     (graph: Graph) => {
-      setSegments((prev) => prev.map((s) => (s.id === activeSegId ? { ...s, graph } : s)));
-    },
-    [activeSegId, setSegments]
-  );
-
-  // Mark (or clear, with an empty id) the active segment's "final" output — the one
-  // the export stage renders. Same setSegments path as a graph edit, so App's
-  // autosave persists it. An OutputNode toggles this via ctx.setFinalOutput.
-  const setFinalOutput = useCallback(
-    (nodeId: string) => {
+      const rootId = activeSeg?.rootCompositionId;
+      if (rootId && compositions[rootId]) {
+        setCompositions((pool) => ({ ...pool, [rootId]: { ...pool[rootId], graph } }));
+        return;
+      }
+      if (!activeSeg) return;
+      const comp = createComposition(activeSeg.label, graph);
+      setCompositions((pool) => ({ ...pool, [comp.id]: comp }));
       setSegments((prev) =>
-        prev.map((s) => (s.id === activeSegId ? { ...s, finalOutputId: nodeId || undefined } : s))
+        prev.map((s) => (s.id === activeSeg.id ? { ...s, rootCompositionId: comp.id } : s))
       );
     },
-    [activeSegId, setSegments]
+    [activeSeg, compositions, setCompositions, setSegments]
   );
 
-  // Copy the current segment's card layout (its whole animation graph) onto an
-  // ADJACENT segment (previous or next), so you can build once and reuse the pipeline
-  // up or down the track. `copyLayout` deep-copies the graph AND rewires its signal
-  // cards onto the target segment's own signals (matching bands, cloning any it's
-  // missing) — so the copy drives the right segment, never the source.
+  // Mark (or clear, with an empty id) the composition's "final" output — the one
+  // the export stage renders. Lives on the composition now (`outputId`), same
+  // autosave path as a graph edit. An OutputNode toggles this via ctx.setFinalOutput.
+  const setFinalOutput = useCallback(
+    (nodeId: string) => {
+      const rootId = activeSeg?.rootCompositionId;
+      if (!rootId) return; // no composition yet — nothing to mark
+      setCompositions((pool) =>
+        pool[rootId]
+          ? { ...pool, [rootId]: { ...pool[rootId], outputId: nodeId || undefined } }
+          : pool
+      );
+    },
+    [activeSeg, setCompositions]
+  );
+
+  // Copy the current segment's card layout (its root composition) onto an ADJACENT
+  // segment (previous or next), so you can build once and reuse the pipeline up or
+  // down the track. `copyLayout` clones the composition AND rewires its signal cards
+  // onto the target segment's own signals (matching bands, cloning any it's missing)
+  // — so the copy drives the right segment, never the source.
   const segIdx = useMemo(
     () => segments.findIndex((s) => s.id === activeSegId),
     [segments, activeSegId]
   );
   const prevSeg = segIdx > 0 ? segments[segIdx - 1] : null;
   const nextSeg = segIdx >= 0 && segIdx + 1 < segments.length ? segments[segIdx + 1] : null;
-  const hasCards = !!activeSeg?.graph?.nodes?.length;
+  const hasCards = !!activeComp?.graph.nodes?.length;
+  const segHasCards = useCallback(
+    (seg: Segment | null) =>
+      !!(seg?.rootCompositionId && compositions[seg.rootCompositionId]?.graph.nodes?.length),
+    [compositions]
+  );
   const runCopyLayout = useCallback(
     (target: Segment) => {
       if (!activeSeg) return;
-      const updated = copyLayout(activeSeg, target);
-      setSegments((prev) => prev.map((s) => (s.id === target.id ? updated : s)));
+      const res = copyLayout(activeSeg, target, compositions);
+      setCompositions(() => res.pool);
+      setSegments((prev) => prev.map((s) => (s.id === target.id ? res.target : s)));
       selectSegment(target.id); // follow the copy onto the target segment
     },
-    [activeSeg, setSegments, selectSegment]
+    [activeSeg, compositions, setCompositions, setSegments, selectSegment]
   );
   // Clicking an asset in the library DROPS ITS CARD on the canvas, already pointing at
   // that file — the montage workflow is "pick twenty clips", and doing that through the
@@ -223,29 +256,24 @@ export default function Studio({
   const dropAssetCard = useCallback(
     (asset: AssetT) => {
       if (!activeSeg) return;
-      setSegments((prev) =>
-        prev.map((seg) => {
-          if (seg.id !== activeSeg.id) return seg;
-          const base = seg.graph || emptyGraph();
-          return { ...seg, graph: addAssetCard(base, asset, defaultCardName(base, asset.kind)) };
-        })
-      );
+      const base = activeComp?.graph || emptyGraph();
+      setActiveGraph(addAssetCard(base, asset, defaultCardName(base, asset.kind)));
       setAddedCount((n) => n + 1);
       setTab("animation"); // the card lands on the canvas — show it
     },
-    [activeSeg, setSegments]
+    [activeSeg, activeComp, setActiveGraph]
   );
 
-  // Overwriting a segment that already has cards asks first (the target's graph is
-  // replaced wholesale); an empty target copies straight through.
+  // Overwriting a segment that already has cards asks first (the target's animation
+  // is replaced wholesale); an empty target copies straight through.
   const [copyTarget, setCopyTarget] = useState<Segment | null>(null);
   const copyLayoutTo = useCallback(
     (target: Segment | null) => {
-      if (!target || !activeSeg?.graph?.nodes?.length) return;
-      if (target.graph?.nodes?.length) setCopyTarget(target);
+      if (!target || !hasCards) return;
+      if (segHasCards(target)) setCopyTarget(target);
       else runCopyLayout(target);
     },
-    [activeSeg, runCopyLayout]
+    [hasCards, segHasCards, runCopyLayout]
   );
 
   return (
@@ -413,6 +441,8 @@ export default function Studio({
               <AnimationCanvas
                 key={activeSeg.id}
                 segment={activeSeg}
+                graph={activeComp?.graph ?? null}
+                finalOutputId={activeComp?.outputId}
                 stems={stems}
                 job={job}
                 output={output}

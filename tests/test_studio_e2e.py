@@ -37,11 +37,20 @@ def playground(client, live_db):  # noqa: ARG001 — live_db gates on a reachabl
     return project.get_json()
 
 
+def _root_graph(playground, seg):
+    """A segment's graph through the composition pool — the shape the Studio reads."""
+    pool = playground.get("compositions") or {}
+    return (pool.get(seg.get("rootCompositionId") or "") or {}).get("graph") or {}
+
+
 def test_playground_loads_through_the_real_routes(playground):
-    """A project comes back with segments and graphs — the shape the Studio needs."""
+    """A project comes back with segments and a composition pool the segments
+    reference — the shape the Studio needs."""
     segments = playground.get("segments") or []
     assert segments, "the Playground project has no segments"
-    assert all(s.get("graph", {}).get("nodes") for s in segments), "a segment has no graph"
+    assert all(
+        _root_graph(playground, s).get("nodes") for s in segments
+    ), "a segment has no composition graph"
 
 
 @_needs_ffmpeg
@@ -58,19 +67,20 @@ def test_a_segment_renders_a_real_moving_clip(playground, client):
         (
             s
             for s in playground["segments"]
-            if any(n["type"] == "fluid" for n in s["graph"]["nodes"])
+            if any(n["type"] == "fluid" for n in _root_graph(playground, s)["nodes"])
         ),
         playground["segments"][0],
     )
-    out_id = next(n["id"] for n in seg["graph"]["nodes"] if n["type"] == "output")
+    g = _root_graph(playground, seg)
+    out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
     body = {
         "job_id": playground["job_id"],
-        "graph": seg["graph"],
+        "graph": g,
         "segment": {"start": seg["start"], "end": seg["end"], "signals": seg.get("signals", [])},
         "output": OUT,
         "output_id": out_id,
     }
-    url = graph.render(body["job_id"], body["segment"], seg["graph"], _stem_path, OUT, out_id)
+    url = graph.render(body["job_id"], body["segment"], g, _stem_path, OUT, out_id)
 
     # /fluid/<name> serves it, and the served bytes are a real playable clip.
     served = client.get(url)
@@ -78,9 +88,7 @@ def test_a_segment_renders_a_real_moving_clip(playground, client):
     assert len(served.get_data()) > 1000, "the served clip is suspiciously small"
 
     # …and the frames move. This is the assertion the whole file exists for.
-    frames = graph.Dag(playground["job_id"], body["segment"], seg["graph"], _stem_path, OUT).video(
-        out_id
-    )
+    frames = graph.Dag(playground["job_id"], body["segment"], g, _stem_path, OUT).video(out_id)
     assert_not_black(frames, "rendered segment")
     assert_moves(frames, "rendered segment")
 
@@ -90,16 +98,17 @@ def test_rendering_twice_reuses_the_cached_clip(playground, client):
     """The second render must return the same URL — the render cache keyed on the graph.
     A hash that stopped being stable would silently re-render everything, forever."""
     seg = playground["segments"][0]
-    out_id = next(n["id"] for n in seg["graph"]["nodes"] if n["type"] == "output")
+    g = _root_graph(playground, seg)
+    out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
     body = {
         "job_id": playground["job_id"],
-        "graph": seg["graph"],
+        "graph": g,
         "segment": {"start": seg["start"], "end": seg["end"], "signals": seg.get("signals", [])},
         "output": OUT,
         "output_id": out_id,
     }
-    first = graph.render(body["job_id"], body["segment"], seg["graph"], _stem_path, OUT, out_id)
-    second = graph.render(body["job_id"], body["segment"], seg["graph"], _stem_path, OUT, out_id)
+    first = graph.render(body["job_id"], body["segment"], g, _stem_path, OUT, out_id)
+    second = graph.render(body["job_id"], body["segment"], g, _stem_path, OUT, out_id)
     assert first == second
 
 

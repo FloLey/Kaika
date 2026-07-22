@@ -12,6 +12,8 @@ import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 
 interface AnimationCanvasProps {
   segment: Segment;
+  graph?: Graph | null; // the active composition's graph (null = none built yet)
+  finalOutputId?: string; // the composition's ★-final output mark
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -28,16 +30,20 @@ interface AnimationCanvasProps {
   setFinalOutput?: NodeCtx["setFinalOutput"];
 }
 
-// 07 — the per-segment animation container (the VIEW). The graph state + mutation
-// handlers + node `ctx` live in useGraphEditor; this component owns layout: refs,
-// fullscreen, where-to-drop-new-nodes, and the JSX. Rendering is per-output (each
-// OutputNode renders its own pipeline). Mount it keyed by segment.id so state resets.
+// 07 — the per-composition animation container (the VIEW). The graph state +
+// mutation handlers + node `ctx` live in useGraphEditor; this component owns layout:
+// refs, fullscreen, where-to-drop-new-nodes, and the JSX. Rendering is per-output
+// (each OutputNode renders its own pipeline). Mount it keyed by segment.id so state
+// resets.
 //
-//   segment        — the active segment ({ id, start, end, signals, graph? })
+//   segment        — the host segment ({ id, start, end, signals })
+//   graph          — the active composition's graph (lives in the pool, not on segment)
 //   stems, job     — project context (audio + spectrograms)
-//   onGraphChange  — (graph) => void; commits the whole graph to segment.graph
+//   onGraphChange  — (graph) => void; commits the whole graph to the composition pool
 export default function AnimationCanvas({
   segment,
+  graph: compGraph,
+  finalOutputId,
   stems,
   job,
   output,
@@ -72,6 +78,8 @@ export default function AnimationCanvas({
     canRedo,
   } = useGraphEditor({
     segment,
+    graph: compGraph,
+    finalOutputId,
     stems,
     job,
     output,
@@ -99,7 +107,10 @@ export default function AnimationCanvas({
 
   // Dead-wiring warnings for the ⚠ toolbar chip; clicking a row selects + centers
   // the offending card (a stale ★final points at a gone card — fall back to fit-all).
-  const problems = useMemo(() => problemsFor(graph, segment), [graph, segment]);
+  const problems = useMemo(
+    () => problemsFor(graph, { signals: segment.signals, finalOutputId }),
+    [graph, segment.signals, finalOutputId]
+  );
   const onProblemClick = useCallback(
     (nodeId: string) => {
       const exists = graph.nodes.some((n) => n.id === nodeId);

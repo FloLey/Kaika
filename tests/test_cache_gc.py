@@ -65,8 +65,22 @@ def _project(job_id):
             _edge("cb", "oB", "video"),
         ],
     }
-    segment = {"id": "seg-0", "start": 0.0, "end": 2.0, "signals": [], "graph": graph}
-    return {"job_id": job_id, "data": {"output": OUT, "segments": [segment]}}
+    segment = {
+        "id": "seg-0",
+        "start": 0.0,
+        "end": 2.0,
+        "signals": [],
+        "rootCompositionId": "c-root",
+    }
+    pool = {"c-root": {"id": "c-root", "name": "seg-0", "graph": graph}}
+    return {
+        "job_id": job_id,
+        "data": {"output": OUT, "segments": [segment], "compositions": pool},
+    }
+
+
+def _root_graph(proj):
+    return proj["data"]["compositions"]["c-root"]["graph"]
 
 
 @pytest.fixture
@@ -92,9 +106,8 @@ def test_reachable_matches_output_hash_including_lyrics(wired):
     proj, lines, _ = wired
     seg = proj["data"]["segments"][0]
     seg_with_lines = {**seg, "lyric_lines": lines}
-    expected = {
-        G.output_hash("proj1", seg_with_lines, seg["graph"], oid, OUT) for oid in ("oA", "oB")
-    }
+    graph = _root_graph(proj)  # graphs live in the composition pool now
+    expected = {G.output_hash("proj1", seg_with_lines, graph, oid, OUT) for oid in ("oA", "oB")}
     assert cache_gc.reachable_hashes() == expected
     assert len(expected) == 2  # one key per output node
 
@@ -195,15 +208,17 @@ def test_sweep_keeps_recorded_segment_hd_renders(wired):
 
 
 def test_reachable_recomputes_song_export_hash_when_final_outputs_marked(wired):
-    # With every segment carrying a finalOutputId, the sweep can recompute the export
-    # stem straight from the saved state (exact when no imagegen HD regen happened).
+    # With every segment's root composition carrying a marked output, the sweep can
+    # recompute the export stem straight from the saved state (exact when no imagegen
+    # HD regen happened).
     from backend import song_render
     from backend.routes.export import _EXPORT_DEFAULTS
 
     proj, lines, _ = wired
     seg = proj["data"]["segments"][0]
-    seg["finalOutputId"] = "oA"
-    expected = "song_" + song_render._export_hash("proj1", [seg], lines, {**_EXPORT_DEFAULTS})
+    pool = proj["data"]["compositions"]
+    pool["c-root"]["outputId"] = "oA"
+    expected = "song_" + song_render._export_hash("proj1", [seg], pool, lines, {**_EXPORT_DEFAULTS})
     assert expected in cache_gc.reachable_hashes()
 
 
@@ -259,7 +274,7 @@ def test_sweep_keeps_song_exports_when_the_export_hash_raises(wired, monkeypatch
     """Same guarantee for the whole-song master, which costs minutes plus HD asset
     regeneration to rebuild."""
     proj, _, tmp = wired
-    proj["data"]["segments"][0]["finalOutputId"] = "oA"
+    proj["data"]["compositions"]["c-root"]["outputId"] = "oA"
     stem = tmp / "fluid" / "song_0123456789abcdef.mp4"
     stem.write_bytes(b"x")
     _age(stem, cache_gc.KEEP_RECENT_SEC + 3600)

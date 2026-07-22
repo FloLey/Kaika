@@ -90,8 +90,9 @@ def _dims(graph, output):
 def test_song_and_segment_share_one_output_contract():
     # build_plan derives its grid from the same helper the segment route uses, so the
     # two HD paths can never disagree about size/fps/detail.
-    seg = {**SEG, "graph": _heavy_graph(), "finalOutputId": "o"}
-    ctx = SR.build_plan("job", [seg], [], EXPORT, NOAUDIO)
+    seg = {**SEG, "rootCompositionId": "c1"}
+    pool = {"c1": {"id": "c1", "name": "s", "graph": _heavy_graph(), "outputId": "o"}}
+    ctx = SR.build_plan("job", [seg], pool, [], EXPORT, NOAUDIO)
     assert (ctx["gh"], ctx["gw"]) == fluid.grid_from_output(SR.output_from_export(EXPORT))
     assert (ctx["w"], ctx["h"], ctx["fps"]) == (EXPORT["width"], EXPORT["height"], EXPORT["fps"])
 
@@ -259,7 +260,7 @@ def test_route_rejects_bad_and_missing_input(client):
 
 def test_route_404s_unknown_project(client, monkeypatch):
     monkeypatch.setattr(EX.db, "get_project", lambda j: None)
-    r = _post(client, {"job_id": "deadbeef", "segment": {**SEG, "graph": _heavy_graph()}})
+    r = _post(client, {"job_id": "deadbeef", "segment": SEG, "graph": _heavy_graph()})
     assert r.status_code == 404
 
 
@@ -267,7 +268,7 @@ def test_route_400s_when_the_output_is_ambiguous(client, monkeypatch):
     monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
     graph = _heavy_graph()
     graph["nodes"].append({"id": "o2", "type": "output", "data": {}})
-    r = _post(client, {"job_id": "deadbeef", "segment": {**SEG, "graph": graph}})
+    r = _post(client, {"job_id": "deadbeef", "segment": SEG, "graph": graph})
     assert r.status_code == 400
     assert "o2" in r.get_json()["error"]  # names the candidates
 
@@ -275,7 +276,7 @@ def test_route_400s_when_the_output_is_ambiguous(client, monkeypatch):
 def test_route_409s_while_an_hd_render_is_running(client, monkeypatch):
     monkeypatch.setattr(EX.db, "get_project", lambda j: {"data": {"export": EXPORT}})
     monkeypatch.setattr(EX.render_jobs, "start", lambda run: "rid-1")
-    body = {"job_id": "deadbeef", "segment": {**SEG, "graph": _heavy_graph()}}
+    body = {"job_id": "deadbeef", "segment": SEG, "graph": _heavy_graph()}
     first = _post(client, body)
     try:
         assert first.status_code == 200 and first.get_json()["render_id"] == "rid-1"
@@ -300,7 +301,7 @@ def _cached(client, body):
 
 
 def _seg_body():
-    return {"job_id": "deadbeef", "segment": {**SEG, "graph": _heavy_graph()}}
+    return {"job_id": "deadbeef", "segment": SEG, "graph": _heavy_graph()}
 
 
 def test_cached_lookup_misses_when_nothing_was_rendered(client, monkeypatch):
@@ -346,7 +347,7 @@ def test_cached_lookup_misses_after_the_graph_changes(client, monkeypatch):
     assert _cached(client, body).get_json()["url"] is not None
 
     edited = _seg_body()
-    for n in edited["segment"]["graph"]["nodes"]:
+    for n in edited["graph"]["nodes"]:
         if n["type"] == "fluid":
             n["data"] = {**n.get("data", {}), "seed": 4242}  # any render-visible edit
     assert _cached(client, edited).get_json()["url"] is None
@@ -377,8 +378,9 @@ def test_song_export_renders_a_segment_at_the_size_the_segment_export_does(kind)
     The LIGHT case is the bug: the song path rendered on the sim grid. The HEAVY case pins
     the non-regression — a fluid segment must still render on the sim grid both ways."""
     graph = _light_graph() if kind == "light" else _heavy_graph()
-    seg = {**SEG, "graph": graph, "finalOutputId": "o"}
-    ctx = SR.build_plan("job", [seg], [], EXPORT, NOAUDIO)
+    seg = {**SEG, "rootCompositionId": "c1"}
+    pool = {"c1": {"id": "c1", "name": "s", "graph": graph, "outputId": "o"}}
+    ctx = SR.build_plan("job", [seg], pool, [], EXPORT, NOAUDIO)
     first = next(iter(SR.iter_song_windows(ctx)))[2]
     # The SEGMENT path's own dict — comparing the song path against itself proves nothing.
     segment_dims = _dims(graph, EX._hd_output(EXPORT))
@@ -391,23 +393,13 @@ def test_every_window_of_a_mixed_song_matches_the_encoder_input():
     so every window — light or fluid — must arrive at exactly (gh, gw). This is the test that
     catches a resize site someone forgot."""
     segs = [
-        {
-            **SEG,
-            "id": "s1",
-            "start": 0.0,
-            "end": 1.0,
-            "graph": _heavy_graph(),
-            "finalOutputId": "o",
-        },
-        {
-            **SEG,
-            "id": "s2",
-            "start": 1.0,
-            "end": 2.0,
-            "graph": _light_graph(),
-            "finalOutputId": "o",
-        },
+        {**SEG, "id": "s1", "start": 0.0, "end": 1.0, "rootCompositionId": "c1"},
+        {**SEG, "id": "s2", "start": 1.0, "end": 2.0, "rootCompositionId": "c2"},
     ]
-    ctx = SR.build_plan("job", segs, [], EXPORT, NOAUDIO)
+    pool = {
+        "c1": {"id": "c1", "name": "s1", "graph": _heavy_graph(), "outputId": "o"},
+        "c2": {"id": "c2", "name": "s2", "graph": _light_graph(), "outputId": "o"},
+    }
+    ctx = SR.build_plan("job", segs, pool, [], EXPORT, NOAUDIO)
     sizes = {w.shape[1:3] for _a, _b, w in SR.iter_song_windows(ctx)}
     assert sizes == {(ctx["gh"], ctx["gw"])}, f"mixed sizes reached one fixed encoder: {sizes}"

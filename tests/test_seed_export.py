@@ -27,6 +27,19 @@ def scratch_playground(live_db, tmp_path, monkeypatch):
             "id": "s1",
             "label": "Fluid",
             "signals": [{"id": "sig-used", "name": "u"}, {"id": "sig-unused", "name": "x"}],
+            "rootCompositionId": "c-s1",
+        },
+        {
+            "id": "s2",
+            "label": "My Experiment",
+            "signals": [],  # not a card name
+            "rootCompositionId": "c-s2",
+        },
+    ]
+    pool = {
+        "c-s1": {
+            "id": "c-s1",
+            "name": "Fluid",
             "graph": {
                 "version": 22,
                 "edges": [],
@@ -36,14 +49,17 @@ def scratch_playground(live_db, tmp_path, monkeypatch):
                 ],
             },
         },
-        {
-            "id": "s2",
-            "label": "My Experiment",
-            "signals": [],  # not a card name
-            "graph": {"version": 22, "edges": [], "nodes": []},
+        "c-s2": {
+            "id": "c-s2",
+            "name": "My Experiment",
+            "graph": {
+                "version": 22,
+                "edges": [],
+                "nodes": [{"id": "x", "type": "fluid", "data": {}}],
+            },
         },
-    ]
-    db.save_segments(job, segs)
+    }
+    db.save_segments(job, segs, compositions=pool)
     yield job, fixture
     db.delete_project(job)
 

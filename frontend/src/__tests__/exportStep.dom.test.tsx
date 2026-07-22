@@ -36,6 +36,7 @@ describe("ExportStep — the wait says which segment it is on", () => {
       <ExportStep
         job="j1"
         segments={[]}
+        compositions={{}}
         exportSettings={{ ...EXPORT_DEFAULTS, width: 1080, height: 1920, fps: 30 }}
         setExportSettings={() => {}}
         output={canvas(1080, 1920)}
@@ -79,6 +80,7 @@ describe("ExportStep — export aspect locked to the canvas", () => {
       <ExportStep
         job="j1"
         segments={[]}
+        compositions={{}}
         exportSettings={{ ...EXPORT_DEFAULTS, width: 1080, height: 1920 }} // portrait
         setExportSettings={setExportSettings}
         output={canvas(1920, 1080)} // landscape 16:9 canvas
@@ -96,6 +98,7 @@ describe("ExportStep — export aspect locked to the canvas", () => {
       <ExportStep
         job="j2"
         segments={[]}
+        compositions={{}}
         exportSettings={{ ...EXPORT_DEFAULTS, width: 1080, height: 1920 }}
         setExportSettings={setExportSettings}
         output={canvas(1080, 1920)} // portrait canvas — same shape
@@ -109,20 +112,34 @@ describe("ExportStep — export aspect locked to the canvas", () => {
 // The readiness checklist names the segments blocking Generate; an unmarked row is the
 // click-through to go fix it (a marked row stays inert).
 describe("ExportStep — checklist click-through", () => {
-  const seg = (id: string, finalOutputId?: string): Segment => ({
+  const seg = (id: string, rootCompositionId?: string): Segment => ({
     id,
     label: id,
     start: 0,
     end: 4,
     signals: [],
-    ...(finalOutputId ? { finalOutputId } : {}),
+    ...(rootCompositionId ? { rootCompositionId } : {}),
   });
+  // intro's composition carries a marked output; verse has no animation at all.
+  const pool = {
+    "c-intro": {
+      id: "c-intro",
+      name: "intro",
+      outputId: "o1",
+      graph: {
+        version: 8,
+        nodes: [{ id: "o1", type: "output", x: 0, y: 0, data: { title: "preview" } }],
+        edges: [],
+      },
+    },
+  } as unknown as import("../lib/types").CompositionPool;
 
   const renderList = (onOpenSegment?: (id: string) => void) =>
     render(
       <ExportStep
         job="j3"
-        segments={[seg("intro", "o1"), seg("verse")]}
+        segments={[seg("intro", "c-intro"), seg("verse")]}
+        compositions={pool}
         exportSettings={EXPORT_DEFAULTS}
         setExportSettings={() => {}}
         output={canvas(EXPORT_DEFAULTS.width, EXPORT_DEFAULTS.height)}

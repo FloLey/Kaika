@@ -330,8 +330,9 @@ Codegen).
   canvas moves wrappers with a live offset and commits the graph **once on
   pointer-up**; cards are memoized (`NodeCard`) so canvas ticks don't re-render
   card bodies.
-- **`useGraphEditor`** owns graph state (normalized from `segment.graph`),
-  selection, mutation handlers, and the memoized `ctx` handed to every card.
+- **`useGraphEditor`** owns graph state (normalized from the active
+  composition's graph, passed in by Studio through the pool), selection,
+  mutation handlers, and the memoized `ctx` handed to every card.
 - **Studio** hosts the two tabs and the shared transport. The playhead lives in
   an external store (`useSyncExternalStore`) — only the `TransportClock`
   re-renders on timeupdate ticks. Each `OutputNode` owns its own streaming
@@ -363,8 +364,20 @@ So a UI slider's range can never drift from what the render maps.
 ## Persistence & data
 
 - **Postgres** (`db.py`, docker-compose): one `projects` row per job — the whole
-  editable tree (segments, signals, animation graphs, output/export settings,
-  the asset library) as a JSONB `data` document with a `schema_version`.
+  editable tree as a JSONB `data` document with a `schema_version` (=2):
+  `segments` (time ranges + signals + a `rootCompositionId` reference),
+  **`compositions`** (the pool — every animation graph, keyed by a STABLE
+  `comp-…` id; each entry `{id, name, graph, outputId?}` where `outputId` is
+  the ★-final mark, defaulting to the sole output), output/export settings, and
+  the asset library. The pool saves **in the autosave payload with the
+  segments** (`save_segments`), not out-of-band like assets — it is client-owned
+  editable state; assets are out-of-band only because the server appends them
+  concurrently. Resolution helpers live in `backend/compositions.py`
+  (`root_composition`, `final_output_id`) and `frontend/src/lib/compositions.ts`
+  (which also owns hydration — ids are PRESERVED on load, unlike segment ids —
+  and the pool-aware `splitAt`/`copyLayout` cloning). The v1→v2 migration is
+  deliberately destructive: pre-pool `segment.graph` animations are dropped, so
+  old projects open with empty animations instead of half-loading.
   `db.DBUnavailable` is the sentinel the cache GC respects.
 - **`data/` tree** (`paths.py` — the one place directories are defined;
   **tests monkeypatch `backend.paths`**, consumers read the dirs late-bound):

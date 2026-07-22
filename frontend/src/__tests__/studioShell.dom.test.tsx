@@ -23,6 +23,8 @@ function renderStudio(overrides = {}) {
   const props = {
     segments,
     setSegments: vi.fn(),
+    compositions: {},
+    setCompositions: vi.fn(),
     activeSegId: "s0",
     setActiveSegId: vi.fn(),
     stems: {},

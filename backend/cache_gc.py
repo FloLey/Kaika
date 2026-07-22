@@ -23,6 +23,7 @@ import time
 from . import db
 from . import graph as graphmod
 from . import paths
+from .compositions import final_output_id, root_composition
 from .paths import ANALYSIS_DIR, ASSETS_DIR, asset_file_for_url
 
 log = logging.getLogger("kaika.cache")
@@ -62,11 +63,12 @@ def _hashes_from(row: dict, job_id: str) -> tuple[set[str], bool]:
     """
     data = row.get("data") or {}
     output = data.get("output") or {}
+    pool = data.get("compositions") or {}
     lines = _lyric_lines(job_id)
     keys: set[str] = set()
     complete = True
     for seg in data.get("segments") or []:
-        graph = seg.get("graph")
+        graph = (root_composition(pool, seg) or {}).get("graph")
         if not graph:
             continue
         seg_h = {**seg, "lyric_lines": seg.get("lyric_lines") or lines}
@@ -117,10 +119,11 @@ def _song_export_stems(row: dict, job_id: str, lines: list) -> tuple[set[str], b
             complete = False
     data = row.get("data") or {}
     segments = data.get("segments") or []
-    if segments and all(s.get("finalOutputId") for s in segments):
+    pool = data.get("compositions") or {}
+    if segments and all(final_output_id(root_composition(pool, s)) for s in segments):
         export = {**song_render.EXPORT_DEFAULTS, **(data.get("export") or {})}
         try:
-            stems.add("song_" + song_render._export_hash(job_id, segments, lines, export))
+            stems.add("song_" + song_render._export_hash(job_id, segments, pool, lines, export))
         except Exception as e:  # noqa: BLE001 — a bad segment must not sink the whole scan
             log.warning(
                 "cache gc: couldn't hash %s's song export (%s) — clip deletion suspended",
@@ -141,15 +144,19 @@ def _asset_file(url: str, root=None):
 def _assets_from(row: dict, root=None) -> set:
     """The asset files a project keeps alive: every entry in its `data.assets` LIBRARY
     plus any node carrying an `assetUrl` (image/video/backdrop). So a library asset stays
-    even before a card uses it, and a card's asset stays even if not (yet) in the library."""
+    even before a card uses it, and a card's asset stays even if not (yet) in the library.
+
+    Walks EVERY composition in the pool, referenced or not — an orphaned composition
+    keeps its assets alive until the pool prune (step 07) removes it, deliberately:
+    asset loss is the harm worth being conservative about."""
     data = row.get("data") or {}
     files: set = set()
     for a in data.get("assets") or []:
         f = _asset_file(a.get("url"), root)
         if f:
             files.add(f)
-    for seg in data.get("segments") or []:
-        for n in (seg.get("graph") or {}).get("nodes") or []:
+    for comp in (data.get("compositions") or {}).values():
+        for n in ((comp or {}).get("graph") or {}).get("nodes") or []:
             d = n.get("data") or {}
             f = _asset_file(d.get("assetUrl"), root)
             if f:

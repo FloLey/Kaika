@@ -7,6 +7,7 @@ import type { BackendPayload } from "./logbus";
 import type { Asset, Graph, LyricLine, OutputSettings, StemInfo } from "./types";
 import type { ExportSettings } from "./export";
 import type { RawSegment } from "./segments";
+import type { RawCompositionPool } from "./compositions";
 
 // ---- response shapes ---------------------------------------------------------
 export interface JobAck {
@@ -55,6 +56,7 @@ export interface Project {
   step?: string;
   stems?: Record<string, StemInfo>;
   segments?: RawSegment[];
+  compositions?: RawCompositionPool;
   output?: Partial<OutputSettings>;
   export?: Partial<ExportSettings>;
   assets?: Asset[];

@@ -178,9 +178,15 @@ def write_synthetic_stems(job_id: str, duration: float) -> dict:
 # --------------------------------------------------------------------------- #
 # Segments + analysis cache
 # --------------------------------------------------------------------------- #
-def build_segments(demos: list[dict]) -> list[dict]:
-    segs = []
+def build_segments(demos: list[dict]) -> tuple[list[dict], dict]:
+    """`(segments, compositions)`: one composition per demo — stable id derived from
+    the card key, so the additive sync and a reseed agree — and one segment
+    referencing it by `rootCompositionId`. `outputId` is left unset: every demo
+    graph carries exactly one output, which `final_output_id` resolves."""
+    segs, pool = [], {}
     for i, d in enumerate(demos):
+        cid = f"comp-demo-{d['key']}"
+        pool[cid] = {"id": cid, "name": d["label"], "graph": d["graph"]}
         segs.append(
             {
                 "id": f"seg-{i}",
@@ -188,17 +194,26 @@ def build_segments(demos: list[dict]) -> list[dict]:
                 "start": round(i * SEG_LEN, 3),
                 "end": round((i + 1) * SEG_LEN, 3),
                 "signals": d["signals"],
-                "graph": d["graph"],
+                "rootCompositionId": cid,
             }
         )
-    return segs
+    return segs, pool
 
 
-def _lyric_lines(segments: list[dict]) -> list[dict]:
+def _root_graph(seg: dict, pool: dict) -> dict:
+    """A segment's root-composition graph (empty shape when dangling)."""
+    return (pool.get(seg.get("rootCompositionId") or "") or {}).get("graph") or {"nodes": []}
+
+
+def _lyric_lines(segments: list[dict], pool: dict) -> list[dict]:
     """Author lyric lines spanning the lyrics segment's window (absolute song time).
     Found by the graph containing a `lyrics` node, so it's independent of the label."""
     seg = next(
-        (s for s in segments if any(n.get("type") == "lyrics" for n in s["graph"]["nodes"])),
+        (
+            s
+            for s in segments
+            if any(n.get("type") == "lyrics" for n in _root_graph(s, pool)["nodes"])
+        ),
         None,
     )
     if seg is None:
@@ -217,10 +232,10 @@ def _lyric_lines(segments: list[dict]) -> list[dict]:
     ]
 
 
-def write_analysis(job_id: str, segments: list[dict], duration: float) -> list[dict]:
+def write_analysis(job_id: str, segments: list[dict], pool: dict, duration: float) -> list[dict]:
     times = np.arange(0.0, duration, 0.25)
     env = (0.5 + 0.5 * np.sin(2 * np.pi * times / 2.0)).round(3).tolist()
-    lines = _lyric_lines(segments)
+    lines = _lyric_lines(segments, pool)
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     (ANALYSIS_DIR / f"{job_id}.json").write_text(
         json.dumps(
@@ -237,13 +252,13 @@ def _build(db, *, render: bool, log=lambda _m="": None) -> str:
     """(Re)build the Playground project: synthetic stems + analysis + DB rows. With
     `render`, also pre-render each segment as a smoke check (the CLI path); the app's
     ensure path skips that (the Studio renders on open)."""
-    segments = build_segments(card_demo.DEMOS)
+    segments, pool = build_segments(card_demo.DEMOS)
     duration = len(segments) * SEG_LEN
 
     log(f"writing synthetic stems ({duration:.0f}s) …")
     stems_meta = write_synthetic_stems(JOB_ID, duration)
     write_sample_assets()  # dummy image/video for the Image/Video card demos
-    lines = write_analysis(JOB_ID, segments, duration)
+    lines = write_analysis(JOB_ID, segments, pool, duration)
 
     log("(re)creating project …")
     db.delete_project(JOB_ID)
@@ -256,7 +271,7 @@ def _build(db, *, render: bool, log=lambda _m="": None) -> str:
         has_lyrics=bool(lines),
         stems=stems_meta,
     )
-    db.save_segments(JOB_ID, segments, step="studio", output=OUTPUT)
+    db.save_segments(JOB_ID, segments, compositions=pool, step="studio", output=OUTPUT)
 
     if render:
         log("rendering each segment (smoke check) …")
@@ -264,8 +279,9 @@ def _build(db, *, render: bool, log=lambda _m="": None) -> str:
             # Mirror the app: the lyric lines ride in the render payload (OutputNode
             # does this) so the lyrics segment renders its text here too.
             payload = {**seg, "lyric_lines": lines}
-            out_id = next(n["id"] for n in seg["graph"]["nodes"] if n["type"] == "output")
-            url = graph.render(JOB_ID, payload, seg["graph"], stem_audio_path, OUTPUT, out_id)
+            g = _root_graph(seg, pool)
+            out_id = next(n["id"] for n in g["nodes"] if n["type"] == "output")
+            url = graph.render(JOB_ID, payload, g, stem_audio_path, OUTPUT, out_id)
             log(f"  • {seg['label']:<22} {url}")
     return JOB_ID
 
@@ -279,6 +295,7 @@ def _append_missing_demos(db) -> list[str]:
     deterministic content, longer). Returns the appended labels."""
     row = db.get_project(JOB_ID)
     segments = row["data"]["segments"]
+    pool = row["data"].get("compositions") or {}
     have = {s.get("label") for s in segments}
     missing = [d for d in card_demo.DEMOS if d["label"] not in have]
     if not missing:
@@ -286,6 +303,10 @@ def _append_missing_demos(db) -> list[str]:
     end0 = max((float(s.get("end", 0.0)) for s in segments), default=0.0)
     for k, d in enumerate(missing):
         s0 = end0 + k * SEG_LEN
+        # Same stable id scheme as `build_segments`; a lingering orphan under this id
+        # (its segment was deleted) is simply reclaimed by the fixture's graph.
+        cid = f"comp-demo-{d['key']}"
+        pool[cid] = {"id": cid, "name": d["label"], "graph": d["graph"]}
         segments.append(
             {
                 "id": f"seg-{uuid.uuid4().hex[:8]}",
@@ -293,13 +314,13 @@ def _append_missing_demos(db) -> list[str]:
                 "start": round(s0, 3),
                 "end": round(s0 + SEG_LEN, 3),
                 "signals": d["signals"],
-                "graph": d["graph"],
+                "rootCompositionId": cid,
             }
         )
     duration = end0 + len(missing) * SEG_LEN
     write_synthetic_stems(JOB_ID, duration)
-    write_analysis(JOB_ID, segments, duration)
-    db.save_segments(JOB_ID, segments, step="studio")
+    write_analysis(JOB_ID, segments, pool, duration)
+    db.save_segments(JOB_ID, segments, compositions=pool, step="studio")
     db.set_duration(JOB_ID, duration)
     return [d["label"] for d in missing]
 
@@ -314,7 +335,17 @@ def ensure_playground() -> str:
     from . import db
 
     write_sample_assets()  # idempotent — ensure the dummy assets exist even for an old playground
-    if db.get_project(JOB_ID) is not None and stem_audio_path(JOB_ID, "drums") is not None:
+    row = db.get_project(JOB_ID)
+    if row is not None and stem_audio_path(JOB_ID, "drums") is not None:
+        # A pre-pool playground row just went through the destructive v2 migration:
+        # its segments reference no composition at all. The Playground is app-managed
+        # and rebuilt from the committed fixture, so this is the one case where a
+        # destructive reseed is the RIGHT recovery (user projects stay empty instead).
+        segs = row["data"].get("segments") or []
+        pool = row["data"].get("compositions") or {}
+        if segs and not any(pool.get(s.get("rootCompositionId") or "") for s in segs):
+            logging.getLogger("kaika").info("playground: pre-pool row — rebuilding from fixture")
+            return _build(db, render=False)
         appended = _append_missing_demos(db)
         if appended:
             logging.getLogger("kaika").info(
@@ -347,6 +378,7 @@ def export_playground() -> dict:
     if row is None:
         raise LookupError(f"no '{JOB_ID}' project in the DB — open the Playground once first")
     label_to_key = {label: key for key, label in card_demo.CARD_LABELS.items()}
+    pool = row["data"].get("compositions") or {}
     out = []
     skipped = []
     for s in row["data"]["segments"]:
@@ -354,7 +386,10 @@ def export_playground() -> dict:
         if key is None:
             skipped.append(s["label"])
             continue
-        graph = s["graph"]
+        graph = _root_graph(s, pool)
+        if not graph.get("nodes"):
+            skipped.append(s["label"])  # a segment with no animation exports nothing
+            continue
         referenced = {
             n.get("data", {}).get("signalId") for n in graph["nodes"] if n.get("type") == "signal"
         }

@@ -31,19 +31,31 @@ _CONNECT_RETRIES = 3
 _CONNECT_BACKOFF = 0.4  # seconds, multiplied by the attempt number
 
 # Version of the project JSONB document shape ({schema_version, stems, segments,
-# output}). Bump + add a step to `migrate_project_data` when the shape changes, so
-# old saves upgrade on load instead of silently mis-parsing.
-SCHEMA_VERSION = 1
+# compositions, output}). Bump + add a step to `migrate_project_data` when the shape
+# changes, so old saves upgrade on load instead of silently mis-parsing.
+SCHEMA_VERSION = 2
 DEFAULT_STEP = "review"  # a fresh project opens on the review screen
 
 
 def migrate_project_data(data: dict | None) -> dict:
-    """Upgrade a loaded project blob to SCHEMA_VERSION. Currently only stamps the
-    version on pre-versioning saves; future shape changes add a step here."""
+    """Upgrade a loaded project blob to SCHEMA_VERSION.
+
+    v2 (compositions wave): graphs moved from `segments[i].graph` into the
+    project-level pool `data.compositions`, and `finalOutputId` onto the
+    composition (`outputId`). The v1→v2 step is DESTRUCTIVE by decision (specs/
+    compositions/README.md §2): pre-pool animations are dropped rather than
+    lifted, so an old project opens cleanly with empty animations instead of
+    half-loading a shape the editor no longer speaks."""
     data = dict(data or {})
     if data.get("schema_version") == SCHEMA_VERSION:
         return data
-    # (no breaking transitions yet — a v0/unversioned blob is shape-compatible.)
+    if (data.get("schema_version") or 0) < 2:
+        data["segments"] = [
+            {k: v for k, v in seg.items() if k not in ("graph", "finalOutputId")}
+            for seg in data.get("segments") or []
+            if isinstance(seg, dict)
+        ]
+        data["compositions"] = {}
     data["schema_version"] = SCHEMA_VERSION
     return data
 
@@ -96,7 +108,7 @@ def create_project(
 ) -> None:
     """Insert (or replace) a project at the 'review' step with its stem map and
     an empty segment list — called right after demucs separation."""
-    data = {"schema_version": SCHEMA_VERSION, "stems": stems, "segments": []}
+    data = {"schema_version": SCHEMA_VERSION, "stems": stems, "segments": [], "compositions": {}}
     with _connect() as conn:
         conn.execute(
             """
@@ -129,16 +141,19 @@ def save_segments(
     job_id: str,
     segments: list,
     *,
+    compositions: dict | None = None,
     step: str | None = None,
     title: str | None = None,
     output: dict | None = None,
     export: dict | None = None,
 ) -> bool:
-    """Update the editable tree (segments + per-segment tracks), and optionally the
-    step/title, the project-wide `output` render settings, and the `export` (HD final
-    render) settings. Used by /segment to seed the proposal and by the frontend
-    autosave. A None `output`/`export` preserves the stored value. Returns False if the
-    project doesn't exist."""
+    """Update the editable tree (segments + the composition pool they reference), and
+    optionally the step/title, the project-wide `output` render settings, and the
+    `export` (HD final render) settings. Used by /segment to seed the proposal and by
+    the frontend autosave. A None `compositions`/`output`/`export` preserves the stored
+    value (the proposal seeding carries no pool). The pool saves IN this payload — not
+    out-of-band like assets — because it is client-owned editable state exactly like
+    the graphs it now holds. Returns False if the project doesn't exist."""
     with _connect() as conn:
         cur = conn.execute(
             """
@@ -146,7 +161,12 @@ def save_segments(
               data = jsonb_set(
                        jsonb_set(
                          jsonb_set(
-                           jsonb_set(data, '{segments}', %(segments)s, true),
+                           jsonb_set(
+                             jsonb_set(data, '{segments}', %(segments)s, true),
+                             '{compositions}',
+                             COALESCE(%(compositions)s::jsonb, data->'compositions',
+                                      '{}'::jsonb),
+                             true),
                            '{output}',
                            COALESCE(%(output)s::jsonb, data->'output', '{}'::jsonb),
                            true),
@@ -161,6 +181,7 @@ def save_segments(
             """,
             {
                 "segments": Jsonb(segments),
+                "compositions": Jsonb(compositions) if compositions is not None else None,
                 "step": step,
                 "title": title,
                 "output": Jsonb(output) if output is not None else None,

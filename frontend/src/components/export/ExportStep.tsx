@@ -4,14 +4,18 @@ import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
 import { aspectOf, fitToRatio, ratioLabel } from "../../lib/output";
 import { useRenderJob } from "../../lib/useRenderJob";
+import { finalOutputIdOf, rootCompositionOf } from "../../lib/compositions";
 import { usePreservePlayback } from "../animation/nodes/usePreservePlayback";
 import type { ExportSettings } from "../../lib/export";
-import type { OutputSettings, Segment } from "../../lib/types";
+import type { CompositionPool, OutputSettings, Segment } from "../../lib/types";
 import Info from "../../ui/Info";
 
 interface ExportStepProps {
   job?: string;
   segments: Segment[];
+  // The composition pool — where each segment's ★-final mark lives now
+  // (composition.outputId), so readiness resolves through it.
+  compositions: CompositionPool;
   exportSettings: ExportSettings;
   setExportSettings: (o: ExportSettings) => void;
   // The studio canvas (output) settings — the export aspect is locked to match this,
@@ -32,6 +36,7 @@ interface ExportStepProps {
 export default function ExportStep({
   job,
   segments,
+  compositions,
   exportSettings,
   setExportSettings,
   output,
@@ -78,7 +83,9 @@ export default function ExportStep({
 
   // Readiness: every segment needs a marked final output (⚠ otherwise). Generate is
   // disabled until they all do — the backend would 400 anyway, but flag it up front.
-  const unmarked = segments.filter((s) => !s.finalOutputId);
+  // Resolves like the backend does: the composition's explicit mark, else its sole
+  // output card.
+  const unmarked = segments.filter((s) => !finalOutputIdOf(rootCompositionOf(s, compositions)));
   const ready = segments.length > 0 && unmarked.length === 0;
 
   // Kick off the full-track export, persist its id (so it survives leaving the stage),
@@ -255,7 +262,7 @@ export default function ExportStep({
             <div className="export-checklist-head">SEGMENTS</div>
             {segments.length === 0 && <div className="export-hint">no segments to export</div>}
             {segments.map((s) => {
-              const marked = !!s.finalOutputId;
+              const marked = !!finalOutputIdOf(rootCompositionOf(s, compositions));
               // An unmarked row is the ONLY thing standing between you and Generate, so
               // it doubles as the click-through to the segment that needs fixing
               // (mirrors the animation palette's ⚠ problems list).

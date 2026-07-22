@@ -20,6 +20,7 @@ from .. import graph_hash
 from .. import render_cache
 from .. import render_jobs
 from .. import song_render
+from ..compositions import final_output_id, root_composition
 from ..media import stem_audio_path
 from ..paths import ANALYSIS_DIR, ANIM_DIR, ASSETS_DIR
 from ..web import json_body, error_response, validate_job_id
@@ -106,12 +107,15 @@ def export_stream(body):
         return error_response("unknown project", 404)
     data = row.get("data") or {}
     segments = data.get("segments") or []
+    compositions = data.get("compositions") or {}
     export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
     lyric_lines = _cached_lyric_lines(job_id)
 
     if not segments:
         return error_response("project has no segments", 400)
-    missing = [s.get("id") for s in segments if not s.get("finalOutputId")]
+    missing = [
+        s.get("id") for s in segments if not final_output_id(root_composition(compositions, s))
+    ]
     if missing:
         return error_response(f"mark a final output for every segment (missing: {missing})", 400)
 
@@ -119,7 +123,7 @@ def export_stream(body):
     # would just starve each other (and every card preview) on the same worker pool.
     refused, render_id = _start_hd_render(
         lambda on_progress, should_cancel: _export_job(
-            job_id, segments, lyric_lines, export, on_progress, should_cancel
+            job_id, segments, compositions, lyric_lines, export, on_progress, should_cancel
         )
     )
     return refused or jsonify({"render_id": render_id})
@@ -139,7 +143,7 @@ def _segment_request(body):
     seg = body.get("segment")
     if not isinstance(seg, dict):
         return error_response("missing segment", 400), None
-    graph = body.get("graph") or seg.get("graph")
+    graph = body.get("graph")
     if not isinstance(graph, dict) or not graph.get("nodes"):
         return error_response("missing graph", 400), None
     row = db.get_project(job_id)
@@ -148,10 +152,10 @@ def _segment_request(body):
     data = row.get("data") or {}
     export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
 
-    # Which output card to render: what was clicked, else the segment's marked final,
-    # else the only output in the graph — otherwise it's genuinely ambiguous.
+    # Which output card to render: what was clicked, else the only output in the
+    # graph — otherwise it's genuinely ambiguous.
     outs = [n.get("id") for n in graph.get("nodes", []) if n.get("type") == "output"]
-    output_id = body.get("output_id") or seg.get("finalOutputId")
+    output_id = body.get("output_id")
     if output_id not in outs:
         if len(outs) != 1:
             return (
@@ -301,16 +305,24 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
         _finish_hd_render()
 
 
-def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cancel):
+def _export_job(job_id, segments, compositions, lyric_lines, export, on_progress, should_cancel):
     """The background export: FIRST regenerate every Image-gen card's images fresh in
     HD (swapping their draft assetUrls in the in-memory graph), THEN render the song.
     Regeneration is slow (Z-Image is minutes/image), so it honours cancellation."""
     try:
         on_progress(phase="assets")
-        _regenerate_hd_images(job_id, segments, export, should_cancel)
+        # The regen helpers walk "segments that carry a graph" (the segment-HD path
+        # feeds them the client's body graph the same way). Attach each root
+        # composition's graph BY REFERENCE: the in-place assetUrl swaps land on the
+        # same node dicts the pool hands `render_song`, which is the whole point —
+        # the export renders the HD urls while the saved project keeps its drafts.
+        hydrated = [
+            {**s, "graph": (root_composition(compositions, s) or {}).get("graph")} for s in segments
+        ]
+        _regenerate_hd_images(job_id, hydrated, export, should_cancel)
         if should_cancel and should_cancel():
             return None
-        _regenerate_hd_stylize(job_id, segments, export, should_cancel)
+        _regenerate_hd_stylize(job_id, hydrated, export, should_cancel)
         if should_cancel and should_cancel():
             return None
 
@@ -327,6 +339,7 @@ def _export_job(job_id, segments, lyric_lines, export, on_progress, should_cance
         url = song_render.render_song(
             job_id,
             segments,
+            compositions,
             lyric_lines,
             export,
             stem_audio_path,
