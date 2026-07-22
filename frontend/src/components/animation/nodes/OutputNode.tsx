@@ -6,6 +6,7 @@ import HdViewerModal from "../HdViewerModal";
 import Info from "../../../ui/Info";
 import * as api from "../../../lib/api";
 import { outputRenderable } from "../../../lib/graphModel";
+import { reachableSlice } from "../../../lib/compositions";
 import { aspectOf } from "../../../lib/output";
 import { useRenderJob } from "../../../lib/useRenderJob";
 import { usePreservePlayback } from "./usePreservePlayback";
@@ -32,6 +33,7 @@ export default function OutputNode({
   const {
     graph,
     segment,
+    compositions,
     job,
     output,
     exportSettings,
@@ -127,8 +129,9 @@ export default function OutputNode({
       },
       graph,
       output_id: node.id,
+      compositions: reachableSlice(graph, compositions || {}),
     };
-  }, [jobId, graph, segment, lyricLines, node.id]);
+  }, [jobId, graph, segment, compositions, lyricLines, node.id]);
 
   function startHd() {
     const body = hdBody();

@@ -75,7 +75,7 @@ def _hashes_from(row: dict, job_id: str) -> tuple[set[str], bool]:
         try:
             outputs = [n["id"] for n in graph.get("nodes", []) if n.get("type") == "output"]
             for output_id in outputs:
-                keys.add(graphmod.output_hash(job_id, seg_h, graph, output_id, output))
+                keys.add(graphmod.output_hash(job_id, seg_h, graph, output_id, output, pool))
         except Exception as e:  # noqa: BLE001 — one bad graph must not sink the whole scan
             log.warning(
                 "cache gc: could not hash a segment of %s (%s) — clip deletion suspended",

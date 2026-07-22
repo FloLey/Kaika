@@ -8,6 +8,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { normalizeGraph } from "./graph/normalize";
+import { referencedCompositionIds } from "./graph/core";
 import { cloneSignals, mkSegId, mkSigId, rid } from "./segments";
 import type { Composition, CompositionPool, Graph, Segment } from "./types";
 
@@ -53,6 +54,31 @@ export function finalOutputIdOf(comp: Composition | null | undefined): string | 
   const outs = (comp.graph.nodes || []).filter((n) => n.type === "output").map((n) => n.id);
   if (comp.outputId && outs.includes(comp.outputId)) return comp.outputId;
   return outs.length === 1 ? outs[0] : undefined;
+}
+
+// The slice of the pool a graph can reach through its montage extracts
+// (recursively) — what a render POST ships as `compositions`, so a preview body
+// never carries the whole project's pool. `undefined` when the graph references
+// nothing (the common case: no request-size cost, and the backend hash stays
+// byte-identical to the pool-less form).
+export function reachableSlice(
+  graph: Graph | null | undefined,
+  pool: CompositionPool
+): CompositionPool | undefined {
+  const seen = new Set<string>();
+  const stack = [...referencedCompositionIds(graph)];
+  if (!stack.length) return undefined;
+  const out: CompositionPool = {};
+  while (stack.length) {
+    const cid = stack.pop()!;
+    if (seen.has(cid)) continue;
+    seen.add(cid);
+    const comp = pool[cid];
+    if (!comp) continue; // dangling — the hash still notices via the reference itself
+    out[cid] = comp;
+    stack.push(...referencedCompositionIds(comp.graph));
+  }
+  return out;
 }
 
 // A segment's root composition, or null while it has no animation.

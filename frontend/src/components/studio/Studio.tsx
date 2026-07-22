@@ -443,6 +443,7 @@ export default function Studio({
                 segment={activeSeg}
                 graph={activeComp?.graph ?? null}
                 finalOutputId={activeComp?.outputId}
+                compositions={compositions}
                 stems={stems}
                 job={job}
                 output={output}

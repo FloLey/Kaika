@@ -15,7 +15,7 @@ import numpy as np
 
 from . import fluid, signals
 from .animation_params import COLOR_PARAMS, SOURCE_STATIC_KEYS
-from .graph_common import _POINT_CAP, FLUID_FPS, _video_source, resolve_port
+from .graph_common import _POINT_CAP, FLUID_FPS, _video_source, resolve_port, resolve_signal
 
 log = logging.getLogger("kaika.graph")
 
@@ -84,7 +84,9 @@ def _signal_curve(
     net `fluid._series` snaps to exact length). A missing/deleted signal degrades
     to a flat 0 (01 §3.7) rather than failing the render.
     """
-    sig = signals_by_id.get(node.get("data", {}).get("signalId"))
+    # Exact id, else the `ref` signature fallback (a shared composition under a
+    # different segment's signals) — see graph_common.resolve_signal.
+    sig = resolve_signal(node.get("data", {}), signals_by_id)
     if sig is None:
         return np.zeros(nframes, np.float32)  # deleted signal — silent (01 §3.7)
     stem_path = stem_audio_path(job_id, sig["stemKey"])

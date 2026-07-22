@@ -49,7 +49,14 @@ import type {
 // ---- node factories (01 §3.1) ------------------------------------------------
 
 export function signalNode(
-  signal: { id: string; name?: string },
+  signal: {
+    id: string;
+    name?: string;
+    stemKey?: string;
+    minHz?: number;
+    maxHz?: number;
+    feature?: string;
+  },
   x: number,
   y: number
 ): SignalNode {
@@ -58,7 +65,25 @@ export function signalNode(
     type: "signal",
     x,
     y,
-    data: { signalId: signal.id, label: signal.name },
+    data: {
+      signalId: signal.id,
+      label: signal.name,
+      // The signature fallback for shared compositions (SignalData.ref) — written
+      // here, at pick time, because only the caller has the whole Signal in hand.
+      ...(signal.stemKey != null &&
+      signal.minHz != null &&
+      signal.maxHz != null &&
+      signal.feature != null
+        ? {
+            ref: {
+              stemKey: signal.stemKey,
+              minHz: signal.minHz,
+              maxHz: signal.maxHz,
+              feature: signal.feature,
+            },
+          }
+        : {}),
+    },
   };
 }
 

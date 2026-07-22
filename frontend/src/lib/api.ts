@@ -304,6 +304,9 @@ export async function startStreamRender(body: {
   graph: Graph;
   output?: unknown;
   output_id?: string;
+  // The reachable slice of the composition pool (montage extracts) — undefined
+  // when the graph references none.
+  compositions?: RawCompositionPool;
 }): Promise<StreamStartResult> {
   return postJson<StreamStartResult>("/animate/stream", body);
 }
@@ -346,6 +349,7 @@ export async function startSegmentHdRender(body: {
   graph: unknown;
   output_id?: string;
   hdStylize?: boolean;
+  compositions?: RawCompositionPool;
 }): Promise<StreamStartResult> {
   return postJson<StreamStartResult>("/export/segment", body);
 }
@@ -361,6 +365,7 @@ export async function findSegmentHdRender(body: {
   segment: unknown;
   graph: unknown;
   output_id?: string;
+  compositions?: RawCompositionPool;
 }): Promise<{ url: string | null; audio?: boolean }> {
   return postJson<{ url: string | null; audio?: boolean }>("/export/segment/cached", body);
 }

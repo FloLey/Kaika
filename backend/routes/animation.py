@@ -156,12 +156,16 @@ def animate_stream(body):
     segment = body.get("segment")
     output = body.get("output")
     output_id = body.get("output_id")
+    # The composition pool: the graphs any montage extract in `graph` references
+    # (recursively). Optional — a graph with no montage needs none.
+    compositions = body.get("compositions")
     if not job_id or graph is None or segment is None:
         return error_response("missing job_id, segment, or graph", 400)
     if _bad_job(job_id):
         return error_response("bad job id", 404)
     try:  # fail fast on an invalid graph instead of surfacing it as an async error
         graphmod.validate(graph, output_id)
+        graphmod.validate_pool(compositions)
     except ValueError as e:
         log.warning("animate/stream rejected graph (%s): %s", job_id, e)
         return error_response(str(e), 400)
@@ -175,6 +179,7 @@ def animate_stream(body):
             output_id,
             on_progress=on_progress,
             should_cancel=should_cancel,
+            pool=compositions,
         )
     )
     return jsonify({"render_id": render_id})

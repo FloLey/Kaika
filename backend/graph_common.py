@@ -163,6 +163,46 @@ def composite(layers: list, opacities: list) -> np.ndarray:
     return (np.clip(acc, 0.0, 1.0) * 255).astype(np.uint8)
 
 
+def resolve_signal(node_data: dict, signals_by_id: dict) -> dict | None:
+    """The host-segment signal a `signal` node reads.
+
+    Exact `signalId` first. When that dangles — the normal state for a SHARED
+    composition rendered under a segment whose default signals carry different
+    UUIDs — fall back to a signature match via the node's denormalized `ref`
+    snapshot `{stemKey, minHz, maxHz, feature}` (written by the frontend when the
+    signal is picked). The matched signal is used WHOLE, its shaping included:
+    the contextual time base means the host segment's tuning drives the child.
+    None when neither resolves (renders as flat 0, 01 §3.7)."""
+    sig = signals_by_id.get((node_data or {}).get("signalId"))
+    if sig is not None:
+        return sig
+    ref = (node_data or {}).get("ref")
+    if not isinstance(ref, dict):
+        return None
+    try:
+        want = (
+            str(ref.get("stemKey")),
+            str(ref.get("feature")),
+            float(ref.get("minHz")),
+            float(ref.get("maxHz")),
+        )
+    except (TypeError, ValueError):
+        return None
+    for s in signals_by_id.values():
+        try:
+            have = (
+                str(s.get("stemKey")),
+                str(s.get("feature")),
+                float(s.get("minHz")),
+                float(s.get("maxHz")),
+            )
+        except (TypeError, ValueError):
+            continue
+        if have == want:
+            return s
+    return None
+
+
 def _nodes_of(graph: dict, ntype: str) -> list[dict]:
     return [n for n in graph.get("nodes", []) if n.get("type") == ntype]
 

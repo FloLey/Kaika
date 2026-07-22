@@ -14,6 +14,7 @@ interface AnimationCanvasProps {
   segment: Segment;
   graph?: Graph | null; // the active composition's graph (null = none built yet)
   finalOutputId?: string; // the composition's ★-final output mark
+  compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -44,6 +45,7 @@ export default function AnimationCanvas({
   segment,
   graph: compGraph,
   finalOutputId,
+  compositions,
   stems,
   job,
   output,
@@ -80,6 +82,7 @@ export default function AnimationCanvas({
     segment,
     graph: compGraph,
     finalOutputId,
+    compositions,
     stems,
     job,
     output,

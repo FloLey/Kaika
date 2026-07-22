@@ -31,7 +31,12 @@ import cv2
 import numpy as np
 
 from . import fluid, paths, render_cache
-from .compositions import final_output_id, root_composition
+from .compositions import (
+    composition_closure,
+    final_output_id,
+    referenced_composition_ids,
+    root_composition,
+)
 from .config import ENCODE_TIMEOUT
 from .graph_hash import RENDER_VERSION
 from .graph_render import Dag, _clip_dims, _grid_dims
@@ -131,6 +136,17 @@ def _export_hash(job_id, segments, compositions, lyric_lines, export) -> str:
             for s in segments
         ],
     }
+    # Compositions the roots reference through montage extracts (recursively): a
+    # child edit must move the master's key too. Keyed in only when present, so a
+    # project with no extracts keeps its exact v3 hash.
+    seeds: set = set()
+    for s in segments:
+        seeds |= referenced_composition_ids((root_composition(compositions, s) or {}).get("graph"))
+    if seeds:
+        payload["refs"] = [
+            [cid, (comp or {}).get("graph")]
+            for cid, comp in composition_closure(compositions, seeds)
+        ]
     blob = json.dumps(payload, sort_keys=True, default=str).encode()
     return hashlib.sha1(blob).hexdigest()[:16]
 

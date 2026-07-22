@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../../../lib/api";
+import { reachableSlice } from "../../../lib/compositions";
 import type { NodeCtx } from "./nodeProps";
 
 // Two INDEPENDENT render lanes, not one shared cap. An output is what the user is
@@ -99,7 +100,7 @@ export function useStreamRender(
   progress: { done: number; total: number } | null;
 } {
   const lane = opts.lane ?? "preview";
-  const { graph, segment, job, output, lyricLines, groupClock } = ctx || {};
+  const { graph, segment, compositions, job, output, lyricLines, groupClock } = ctx || {};
   const [videoUrl, setVideoUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -166,6 +167,9 @@ export function useStreamRender(
           graph,
           output,
           output_id: nodeId,
+          // Only the slice the graph can actually reach (undefined for the
+          // common no-montage case — no request-size cost).
+          compositions: reachableSlice(graph, compositions || {}),
         });
         if (stopped || id !== reqId.current) {
           api.cancelStreamRender(render_id);

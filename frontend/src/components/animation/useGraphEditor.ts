@@ -29,6 +29,7 @@ interface GraphEditorOpts {
   segment: Segment; // the host segment: time window + signals (the graph is NOT on it)
   graph?: Graph | null; // the active composition's graph (null = none built yet)
   finalOutputId?: string; // the composition's ★-final output mark
+  compositions?: NodeCtx["compositions"]; // the pool (montage extracts reference into it)
   stems?: NodeCtx["stems"];
   job?: NodeCtx["job"];
   output?: OutputSettings | null;
@@ -47,6 +48,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     segment,
     graph: rawGraph,
     finalOutputId,
+    compositions,
     stems,
     job,
     output,
@@ -294,6 +296,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const ctx: NodeCtx = useMemo(
     () => ({
       segment,
+      compositions,
       stems,
       job,
       output,
@@ -316,6 +319,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     }),
     [
       segment,
+      compositions,
       stems,
       job,
       output,

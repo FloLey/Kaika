@@ -146,6 +146,7 @@ def _segment_request(body):
     graph = body.get("graph")
     if not isinstance(graph, dict) or not graph.get("nodes"):
         return error_response("missing graph", 400), None
+    pool = body.get("compositions")  # the graphs any montage extract references
     row = db.get_project(job_id)
     if row is None:
         return error_response("unknown project", 404), None
@@ -167,12 +168,13 @@ def _segment_request(body):
         output_id = outs[0]
     try:
         graphmod.validate(graph, output_id)
+        graphmod.validate_pool(pool)
     except ValueError as e:
         return error_response(str(e), 400), None
 
     lyric_lines = _cached_lyric_lines(job_id)
     seg = {**seg, "graph": graph, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
-    return None, (job_id, seg, graph, output_id, export)
+    return None, (job_id, seg, graph, output_id, export, pool)
 
 
 # The segment HD render's settings. `nativeShort` used to be added HERE and nowhere else,
@@ -182,11 +184,11 @@ def _segment_request(body):
 _hd_output = song_render.output_from_export
 
 
-def _hd_paths(job_id, seg, graph, output_id, export):
+def _hd_paths(job_id, seg, graph, output_id, export, pool=None):
     """`(silent, muxed)` cache paths for this exact HD render. `silent` is the shared
     render-cache entry (`render_stream` returns it on a hit); `muxed` is the sibling
     carrying the audio — what the viewer actually plays."""
-    h = graphmod.output_hash(job_id, seg, graph, output_id, _hd_output(export))
+    h = graphmod.output_hash(job_id, seg, graph, output_id, _hd_output(export), pool)
     silent = ANIM_DIR / f"{h}.mp4"
     muxed = ANIM_DIR / f"hd-{h}-{str(export.get('audioMode', 'original'))[:4]}.mp4"
     return silent, muxed
@@ -233,12 +235,12 @@ def export_segment(body):
     err, ctx = _segment_request(body)
     if err:
         return err
-    job_id, seg, graph, output_id, export = ctx
+    job_id, seg, graph, output_id, export, pool = ctx
     hd_stylize = bool(body.get("hdStylize", True))
 
     refused, render_id = _start_hd_render(
         lambda on_progress, should_cancel: _segment_hd_job(
-            job_id, seg, graph, output_id, export, hd_stylize, on_progress, should_cancel
+            job_id, seg, graph, output_id, export, pool, hd_stylize, on_progress, should_cancel
         )
     )
     return refused or jsonify({"render_id": render_id})
@@ -248,7 +250,9 @@ def export_segment(body):
 _hd_block_seconds = song_render.hd_block_seconds
 
 
-def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progress, should_cancel):
+def _segment_hd_job(
+    job_id, seg, graph, output_id, export, pool, hd_stylize, on_progress, should_cancel
+):
     """One segment, rendered at the final export's settings, with its audio slice muxed
     in. Phases: HD assets -> render -> audio (published so the UI doesn't sit at 0%
     through minutes of regeneration)."""
@@ -276,6 +280,7 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
             on_progress=progress,
             should_cancel=should_cancel,
             block_seconds=_hd_block_seconds(output["width"], output["height"]),
+            pool=pool,
         )
         if not url:
             return None  # cancelled mid-render
@@ -286,7 +291,7 @@ def _segment_hd_job(job_id, seg, graph, output_id, export, hd_stylize, on_progre
         audio = song_render.export_audio_path(job_id, export, stem_audio_path)
         if audio is None:
             return url  # no audio available — the silent clip is the result
-        _, muxed = _hd_paths(job_id, seg, graph, output_id, export)
+        _, muxed = _hd_paths(job_id, seg, graph, output_id, export, pool)
         muxed_url = f"/fluid/{muxed.name}"
         if not muxed.exists():
             on_progress(phase="audio")

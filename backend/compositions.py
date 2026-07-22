@@ -13,6 +13,42 @@ needs; rendering-side recursion lives with the montage handler in ``graph_render
 from __future__ import annotations
 
 
+def referenced_composition_ids(graph: dict | None) -> set:
+    """Composition ids a graph references DIRECTLY — today that is exactly the
+    montage card's extracts (`data.extracts[].compositionId`). The extracts wave
+    lands the field in step 03; reading it here (empty until then) keeps hashing
+    and validation forward-compatible without a second pass later."""
+    ids: set = set()
+    for n in (graph or {}).get("nodes") or []:
+        if n.get("type") != "montage":
+            continue
+        for ex in (n.get("data") or {}).get("extracts") or []:
+            cid = (ex or {}).get("compositionId") if isinstance(ex, dict) else None
+            if cid:
+                ids.add(cid)
+    return ids
+
+
+def composition_closure(pool: dict | None, seed_ids: set) -> list:
+    """The transitive closure of composition references, as an ORDERED list of
+    `(comp_id, comp_or_None)` pairs (sorted by id — hashing needs a stable order).
+    A dangling reference stays in the list as `(id, None)`: a reference appearing
+    or breaking must still move a content hash. Cycle-safe (the pool validator
+    refuses cycles, but hashing must not hang on a bad save)."""
+    pool = pool or {}
+    seen: set = set()
+    stack = sorted(seed_ids)
+    while stack:
+        cid = stack.pop()
+        if cid in seen:
+            continue
+        seen.add(cid)
+        comp = pool.get(cid)
+        if comp:
+            stack.extend(referenced_composition_ids(comp.get("graph")))
+    return [(cid, pool.get(cid)) for cid in sorted(seen)]
+
+
 def root_composition(pool: dict | None, seg: dict) -> dict | None:
     """The segment's root composition record, or None when the segment has no
     animation yet (no reference, or a dangling one)."""

@@ -91,6 +91,11 @@ export type Binding =
 export interface SignalData {
   signalId: string;
   label?: string;
+  // Denormalized signature of the picked signal, written at pick time. The render
+  // falls back to it when `signalId` dangles — the normal state for a SHARED
+  // composition rendered under a segment whose default signals carry different
+  // UUIDs but the same stem/band/feature (backend graph_common.resolve_signal).
+  ref?: { stemKey: string; minHz: number; maxHz: number; feature: string };
 }
 
 export interface FluidStatic {

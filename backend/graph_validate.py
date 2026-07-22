@@ -192,6 +192,31 @@ def validate(graph: dict, output_id: str | None = None) -> None:
     _check_acyclic(graph, nodes)
 
 
+def validate_pool(pool: dict | None) -> None:
+    """Pool-level validation (specs/compositions): the composition-REFERENCE graph
+    (montage extracts pointing at child compositions) must be acyclic — a
+    composition containing itself, directly or transitively, would recurse forever
+    at render time. Raises ValueError (HTTP 400 at the boundary).
+
+    Deliberately does NOT run `validate()` on every entry: rendering composition A
+    must not fail because composition B is mid-edit (a just-created leaf with
+    nothing wired). Each composition is fully validated when IT renders."""
+    from .compositions import referenced_composition_ids
+
+    if pool is None:
+        return
+    if not isinstance(pool, dict):
+        raise ValueError("compositions must be an object keyed by composition id")
+    adj: dict[str, list[str]] = {}
+    for cid, comp in pool.items():
+        if not isinstance(comp, dict) or not isinstance(comp.get("graph"), dict):
+            raise ValueError(f"composition '{cid}' has no graph")
+        # Dangling references (id not in the pool) can't close a cycle — skip them.
+        adj[cid] = [r for r in referenced_composition_ids(comp["graph"]) if r in pool]
+    if _has_cycle(adj):
+        raise ValueError("compositions reference each other in a cycle")
+
+
 def _has_cycle(adj: dict[str, list[str]]) -> bool:
     WHITE, GREY, BLACK = 0, 1, 2
     color = {n: WHITE for n in adj}

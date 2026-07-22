@@ -20,6 +20,7 @@ export {
   videoSource,
   feedsMontage,
   rankedEdges,
+  referencedCompositionIds,
 } from "./graph/core";
 export {
   GRAPH_VERSION,

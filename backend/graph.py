@@ -41,7 +41,7 @@ from .graph_common import (  # noqa: F401
     _video_source,
     composite,
 )
-from .graph_validate import validate  # noqa: F401
+from .graph_validate import validate, validate_pool  # noqa: F401
 from .graph_hash import _contributing_ids, output_hash  # noqa: F401
 from .graph_modulators import (  # noqa: F401
     _animate_point_specs,

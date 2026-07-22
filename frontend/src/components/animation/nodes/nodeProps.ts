@@ -4,6 +4,7 @@
 import type { PointerEvent, RefObject } from "react";
 import type {
   Asset,
+  CompositionPool,
   Graph,
   GraphNode,
   LyricLine,
@@ -54,6 +55,9 @@ export const STUB_HELPERS: NodeHelpers = {
 export interface NodeCtx {
   graph?: Graph;
   segment?: Segment;
+  // The project's composition pool — a montage card's extracts reference into it,
+  // and render keys/POSTs carry the reachable slice so child edits re-render.
+  compositions?: CompositionPool;
   stems?: Record<string, StemInfo>;
   job?: string;
   output?: OutputSettings | null;

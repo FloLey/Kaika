@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from .graph_common import LOOSE_PORT, _nodes_of
+from .graph_common import LOOSE_PORT, _nodes_of, resolve_signal
 
 # Bump when render SEMANTICS change so stale clips (cached under an old meaning of
 # the same graph) are invalidated. Folded into `output_hash`. The full history is in
@@ -100,7 +100,9 @@ def _referenced_signal_defs(graph: dict, signals_by_id: dict) -> list[list]:
     defs = []
     for node in _nodes_of(graph, "signal"):
         sig_id = node.get("data", {}).get("signalId")
-        sig = signals_by_id.get(sig_id)
+        # Resolve exactly like the render does (exact id, else the `ref` signature
+        # fallback) so the hash covers the signal that actually shapes the frames.
+        sig = resolve_signal(node.get("data", {}), signals_by_id)
         if sig is None:
             defs.append([sig_id, None])
         else:
@@ -129,8 +131,53 @@ def _contributing_ids(graph: dict, output_id: str) -> set:
     return seen
 
 
+def _graph_for_hash(graph: dict, signals_by_id: dict) -> dict:
+    """A WHOLE graph canonicalized for hashing: every node stripped of layout,
+    unwired slots dropped, loose edges filtered, referenced signal defs resolved.
+    Used for the compositions a montage extract references — an extract renders the
+    child's ENTIRE output pipeline, so unlike the top-level payload there is no
+    per-output contributing walk to narrow it."""
+    wired = _wired_ports(graph)
+    nodes = [n for n in graph.get("nodes", []) if "id" in n]
+    nodes.sort(key=lambda n: str(n.get("id")))
+    return {
+        "nodes": [_node_for_hash(n, wired) for n in nodes],
+        "edges": [e for e in graph.get("edges", []) if e.get("targetPort") != LOOSE_PORT],
+        "signals": _referenced_signal_defs(graph, signals_by_id),
+    }
+
+
+def _composition_refs_payload(graph: dict, pool: dict | None, signals_by_id: dict):
+    """`(payload, has_lyrics)` for the compositions reachable from `graph`'s montage
+    extracts, or `(None, False)` when it references none — the key must be ABSENT in
+    that case so every pre-pool graph keeps its exact hash (no RENDER_VERSION bump
+    for plumbing). Child signal defs resolve against the HOST segment's signals:
+    the contextual time base (specs/compositions decision 1) renders a shared child
+    under the referencing segment's signals, so those are what shape its frames."""
+    from .compositions import composition_closure, final_output_id, referenced_composition_ids
+
+    seeds = referenced_composition_ids(graph)
+    if not seeds:
+        return None, False
+    payload = []
+    has_lyrics = False
+    for cid, comp in composition_closure(pool, seeds):
+        if comp is None:
+            payload.append([cid, None])  # dangling — still moves the key
+            continue
+        g = comp.get("graph") or {}
+        has_lyrics = has_lyrics or any(n.get("type") == "lyrics" for n in g.get("nodes", []))
+        payload.append([cid, final_output_id(comp), _graph_for_hash(g, signals_by_id)])
+    return payload, has_lyrics
+
+
 def output_hash(
-    job_id: str, segment: dict, graph: dict, output_id: str, output: dict | None = None
+    job_id: str,
+    segment: dict,
+    graph: dict,
+    output_id: str,
+    output: dict | None = None,
+    pool: dict | None = None,
 ) -> str:
     """Stable SHA-1 over ONE output's CONTRIBUTING video DAG (spec 10).
 
@@ -139,6 +186,11 @@ def output_hash(
     signal defs, the segment bounds + job id, and the project `output` settings —
     so each output caches independently and editing one pipeline never busts
     another's. Excludes node positions/view.
+
+    When the contributing DAG holds a montage with extracts, `pool` (the project's
+    composition pool) contributes the RECURSIVE closure of referenced compositions
+    — editing a child composition anywhere in the tree moves the root's key, while
+    editing an unreferenced composition moves nothing.
     """
     contributing = _contributing_ids(graph, output_id)
     nodes = {n["id"]: n for n in graph.get("nodes", []) if "id" in n}
@@ -166,9 +218,15 @@ def output_hash(
         ),
         "output": output or {},
     }
+    refs, refs_have_lyrics = _composition_refs_payload(
+        {"nodes": sub_nodes, "edges": graph.get("edges", [])}, pool, signals_by_id
+    )
+    if refs is not None:
+        payload["compositions"] = refs
     # A lyrics card burns external (segment) lyric text into the frames; fold the lines
-    # overlapping this segment into the hash so editing the lyrics busts the cache.
-    if any(n.get("type") == "lyrics" for n in sub_nodes):
+    # overlapping this segment into the hash so editing the lyrics busts the cache. A
+    # lyrics card inside a REFERENCED composition burns the same segment lines.
+    if refs_have_lyrics or any(n.get("type") == "lyrics" for n in sub_nodes):
         s, e = float(segment.get("start", 0.0)), float(segment.get("end", 0.0))
         payload["lyrics"] = [
             [round(float(ln.get("t0", 0)), 2), round(float(ln.get("t1", 0)), 2), ln.get("text", "")]

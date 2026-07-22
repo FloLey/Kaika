@@ -18,14 +18,25 @@ import type { NodeCtx } from "./nodeProps";
 // the editor's single serialization of those lines for all outputs; the JSON fallback
 // covers a ctx that has none.
 export function useRenderKey(ctx: NodeCtx | undefined, nodeId: string): string {
-  const { graph, segment, job, signals, lyricLines, lyricsKey, output } = ctx || {};
+  const { graph, segment, compositions, job, signals, lyricLines, lyricsKey, output } = ctx || {};
   return useMemo(
     () =>
       graph
-        ? outputHash(graph, nodeId, job, segment?.start, segment?.end, signals) +
+        ? outputHash(graph, nodeId, job, segment?.start, segment?.end, signals, compositions) +
           JSON.stringify(output || {}) +
           `|ly:${lyricsKey ?? JSON.stringify(lyricLines || [])}`
         : "",
-    [graph, nodeId, job, segment?.start, segment?.end, signals, output, lyricsKey, lyricLines]
+    [
+      graph,
+      nodeId,
+      job,
+      segment?.start,
+      segment?.end,
+      signals,
+      compositions,
+      output,
+      lyricsKey,
+      lyricLines,
+    ]
   );
 }

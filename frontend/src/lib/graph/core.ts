@@ -137,3 +137,19 @@ export function feedsMontage(graph: Graph | undefined, nodeId: string): boolean 
 // the settings window assigns a real port.
 export const LOOSE_PORT = "__in";
 export const isLooseEdge = (e: { targetPort: string }): boolean => e.targetPort === LOOSE_PORT;
+
+// Composition ids a graph references DIRECTLY — the montage card's extracts
+// (`data.extracts[].compositionId`; the field lands with the extracts step, so this
+// reads empty on older montage shapes). Mirrors backend
+// `compositions.referenced_composition_ids`.
+export function referencedCompositionIds(graph: Graph | null | undefined): Set<string> {
+  const ids = new Set<string>();
+  for (const n of graph?.nodes || []) {
+    if (n.type !== "montage") continue;
+    const extracts = (n.data as { extracts?: { compositionId?: string }[] }).extracts;
+    for (const ex of extracts || []) {
+      if (ex?.compositionId) ids.add(ex.compositionId);
+    }
+  }
+  return ids;
+}

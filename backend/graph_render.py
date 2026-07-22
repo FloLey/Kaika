@@ -2003,6 +2003,8 @@ def render(
     stem_audio_path: Callable,
     output: dict | None = None,
     output_id: str | None = None,
+    *,
+    pool: dict | None = None,
 ) -> str:
     """Resolve one output's video DAG for `segment`, render an mp4, return its URL.
 
@@ -2019,7 +2021,8 @@ def render(
     validate(graph, output_id)
     if output_id is None:
         output_id = _nodes_of(graph, "output")[0]["id"]
-    out_path = paths.ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
+    h = output_hash(job_id, segment, graph, output_id, output, pool)
+    out_path = paths.ANIM_DIR / f"{h}.mp4"
     url = f"/fluid/{out_path.name}"
     if out_path.exists():
         render_cache.touch(out_path)  # keep this hot clip from aging out (LRU)
@@ -2048,6 +2051,7 @@ def render_stream(
     on_progress: Callable | None = None,
     should_cancel: Callable | None = None,
     block_seconds: float = RENDER_BLOCK_SECONDS,
+    pool: dict | None = None,
 ) -> str | None:
     """Progressive render: encode `output_id`'s clip in front-to-back blocks into ONE
     growing (fragmented) mp4, and return the final clip URL.
@@ -2068,7 +2072,8 @@ def render_stream(
     validate(graph, output_id)
     if output_id is None:
         output_id = _nodes_of(graph, "output")[0]["id"]
-    out_path = paths.ANIM_DIR / f"{output_hash(job_id, segment, graph, output_id, output)}.mp4"
+    h = output_hash(job_id, segment, graph, output_id, output, pool)
+    out_path = paths.ANIM_DIR / f"{h}.mp4"
     url = f"/fluid/{out_path.name}"
     if out_path.exists():  # already rendered — nothing to stream, and no Dag to build
         render_cache.touch(out_path)
