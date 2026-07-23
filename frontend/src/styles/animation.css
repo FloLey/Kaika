@@ -3018,12 +3018,19 @@
 }
 
 /* ---- the montage editor (segment ▸ montage — a full-area breadcrumb level) ---- */
+/* Lives INSIDE .anim-wrap (flex column, 72vh, overflow hidden) — so it must fill
+   that height, scroll its own overflow, and pin the strip/timeline at natural size
+   (a shrinkable flex child inside a fixed-height column otherwise gets crushed to
+   a sliver, which is exactly the bug this comment is the tombstone of). */
 .montage-editor {
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  min-height: 420px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
 }
 /* The extract strip: tiles side by side, scrolling horizontally past the viewport. */
 .montage-strip {
@@ -3034,19 +3041,28 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
+  flex: 0 0 auto;
 }
 .montage-tile {
-  flex: 0 0 148px;
+  flex: 0 0 164px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px;
+  gap: 5px;
+  padding: 7px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
   cursor: grab;
   font-size: 11px;
   color: var(--muted);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.montage-tile:hover {
+  border-color: var(--fx, #b8860b);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .montage-tile.short {
   border-color: #f87171;
@@ -3055,18 +3071,20 @@
   opacity: 0.55;
 }
 .montage-tile-thumb {
-  height: 72px;
-  border-radius: 6px;
+  height: 88px;
+  border-radius: 7px;
   overflow: hidden;
-  background: #0006;
+  background: #0c0d12;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.montage-tile-thumb img {
+.montage-tile-thumb img,
+.montage-tile-thumb video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
 }
 .montage-tile-anim {
   font-size: 22px;
@@ -3090,34 +3108,59 @@
   align-items: center;
 }
 .montage-tile-add {
-  flex: 0 0 92px;
+  flex: 0 0 96px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   border-style: dashed;
   color: var(--muted);
+  font-size: 12px;
+  box-shadow: none;
 }
 .montage-tile-add:hover {
   color: var(--text);
+  border-color: var(--fx, #b8860b);
 }
-/* Live view left (grows), wiring rail right. */
+/* Live view left (grows, fills the remaining height), wiring rail right. */
 .montage-editor-body {
   display: flex;
   gap: 14px;
-  align-items: flex-start;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 260px;
 }
 .montage-live {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
 }
+/* The live view sizes by HEIGHT (aspect-ratio derives the width), so a portrait
+   project doesn't become a wall-height poster that crushes the strip above. */
 .montage-live .anim-output-well {
-  max-width: 560px;
+  width: auto;
+  max-width: 100%;
+  height: clamp(220px, 46vh, 520px);
 }
 .montage-rail {
-  flex: 0 0 300px;
+  flex: 0 0 320px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow-y: auto;
 }
 
 /* ---- the breakpoints timeline (montage editor) ------------------------------ */
@@ -3125,6 +3168,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 0 0 auto;
 }
 .bp-rail {
   position: relative;

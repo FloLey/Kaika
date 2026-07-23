@@ -97,6 +97,7 @@ export type PaletteCategory =
   | "modulators"
   | "points"
   | "generators"
+  | "montage"
   | "compositing"
   | "output";
 export const PALETTE_CATEGORIES: { key: PaletteCategory; label: string }[] = [
@@ -104,6 +105,10 @@ export const PALETTE_CATEGORIES: { key: PaletteCategory; label: string }[] = [
   { key: "modulators", label: "Modulators" },
   { key: "points", label: "Points" },
   { key: "generators", label: "Generators" },
+  // Montage carries the whole recap-video workflow (the composition editor opens
+  // from it) — central enough to deserve its own palette entry rather than hiding
+  // among the compositing FX.
+  { key: "montage", label: "Montage" },
   { key: "compositing", label: "Compositing" },
   { key: "output", label: "Output" },
 ];
@@ -193,11 +198,11 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
     factory: montageNode,
     palette: {
       label: "Montage",
-      title: "Cut between video inputs on the music's rhythm",
-      order: 3.2,
-      category: "compositing",
-      help: "A rhythm-driven switcher: each rising edge of the trigger cuts to the NEXT slot's video, re-timed to start at the cut. Wire signal → gate → trigger for beat-locked cuts; the last input holds to the end.",
-      io: { in: "trigger + N video", out: "video" },
+      title: "Cut clips (or whole compositions) on the music's rhythm",
+      order: 1,
+      category: "montage",
+      help: "A rhythm-driven switcher over composition EXTRACTS: pick clips (or reuse compositions), and every cut — the trigger's rising edges plus your manual breakpoints — plays the next one, re-timed to start at the cut. Click the card to open the montage editor.",
+      io: { in: "trigger", out: "video" },
     },
   },
   transform: {

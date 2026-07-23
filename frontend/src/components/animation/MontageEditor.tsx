@@ -11,7 +11,7 @@ import { dp2 } from "./nodes/nodeConstants";
 import { argHelp } from "../../lib/paramHelp";
 import { ctxAspect } from "../../lib/output";
 import ConfirmDialog from "../../ui/ConfirmDialog";
-import { videoThumbSrc } from "../../lib/assetPreview";
+import { videoClipSrc, videoThumbSrc } from "../../lib/assetPreview";
 import { leafComposition, wouldCycle } from "../../lib/compositions";
 import {
   addExtract,
@@ -27,6 +27,20 @@ interface Props {
   node: GraphNode; // the live montage node (updates on every graph commit)
   ctx: NodeCtx;
   onGraphChange: (updater: (g: Graph) => Graph) => void;
+}
+
+// A leaf clip's thumbnail with a graceful miss: the server-side `<sha>-thumb.jpg`
+// only exists for LIBRARY videos (upload/backfill write it) — a seeded or
+// hand-placed asset has none, and a broken-image icon reads as "the app is
+// broken". On error, fall back to a metadata-only <video> over the server-cut
+// 1s excerpt (`/asset-clip` generates it on demand, ~57 KB): a real first frame,
+// never the raw asset.
+function TileThumb({ url, start }: { url: string; start: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <video src={videoClipSrc(url, start, 1)} preload="metadata" muted playsInline />;
+  }
+  return <img src={videoThumbSrc(url)} alt="" draggable={false} onError={() => setFailed(true)} />;
 }
 
 // The MONTAGE EDITOR — the full-area view a montage opens into (its own breadcrumb
@@ -128,7 +142,7 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
             >
               <div className="montage-tile-thumb">
                 {clip ? (
-                  <img src={videoThumbSrc(clip.url)} alt="" draggable={false} />
+                  <TileThumb url={clip.url} start={clip.start + (x.inPoint || 0)} />
                 ) : (
                   <span className="montage-tile-anim">{comp ? "✦" : "⚠"}</span>
                 )}
