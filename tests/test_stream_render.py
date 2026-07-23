@@ -183,6 +183,21 @@ def test_render_stream_progress_and_finalize(tmp_path, monkeypatch):
     assert int(probe.stdout.strip()) == total
     # frames_done climbs to total across >1 block, then a final event carries the url
     assert [e[0] for e in events] == sorted(e[0] for e in events)
+    # …and the video stream STARTS AT ZERO (v18): B-frame reorder delay in a
+    # fragmented mp4 is a real presentation offset (no edit list), which made every
+    # streamed clip's video lag its audio/transport by two frames.
+    start = subprocess.run(
+        # fmt: off
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=start_time", "-of", "default=nk=1:nw=1",
+            str(G.ANIM_DIR / f"{oh}.mp4"),
+        ],
+        # fmt: on
+        capture_output=True,
+        text=True,
+    )
+    assert float(start.stdout.strip()) == 0.0
     assert events[-1][2] == url and events[-1][0] == total
     # growing previews: one stable file, cache-busting `?n=` so the client reloads it
     assert all("/stream/" in e[2] and "?n=" in e[2] for e in events[:-1])

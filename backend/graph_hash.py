@@ -45,7 +45,7 @@ from .graph_common import LOOSE_PORT, _nodes_of, resolve_signal
 #       exemption is deleted (a child composition's window IS the extract's, so
 #       sync="song" pre-rolls correctly inside it). Old montage clips are
 #       meaningless under the new semantics.
-RENDER_VERSION = 17
+RENDER_VERSION = 18
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.

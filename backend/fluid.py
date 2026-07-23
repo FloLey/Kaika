@@ -781,6 +781,15 @@ def open_stream_encoder(
     cmd = _encode_args(gw, gh, fps, out_w, out_h, channels, crf) + [
         # ~1s GOPs with a keyframe at each fragment so partial reads decode cleanly.
         "-g", str(max(1, int(fps))), "-keyint_min", str(max(1, int(fps))), "-sc_threshold", "0",
+        # NO B-frames (v18): their 2-frame reorder delay becomes a REAL presentation
+        # offset in a fragmented mp4 (no edit list to hide it — start_time 0.083s at
+        # 24fps, verified with ffprobe; `+negative_cts_offsets` does not help). Every
+        # streamed clip's video therefore lagged its audio by two frames: preview
+        # video elements ran ~83ms behind the transport, and the EXPORT master (this
+        # same encoder, audio muxed from 0) shipped with the offset baked in — heard
+        # as cuts landing just after their beat once the schedule itself was exact.
+        # Cost: a few percent of bitrate at the same CRF; sync is not negotiable.
+        "-bf", "0",
         "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
         str(path),
     ]  # fmt: skip
