@@ -11,7 +11,7 @@ import { normalizeGraph } from "./graph/normalize";
 import { referencedCompositionIds } from "./graph/core";
 import { connectVideo, emptyGraph, outputNode, videoNode } from "./graphModel";
 import { cloneSignals, mkSegId, mkSigId, rid } from "./segments";
-import type { Asset, Composition, CompositionPool, Graph, Segment } from "./types";
+import type { Asset, Composition, CompositionPool, Graph, MontageData, Segment } from "./types";
 
 export function mkCompId() {
   return rid("comp");
@@ -198,6 +198,27 @@ function remapGraphSignals(graph: Graph, idMap: Record<string, string>): Graph {
   return g;
 }
 
+// Shift every montage's LOCAL-second times (manualBreakpoints, disabledCuts) in a
+// graph by `-delta` seconds, where `delta` is how much the composition's window
+// START moved (newStart - oldStart). Local times anchor to the window start, so a
+// boundary edit silently slides hand-placed cuts against the MUSIC while the gate
+// cuts (audio-derived) stay on their beats — this keeps both anchored to the same
+// musical instant. Entries that land outside the window are KEPT (they clamp to
+// inert at render), so moving a boundary back restores them losslessly. Returns
+// the same graph object when nothing shifts.
+export function shiftMontageLocalTimes(graph: Graph, delta: number): Graph {
+  if (!delta || !graph.nodes?.some((n) => n.type === "montage")) return graph;
+  const nodes = graph.nodes.map((n) => {
+    if (n.type !== "montage") return n;
+    const d = n.data as MontageData;
+    const bps = (d.manualBreakpoints || []).map((bp) => ({ ...bp, t: bp.t - delta }));
+    const dis = (d.disabledCuts || []).map((t) => t - delta);
+    if (!bps.length && !dis.length) return n;
+    return { ...n, data: { ...d, manualBreakpoints: bps, disabledCuts: dis } };
+  });
+  return nodes.some((n, i) => n !== graph.nodes[i]) ? { ...graph, nodes } : graph;
+}
+
 // Clone a segment's root composition onto fresh signal ids -> a NEW pool entry
 // (or null when the segment has no animation). The shared core of split/copy.
 function cloneRootFor(
@@ -232,7 +253,13 @@ export function splitAt(
       out.push({ ...s, end: t });
       const { signals, idMap } = cloneSignals(s.signals);
       const clone = cloneRootFor(s, pool, idMap);
-      if (clone) nextPool = { ...nextPool, [clone.id]: clone };
+      if (clone) {
+        // The right half's window starts at `t`, not at the source's start — its
+        // montage's local times shift so every hand-placed cut keeps its absolute
+        // musical position.
+        clone.graph = shiftMontageLocalTimes(clone.graph, t - s.start);
+        nextPool = { ...nextPool, [clone.id]: clone };
+      }
       out.push({
         ...s,
         id: mkSegId(),
@@ -284,7 +311,15 @@ export function copyLayout(
   const comp: Composition = {
     ...srcComp,
     id: mkCompId(),
-    graph: remapGraphSignals(srcComp.graph, idMap),
+    // Signals rewired to the target's; montage local times re-anchored to the
+    // TARGET's window start, so a copied hand-placed cut keeps its absolute musical
+    // position — usually outside the copy's window, i.e. cleanly inert, instead of
+    // cutting at a nonsense local offset (how the bridge once inherited the verse's
+    // 67s/69s/71s breakpoints).
+    graph: shiftMontageLocalTimes(
+      remapGraphSignals(srcComp.graph, idMap),
+      target.start - source.start
+    ),
   };
   return {
     target: {

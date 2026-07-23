@@ -11,7 +11,12 @@ import LogsPanel from "./components/LogsPanel";
 import SettingsModal from "./components/SettingsModal";
 import ErrorToast from "./components/ErrorToast";
 import { hydrateSegments, serializeSegments } from "./lib/segments";
-import { hydrateCompositions, pruneOrphans, splitAt } from "./lib/compositions";
+import {
+  hydrateCompositions,
+  pruneOrphans,
+  shiftMontageLocalTimes,
+  splitAt,
+} from "./lib/compositions";
 import { OUTPUT_DEFAULTS, withOutputDefaults } from "./lib/output";
 import { EXPORT_DEFAULTS, withExportDefaults } from "./lib/export";
 import type { ExportSettings } from "./lib/export";
@@ -70,6 +75,47 @@ export default function App() {
   // The composition pool — every animation graph in the project, addressed by id;
   // segments (and later montage extracts) reference into it. Saves with segments.
   const [compositions, setCompositions] = useState<CompositionPool>({});
+
+  // When a segment's START moves (a boundary drag on the review screen), its root
+  // composition's montage breakpoints — stored in window-LOCAL seconds — would slide
+  // against the MUSIC while the gate cuts stay on their beats. Reconcile here, off a
+  // baseline of starts by id: whatever path moved the boundary (60 Hz drag updaters
+  // included — a wrapper around setSegments couldn't see those), the montage's local
+  // times shift by the same delta so every hand-placed cut keeps its absolute
+  // musical position. Incremental deltas over a drag sum to the total. The baseline
+  // resets per project (a LOAD is not a boundary edit); a root shared by two
+  // segments is left alone (one shift can't serve two windows).
+  const segStartBaseline = useRef<Map<string, number>>(new Map());
+  const compositionsRef = useRef(compositions);
+  compositionsRef.current = compositions;
+  useEffect(() => {
+    segStartBaseline.current = new Map();
+  }, [job]);
+  useEffect(() => {
+    const base = segStartBaseline.current;
+    segStartBaseline.current = new Map(segments.map((s) => [s.id, s.start]));
+    let pool: CompositionPool | null = null;
+    for (const s of segments) {
+      const old = base.get(s.id);
+      if (old === undefined || !s.rootCompositionId) continue;
+      const delta = s.start - old;
+      if (Math.abs(delta) < 1e-4) continue;
+      if (segments.some((o) => o.id !== s.id && o.rootCompositionId === s.rootCompositionId))
+        continue;
+      const src: CompositionPool[string] | undefined = (pool ?? compositionsRef.current)[
+        s.rootCompositionId
+      ];
+      if (!src) continue;
+      const g = shiftMontageLocalTimes(src.graph, delta);
+      if (g !== src.graph) {
+        pool = {
+          ...(pool ?? compositionsRef.current),
+          [s.rootCompositionId]: { ...src, graph: g },
+        };
+      }
+    }
+    if (pool) setCompositions(pool);
+  }, [segments]);
   const [vocalEnvelope, setVocalEnvelope] = useState<number[]>([]);
   const [envelopeTimes, setEnvelopeTimes] = useState<number[]>([]);
   const [lyricLines, setLyricLines] = useState<LyricLine[]>([]);

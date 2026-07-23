@@ -61,10 +61,16 @@ import {
 } from "../lib/graphModel";
 import { FLUID_PARAMS, fluidParam } from "../lib/fluidParams.js";
 import { hydrateSegments, serializeSegments } from "../lib/segments";
-import { createComposition, hydrateCompositions, splitAt } from "../lib/compositions";
+import {
+  createComposition,
+  hydrateCompositions,
+  shiftMontageLocalTimes,
+  splitAt,
+} from "../lib/compositions";
 import { cutMarks, effectiveCuts, montageStarts } from "../lib/montageCuts";
 import type {
   CombineData,
+  MontageData,
   MontageNode,
   FluidData,
   FluidNode,
@@ -603,6 +609,42 @@ describe("segments graph persistence + split (01 §3.8)", () => {
     const ref = (roundPool[comp.id].graph.nodes[0].data as SignalData).signalId;
     expect(ref).toBe(sigId);
     expect(round.signals.some((s) => s.id === ref)).toBe(true);
+  });
+
+  it("shiftMontageLocalTimes re-anchors breakpoints when a window start moves", () => {
+    const mg = montageNode(0, 0);
+    let g: Graph = { ...emptyGraph(), nodes: [mg] };
+    g = addManualBreakpoint(g, mg.id, 10.0);
+    g = toggleAutoCut(g, mg.id, 4.0, 0.02);
+    // The window start moved +2s: local times shift -2 so the cuts stay at the
+    // same ABSOLUTE musical instant (the gate cuts, audio-derived, don't move).
+    const shifted = shiftMontageLocalTimes(g, 2.0);
+    const d = shifted.nodes[0].data as MontageData;
+    expect(d.manualBreakpoints[0].t).toBe(8.0);
+    expect(d.disabledCuts[0]).toBe(2.0);
+    // Entries pushed out of the window are KEPT — shifting back restores them.
+    const back = shiftMontageLocalTimes(shifted, -2.0);
+    expect((back.nodes[0].data as MontageData).manualBreakpoints[0].t).toBe(10.0);
+    // No montage / zero delta: the same object comes back.
+    expect(shiftMontageLocalTimes(g, 0)).toBe(g);
+    const bare = emptyGraph();
+    expect(shiftMontageLocalTimes(bare, 3)).toBe(bare);
+  });
+
+  it("splitAt re-anchors the right half's montage times to its new window start", () => {
+    const seg = hydrateSegments([{ start: 0, end: 10, label: "verse", signals: [] }], STEMS)[0];
+    const mg = montageNode(0, 0);
+    let mgGraph: Graph = { ...emptyGraph(), nodes: [mg] };
+    mgGraph = addManualBreakpoint(mgGraph, mg.id, 7.0); // absolute 7s (seg starts at 0)
+    const comp = createComposition(seg.label, mgGraph);
+    seg.rootCompositionId = comp.id;
+    const res = splitAt([seg], { [comp.id]: comp }, 5);
+    const [left, right] = res.segments;
+    // Left keeps its clock; right's clone re-anchors: local 7 → 2 (still abs 7s).
+    const lData = res.pool[left.rootCompositionId!].graph.nodes[0].data as MontageData;
+    const rData = res.pool[right.rootCompositionId!].graph.nodes[0].data as MontageData;
+    expect(lData.manualBreakpoints[0].t).toBe(7.0);
+    expect(rData.manualBreakpoints[0].t).toBe(2.0);
   });
 
   it("splitAt gives the cloned half fresh ids + its OWN composition, remapped", () => {
