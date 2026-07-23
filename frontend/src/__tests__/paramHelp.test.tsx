@@ -29,7 +29,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   pattern: 6, // layout/count/radius/rotation/offsetX/offsetY (seed hidden unless scatter)
   "animate-points": 3, // mode/amount/rate (angle/length/taper are mode-specific)
   "merge-points": 0,
-  lyrics: 10, // font + align/case/reveal + box (visual pad) + outline + outlineWidth + sizeMin/sizeMax + opacity port
+  lyrics: 9, // font + align/case/reveal + box (visual pad) + outline + outlineWidth + sizing (auto mode: the per-mode sliders are hidden) + opacity port
   image: 3, // fit + box (visual pad) + opacity port
   slideshow: 6, // threshold + hysteresis + fit + box + opacity/trigger ports
   imagegen: 2, // seed + model (prompts use plain title tooltips)

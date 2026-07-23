@@ -114,6 +114,12 @@ export default function LyricsNode({
 
   const aspect = ctxAspect(ctx);
   const family = useLyricsFont(d.font);
+  // The sizing mode is DERIVED from the clamp fields (no extra state to migrate):
+  // equal clamps = a fixed size, any clamp = min–max, none = the plain box fit.
+  const hasMin = d.sizeMin != null && d.sizeMin > 0;
+  const hasMax = d.sizeMax != null && d.sizeMax < 1;
+  const sizeMode =
+    hasMin && hasMax && d.sizeMin === d.sizeMax ? "fixed" : hasMin || hasMax ? "minmax" : "auto";
   // The preview plays the reveal off the shared clock (see BoxPad): `getText(t)` gives the
   // revealed text at song time t; when paused it shows `idleText` (the longest line so the
   // box can be sized safely, else a sample when the track has no lyrics).
@@ -275,28 +281,69 @@ export default function LyricsNode({
           onChange={(v) => set({ outlineWidth: v })}
           {...argHelp("lyrics", "outlineWidth")}
         />
-        {/* Auto-fit clamps, % of the frame height — resolution-independent, so the
-            export sizes exactly like the preview. 0% min / 100% max = the plain fit. */}
-        <Ctl
-          label="min size"
-          value={d.sizeMin ?? 0}
-          min={0}
-          max={0.3}
-          step={0.005}
-          fmt={pct}
-          onChange={(v) => set({ sizeMin: v })}
-          {...argHelp("lyrics", "sizeMin")}
-        />
-        <Ctl
-          label="max size"
-          value={d.sizeMax ?? 1}
-          min={0.05}
-          max={1}
-          step={0.01}
-          fmt={pct}
-          onChange={(v) => set({ sizeMax: v })}
-          {...argHelp("lyrics", "sizeMax")}
-        />
+        {/* Sizing: auto (fit the box, size varies per line), fixed (every line the
+            same size — sizeMin == sizeMax, and it wins over the box), or min–max
+            (the fit, clamped). All sizes are % of the frame height, so preview and
+            export agree at any resolution. */}
+        <label className="anim-select-row">
+          <span className="anim-select-label">size</span>
+          <ArgInfo type="lyrics" k="sizing" />
+          <select
+            className="anim-select"
+            value={sizeMode}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+              const m = e.target.value;
+              if (m === "auto")
+                set({ sizeMin: 0, sizeMax: 1 }); // 0/1 = no clamp (dropped)
+              else if (m === "fixed") {
+                const v = d.sizeMax && d.sizeMax < 1 ? d.sizeMax : 0.06;
+                set({ sizeMin: v, sizeMax: v });
+              } else {
+                set({ sizeMin: d.sizeMin || 0.02, sizeMax: d.sizeMax || 0.12 });
+              }
+            }}
+          >
+            <option value="auto">auto (fit box)</option>
+            <option value="fixed">fixed</option>
+            <option value="minmax">min – max</option>
+          </select>
+        </label>
+        {sizeMode === "fixed" && (
+          <Ctl
+            label="font size"
+            value={d.sizeMax ?? 0.06}
+            min={0.01}
+            max={0.4}
+            step={0.005}
+            fmt={pct}
+            onChange={(v) => set({ sizeMin: v, sizeMax: v })}
+            {...argHelp("lyrics", "sizeFixed")}
+          />
+        )}
+        {sizeMode === "minmax" && (
+          <>
+            <Ctl
+              label="min size"
+              value={d.sizeMin ?? 0}
+              min={0}
+              max={0.3}
+              step={0.005}
+              fmt={pct}
+              onChange={(v) => set({ sizeMin: v })}
+              {...argHelp("lyrics", "sizeMin")}
+            />
+            <Ctl
+              label="max size"
+              value={d.sizeMax ?? 1}
+              min={0.05}
+              max={1}
+              step={0.01}
+              fmt={pct}
+              onChange={(v) => set({ sizeMax: v })}
+              {...argHelp("lyrics", "sizeMax")}
+            />
+          </>
+        )}
       </div>
       <ParamRows
         params={LYRICS_PARAMS}

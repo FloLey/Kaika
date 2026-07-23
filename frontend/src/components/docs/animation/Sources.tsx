@@ -79,13 +79,15 @@ export default function Sources() {
           <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs <em>word</em>{" "}
           reveal (word fills the line in as it's sung). Drag the <em>text box</em> to place it and
           pull a corner to size it — the text word-wraps and fills the box (the box defines size +
-          placement). <strong>min size / max size</strong> clamp that auto-fit (as % of the frame
-          height, so preview and export agree): max stops a short line from growing huge, min stops
-          a long line from shrinking unreadable — a floored line may then overflow the box, which is
-          the point. A black <em>outline</em> keeps it readable over anything. Wire a{" "}
-          <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em> input to
-          recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
-          keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.
+          placement). The <strong>size</strong> mode controls that fit: <em>auto</em> lets each line
+          fill the box (size varies with line length), <em>fixed</em> renders every line at ONE size
+          you choose, <em>min – max</em> keeps the fit but clamps it between two sizes. Sizes are %
+          of the frame height, so preview and export agree; a fixed/floored line wraps and may
+          overflow the box — readable beats unreadable, which is the point. A black <em>outline</em>{" "}
+          keeps it readable over anything. Wire a <a href="#animation-fx">color card</a> into the{" "}
+          <em>fill</em> or <em>outline</em> input to recolour the text (defaults: white fill, black
+          outline) — the outline stays opaque so it keeps occluding the video. Opacity is
+          modulatable. Needs lyrics on the track.
           <br />
           <strong>✎ edit lines</strong> (on the card) edits each line's <em>words</em> and its{" "}
           <em>start/end time</em> (as <code>m:ss.cc</code>). For covers and rewritten lyrics, upload
