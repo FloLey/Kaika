@@ -26,6 +26,47 @@ export const EXTRACT_COLORS = [
 ];
 export const extractColor = (k: number) => EXTRACT_COLORS[k % EXTRACT_COLORS.length];
 
+// Which extract the transport sits over right now (an index into `starts`), or null
+// when the playhead is outside the window. A rAF loop reads the audio clock every
+// frame — playing OR scrubbing — but commits state only when the INDEX changes, so
+// this costs a handful of re-renders per pass, not 60 Hz. The editor highlights the
+// live extract's timeline band and strip tile off this one value.
+export function useLiveExtract(
+  clock: NodeCtx["groupClock"] | undefined,
+  starts: number[] | undefined,
+  total: number,
+  fps: number,
+  segStart: number
+): number | null {
+  const [live, setLive] = useState<number | null>(null);
+  const liveRef = useRef<number | null>(null);
+  useEffect(() => {
+    liveRef.current = null;
+    setLive(null);
+    if (!clock || !starts || !starts.length || !total) return;
+    let raf = 0;
+    const tick = () => {
+      const a = clock.current;
+      let k: number | null = null;
+      if (a) {
+        const f = (a.currentTime - segStart) * fps;
+        if (f >= 0 && f < total) {
+          k = 0;
+          while (k + 1 < starts.length && starts[k + 1] <= f) k++;
+        }
+      }
+      if (k !== liveRef.current) {
+        liveRef.current = k;
+        setLive(k);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [clock, starts, total, fps, segStart]);
+  return live;
+}
+
 interface Props {
   montageId: string;
   marks: CutMark[]; // from useMontageShortfall — gate ∪ manual, with provenance
@@ -38,6 +79,8 @@ interface Props {
   // start — the playhead line follows them, playing OR scrubbing.
   clock?: NodeCtx["groupClock"];
   segStart?: number;
+  // The extract the playhead is over (useLiveExtract) — its bands render brighter.
+  liveExtract?: number | null;
   onGraphChange: (updater: (g: Graph) => Graph) => void;
 }
 
@@ -57,6 +100,7 @@ export default function BreakpointTimeline({
   total,
   clock,
   segStart = 0,
+  liveExtract = null,
   onGraphChange,
 }: Props) {
   const railRef = useRef<HTMLDivElement>(null);
@@ -145,11 +189,21 @@ export default function BreakpointTimeline({
         {coverage.map((b, i) => (
           <div
             key={`c${i}`}
-            className={"bp-band" + (b.kind === "black" ? " bp-band-black" : "")}
+            className={
+              "bp-band" +
+              (b.kind === "black" ? " bp-band-black" : "") +
+              (b.kind === "covered" && b.extract === liveExtract ? " bp-band-live" : "")
+            }
             style={{
               left: `${(b.from / total) * 100}%`,
               width: `${((b.to - b.from) / total) * 100}%`,
-              ...(b.kind === "covered" ? { background: `${extractColor(b.extract)}59` } : {}),
+              // The band under the playhead brightens (b3 vs 59 alpha): "this is
+              // the video playing right now".
+              ...(b.kind === "covered"
+                ? {
+                    background: `${extractColor(b.extract)}${b.extract === liveExtract ? "b3" : "59"}`,
+                  }
+                : {}),
             }}
             title={
               b.kind === "black"

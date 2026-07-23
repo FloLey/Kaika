@@ -48,7 +48,7 @@ function rig() {
   return { graph: g, mgId: mg.id, pool };
 }
 
-function mountEditor() {
+function mountEditor(groupClock?: NodeCtx["groupClock"]) {
   const r = rig();
   let graph = r.graph;
   const onGraphChange = (updater: (g: Graph) => Graph) => {
@@ -62,6 +62,7 @@ function mountEditor() {
     signals: [],
     assets: ASSETS,
     job: "j",
+    groupClock,
     updateCompositions: vi.fn(),
     onGraphChange,
   });
@@ -149,5 +150,19 @@ describe("breakpoints timeline", () => {
     // compute it; the place-a-cut test above proves the rail still takes clicks.)
     // The playhead line is mounted too, ready to follow the transport.
     expect(container.querySelector(".bp-head")).toBeTruthy();
+  });
+
+  it("highlights the extract under the playhead: its tile and its timeline band", async () => {
+    // A transport clock parked at 1s — inside the single extract's window, so
+    // extract 0 is "the video playing right now": its strip tile takes the `live`
+    // outline and its covered band brightens (b3 alpha ≈ 0.70 vs the resting 0.35).
+    const clock = { current: { currentTime: 1 } as HTMLAudioElement };
+    const { container } = mountEditor(clock);
+    await waitFor(() => {
+      expect(container.querySelector(".montage-tile.live")).toBeTruthy();
+      const band = container.querySelector(".bp-band-live") as HTMLElement;
+      expect(band).toBeTruthy();
+      expect(band.style.background).toMatch(/^rgba\(.+0\.7\)$/);
+    });
   });
 });

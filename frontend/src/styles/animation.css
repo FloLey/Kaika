@@ -3309,3 +3309,13 @@
   margin-right: 5px;
   vertical-align: baseline;
 }
+
+/* The extract under the playhead: its band brightens (inline alpha) and gets a
+   ring; its strip tile wears an outline in ITS colour (inline outline-color). */
+.bp-band-live {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+.montage-tile.live {
+  outline: 2px solid var(--fx, #b8860b);
+  outline-offset: -1px;
+}

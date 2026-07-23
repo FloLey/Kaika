@@ -1,5 +1,5 @@
 import { useState } from "react";
-import BreakpointTimeline, { extractColor } from "./BreakpointTimeline";
+import BreakpointTimeline, { extractColor, useLiveExtract } from "./BreakpointTimeline";
 import StreamPreview from "./nodes/StreamPreview";
 import InputPicker from "./InputPicker";
 import AssetLibrary from "../assets/AssetLibrary";
@@ -65,6 +65,11 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
     shortRows,
     repeats,
   } = useMontageShortfall(node, ctx);
+
+  // The extract under the playhead: its tile and timeline band highlight while the
+  // transport moves, so "which video is this?" answers itself.
+  const segStart = ctx.segStart ?? ctx.segment?.start ?? 0;
+  const liveExtract = useLiveExtract(ctx.groupClock, cuts?.starts, cuts?.total ?? 0, fps, segStart);
 
   // "+ video" appends a leaf; "pick" on a tile RE-POINTS that extract at a new leaf
   // (the composition it left stays in the pool — lifecycle is the prune's job).
@@ -138,8 +143,12 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
               key={x.id}
               role="listitem"
               className={
-                "montage-tile" + (goesBlack ? " short" : "") + (label === "unused" ? " unused" : "")
+                "montage-tile" +
+                (goesBlack ? " short" : "") +
+                (label === "unused" ? " unused" : "") +
+                (k === liveExtract ? " live" : "")
               }
+              style={k === liveExtract ? { outlineColor: extractColor(k) } : undefined}
               draggable
               onDragStart={() => setDragFrom(k)}
               onDragOver={(e) => e.preventDefault()}
@@ -288,7 +297,8 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
           fps={fps}
           total={cuts.total}
           clock={ctx.groupClock}
-          segStart={ctx.segStart ?? ctx.segment?.start ?? 0}
+          segStart={segStart}
+          liveExtract={liveExtract}
           onGraphChange={onGraphChange}
         />
       )}
