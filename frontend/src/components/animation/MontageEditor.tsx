@@ -53,8 +53,18 @@ function TileThumb({ url, start }: { url: string; start: number }) {
 export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
   const d = node.data as MontageData;
   const set = useNodeData<MontageData>(node, onGraphChange);
-  const { extracts, comps, cuts, fps, extractLabel, clips, shortfall, shortRows, repeats } =
-    useMontageShortfall(node, ctx);
+  const {
+    extracts,
+    comps,
+    cuts,
+    fps,
+    coverage,
+    extractLabel,
+    clips,
+    shortfall,
+    shortRows,
+    repeats,
+  } = useMontageShortfall(node, ctx);
 
   // "+ video" appends a leaf; "pick" on a tile RE-POINTS that extract at a new leaf
   // (the composition it left stays in the pool — lifecycle is the prune's job).
@@ -273,8 +283,11 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
         <BreakpointTimeline
           montageId={node.id}
           marks={cuts.marks}
+          coverage={coverage}
           fps={fps}
           total={cuts.total}
+          clock={ctx.groupClock}
+          segStart={ctx.segStart ?? ctx.segment?.start ?? 0}
           onGraphChange={onGraphChange}
         />
       )}

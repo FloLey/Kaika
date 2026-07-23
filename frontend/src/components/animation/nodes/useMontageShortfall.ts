@@ -191,11 +191,40 @@ export function useMontageShortfall(node: GraphNode, ctx: NodeCtx | undefined) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extracts, clips, durations, cuts, fps]);
 
+  // Timeline COVERAGE: which stretches of the window have material, and which
+  // will render BLACK (a leaf clip out of material with loop off, or a dangling
+  // reference). Same numbers the render uses — starts/shortfall — cut into bands
+  // the breakpoints timeline shades, so the black spots read at a glance.
+  const coverage = useMemo(() => {
+    if (!cuts) return [];
+    const bands: { from: number; to: number; kind: "covered" | "black" }[] = [];
+    cuts.starts.forEach((s, k) => {
+      const e = k + 1 < cuts.starts.length ? cuts.starts[k + 1] : cuts.total;
+      if (e <= s) return;
+      if (!comps[k]) {
+        bands.push({ from: s, to: e, kind: "black" }); // dangling reference
+        return;
+      }
+      const sf = shortfall(k);
+      if (sf && !sf.loop) {
+        const availEnd = Math.min(e, s + Math.max(0, Math.round(sf.avail * fps)));
+        if (availEnd > s) bands.push({ from: s, to: availEnd, kind: "covered" });
+        if (availEnd < e) bands.push({ from: availEnd, to: e, kind: "black" });
+        return;
+      }
+      bands.push({ from: s, to: e, kind: "covered" });
+    });
+    return bands;
+    // `shortfall` closes over clips/durations/cuts; those are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuts, comps, clips, durations, extracts, fps]);
+
   return {
     extracts,
     comps,
     cuts,
     fps,
+    coverage,
     extractSecs,
     extractLabel,
     clips,

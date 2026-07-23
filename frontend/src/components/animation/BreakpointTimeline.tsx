@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as RPointerEvent } from "react";
 import ArgInfo from "./nodes/ArgInfo";
 import {
@@ -7,14 +7,22 @@ import {
   removeManualBreakpoint,
   toggleAutoCut,
 } from "../../lib/graphModel";
+import type { NodeCtx } from "./nodes/nodeProps";
 import type { CutMark } from "../../lib/montageCuts";
 import type { Graph } from "../../lib/types";
 
 interface Props {
   montageId: string;
   marks: CutMark[]; // from useMontageShortfall — gate ∪ manual, with provenance
+  // Material coverage bands (same hook): tinted where an extract has footage,
+  // near-black where the export will render BLACK — the gaps read at a glance.
+  coverage: { from: number; to: number; kind: "covered" | "black" }[];
   fps: number;
   total: number; // window length in frames
+  // The shared transport clock (Studio's <audio>) + this composition's window
+  // start — the playhead line follows them, playing OR scrubbing.
+  clock?: NodeCtx["groupClock"];
+  segStart?: number;
   onGraphChange: (updater: (g: Graph) => Graph) => void;
 }
 
@@ -26,8 +34,42 @@ interface Props {
 // time exception, re-enabled automatically if the cut MOVES under a threshold
 // edit). Click an empty spot to place a manual cut there; drag a manual cut to
 // move it; click one to delete it.
-export default function BreakpointTimeline({ montageId, marks, fps, total, onGraphChange }: Props) {
+export default function BreakpointTimeline({
+  montageId,
+  marks,
+  coverage,
+  fps,
+  total,
+  clock,
+  segStart = 0,
+  onGraphChange,
+}: Props) {
   const railRef = useRef<HTMLDivElement>(null);
+  // The playhead: a line that follows the transport across the strip — while
+  // PLAYING and while scrubbing (it reads the audio clock every frame either
+  // way). Driven by direct style writes off one rAF loop, not state: a 60 Hz
+  // setState would re-render every mark and band for a moving line.
+  const headRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!clock) return;
+    let raf = 0;
+    const tick = () => {
+      const a = clock.current;
+      const el = headRef.current;
+      if (a && el) {
+        const frac = (a.currentTime - segStart) / Math.max(0.001, total / fps);
+        if (frac >= 0 && frac <= 1) {
+          el.style.left = `${frac * 100}%`;
+          el.style.display = "";
+        } else {
+          el.style.display = "none"; // the playhead is outside this window
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [clock, segStart, total, fps]);
   // A manual mark mid-drag: its breakpointId + live position (frames). Committed on
   // pointer-up through moveManualBreakpoint; rendering uses the live position so the
   // marker follows the pointer without a graph commit per move.
@@ -83,6 +125,19 @@ export default function BreakpointTimeline({ montageId, marks, fps, total, onGra
         }}
         title="click to place a manual cut here"
       >
+        {/* Coverage first (marks render above): pointer-events none, so the rail's
+            own click — target === currentTarget — still places manual cuts. */}
+        {coverage.map((b, i) => (
+          <div
+            key={`c${i}`}
+            className={"bp-band" + (b.kind === "black" ? " bp-band-black" : "")}
+            style={{
+              left: `${(b.from / total) * 100}%`,
+              width: `${((b.to - b.from) / total) * 100}%`,
+            }}
+          />
+        ))}
+        <div className="bp-head" ref={headRef} style={{ display: "none" }} />
         {marks.map((m) => {
           const frame = drag && m.breakpointId === drag.id ? drag.frame : m.frame;
           const left = `${(frame / total) * 100}%`;
@@ -117,7 +172,8 @@ export default function BreakpointTimeline({ montageId, marks, fps, total, onGra
       </div>
       <div className="bp-legend anim-fx-hint">
         <span className="bp-key bp-key-gate" /> gate · <span className="bp-key bp-key-manual" />{" "}
-        manual · {secs.toFixed(1)}s
+        manual · <span className="bp-key bp-key-covered" /> filmed ·{" "}
+        <span className="bp-key bp-key-black" /> black · {secs.toFixed(1)}s
         <ArgInfo type="montage" k="breakpoints" />
       </div>
     </div>

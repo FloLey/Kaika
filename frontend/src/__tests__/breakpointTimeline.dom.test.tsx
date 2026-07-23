@@ -4,7 +4,7 @@ import { render, fireEvent, waitFor } from "@testing-library/react";
 import MontageEditor from "../components/animation/MontageEditor";
 import { emptyGraph, montageNode, lfoNode, connect, addExtract } from "../lib/graphModel";
 import { leafComposition } from "../lib/compositions";
-import type { CompositionPool, Graph, MontageNode, Segment } from "../lib/types";
+import type { Asset, CompositionPool, Graph, MontageNode, Segment } from "../lib/types";
 import type { NodeCtx } from "../components/animation/nodes/nodeProps";
 
 // The breakpoints timeline (specs/compositions step 06): both cut sources on one
@@ -30,6 +30,12 @@ vi.mock("../lib/api", async (orig) => ({
 
 const segment: Segment = { id: "s1", label: "verse", start: 0, end: 8, signals: [] };
 
+// The rig's one clip is 2s long (the backend ffprobes durations at upload) — over
+// an 8s window with loop off, that's 6s of black for the coverage bands to show.
+const ASSETS: Asset[] = [
+  { id: "a", url: "/assets/j/a.mp4", kind: "video", name: "a.mp4", addedAt: 0, duration: 2 },
+];
+
 function rig() {
   const clip = leafComposition({ url: "/assets/j/a.mp4", name: "clip A", kind: "video" });
   const mg = montageNode(400, 0);
@@ -53,7 +59,7 @@ function mountEditor() {
     segment,
     compositions: r.pool,
     signals: [],
-    assets: [],
+    assets: ASSETS,
     job: "j",
     updateCompositions: vi.fn(),
     onGraphChange,
@@ -115,5 +121,26 @@ describe("breakpoints timeline", () => {
     fireEvent(manual, ptr("pointerdown", 60));
     fireEvent(window, ptr("pointerup", 60));
     expect(node().data.manualBreakpoints).toHaveLength(0);
+  });
+
+  it("shades material coverage: tinted where footage exists, near-black where it runs out", async () => {
+    const { container } = mountEditor();
+    // One extract over the whole 8s window; its clip holds 2s with loop off →
+    // covered 0–25% of the rail, BLACK for the remaining 75%.
+    const bands = await waitFor(() => {
+      const els = container.querySelectorAll(".bp-band");
+      expect(els.length).toBe(2);
+      return [...els] as HTMLElement[];
+    });
+    expect(bands[0].className).not.toContain("bp-band-black");
+    expect(parseFloat(bands[0].style.left)).toBeCloseTo(0, 1);
+    expect(parseFloat(bands[0].style.width)).toBeCloseTo(25, 0);
+    expect(bands[1].className).toContain("bp-band-black");
+    expect(parseFloat(bands[1].style.left)).toBeCloseTo(25, 0);
+    expect(parseFloat(bands[1].style.width)).toBeCloseTo(75, 0);
+    // (pointer-events: none on the bands lives in the stylesheet — jsdom doesn't
+    // compute it; the place-a-cut test above proves the rail still takes clicks.)
+    // The playhead line is mounted too, ready to follow the transport.
+    expect(container.querySelector(".bp-head")).toBeTruthy();
   });
 });

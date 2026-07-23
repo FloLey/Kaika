@@ -3267,3 +3267,36 @@
   width: 36px;
   height: 36px;
 }
+
+/* Coverage bands under the cut marks: tinted = an extract has material there,
+   near-black = the export will render BLACK there (short clip with loop off, or a
+   dangling reference). pointer-events none — the rail's click-to-place stays. */
+.bp-band {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  background: color-mix(in srgb, var(--fx, #b8860b) 22%, transparent);
+  pointer-events: none;
+}
+.bp-band-black {
+  background: #15161c;
+}
+.bp-key-covered {
+  background: color-mix(in srgb, var(--fx, #b8860b) 45%, transparent);
+}
+.bp-key-black {
+  background: #15161c;
+  border: 1px solid var(--line);
+}
+
+/* The transport playhead across the strip — follows play AND scrub. */
+.bp-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--petale, #e2557b);
+  pointer-events: none;
+  z-index: 2;
+}
