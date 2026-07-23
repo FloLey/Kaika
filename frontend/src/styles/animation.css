@@ -3275,14 +3275,13 @@
   position: absolute;
   top: 3px;
   bottom: 3px;
-  background: color-mix(in srgb, var(--fx, #b8860b) 22%, transparent);
-  pointer-events: none;
+  pointer-events: none; /* covered bands take their per-extract colour inline */
 }
 .bp-band-black {
   background: #15161c;
 }
 .bp-key-covered {
-  background: color-mix(in srgb, var(--fx, #b8860b) 45%, transparent);
+  background: linear-gradient(90deg, #60a5fa, #34d399, #fbbf24);
 }
 .bp-key-black {
   background: #15161c;
@@ -3299,4 +3298,14 @@
   background: var(--petale, #e2557b);
   pointer-events: none;
   z-index: 2;
+}
+
+/* The tile's key dot — the same colour its stretch wears on the timeline. */
+.montage-tile-key {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: baseline;
 }

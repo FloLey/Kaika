@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/react";
 import MontageEditor from "../components/animation/MontageEditor";
+import { extractColor } from "../components/animation/BreakpointTimeline";
 import { emptyGraph, montageNode, lfoNode, connect, addExtract } from "../lib/graphModel";
 import { leafComposition } from "../lib/compositions";
 import type { Asset, CompositionPool, Graph, MontageNode, Segment } from "../lib/types";
@@ -135,7 +136,13 @@ describe("breakpoints timeline", () => {
     expect(bands[0].className).not.toContain("bp-band-black");
     expect(parseFloat(bands[0].style.left)).toBeCloseTo(0, 1);
     expect(parseFloat(bands[0].style.width)).toBeCloseTo(25, 0);
+    // Covered bands wear their EXTRACT's colour (inline, from the cycled palette) so
+    // each video reads apart from its neighbour; black bands stay stylesheet-black.
+    // (jsdom normalises the #rrggbbaa hex to rgba() — assert semi-transparent rgba.)
+    expect(bands[0].style.background).toMatch(/^rgba\(.+0\.35\)$/);
+    expect(extractColor(0)).not.toBe(extractColor(1)); // neighbours never match
     expect(bands[1].className).toContain("bp-band-black");
+    expect(bands[1].style.background).toBe("");
     expect(parseFloat(bands[1].style.left)).toBeCloseTo(25, 0);
     expect(parseFloat(bands[1].style.width)).toBeCloseTo(75, 0);
     // (pointer-events: none on the bands lives in the stylesheet — jsdom doesn't

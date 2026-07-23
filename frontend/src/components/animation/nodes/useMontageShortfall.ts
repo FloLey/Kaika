@@ -197,22 +197,22 @@ export function useMontageShortfall(node: GraphNode, ctx: NodeCtx | undefined) {
   // the breakpoints timeline shades, so the black spots read at a glance.
   const coverage = useMemo(() => {
     if (!cuts) return [];
-    const bands: { from: number; to: number; kind: "covered" | "black" }[] = [];
+    const bands: { from: number; to: number; kind: "covered" | "black"; extract: number }[] = [];
     cuts.starts.forEach((s, k) => {
       const e = k + 1 < cuts.starts.length ? cuts.starts[k + 1] : cuts.total;
       if (e <= s) return;
       if (!comps[k]) {
-        bands.push({ from: s, to: e, kind: "black" }); // dangling reference
+        bands.push({ from: s, to: e, kind: "black", extract: k }); // dangling reference
         return;
       }
       const sf = shortfall(k);
       if (sf && !sf.loop) {
         const availEnd = Math.min(e, s + Math.max(0, Math.round(sf.avail * fps)));
-        if (availEnd > s) bands.push({ from: s, to: availEnd, kind: "covered" });
-        if (availEnd < e) bands.push({ from: availEnd, to: e, kind: "black" });
+        if (availEnd > s) bands.push({ from: s, to: availEnd, kind: "covered", extract: k });
+        if (availEnd < e) bands.push({ from: availEnd, to: e, kind: "black", extract: k });
         return;
       }
-      bands.push({ from: s, to: e, kind: "covered" });
+      bands.push({ from: s, to: e, kind: "covered", extract: k });
     });
     return bands;
     // `shortfall` closes over clips/durations/cuts; those are the real inputs.

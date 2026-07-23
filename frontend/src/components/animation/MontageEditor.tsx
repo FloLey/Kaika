@@ -1,5 +1,5 @@
 import { useState } from "react";
-import BreakpointTimeline from "./BreakpointTimeline";
+import BreakpointTimeline, { extractColor } from "./BreakpointTimeline";
 import StreamPreview from "./nodes/StreamPreview";
 import InputPicker from "./InputPicker";
 import AssetLibrary from "../assets/AssetLibrary";
@@ -158,6 +158,7 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
                 )}
               </div>
               <div className="montage-tile-name" title={comp?.name}>
+                <span className="montage-tile-key" style={{ background: extractColor(k) }} />
                 {k + 1}. {comp ? comp.name : "missing composition"}
               </div>
               <div className="montage-tile-meta">

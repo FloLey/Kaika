@@ -11,12 +11,27 @@ import type { NodeCtx } from "./nodes/nodeProps";
 import type { CutMark } from "../../lib/montageCuts";
 import type { Graph } from "../../lib/types";
 
+// One colour per EXTRACT, cycling — so each extract's stretch of the timeline
+// (and its strip tile's key dot, MontageEditor) reads apart from its neighbours.
+// Black holes stay black: that's the thing being looked for.
+export const EXTRACT_COLORS = [
+  "#60a5fa",
+  "#34d399",
+  "#fbbf24",
+  "#f472b6",
+  "#c084fc",
+  "#22d3ee",
+  "#f87171",
+  "#a3e635",
+];
+export const extractColor = (k: number) => EXTRACT_COLORS[k % EXTRACT_COLORS.length];
+
 interface Props {
   montageId: string;
   marks: CutMark[]; // from useMontageShortfall — gate ∪ manual, with provenance
   // Material coverage bands (same hook): tinted where an extract has footage,
   // near-black where the export will render BLACK — the gaps read at a glance.
-  coverage: { from: number; to: number; kind: "covered" | "black" }[];
+  coverage: { from: number; to: number; kind: "covered" | "black"; extract: number }[];
   fps: number;
   total: number; // window length in frames
   // The shared transport clock (Studio's <audio>) + this composition's window
@@ -134,7 +149,13 @@ export default function BreakpointTimeline({
             style={{
               left: `${(b.from / total) * 100}%`,
               width: `${((b.to - b.from) / total) * 100}%`,
+              ...(b.kind === "covered" ? { background: `${extractColor(b.extract)}59` } : {}),
             }}
+            title={
+              b.kind === "black"
+                ? "no material here — the export renders BLACK"
+                : `extract ${b.extract + 1}`
+            }
           />
         ))}
         <div className="bp-head" ref={headRef} style={{ display: "none" }} />
