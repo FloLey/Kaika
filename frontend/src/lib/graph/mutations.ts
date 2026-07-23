@@ -249,11 +249,21 @@ export function setExtractInPoint(
   }));
 }
 
-export function addManualBreakpoint(graph: Graph, montageId: string, t: number): Graph {
+// Placing (or moving) a manual cut at `t` also CLEARS any `disabledCuts` entry within
+// `tol` of it: a disabled entry silences EVERY cut source at that time (the render
+// rule, _effective_cuts/montageCuts), so without the sweep a fresh "cut here" landing
+// on an old "no cut here" would be silently ignored. The newest gesture wins.
+export function addManualBreakpoint(
+  graph: Graph,
+  montageId: string,
+  t: number,
+  tol: number = 0
+): Graph {
   if (!(t > 0)) return graph;
   return patchMontage(graph, montageId, (d) => ({
     ...d,
     manualBreakpoints: [...d.manualBreakpoints, { id: mkSlotId(), t }].sort((a, b) => a.t - b.t),
+    disabledCuts: d.disabledCuts.filter((x) => Math.abs(x - t) > tol),
   }));
 }
 
@@ -261,7 +271,8 @@ export function moveManualBreakpoint(
   graph: Graph,
   montageId: string,
   breakpointId: string,
-  t: number
+  t: number,
+  tol: number = 0
 ): Graph {
   if (!(t > 0)) return graph;
   return patchMontage(graph, montageId, (d) => ({
@@ -269,6 +280,7 @@ export function moveManualBreakpoint(
     manualBreakpoints: d.manualBreakpoints
       .map((bp) => (bp.id === breakpointId ? { ...bp, t } : bp))
       .sort((a, b) => a.t - b.t),
+    disabledCuts: d.disabledCuts.filter((x) => Math.abs(x - t) > tol),
   }));
 }
 
@@ -287,12 +299,21 @@ export function removeManualBreakpoint(
 // exception at that time. Matching is by tolerance (the caller passes half a frame,
 // 0.5/fps — the same rule the render applies), so toggling twice round-trips even if
 // the stored second differs by float noise, and a cut that MOVED re-enables itself.
+// DISABLING also deletes any manual breakpoint within the tolerance: the click says
+// "no cut at this time", and a manual left on the same frame would keep cutting
+// (a disabled entry silences it too, but sweeping keeps the data honest — no
+// invisible breakpoint parked under a greyed gate mark).
 export function toggleAutoCut(graph: Graph, montageId: string, t: number, tol: number): Graph {
   return patchMontage(graph, montageId, (d) => {
     const kept = d.disabledCuts.filter((x) => Math.abs(x - t) > tol);
-    const disabledCuts =
-      kept.length === d.disabledCuts.length ? [...d.disabledCuts, t].sort((a, b) => a - b) : kept;
-    return { ...d, disabledCuts };
+    const disabling = kept.length === d.disabledCuts.length;
+    return {
+      ...d,
+      disabledCuts: disabling ? [...d.disabledCuts, t].sort((a, b) => a - b) : kept,
+      manualBreakpoints: disabling
+        ? d.manualBreakpoints.filter((bp) => Math.abs(bp.t - t) > tol)
+        : d.manualBreakpoints,
+    };
   });
 }
 

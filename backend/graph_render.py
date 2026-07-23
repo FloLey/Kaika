@@ -921,11 +921,17 @@ def _effective_cuts(trigger: "np.ndarray", d: dict, fps: int, nframes: int) -> l
     DISABLED ones, unioned with the MANUAL breakpoints — sorted, deduped at frame
     granularity, clamped inside (0, nframes).
 
-    `disabledCuts` stores composition-LOCAL seconds; a recomputed gate cut is disabled
-    iff an entry lands within HALF A FRAME of it, so the match is deterministic and a
-    cut that MOVED (threshold edit) re-enables itself. Manual breakpoints are local
-    seconds too (frontend mirror: lib/montageCuts.ts — the two must agree or the strip
-    preview lies about where the render will cut)."""
+    `disabledCuts` stores composition-LOCAL seconds; an entry suppresses ANY cut
+    within HALF A FRAME of it — gate or manual — so the match is deterministic and a
+    gate cut that MOVED (threshold edit) re-enables itself. Suppressing manuals too
+    matters (v17): a manual breakpoint sharing a disabled gate cut's frame used to
+    resurrect the cut the user just clicked off, while the timeline (where the gate
+    mark wins the collision pixel) showed it silenced — the render cut where the UI
+    said it wouldn't. The editor's gestures keep such data rare (disabling sweeps
+    same-frame manuals, placing a manual clears a stale disable), but saved projects
+    carry it. Manual breakpoints are local seconds too (frontend mirror:
+    lib/montageCuts.ts — the two must agree or the strip preview lies about where
+    the render will cut)."""
     gate = _gate_curve(
         trigger, {"threshold": d.get("threshold", 0.5), "hysteresis": d.get("hysteresis", 0.1)}
     )
@@ -936,13 +942,18 @@ def _effective_cuts(trigger: "np.ndarray", d: dict, fps: int, nframes: int) -> l
             disabled.append(float(t) * fps)
         except (TypeError, ValueError):
             continue
-    cuts = {int(r) for r in rises if not any(abs(int(r) - f) <= 0.5 for f in disabled)}
+
+    def silenced(frame: int) -> bool:
+        return any(abs(frame - f) <= 0.5 for f in disabled)
+
+    cuts = {int(r) for r in rises if not silenced(int(r))}
     for bp in d.get("manualBreakpoints") or []:
         try:
-            f = round(float((bp or {}).get("t")) * fps)
+            f = int(round(float((bp or {}).get("t")) * fps))
         except (TypeError, ValueError):
             continue
-        cuts.add(int(f))
+        if not silenced(f):
+            cuts.add(f)
     return sorted(c for c in cuts if 1 <= c < nframes)
 
 

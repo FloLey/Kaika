@@ -224,6 +224,23 @@ def test_effective_cuts_clamps_inside_the_window():
     assert _effective_cuts(np.zeros(12, np.float32), d, 12, 12) == []
 
 
+def test_a_disabled_time_silences_a_manual_on_the_same_frame():
+    """The bridge bug (v17): a gate cut disabled at 0.5s PLUS a manual breakpoint at
+    the same second (a mis-click, or a copied layout) — the manual used to resurrect
+    the cut the user had just clicked off, while the timeline showed it silenced.
+    A disabled entry now suppresses ANY cut source within half a frame."""
+    d = {
+        "threshold": 0.5,
+        "hysteresis": 0.1,
+        "disabledCuts": [0.5],
+        "manualBreakpoints": [{"t": 0.5}],
+    }
+    assert _effective_cuts(_sq(2), d, 12, 12) == []
+    # …and only that time: a manual clear of the band still cuts.
+    d["manualBreakpoints"].append({"t": 0.25})
+    assert _effective_cuts(_sq(2), d, 12, 12) == [3]
+
+
 # --------------------------------------------------------------------------- #
 # 3ch → RGBA equivalence (unchanged by the rework)
 # --------------------------------------------------------------------------- #

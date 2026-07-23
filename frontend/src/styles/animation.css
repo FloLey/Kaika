@@ -3201,6 +3201,12 @@
   background: #fbbf24; /* the hand-placed colour */
   cursor: grab;
 }
+.bp-manual.off {
+  /* silenced by a disabled entry at the same time — visible, not cutting */
+  background: transparent;
+  border-left: 2px dashed #fbbf2466;
+  width: 0;
+}
 .bp-legend {
   display: flex;
   align-items: center;

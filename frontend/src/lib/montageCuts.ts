@@ -6,8 +6,10 @@
 // threshold — `riseFrames`) minus the individually DISABLED ones, unioned with the
 // MANUAL breakpoints; sorted, deduped at frame granularity, clamped inside
 // (0, nframes). `disabledCuts`/breakpoint times are composition-LOCAL seconds; a
-// disabled entry matches a gate cut within HALF A FRAME (deterministic, and a cut
-// that MOVED under a threshold edit re-enables itself).
+// disabled entry suppresses ANY cut within HALF A FRAME of it — gate or MANUAL
+// (deterministic, and a gate cut that MOVED under a threshold edit re-enables
+// itself). Manuals must obey too (v17): one sharing a disabled gate cut's frame
+// used to resurrect the cut backend-side while this mirror said it was silenced.
 
 import type { MontageData } from "./types";
 
@@ -45,7 +47,13 @@ export function cutMarks(
     // Same-frame collision: the gate mark wins the pixel (provenance display); the
     // manual row still exists in the data and stays editable from the list.
     if (taken.has(f)) continue;
-    marks.push({ frame: f, source: "manual", disabled: false, breakpointId: bp.id });
+    marks.push({
+      frame: f,
+      source: "manual",
+      // A disabled entry silences manuals too — mirror of _effective_cuts (v17).
+      disabled: disabledFrames.some((df) => Math.abs(f - df) <= half),
+      breakpointId: bp.id,
+    });
   }
   return marks.sort((a, b) => a.frame - b.frame);
 }

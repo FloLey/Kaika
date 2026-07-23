@@ -1183,6 +1183,26 @@ describe("montage extract & breakpoint mutations", () => {
     expect(dataOf(next, mg.id).disabledCuts).toEqual([2.0, 3.0]);
   });
 
+  it("the newest gesture wins: disabling sweeps same-time manuals, placing clears a stale disable", () => {
+    const { mg, g } = withMontage();
+    const tol = 0.5 / 24;
+    // A manual parked on the gate cut's time: DISABLING there deletes it — no
+    // invisible breakpoint left under the greyed mark to keep cutting.
+    let next = addManualBreakpoint(g, mg.id, 2.0);
+    next = addManualBreakpoint(next, mg.id, 5.0);
+    next = toggleAutoCut(next, mg.id, 2.0 + tol / 2, tol);
+    expect(dataOf(next, mg.id).disabledCuts).toEqual([2.0 + tol / 2]);
+    expect(dataOf(next, mg.id).manualBreakpoints.map((b) => b.t)).toEqual([5.0]);
+    // And the reverse: placing (or moving) a manual where an old "no cut here"
+    // lingers clears that entry — the fresh "cut here" must actually cut.
+    next = addManualBreakpoint(next, mg.id, 2.0, tol);
+    expect(dataOf(next, mg.id).disabledCuts).toEqual([]);
+    const placed = dataOf(next, mg.id).manualBreakpoints.find((b) => b.t === 2.0)!;
+    next = toggleAutoCut(next, mg.id, 5.0, tol); // sweeps the 5.0 manual, disables 5.0
+    next = moveManualBreakpoint(next, mg.id, placed.id, 5.0, tol);
+    expect(dataOf(next, mg.id).disabledCuts).toEqual([]);
+  });
+
   it("does not mutate the graph it is given", () => {
     const { mg, g } = withMontage();
     const before = JSON.stringify(g);
@@ -1215,6 +1235,22 @@ describe("montageCuts (the schedule mirror of backend _effective_cuts)", () => {
       [48, "gate", true], // still VISIBLE — provenance — just not cutting
       [96, "gate", false],
     ]);
+  });
+
+  it("a disabled entry silences a MANUAL at the same time too (the v17 bridge bug)", () => {
+    // Disabled gate cut at 2.0s + a manual breakpoint at the same second: the manual
+    // must not resurrect the cut (backend _effective_cuts agrees — the render used to
+    // cut where the timeline said it wouldn't).
+    const data = {
+      ...base,
+      disabledCuts: [2.0],
+      manualBreakpoints: [{ id: "b1", t: 2.0 }],
+    };
+    expect(effectiveCuts([48], data, 24, 240)).toEqual([]);
+    // A standalone silenced manual (its gate moved away) stays visible, marked off.
+    const solo = cutMarks([], data, 24, 240);
+    expect(solo.map((m) => [m.frame, m.source, m.disabled])).toEqual([[48, "manual", true]]);
+    expect(effectiveCuts([], data, 24, 240)).toEqual([]);
   });
 
   it("clamps cuts inside (0, nframes) and keeps manual ids on their marks", () => {

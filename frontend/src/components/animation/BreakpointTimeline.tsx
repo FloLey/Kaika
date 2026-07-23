@@ -168,7 +168,7 @@ export default function BreakpointTimeline({
       // A drag MOVES the breakpoint; a plain click (no movement) DELETES it.
       onGraphChange((g) =>
         moved
-          ? moveManualBreakpoint(g, montageId, id, last / fps)
+          ? moveManualBreakpoint(g, montageId, id, last / fps, tol)
           : removeManualBreakpoint(g, montageId, id)
       );
     };
@@ -220,7 +220,8 @@ export default function BreakpointTimeline({
           onPointerDown={(e) => {
             if (e.target !== e.currentTarget) return; // marks handle their own clicks
             const f = frameAtX(e.clientX);
-            onGraphChange((g) => addManualBreakpoint(g, montageId, f / fps));
+            // tol: placing a cut here clears a stale "no cut here" at the same spot.
+            onGraphChange((g) => addManualBreakpoint(g, montageId, f / fps, tol));
           }}
           title="click to place a manual cut here"
         >
@@ -248,9 +249,13 @@ export default function BreakpointTimeline({
             return (
               <button
                 key={m.breakpointId}
-                className="bp-mark bp-manual"
+                className={"bp-mark bp-manual" + (m.disabled ? " off" : "")}
                 style={{ left }}
-                title={`manual cut at ${t}s — drag to move, click to delete`}
+                title={
+                  m.disabled
+                    ? `manual cut at ${t}s — SILENCED by a disabled cut at the same time. Drag to move it clear, click to delete.`
+                    : `manual cut at ${t}s — drag to move, click to delete`
+                }
                 onPointerDown={(e) =>
                   startDrag({ breakpointId: m.breakpointId, frame: m.frame }, e)
                 }
