@@ -108,7 +108,9 @@ def export_stream(body):
     data = row.get("data") or {}
     segments = data.get("segments") or []
     compositions = data.get("compositions") or {}
-    export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
+    export = song_render.export_with_schedule(
+        {**_EXPORT_DEFAULTS, **(data.get("export") or {})}, data.get("output")
+    )
     lyric_lines = _cached_lyric_lines(job_id)
 
     if not segments:
@@ -151,7 +153,9 @@ def _segment_request(body):
     if row is None:
         return error_response("unknown project", 404), None
     data = row.get("data") or {}
-    export = {**_EXPORT_DEFAULTS, **(data.get("export") or {})}
+    export = song_render.export_with_schedule(
+        {**_EXPORT_DEFAULTS, **(data.get("export") or {})}, data.get("output")
+    )
 
     # Which output card to render: what was clicked, else the only output in the
     # graph — otherwise it's genuinely ambiguous.

@@ -21,6 +21,7 @@ from backend import paths
 from backend import sources as S
 from backend.graph_render import (
     _effective_cuts,
+    _montage_cut_frames,
     _montage_starts,
     _to_rgba,
     _window_sensitive,
@@ -239,6 +240,53 @@ def test_a_disabled_time_silences_a_manual_on_the_same_frame():
     # …and only that time: a manual clear of the band still cuts.
     d["manualBreakpoints"].append({"t": 0.25})
     assert _effective_cuts(_sq(2), d, 12, 12) == [3]
+
+
+# --------------------------------------------------------------------------- #
+# schedule_fps — the cut schedule pinned to the EDITOR's rate on HD exports
+# --------------------------------------------------------------------------- #
+def test_schedule_fps_pins_cuts_to_the_editor_rate(assets):
+    """An export rendering at another fps must cut at the same MUSICAL instants the
+    editor timeline showed (gate-rise detection is sampling-dependent — a 30fps
+    export once found an extra rise and played every later extract one slot early).
+    With `schedule_fps` in the output dict, cuts are detected at the editor's rate
+    and converted; without it, behavior is byte-identical to before."""
+    pool = _pool_images(assets)
+    g = _host([_x("c1"), _x("c2")], lfo_rate=4)
+    mont = next(n for n in g["nodes"] if n["type"] == "montage")
+    a = G.Dag("job", SEG, g, NOAUDIO, OUT, pool=pool)  # the editor: 12fps
+    hd = {**OUT, "fps": 30, "schedule_fps": OUT["fps"]}
+    b = G.Dag("job", SEG, g, NOAUDIO, hd, pool=pool)  # the export: 30fps, 12fps schedule
+    d = mont["data"]
+    ca = _montage_cut_frames(a, mont, d, a._fx_params(mont)["trigger"], round(a.duration * a.fps))
+    cb = _montage_cut_frames(b, mont, d, b._fx_params(mont)["trigger"], round(b.duration * b.fps))
+    assert len(ca) == len(cb)  # SAME rise set — no extra/missing cut at the other rate
+    for ta, tb in zip((c / 12 for c in ca), (c / 30 for c in cb)):
+        assert abs(ta - tb) <= 0.5 / 12 + 1e-6  # same instant, ±half an editor frame
+    a.close(), b.close()
+
+
+def test_schedule_fps_render_switches_at_the_converted_frame(assets):
+    """End-to-end at the export fps: the first cut (0.25s at the editor rate) lands
+    on frame round(0.25*30) — red before it, blue from it on."""
+    pool = _pool_images(assets)
+    g = _host([_x("c1"), _x("c2")], lfo_rate=4)
+    hd = {**OUT, "fps": 30, "schedule_fps": OUT["fps"]}
+    whole = G.Dag("job", SEG, g, NOAUDIO, hd, pool=pool).video("o")
+    cut = round(3 / 12 * 30)  # editor cut frame 3 @12fps → 0.25s → frame 8 @30fps
+    assert red(whole[cut - 1]) and blue(whole[cut])
+
+
+def test_export_with_schedule_enriches_only_on_differing_fps():
+    from backend.song_render import export_with_schedule, output_from_export
+
+    exp = {"fps": 30, "width": 64, "height": 64}
+    same = export_with_schedule(exp, {"fps": 30})
+    assert same is exp  # equal fps: untouched — existing cache keys stay valid
+    diff = export_with_schedule(exp, {"fps": 24})
+    assert diff["schedule_fps"] == 24
+    assert output_from_export(diff)["schedule_fps"] == 24
+    assert "schedule_fps" not in output_from_export(exp)
 
 
 # --------------------------------------------------------------------------- #

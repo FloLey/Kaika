@@ -218,7 +218,11 @@ def test_reachable_recomputes_song_export_hash_when_final_outputs_marked(wired):
     seg = proj["data"]["segments"][0]
     pool = proj["data"]["compositions"]
     pool["c-root"]["outputId"] = "oA"
-    expected = "song_" + song_render._export_hash("proj1", [seg], pool, lines, {**_EXPORT_DEFAULTS})
+    # The export dict must be enriched EXACTLY like the export routes do
+    # (export_with_schedule folds the project fps in as schedule_fps) — the sweep
+    # recomputes the same key or it evicts a live master.
+    export = song_render.export_with_schedule({**_EXPORT_DEFAULTS}, proj["data"].get("output"))
+    expected = "song_" + song_render._export_hash("proj1", [seg], pool, lines, export)
     assert expected in cache_gc.reachable_hashes()
 
 

@@ -121,7 +121,11 @@ def _song_export_stems(row: dict, job_id: str, lines: list) -> tuple[set[str], b
     segments = data.get("segments") or []
     pool = data.get("compositions") or {}
     if segments and all(final_output_id(root_composition(pool, s)) for s in segments):
-        export = {**song_render.EXPORT_DEFAULTS, **(data.get("export") or {})}
+        # Same enrichment as the export routes (export_with_schedule) — the master's
+        # key folds schedule_fps, so the keep-set must compute it identically.
+        export = song_render.export_with_schedule(
+            {**song_render.EXPORT_DEFAULTS, **(data.get("export") or {})}, data.get("output")
+        )
         try:
             stems.add("song_" + song_render._export_hash(job_id, segments, pool, lines, export))
         except Exception as e:  # noqa: BLE001 — a bad segment must not sink the whole scan

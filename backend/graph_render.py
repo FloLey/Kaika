@@ -46,6 +46,7 @@ from .graph_modulators import (
     _resolve_node_color,
     _source_statics,
     _static_point_spec,
+    resolve_node_curve,
 )
 from .graph_validate import validate
 
@@ -1721,6 +1722,35 @@ def _slideshow_block(dag: "Dag", node: dict):
     return produce
 
 
+def _montage_cut_frames(dag: "Dag", node: dict, d: dict, trigger, nframes: int) -> list[int]:
+    """The montage's effective cut frames at the RENDER fps — computed at the
+    SCHEDULE fps when the output dict carries one (`schedule_fps`, the project's
+    editing fps — song_render.export_with_schedule sets it on HD exports whose fps
+    differs). Gate-rise detection is sampling-dependent: a 30fps export once found
+    one more rise than the 24fps editor timeline had shown, so every later extract
+    played one slot early and the export "wasn't aligned like the montage". Cuts are
+    therefore detected on the trigger resolved at the EDITOR's rate — the same
+    `resolve_node_curve` the timeline's /resolve uses, so the rise set is identical
+    by construction — then converted to render-fps frames as seconds."""
+    sched = float((dag.output or {}).get("schedule_fps") or 0.0)
+    if not sched or abs(sched - dag.fps) < 1e-6:
+        return _effective_cuts(trigger, d, dag.fps, nframes)
+    n_s = max(1, round(dag.duration * sched))
+    b = ((d.get("ports") or {}).get("trigger") or {}).get("binding") or {}
+    if b.get("kind") == "node" and b.get("nodeId"):
+        r = resolve_node_curve(
+            dag.job_id, dag.segment, dag.graph, b["nodeId"], dag.stem_audio_path, fps=int(sched)
+        )
+        trig_s = np.asarray(r.get("curve") or [], np.float32)
+        if len(trig_s) < n_s:  # defensive: a short resolve pads flat (no phantom rise)
+            trig_s = np.pad(trig_s, (0, n_s - len(trig_s)))
+    else:
+        trig_s = np.zeros(n_s, np.float32)  # no wired trigger: manual breakpoints only
+    cuts_s = _effective_cuts(trig_s, d, sched, n_s)
+    conv = sorted({int(round(c / sched * dag.fps)) for c in cuts_s})
+    return [c for c in conv if 1 <= c < nframes]
+
+
 def _montage_block(dag: "Dag", node: dict):
     """The montage switcher: extract k plays its CHILD COMPOSITION's output, re-timed
     so local frame 0 lands on the cut. Each extract owns a private child `Dag` built
@@ -1743,7 +1773,7 @@ def _montage_block(dag: "Dag", node: dict):
     gh, gw = _grid_dims(dag)
     params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
     nframes = max(1, round(dag.duration * dag.fps))
-    cuts = _effective_cuts(params["trigger"], d, dag.fps, nframes)
+    cuts = _montage_cut_frames(dag, node, d, params["trigger"], nframes)
     starts = _montage_starts(cuts, [span for _, span, _ in extracts])
     bounds = np.array(starts + [nframes])
 

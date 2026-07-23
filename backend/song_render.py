@@ -70,6 +70,13 @@ def output_from_export(export: dict) -> dict:
         "width": int(export.get("width", 1080)),
         "height": int(export.get("height", 1920)),
         "fps": int(export.get("fps", 24)),
+        # The montage cut schedule is computed at THIS rate when present (the
+        # project/editor fps — `export_with_schedule`): gate-rise detection is
+        # sampling-dependent, and an export at 30fps once found one more rise than
+        # the 24fps editor had shown, playing every later extract one slot early.
+        # Riding in the output dict folds it into every output_hash (and, via the
+        # export dict, into _export_hash) — stale-schedule clips can't be served.
+        **({"schedule_fps": int(export["schedule_fps"])} if export.get("schedule_fps") else {}),
         "gridCells": int(export.get("gridCells", 144)),
         # An export is watched full-screen and archived, so it gets the quality CRF while
         # the editor's previews stay light. It rides in the OUTPUT dict rather than being
@@ -94,6 +101,18 @@ def output_from_export(export: dict) -> dict:
 def hd_block_seconds(w: int, h: int) -> float:
     ref = 540 * 960
     return max(0.5, min(5.0, 5.0 * ref / max(1, w * h)))
+
+
+def export_with_schedule(export: dict, output: dict | None) -> dict:
+    """Fold the PROJECT's editing fps into the export dict as `schedule_fps` (only
+    when it differs from the export fps — same fps needs no override and keeps
+    existing cache keys byte-identical). Every consumer of the export dict — the
+    whole-song route, the segment-HD route, and cache_gc's keep-set recomputation —
+    must go through this, or their hashes disagree about what the export IS."""
+    sched = int((output or {}).get("fps") or 0)
+    if sched and sched != int(export.get("fps", 24)):
+        return {**export, "schedule_fps": sched}
+    return export
 
 
 def export_audio_path(job_id: str, export: dict, stem_audio_path):
