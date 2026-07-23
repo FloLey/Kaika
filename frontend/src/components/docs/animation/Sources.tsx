@@ -74,6 +74,14 @@ export default function Sources() {
           drop).
         </li>
         <li>
+          <strong>Text</strong> — a <strong>free-typed caption</strong> placed in the frame, like an
+          Instagram sticker: type anything, drag its box into place, pick font / alignment / case /
+          outline, and it stays on for the whole segment. Same size modes as the lyrics card (it
+          defaults to a <em>fixed</em> size); wire a <a href="#animation-fx">color card</a> into{" "}
+          <em>fill</em> or <em>outline</em> to recolour it, and modulate <em>opacity</em> to fade it
+          with the music. Combine it over anything, exactly like the lyrics card.
+        </li>
+        <li>
           <strong>Lyrics</strong> — burns this track's <strong>aligned lyrics</strong> into the
           frame, timed to the vocal (the same alignment the review screen uses). Pick a{" "}
           <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs <em>word</em>{" "}

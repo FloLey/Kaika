@@ -25,6 +25,7 @@ export const VIDEO_PRODUCERS: ReadonlySet<string> = new Set([
   "rain",
   "slideshow",
   "stylize",
+  "text",
   "transform",
   "video",
   "waves",

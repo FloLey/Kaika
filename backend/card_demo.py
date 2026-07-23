@@ -39,6 +39,7 @@ CARD_LABELS = {
     "merge-points": "Merge points",
     "fluid": "Fluid",
     "lyrics": "Lyrics",
+    "text": "Text",
     "image": "Image",
     "slideshow": "Slideshow",
     "imagegen": "Image gen",

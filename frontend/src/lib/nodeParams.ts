@@ -25,6 +25,7 @@ export const COLOR_PARAMS = GEN_COLOR_PARAMS as FluidParam[];
 // is the only modulatable port — plus `speed` on video (the source advances by
 // speed/fps each frame, so a wired signal time-warps the clip).
 export const LYRICS_PARAMS: FluidParam[] = SOURCE_PARAMS.lyrics;
+export const TEXT_PARAMS: FluidParam[] = SOURCE_PARAMS.text;
 export const IMAGE_PARAMS: FluidParam[] = SOURCE_PARAMS.image;
 export const SLIDESHOW_PARAMS: FluidParam[] = SOURCE_PARAMS.slideshow;
 export const VIDEO_PARAMS: FluidParam[] = SOURCE_PARAMS.video;
@@ -54,6 +55,7 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   fluid: FLUID_PARAMS as FluidParam[],
   color: COLOR_PARAMS,
   lyrics: LYRICS_PARAMS,
+  text: TEXT_PARAMS,
   image: IMAGE_PARAMS,
   slideshow: SLIDESHOW_PARAMS,
   video: VIDEO_PARAMS,

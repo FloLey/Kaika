@@ -120,6 +120,7 @@ export function cardInputs(node: GraphNode): CardInputs {
         inputs: [...params, { portId: "images", flow: "images", label: "images", kind: "edge" }],
       };
     case "lyrics":
+    case "text":
       return {
         inputs: [
           ...params,

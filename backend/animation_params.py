@@ -253,6 +253,7 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
     # static asset in a box — likewise. Video adds `speed` (the source advances by
     # speed/fps each frame, so a wired signal time-warps the clip).
     "lyrics": [_opacity_spec()],
+    "text": [_opacity_spec()],
     "image": [_opacity_spec()],
     # The slideshow layer: `trigger` advances to the next image on each rising edge
     # past the card's built-in hysteresis threshold (see graph_render._slideshow_*).

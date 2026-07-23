@@ -2185,6 +2185,72 @@
     }
   },
   {
+    "key": "text",
+    "label": "Text",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e0",
+          "source": "lf",
+          "target": "tx",
+          "sourcePort": "out",
+          "targetPort": "opacity"
+        },
+        {
+          "id": "e1",
+          "source": "tx",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 105,
+          "y": 620,
+          "id": "lf",
+          "data": {
+            "duty": 0.5,
+            "rate": 2,
+            "phase": 0,
+            "shape": "sine",
+            "rateMode": "cycles"
+          },
+          "type": "lfo"
+        },
+        {
+          "x": 105,
+          "y": 60,
+          "id": "tx",
+          "data": {
+            "case": "none",
+            "text": "TEXT CARD",
+            "align": "center",
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "hi": 1,
+                  "lo": 0.25,
+                  "kind": "node",
+                  "nodeId": "lf"
+                }
+              }
+            }
+          },
+          "type": "text"
+        },
+        {
+          "x": 480,
+          "y": 60,
+          "id": "out",
+          "data": {},
+          "type": "output"
+        }
+      ]
+    }
+  },
+  {
     "key": "backdrop",
     "label": "Backdrop",
     "signals": [],

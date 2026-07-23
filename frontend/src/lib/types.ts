@@ -534,6 +534,31 @@ export interface ColorNode extends NodeBase {
   type: "color";
   data: ColorData;
 }
+// A free-typed caption (the Instagram-sticker use): the lyrics pipeline rendering
+// ONE always-on line whose text lives in the card's data. Same box/fit/outline/size
+// semantics as LyricsData; `opacity` is the modulatable port, fill/outline colours
+// come from wired color cards.
+export interface TextData {
+  text: string;
+  font: string;
+  align: LyricsAlign;
+  case: LyricsCase;
+  box_x: number;
+  box_y: number;
+  box_w: number;
+  box_h: number;
+  outline: boolean;
+  outlineWidth: number;
+  sizeMin?: number; // auto-fit clamps, fractions of the frame height (see LyricsData)
+  sizeMax?: number;
+  ports: Record<string, FluidPort>;
+}
+
+export interface TextNode extends NodeBase {
+  type: "text";
+  data: TextData;
+}
+
 export interface LyricsNode extends NodeBase {
   type: "lyrics";
   data: LyricsData;
@@ -636,6 +661,7 @@ export type GraphNode =
   | MergePointsNode
   | ColorNode
   | LyricsNode
+  | TextNode
   | ImageNode
   | VideoNode
   | SlideshowNode

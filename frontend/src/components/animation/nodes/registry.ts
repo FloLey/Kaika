@@ -29,6 +29,7 @@ import AnimatePointsNode from "./AnimatePointsNode";
 import MergePointsNode from "./MergePointsNode";
 import ColorNode from "./ColorNode";
 import LyricsNode from "./LyricsNode";
+import TextNode from "./TextNode";
 import ImageNode from "./ImageNode";
 import VideoNode from "./VideoNode";
 import BackdropNode from "./BackdropNode";
@@ -61,6 +62,7 @@ import {
   mergePointsNode,
   colorNode,
   lyricsNode,
+  textNode,
   imageNode,
   imagegenNode,
   slideshowNode,
@@ -454,6 +456,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       category: "generators",
       help: "Burns this track's aligned lyrics into the frame, timed to the vocal (line or word reveal). Wire a color card into fill/outline to recolour them. Needs lyrics on the track.",
       io: { in: "color cards (fill/outline) + signals on its params", out: "video" },
+    },
+  },
+  text: {
+    type: "text",
+    Component: TextNode,
+    chrome: { title: "text", accent: "var(--courant)", outFlow: "video" },
+    factory: textNode,
+    palette: {
+      label: "Text",
+      title: "A free-typed caption placed in the frame, like an Instagram sticker",
+      order: 43,
+      category: "generators",
+      help: "Type any text and place it in a box — same font/outline/size controls as the lyrics card, but the words are yours and always on. Wire a color card into fill/outline to recolour it; opacity is modulatable. Combine it over anything.",
+      io: { in: "color cards (fill/outline) + a signal on opacity", out: "video" },
     },
   },
   image: {

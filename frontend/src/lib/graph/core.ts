@@ -51,6 +51,7 @@ export const mkSlotId = (): string => rid("slot");
 // Non-fluid video sources (no video input; synthesise frames). Producers, not emitters.
 export const VIDEO_SOURCES = new Set<string>([
   "lyrics",
+  "text",
   "image",
   "slideshow",
   "video",

@@ -3349,3 +3349,20 @@
   outline: 2px dashed var(--fx, #b8860b);
   outline-offset: -1px;
 }
+
+/* The text card's caption input — a small textarea in the select-row layout. */
+.anim-text-row {
+  align-items: flex-start;
+}
+.anim-text-input {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  background: var(--panel);
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+}

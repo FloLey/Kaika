@@ -78,6 +78,7 @@ VIDEO_PRODUCERS = (
     "combine",
     "montage",
     "lyrics",
+    "text",
     "image",
     "slideshow",
     "video",

@@ -40,6 +40,9 @@ export const SOURCE_PARAMS = {
   "lyrics": [
     { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
   ],
+  "text": [
+    { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
+  ],
   "image": [
     { key: "opacity", label: "opacity", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
   ],

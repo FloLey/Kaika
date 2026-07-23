@@ -60,6 +60,7 @@ export const VIDEO_TYPES = new Set([
   "video",
   "slideshow",
   "lyrics",
+  "text",
   "waves",
   "lightning",
   "fire",

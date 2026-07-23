@@ -46,6 +46,7 @@ export {
   mergePointsNode,
   colorNode,
   lyricsNode,
+  textNode,
   imageNode,
   imagegenNode,
   slideshowNode,

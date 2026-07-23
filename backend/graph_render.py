@@ -1559,6 +1559,7 @@ _VIDEO_HANDLERS = {
     "output": _output_video,
     "combine": _whole_from_block("combine"),
     "lyrics": _whole_from_block("lyrics"),
+    "text": _whole_from_block("text"),
     "image": _whole_from_block("image"),
     "slideshow": _whole_from_block("slideshow"),
     "montage": _whole_from_block("montage"),
@@ -1675,6 +1676,31 @@ def _lyrics_block(dag: "Dag", node: dict):
         seg_start=float(dag.segment.get("start", 0.0)),
         **_lyrics_static(d),
     )
+
+    def produce(a, b):
+        return sources.lyrics(
+            b - a, gh, gw, dag.fps, frame_offset=a, **kw, **{k: v[a:b] for k, v in params.items()}
+        )
+
+    return produce
+
+
+def _text_block(dag: "Dag", node: dict):
+    """The TEXT card — a free-typed caption (the Instagram-sticker use), rendered
+    through the LYRICS machinery (same wrap/fit/outline/colour pipeline, same
+    size clamps) as ONE synthetic line covering the whole window: always on,
+    timed to nothing, its text living in the card's own data (so it hashes with
+    the graph — no segment lyric lines involved). `reveal` is forced to "line":
+    the word-by-word write-on only means something against a sung line."""
+    d = node.get("data", {})
+    gh, gw = _grid_dims(dag)
+    seg_start = float(dag.segment.get("start", 0.0))
+    seg_end = float(dag.segment.get("end", seg_start))
+    text = str(d.get("text") or "").strip()
+    lines = [{"t0": seg_start - 1.0, "t1": seg_end + 1.0, "text": text}] if text else []
+    params = dag._lyrics_params(node)  # opacity + fill/outline colour arrays
+    kw = dict(lines=lines, seg_start=seg_start, **_lyrics_static(d))
+    kw["reveal"] = "line"
 
     def produce(a, b):
         return sources.lyrics(
@@ -2073,6 +2099,7 @@ _BLOCK_HANDLERS = {
     "output": _output_block,
     "combine": _combine_block,
     "lyrics": _lyrics_block,
+    "text": _text_block,
     "image": _image_block,
     "slideshow": _slideshow_block,
     "montage": _montage_block,

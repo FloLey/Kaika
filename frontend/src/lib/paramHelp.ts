@@ -57,6 +57,26 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     fillColor: "Wire a Colour card here to drive the text fill colour (else white).",
     outlineColor: "Wire a Colour card here to drive the outline colour (else black).",
   },
+  text: {
+    text: "The caption itself \u2014 type anything; it wraps inside the box and stays on for the whole segment.",
+    font: "Typeface for the caption. Drop a .ttf in backend/assets/fonts to add more.",
+    align: "Horizontal alignment of the text within the box.",
+    case: "Force upper- or lower-case, or leave the text as written.",
+    box: "The text box: drag the rectangle to move it, drag a corner to resize \u2014 like placing a sticker.",
+    outline: "Draw a black outline under the text so it stays readable over anything.",
+    outlineWidth: "Outline thickness, as a fraction of the font size.",
+    sizing:
+      "auto = the text fits the box; fixed = it renders at one size you choose (the default); min\u2013max = the fit, clamped. Sizes are % of the frame height.",
+    sizeFixed:
+      "The size the caption renders at, as % of the frame height. It wins over the box \u2014 long text wraps and may overflow it.",
+    sizeMin:
+      "Floor for the auto-fit, as % of the frame height \u2014 the text stops shrinking here (it may then overflow the box). 0% = no floor.",
+    sizeMax:
+      "Cap for the auto-fit, as % of the frame height \u2014 the text stops growing here instead of filling the whole box.",
+    opacity: "Text opacity over the video \u2014 wire a signal to fade it with the music.",
+    fillColor: "Wire a Colour card here to drive the text fill colour (else white).",
+    outlineColor: "Wire a Colour card here to drive the outline colour (else black).",
+  },
   image: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The image is scaled into it by `fit`.",
     fit: "cover = fill the box, cropping overflow; contain = fit inside, letterboxed; stretch = distort to the box.",
@@ -366,6 +386,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
 export const ARG_SECTION: Record<string, string> = {
   color: "animation-fx",
   lyrics: "animation-sources",
+  text: "animation-sources",
   image: "animation-sources",
   slideshow: "animation-sources",
   imagegen: "animation-sources",

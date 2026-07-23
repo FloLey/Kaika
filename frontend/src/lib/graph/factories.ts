@@ -34,6 +34,7 @@ import type {
   SlideshowNode,
   LfoNode,
   LyricsNode,
+  TextNode,
   MathNode,
   MergePointsNode,
   NoiseNode,
@@ -352,6 +353,32 @@ export function colorNode(x: number, y: number): ColorNode {
 }
 
 // ---- source cards (→ video) --------------------------------------------------
+export function textNode(x: number, y: number): TextNode {
+  return {
+    id: mkNodeId(),
+    type: "text",
+    x,
+    y,
+    data: {
+      text: "Your text",
+      font: "inter",
+      align: "center",
+      case: "none",
+      box_x: 0.1,
+      box_y: 0.35,
+      box_w: 0.8,
+      box_h: 0.3,
+      outline: true,
+      outlineWidth: 0.12,
+      // A caption defaults to a FIXED size (the sticker expectation) — the box fit
+      // would balloon a short word to fill the whole box.
+      sizeMin: 0.06,
+      sizeMax: 0.06,
+      ports: coercePorts("text", undefined),
+    },
+  };
+}
+
 export function lyricsNode(x: number, y: number): LyricsNode {
   return {
     id: mkNodeId(),
