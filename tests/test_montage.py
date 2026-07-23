@@ -504,6 +504,29 @@ def test_a_shared_composition_is_cached_once_across_extracts(assets, monkeypatch
     assert len(calls) == 1  # extract 2 replayed extract 1's cached frames
 
 
+def test_an_oversized_set_still_caches_its_leading_extracts(assets, monkeypatch):
+    """The set allowance is spent in play order: a montage whose full SET overflows
+    the budget caches the extracts that fit and re-renders only the tail. The old
+    all-or-nothing gate cached NOTHING for such a montage — a 104-second 38-extract
+    verse re-rendered every child on every preview stream."""
+    from backend import fluid_cache as FC
+    from backend.graph_render import _grid_dims
+
+    pool = _pool_images(assets)
+    g = _host([_x("c1"), _x("c2")], lfo_rate=4)  # cuts at 3/6/9: c1 = 3 frames, c2 = 9
+    probe = G.Dag("job", SEG, g, NOAUDIO, OUT, pool=pool)
+    gh, gw = _grid_dims(probe)
+    probe.close()
+    # Budget worth 5 frames: c1's 3-frame entry fits, c2's 9-frame entry doesn't.
+    monkeypatch.setattr(FC, "set_budget", lambda: 5 * gh * gw * 4)
+    first = G.Dag("job", SEG, g, NOAUDIO, OUT, pool=pool).video("o")
+    calls = []
+    real = S.image
+    monkeypatch.setattr(S, "image", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    assert np.array_equal(G.Dag("job", SEG, g, NOAUDIO, OUT, pool=pool).video("o"), first)
+    assert len(calls) == 1  # c1 came off the cache; only the past-budget c2 re-rendered
+
+
 # --------------------------------------------------------------------------- #
 # Child Dag lifecycle — decoders open lazily and close when played out
 # --------------------------------------------------------------------------- #

@@ -1735,8 +1735,13 @@ def _montage_block(dag: "Dag", node: dict):
     # One frame-cache entry per extract, each comfortably under the per-entry ceiling,
     # but the SET is what has to survive: 21 extracts of a 4K montage total far past
     # the budget, so they'd evict each other in order and nothing would ever be
-    # re-read. Decide once, up front.
-    cacheable = fluid_cache.set_fits(int(nframes) * gh * gw * 4)
+    # re-read. A running allowance, spent extract by extract in play order (cache HITS
+    # deduct too — an existing entry occupies budget, and deducting it keeps the cached
+    # prefix the SAME set across runs): writes stop when it runs out, so an oversized
+    # montage still caches its leading extracts. The old all-or-nothing gate cached
+    # NOTHING for a 104-second 38-extract montage, and every preview re-rendered every
+    # child from scratch.
+    allowance = {"left": fluid_cache.set_budget(), "dry": False}
 
     def _extract_producer(k: int, length: int):
         """`(produce_local(a, b) -> RGBA frames, child_dag_or_None)` for one extract.
@@ -1790,10 +1795,24 @@ def _montage_block(dag: "Dag", node: dict):
         key = f"comp-{h}-{gh}x{gw}"
         cached = fluid_cache.load(key)
         if cached is not None and cached.shape[1:] == (gh, gw, 4) and len(cached) >= total:
+            allowance["left"] -= int(cached.nbytes)  # a hit occupies budget too
             child.close()  # nothing to render — frames come off the cache
             return (lambda a, b: np.ascontiguousarray(cached[offset + a : offset + b])), None
         dag._closers.append(child.close)  # released early by _release; close is idempotent
         inner = child._block_producer(_render_target(child_graph, child.nodes, target))
+        nbytes = int(total) * gh * gw * 4
+        cacheable = nbytes <= allowance["left"]
+        if cacheable:
+            allowance["left"] -= nbytes
+        elif not allowance["dry"]:  # no silent cap: say once where caching stopped
+            allowance["dry"] = True
+            log.info(
+                "montage '%s': extract cache budget spent at extract %d/%d — "
+                "the tail renders uncached",
+                node["id"],
+                k + 1,
+                len(extracts),
+            )
         mm, finalize, discard = (
             fluid_cache.frame_writer(key, (total, gh, gw, 4)) if cacheable else (None, None, None)
         )

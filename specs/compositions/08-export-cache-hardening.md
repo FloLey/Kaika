@@ -29,9 +29,11 @@ made provable.
 
 The 4.9/5.7 GB failure modes are covered structurally: a played-out extract's
 child Dag closes early (step 03's decoder-release test), `drop_stale_blocks`
-forwards into the active child, and `set_fits` still gates the extract cache
-SET up front. No RSS assertion — it was flaky by nature; the mechanism tests
-are the guard.
+forwards into the active child, and the extract cache SET is bounded up front
+(`set_budget`, spent extract-by-extract in play order — the original
+all-or-nothing `set_fits` gate cached NOTHING for an oversized montage, so
+every preview re-rendered every child). No RSS assertion — it was flaky by
+nature; the mechanism tests are the guard.
 
 ## Accepted trade-off (documented in ARCHITECTURE)
 
