@@ -15,6 +15,7 @@ import {
   signalNode,
   outputNode,
   fluidNode,
+  lyricsNode,
   emptyGraph,
   normalizeGraph,
   GRAPH_VERSION,
@@ -173,6 +174,24 @@ describe("normalizeGraph migrates older saves", () => {
   it("returns the same object when nothing needs migrating", () => {
     const { g } = wiredGraph();
     expect(normalizeGraph(g)).toBe(g);
+  });
+
+  it("keeps the lyrics size clamps through normalize (the schema used to strip them)", () => {
+    // The stuck-slider bug: sizeMin/sizeMax weren't in the schema table, so every
+    // commit's normalize pass silently deleted the value the slider had just set.
+    const ly = lyricsNode(0, 0);
+    const clamped = { ...ly, data: { ...ly.data, sizeMin: 0.1, sizeMax: 0.25 } };
+    const g: Graph = { ...emptyGraph(), nodes: [clamped] };
+    const out = normalizeGraph(structuredClone(g));
+    const d = out.nodes[0].data as { sizeMin?: number; sizeMax?: number };
+    expect(d.sizeMin).toBe(0.1);
+    expect(d.sizeMax).toBe(0.25);
+    // 0 / 1 mean "no clamp" and stay ABSENT — untouched cards keep their exact shape.
+    const noop = { ...ly, data: { ...ly.data, sizeMin: 0, sizeMax: 1 } };
+    const g2: Graph = { ...emptyGraph(), nodes: [noop] };
+    const bare = normalizeGraph(structuredClone(g2)).nodes[0].data as Record<string, unknown>;
+    expect("sizeMin" in bare).toBe(false);
+    expect("sizeMax" in bare).toBe(false);
   });
 
   it("drops a pre-v8 `color` (grade FX) node + its edges (v8 rename -> v10 removal)", () => {

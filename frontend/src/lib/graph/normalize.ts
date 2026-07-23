@@ -92,6 +92,11 @@ const intClamp =
   (lo: number, hi: number, def: number): Coerce =>
   (v) =>
     typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : def;
+// An OPTIONAL open-interval fraction: kept only when 0 < v < 1, else ABSENT (the
+// montage span/inPoint precedent) — 0/1 mean "no clamp", and staying absent keeps
+// untouched cards' data (and output hash) exactly as saved.
+const optFrac: Coerce = (v) =>
+  typeof v === "number" && Number.isFinite(v) && v > 0 && v < 1 ? v : undefined;
 const idList: Coerce = (v) => (Array.isArray(v) && v.length ? v : [mkInputId(), mkInputId()]);
 const strList: Coerce = (v) =>
   Array.isArray(v) ? v.filter((u): u is string => typeof u === "string") : [];
@@ -230,6 +235,8 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     box_h: num(0.84),
     outline: boolDefaultTrue,
     outlineWidth: num(0.12),
+    sizeMin: optFrac,
+    sizeMax: optFrac,
     ports: portsFor("lyrics"),
   },
   image: {
@@ -343,8 +350,15 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
   },
 };
 
+// An undefined coercion result means "this optional field stays ABSENT" — filtered
+// so the key never lands in the data (a present-but-undefined key would survive to
+// the hash and differ from the saved shape).
 const coerceBySchema = (schema: Record<string, Coerce>, d: Record<string, unknown>) =>
-  Object.fromEntries(Object.entries(schema).map(([k, fn]) => [k, fn(d[k])]));
+  Object.fromEntries(
+    Object.entries(schema)
+      .map(([k, fn]) => [k, fn(d[k])] as const)
+      .filter(([, v]) => v !== undefined)
+  );
 
 // Upgrade a (possibly older) persisted graph to the current GRAPH_VERSION. Every
 // fluid node is coerced to EXACTLY the current FLUID_PARAMS ports (a param added
