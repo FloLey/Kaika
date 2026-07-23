@@ -1,21 +1,23 @@
 import { useMemo } from "react";
 import { useResolvedCurve } from "./useResolvedCurve";
-import { upstreamKey, videoSource } from "../../../lib/graphModel";
+import { isLooseEdge, upstreamKey, videoSource } from "../../../lib/graphModel";
 import { riseFrames } from "../../../lib/imageCount";
 import { cutMarks, effectiveCuts, montageStarts } from "../../../lib/montageCuts";
-import type { Graph, GraphNode, MontageData, VideoData } from "../../../lib/types";
+import type { CombineData, Graph, GraphNode, MontageData, VideoData } from "../../../lib/types";
 import type { NodeCtx } from "./nodeProps";
 
-// The video CARD inside a child composition (a leaf, or leaf-through-FX): its clip is
-// the one that has to be long enough to fill the extract. null when the composition's
-// output is fed by something else (a fluid, an image, a sim card) — nothing to check.
-function leafVideoCard(
+// The video CARD inside a child composition whose clip bounds the extract: a leaf,
+// a leaf through FX cards, or a leaf inside a COMBINE (a "video + caption" child —
+// slots are walked in slot order and the first branch that reaches a video card
+// wins; text/backdrop/fluid branches resolve to nothing and are skipped). null when
+// no video feeds the output at all — nothing to thumbnail or duration-check.
+export function leafVideoCard(
   graph: Graph | undefined
 ): { url: string; start: number; loop: boolean; speed: number } | null {
   if (!graph) return null;
   const out = graph.nodes.find((n) => n.type === "output");
-  let id = out ? videoSource(graph, out.id, "video") : null;
-  for (let hops = 0; id && hops < 8; hops++) {
+  const walk = (id: string | null | undefined, hops: number): ReturnType<typeof leafVideoCard> => {
+    if (!id || hops > 8) return null;
     const n = graph.nodes.find((x) => x.id === id);
     if (!n) return null;
     if (n.type === "video") {
@@ -31,9 +33,24 @@ function leafVideoCard(
         speed: sp?.kind === "const" ? Math.max(0.01, Number(sp.value) || 1) : 1,
       };
     }
-    id = videoSource(graph, n.id, "video"); // FX cards pass a stream through
-  }
-  return null;
+    if (n.type === "combine") {
+      const slots = (n.data as CombineData).inputs.map((s) => s.id);
+      const rank = (p: string) => {
+        const i = slots.indexOf(p);
+        return i < 0 ? slots.length : i;
+      };
+      const feeds = (graph.edges || [])
+        .filter((e) => e.target === n.id && !isLooseEdge(e))
+        .sort((a, b) => rank(a.targetPort) - rank(b.targetPort));
+      for (const e of feeds) {
+        const hit = walk(e.source, hops + 1);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    return walk(videoSource(graph, n.id, "video"), hops + 1); // FX cards pass a stream through
+  };
+  return walk(out ? videoSource(graph, out.id, "video") : null, 0);
 }
 
 export interface Shortfall {
