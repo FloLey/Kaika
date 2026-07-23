@@ -9,6 +9,7 @@
 //   graph/validate   validate / outputRenderable (§3.7), contributing-subgraph walk
 //   graph/hash       outputHash — the per-output render-POST gate (§3.6)
 //   graph/layout     de-overlap + flow-layout passes for the card positions
+//   graph/clipboard  copy/paste of card groups across segments (module-state clipboard)
 
 export {
   mkNodeId,
@@ -103,3 +104,11 @@ export { validate, videoInput, outputRenderable, nodeRenderable } from "./graph/
 export { outputHash, upstreamKey } from "./graph/hash";
 export { problemsFor } from "./graph/problems";
 export type { GraphProblem } from "./graph/problems";
+export {
+  copySelection,
+  pasteClipboard,
+  writeClipboard,
+  readClipboard,
+  nextPasteOffset,
+} from "./graph/clipboard";
+export type { GraphClipboard, PasteResult } from "./graph/clipboard";

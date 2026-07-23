@@ -93,6 +93,10 @@ export default function AnimationCanvas({
     redo,
     canUndo,
     canRedo,
+    copy,
+    paste,
+    canCopy,
+    canPaste,
   } = useGraphEditor({
     segment,
     graph: compGraph,
@@ -197,6 +201,10 @@ export default function AnimationCanvas({
         onRedo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
+        onCopy={copy}
+        onPaste={paste}
+        canCopy={canCopy}
+        canPaste={canPaste}
       />
       <div className="anim-stage" ref={wrapRef}>
         <MinimizeContext.Provider value={minimizeCtx}>

@@ -10,6 +10,11 @@ import {
   removeNode,
   renameNode,
   rankedEdges,
+  copySelection,
+  pasteClipboard,
+  writeClipboard,
+  readClipboard,
+  nextPasteOffset,
 } from "../../lib/graphModel";
 import { emptyHistory, recordEdit, redoStep, undoStep } from "../../lib/graph/history";
 import type { GraphHistory } from "../../lib/graph/history";
@@ -140,20 +145,62 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     commitGraph(r.graph);
   }, [commitGraph, setHistory]);
 
-  // Cmd/Ctrl+Z / Shift+Cmd+Z — skipped while typing in a field so text-editing
-  // undo keeps working inside inputs, prompts, and the lyrics editor.
+  // Copy/paste of the selected card group — INCLUDING across segments: the
+  // clipboard is module state (lib/graph/clipboard), so it survives this editor
+  // remounting when the user navigates to another segment and pastes there.
+  // `canPaste` is local state because a copy in ANOTHER segment's editor can't
+  // notify this one — it re-arms on every copy here and on mount (readClipboard).
+  const [canPaste, setCanPaste] = useState(() => readClipboard() !== null);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const copy = useCallback(() => {
+    const clip = copySelection(graphRef.current, selectedRef.current);
+    if (!clip) return;
+    writeClipboard(clip);
+    setCanPaste(true);
+  }, []);
+  const paste = useCallback(() => {
+    const clip = readClipboard();
+    if (!clip) return;
+    // One updater + selecting the new ids: the pasted group lands selected, so
+    // dragging it into place is the very next gesture.
+    let ids: string[] = [];
+    applyUpdater((g) => {
+      const r = pasteClipboard(g, clip, { offset: nextPasteOffset(), signals: segment.signals });
+      ids = r.ids;
+      return r.graph;
+    });
+    if (ids.length) setSelected(new Set(ids));
+  }, [applyUpdater, segment.signals]);
+
+  // Cmd/Ctrl+Z / Shift+Cmd+Z, Cmd/Ctrl+C / Cmd/Ctrl+V — skipped while typing in a
+  // field so text editing keeps its own shortcuts, and copy defers to a real text
+  // selection (copying a title must not silently become "copy the cards").
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key !== "z" && key !== "c" && key !== "v") return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (key === "c") {
+        if (!selectedRef.current.size || document.getSelection()?.toString()) return;
+        e.preventDefault();
+        copy();
+        return;
+      }
       e.preventDefault();
-      if (e.shiftKey) redo();
-      else undo();
+      paste();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  }, [undo, redo, copy, paste]);
 
   // One view: every non-output card is compact (name + preview; its body opens the
   // settings modal). Output alone renders full — its body IS the render preview.
@@ -380,5 +427,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     redo,
     canUndo: histDepth.past > 0,
     canRedo: histDepth.future > 0,
+    copy,
+    paste,
+    canCopy: [...selected].some((id) => graph.nodes.some((n) => n.id === id)),
+    canPaste,
   };
 }

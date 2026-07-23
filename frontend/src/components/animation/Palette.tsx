@@ -34,6 +34,12 @@ interface PaletteProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  // Copy the selected cards / paste the clipboard (also ⌘C / ⌘V). The clipboard
+  // survives switching segments — copy here, paste in another segment's editor.
+  onCopy?: () => void;
+  onPaste?: () => void;
+  canCopy?: boolean;
+  canPaste?: boolean;
 }
 
 // One open category's item list. Measures itself on mount: when the right-anchored
@@ -71,6 +77,10 @@ export default function Palette({
   onRedo,
   canUndo = false,
   canRedo = false,
+  onCopy,
+  onPaste,
+  canCopy = false,
+  canPaste = false,
 }: PaletteProps) {
   // Which category dropdown is open (one at a time), and whether the signal picker
   // (opened from the Sources menu's factory-less Signal entry) is showing.
@@ -259,6 +269,30 @@ export default function Palette({
             onClick={onRedo}
           >
             {"↪︎"}
+          </button>
+        </div>
+      )}
+      {(onCopy || onPaste) && (
+        // The group-move story: select cards (shift-click / marquee), copy, switch
+        // segment, paste — the clipboard is app-level, so it crosses editors.
+        <div className="anim-history-btns">
+          <button
+            className="btn sm anim-history-btn"
+            title="Copy the selected cards (⌘C) — paste them here or in another segment"
+            aria-label="Copy selection"
+            disabled={!canCopy}
+            onClick={onCopy}
+          >
+            ⧉
+          </button>
+          <button
+            className="btn sm anim-history-btn"
+            title="Paste the copied cards (⌘V) — they land selected, ready to drag into place"
+            aria-label="Paste"
+            disabled={!canPaste}
+            onClick={onPaste}
+          >
+            ⎘
           </button>
         </div>
       )}

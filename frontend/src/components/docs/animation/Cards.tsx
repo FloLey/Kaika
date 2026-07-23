@@ -193,6 +193,16 @@ export default function Cards() {
           <strong>move the whole group in one go</strong>, or press Delete to remove them all. Click
           an empty spot to clear the selection.
         </li>
+        <li>
+          <strong>Copy / paste — including to another segment</strong> — with cards selected, the ⧉
+          toolbar button (or <kbd>Cmd</kbd>+<kbd>C</kbd>) copies the group with the wires between
+          them; ⎘ (or <kbd>Cmd</kbd>+<kbd>V</kbd>) pastes it, slightly offset and already selected
+          so you can drag it into place. The clipboard survives switching segments: build a look
+          once, then paste it into each segment. Signal cards re-point themselves at the target
+          segment&apos;s matching signal (same stem, band and feature); a pasted montage{" "}
+          <em>shares</em> its clips with the original — editing a shared clip updates both. Wires
+          into cards you didn&apos;t select stay behind.
+        </li>
       </ul>
       <p>
         The fluid parameters are the same ones documented under
