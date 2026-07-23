@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { upstreamKey } from "../../../lib/graphModel";
 import ValuePreview from "./ValuePreview";
+import { VALUE_TYPES } from "./CompactPreview";
 import PointsPad from "./PointsPad";
 import StreamPreview from "./StreamPreview";
 import CompactPreview from "./CompactPreview";
@@ -26,7 +27,6 @@ import type {
 // pulse, points a scatter, colour/backdrop a swatch, imagegen a gallery. The card's own
 // controls (box editor, drop zone, prompts…) stay in the LEFT column.
 
-const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math", "scope"]);
 // ONE list, shared with CompactPreview. It used to be a second literal here with six
 // entries against that file's nineteen, so montage / transform / stylize / echo /
 // colorgrade / the sim cards silently fell through to the `default` branch and only

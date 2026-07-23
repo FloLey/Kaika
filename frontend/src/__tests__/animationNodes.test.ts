@@ -9,7 +9,14 @@ import CombineNode from "../components/animation/nodes/CombineNode";
 import PointsNode from "../components/animation/nodes/PointsNode";
 import CompactCard from "../components/animation/nodes/CompactCard";
 import { Port } from "../components/animation/nodes/NodeFrame";
-import { signalNode, fluidNode, outputNode, combineNode, pointsNode } from "../lib/graphModel";
+import {
+  signalNode,
+  fluidNode,
+  outputNode,
+  combineNode,
+  pointsNode,
+  gateNode,
+} from "../lib/graphModel";
 import { FLUID_PARAMS } from "../lib/fluidParams.js";
 import {
   clampRangeEdit,
@@ -333,16 +340,28 @@ describe("CompactCard", () => {
     expect(html).toContain("compact"); // compact-view class (body = preview only)
     expect(html).toContain("fluid"); // header title kept
     expect(html).toContain('data-port="out"'); // single output anchor
-    // inbound wires (force + r) consolidate onto ONE input anchor
-    expect(html).toMatch(/data-port="(force|r)"/);
+    // inbound wires (force + r) consolidate onto ONE input anchor — which now
+    // registers the card's DECLARED inputs too, so its data-port is the first
+    // declared one; the title still counts the wires riding it.
+    expect(html).toContain("gc-port-in");
+    expect(html).toContain('title="2 inputs (compact)"');
     expect(html).not.toContain('type="range"'); // full-card controls hidden
     expect(html).toContain("anim-compact-body"); // click target for the settings modal
   });
 
-  it("a node with no inbound wires shows only the output anchor", () => {
+  it("an UNWIRED card with declared inputs still shows the input anchor to aim at", () => {
+    // The complaint this fixes: a fresh montage had no bullet at all — nothing to
+    // aim the trigger wire at. Declared inputs now render the anchor before any
+    // wire exists; the title says what lands there.
+    const html = renderCompact(gateNode(0, 0));
+    expect(html).toContain("gc-port-in");
+    expect(html).toMatch(/title="inputs: [^"]*drop a wire here"/);
+  });
+
+  it("a node with no declared inputs and no wires shows only the output anchor", () => {
     const html = renderCompact(sig);
     expect(html).toContain("anim-node-signal");
     expect(html).toContain('data-port="out"');
-    expect(html).not.toContain("gc-port-in"); // no input anchor rendered
+    expect(html).not.toContain("gc-port-in"); // signal takes nothing in
   });
 });

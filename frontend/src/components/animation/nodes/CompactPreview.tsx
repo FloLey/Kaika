@@ -27,9 +27,20 @@ import type {
 // body IS the render). Heavy previews are viewport-gated inside.
 
 // Value cards preview their REAL resolved 0..1 output (same `/resolve` the Scope and
-// full cards use) as a pulsing pad — so a compact signal reads as "alive" and can't
-// drift from what renders.
-const VALUE_TYPES = new Set(["signal", "lfo", "noise", "shaper", "gate", "math", "scope"]);
+// full cards use) as a sparkline + pulsing pad — so a compact signal reads as "alive",
+// shows its SHAPE, and can't drift from what renders. Exported: SettingsVisual keys
+// its right-column preview off the same set (a card missing from one showed a curve
+// in the modal but a blank compact tile — `change` lived that bug).
+export const VALUE_TYPES = new Set([
+  "signal",
+  "lfo",
+  "noise",
+  "shaper",
+  "gate",
+  "change",
+  "math",
+  "scope",
+]);
 
 // Cards whose output is VIDEO — their preview is a live block-stream of the actual render
 // (not a client-side approximation), so a slideshow advances / lyrics reveal / a layer is

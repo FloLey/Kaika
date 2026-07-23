@@ -9,7 +9,7 @@ interface Props {
   node: GraphNode;
   ctx?: NodeCtx;
   color?: string;
-  compact?: boolean; // compact = the pulse pad alone; detailed = curve + pad
+  compact?: boolean; // compact = a tighter curve + pad; full = the same, roomier
 }
 
 // The shared OUTPUT preview for any value card (signal/lfo/noise/shaper/gate/math/scope):
@@ -46,9 +46,11 @@ export default function ValuePreview({ node, ctx, color = "var(--mod)", compact 
       idleLoop
     />
   );
-  if (compact) return pad;
+  // The curve rides along even compact — the pulse says "alive", the sparkline
+  // says WHAT it does, and a collapsed card without the shape made every value
+  // card read the same.
   return (
-    <div className="anim-signal-viz">
+    <div className={"anim-signal-viz" + (compact ? " compact" : "")}>
       <div className="anim-signal-spark">
         <CurveView
           curve={curve}

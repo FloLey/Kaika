@@ -78,6 +78,18 @@ export default function CompactCard({
       edges.filter((e) => e.target === node.id && !isLooseEdge(e)).map((e) => e.targetPort)
     ),
   ];
+  // The anchor shows the card's DECLARED inputs even before anything is wired — a
+  // fresh card with no dot gives you nothing to aim a wire at (the montage's trigger
+  // was the complaint: brand new card, no bullet, where does the gate go?). Wired
+  // ports the declaration doesn't cover (an edge assigned somewhere odd) ride along
+  // so their edges keep routing here. Cards that take no inputs still show none.
+  const declared = cardInputs(node).inputs;
+  const anchorPorts = [
+    ...declared.map((i) => ({ portId: i.portId, kind: "in", flow: i.flow })),
+    ...inbound
+      .filter((p) => !declared.some((i) => i.portId === p))
+      .map((p) => ({ portId: p, kind: "in", flow: inFlow(p, node, ctx) })),
+  ];
 
   // Re-anchor edges once this compact card has mounted its anchors.
   useEffect(() => {
@@ -98,13 +110,17 @@ export default function CompactCard({
         minimized={false}
         compact
         sideIn={
-          inbound.length ? (
+          anchorPorts.length ? (
             <MultiAnchor
               nodeId={node.id}
               portRef={helpers.portRef}
-              ports={inbound.map((p) => ({ portId: p, kind: "in", flow: inFlow(p, node, ctx) }))}
+              ports={anchorPorts}
               className="anim-min-anchor"
-              title={`${inbound.length} input${inbound.length === 1 ? "" : "s"} (compact)`}
+              title={
+                inbound.length
+                  ? `${inbound.length} input${inbound.length === 1 ? "" : "s"} (compact)`
+                  : `inputs: ${declared.map((i) => i.label ?? i.portId).join(", ")} — drop a wire here`
+              }
             />
           ) : null
         }

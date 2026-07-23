@@ -3258,3 +3258,12 @@
   border-radius: 4px;
   padding: 0 4px;
 }
+
+/* Compact value tiles: the sparkline joins the pulse (tighter than the full card). */
+.anim-signal-viz.compact .anim-signal-spark {
+  height: 36px;
+}
+.anim-signal-viz.compact .pulse-pad {
+  width: 36px;
+  height: 36px;
+}
