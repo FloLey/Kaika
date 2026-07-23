@@ -152,6 +152,20 @@ describe("breakpoints timeline", () => {
     expect(container.querySelector(".bp-head")).toBeTruthy();
   });
 
+  it("clicking a coverage band selects that extract's tile", async () => {
+    const { container } = mountEditor();
+    const band = await waitFor(() => {
+      const el = container.querySelector(".bp-band");
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    // The bands live in their own lane, out of the rail — selecting must not
+    // place a cut. Click one: the matching tile takes the dashed `picked` ring.
+    fireEvent.click(band);
+    expect(container.querySelector(".montage-tile.picked")).toBeTruthy();
+    expect((container.textContent || "").match(/cuts\s*1×/)).toBeTruthy(); // no new cut
+  });
+
   it("highlights the extract under the playhead: its tile and its timeline band", async () => {
     // A transport clock parked at 1s — inside the single extract's window, so
     // extract 0 is "the video playing right now": its strip tile takes the `live`

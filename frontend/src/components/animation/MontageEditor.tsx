@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import BreakpointTimeline, { extractColor, useLiveExtract } from "./BreakpointTimeline";
 import StreamPreview from "./nodes/StreamPreview";
 import InputPicker from "./InputPicker";
@@ -71,6 +71,24 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
   const segStart = ctx.segStart ?? ctx.segment?.start ?? 0;
   const liveExtract = useLiveExtract(ctx.groupClock, cuts?.starts, cuts?.total ?? 0, fps, segStart);
 
+  // Clicking a coverage band on the timeline SELECTS that video: its tile scrolls
+  // into view and takes a dashed outline in its colour — the answer to "which tile
+  // is that stretch?" on a strip too long to eyeball. Clicking a tile selects too,
+  // so the highlight reads both ways. Index-based; clamped so a removed extract
+  // can't leave a stale highlight.
+  const [selected, setSelected] = useState<number | null>(null);
+  const tileRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const picked = selected != null && selected < extracts.length ? selected : null;
+  const selectExtract = (k: number) => {
+    setSelected(k);
+    // jsdom has no scrollIntoView — guard, the highlight alone still testifies.
+    tileRefs.current[k]?.scrollIntoView?.({
+      behavior: "smooth",
+      inline: "nearest",
+      block: "nearest",
+    });
+  };
+
   // "+ video" appends a leaf; "pick" on a tile RE-POINTS that extract at a new leaf
   // (the composition it left stays in the pool — lifecycle is the prune's job).
   const [picking, setPicking] = useState<null | { replaceId?: string }>(null);
@@ -142,13 +160,20 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
             <div
               key={x.id}
               role="listitem"
+              ref={(el) => {
+                tileRefs.current[k] = el;
+              }}
               className={
                 "montage-tile" +
                 (goesBlack ? " short" : "") +
                 (label === "unused" ? " unused" : "") +
-                (k === liveExtract ? " live" : "")
+                (k === liveExtract ? " live" : "") +
+                (k === picked ? " picked" : "")
               }
-              style={k === liveExtract ? { outlineColor: extractColor(k) } : undefined}
+              style={
+                k === liveExtract || k === picked ? { outlineColor: extractColor(k) } : undefined
+              }
+              onClick={() => setSelected(k)}
               draggable
               onDragStart={() => setDragFrom(k)}
               onDragOver={(e) => e.preventDefault()}
@@ -299,6 +324,7 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
           clock={ctx.groupClock}
           segStart={segStart}
           liveExtract={liveExtract}
+          onSelectExtract={selectExtract}
           onGraphChange={onGraphChange}
         />
       )}

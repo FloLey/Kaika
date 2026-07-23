@@ -3268,14 +3268,31 @@
   height: 36px;
 }
 
-/* Coverage bands under the cut marks: tinted = an extract has material there,
+/* The two timeline lanes share one positioning context so the playhead can run
+   through both: the EXTRACTS lane (clickable coverage bands) above, the cuts rail
+   below. */
+.bp-lanes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bp-extracts {
+  position: relative;
+  height: 12px;
+}
+/* Coverage bands, one per stretch: tinted = an extract has material there,
    near-black = the export will render BLACK there (short clip with loop off, or a
-   dangling reference). pointer-events none — the rail's click-to-place stays. */
+   dangling reference). Each band is a BUTTON — click to select its extract's tile. */
 .bp-band {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
-  pointer-events: none; /* covered bands take their per-extract colour inline */
+  top: 0;
+  bottom: 0;
+  border: none;
+  padding: 0;
+  border-radius: 3px;
+  background: transparent; /* covered bands take their per-extract colour inline */
+  cursor: pointer;
 }
 .bp-band-black {
   background: #15161c;
@@ -3317,5 +3334,12 @@
 }
 .montage-tile.live {
   outline: 2px solid var(--fx, #b8860b);
+  outline-offset: -1px;
+}
+
+/* A tile SELECTED from the timeline (or by click): dashed, in the extract's
+   colour — distinct from the solid `live` ring that tracks the playhead. */
+.montage-tile.picked {
+  outline: 2px dashed var(--fx, #b8860b);
   outline-offset: -1px;
 }

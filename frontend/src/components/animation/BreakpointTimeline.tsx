@@ -81,6 +81,11 @@ interface Props {
   segStart?: number;
   // The extract the playhead is over (useLiveExtract) — its bands render brighter.
   liveExtract?: number | null;
+  // Clicking a coverage band SELECTS the extract it belongs to — the editor
+  // scrolls that tile into view and highlights it. The bands live in their own
+  // lane above the rail precisely so this click and click-to-place-a-cut on the
+  // rail can never collide.
+  onSelectExtract?: (k: number) => void;
   onGraphChange: (updater: (g: Graph) => Graph) => void;
 }
 
@@ -101,6 +106,7 @@ export default function BreakpointTimeline({
   clock,
   segStart = 0,
   liveExtract = null,
+  onSelectExtract,
   onGraphChange,
 }: Props) {
   const railRef = useRef<HTMLDivElement>(null);
@@ -172,78 +178,88 @@ export default function BreakpointTimeline({
 
   return (
     <div className="bp-timeline">
-      <div
-        className="bp-rail"
-        ref={railRef}
-        role="group"
-        aria-label="breakpoints"
-        onPointerDown={(e) => {
-          if (e.target !== e.currentTarget) return; // marks handle their own clicks
-          const f = frameAtX(e.clientX);
-          onGraphChange((g) => addManualBreakpoint(g, montageId, f / fps));
-        }}
-        title="click to place a manual cut here"
-      >
-        {/* Coverage first (marks render above): pointer-events none, so the rail's
-            own click — target === currentTarget — still places manual cuts. */}
-        {coverage.map((b, i) => (
-          <div
-            key={`c${i}`}
-            className={
-              "bp-band" +
-              (b.kind === "black" ? " bp-band-black" : "") +
-              (b.kind === "covered" && b.extract === liveExtract ? " bp-band-live" : "")
-            }
-            style={{
-              left: `${(b.from / total) * 100}%`,
-              width: `${((b.to - b.from) / total) * 100}%`,
-              // The band under the playhead brightens (b3 vs 59 alpha): "this is
-              // the video playing right now".
-              ...(b.kind === "covered"
-                ? {
-                    background: `${extractColor(b.extract)}${b.extract === liveExtract ? "b3" : "59"}`,
+      <div className="bp-lanes">
+        {/* The EXTRACTS lane: material coverage, one clickable band per stretch.
+            Click a band to SELECT the video playing there — its own lane above the
+            rail, so selecting can never collide with click-to-place-a-cut. */}
+        <div className="bp-extracts" role="group" aria-label="extract coverage">
+          {coverage.map((b, i) => (
+            <button
+              key={`c${i}`}
+              type="button"
+              className={
+                "bp-band" +
+                (b.kind === "black" ? " bp-band-black" : "") +
+                (b.kind === "covered" && b.extract === liveExtract ? " bp-band-live" : "")
+              }
+              style={{
+                left: `${(b.from / total) * 100}%`,
+                width: `${((b.to - b.from) / total) * 100}%`,
+                // The band under the playhead brightens (b3 vs 59 alpha): "this is
+                // the video playing right now".
+                ...(b.kind === "covered"
+                  ? {
+                      background: `${extractColor(b.extract)}${b.extract === liveExtract ? "b3" : "59"}`,
+                    }
+                  : {}),
+              }}
+              title={
+                (b.kind === "black"
+                  ? `no material here — the export renders BLACK (extract ${b.extract + 1})`
+                  : `extract ${b.extract + 1}`) + " — click to select its tile"
+              }
+              onClick={() => onSelectExtract?.(b.extract)}
+            />
+          ))}
+        </div>
+        <div
+          className="bp-rail"
+          ref={railRef}
+          role="group"
+          aria-label="breakpoints"
+          onPointerDown={(e) => {
+            if (e.target !== e.currentTarget) return; // marks handle their own clicks
+            const f = frameAtX(e.clientX);
+            onGraphChange((g) => addManualBreakpoint(g, montageId, f / fps));
+          }}
+          title="click to place a manual cut here"
+        >
+          {marks.map((m) => {
+            const frame = drag && m.breakpointId === drag.id ? drag.frame : m.frame;
+            const left = `${(frame / total) * 100}%`;
+            const t = (frame / fps).toFixed(2);
+            if (m.source === "gate") {
+              return (
+                <button
+                  key={`g${m.frame}`}
+                  className={"bp-mark bp-gate" + (m.disabled ? " off" : "")}
+                  style={{ left }}
+                  title={
+                    m.disabled
+                      ? `gate cut at ${t}s — DISABLED (click to re-enable). It stays visible so its origin reads; it just doesn't cut.`
+                      : `gate cut at ${t}s, from the trigger signal — click to disable just this one`
                   }
-                : {}),
-            }}
-            title={
-              b.kind === "black"
-                ? "no material here — the export renders BLACK"
-                : `extract ${b.extract + 1}`
+                  onClick={() =>
+                    onGraphChange((g) => toggleAutoCut(g, montageId, m.frame / fps, tol))
+                  }
+                />
+              );
             }
-          />
-        ))}
-        <div className="bp-head" ref={headRef} style={{ display: "none" }} />
-        {marks.map((m) => {
-          const frame = drag && m.breakpointId === drag.id ? drag.frame : m.frame;
-          const left = `${(frame / total) * 100}%`;
-          const t = (frame / fps).toFixed(2);
-          if (m.source === "gate") {
             return (
               <button
-                key={`g${m.frame}`}
-                className={"bp-mark bp-gate" + (m.disabled ? " off" : "")}
+                key={m.breakpointId}
+                className="bp-mark bp-manual"
                 style={{ left }}
-                title={
-                  m.disabled
-                    ? `gate cut at ${t}s — DISABLED (click to re-enable). It stays visible so its origin reads; it just doesn't cut.`
-                    : `gate cut at ${t}s, from the trigger signal — click to disable just this one`
-                }
-                onClick={() =>
-                  onGraphChange((g) => toggleAutoCut(g, montageId, m.frame / fps, tol))
+                title={`manual cut at ${t}s — drag to move, click to delete`}
+                onPointerDown={(e) =>
+                  startDrag({ breakpointId: m.breakpointId, frame: m.frame }, e)
                 }
               />
             );
-          }
-          return (
-            <button
-              key={m.breakpointId}
-              className="bp-mark bp-manual"
-              style={{ left }}
-              title={`manual cut at ${t}s — drag to move, click to delete`}
-              onPointerDown={(e) => startDrag({ breakpointId: m.breakpointId, frame: m.frame }, e)}
-            />
-          );
-        })}
+          })}
+        </div>
+        {/* The playhead spans BOTH lanes — one line through bands and marks. */}
+        <div className="bp-head" ref={headRef} style={{ display: "none" }} />
       </div>
       <div className="bp-legend anim-fx-hint">
         <span className="bp-key bp-key-gate" /> gate · <span className="bp-key bp-key-manual" />{" "}
