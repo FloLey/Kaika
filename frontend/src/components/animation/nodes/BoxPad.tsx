@@ -22,6 +22,8 @@ export interface BoxPreview {
   align: "left" | "center" | "right";
   outline: boolean;
   outlineWidth: number;
+  sizeMin?: number; // auto-fit clamps, fractions of the frame height (lyrics card)
+  sizeMax?: number;
   clock?: RefObject<HTMLAudioElement | null>;
   playing?: boolean;
   time0: number; // fallback time when there's no clock (e.g. the segment start)
@@ -161,6 +163,8 @@ export default function BoxPad({
   const fontFamily = preview?.fontFamily;
   const outline = preview?.outline;
   const outlineWidth = preview?.outlineWidth;
+  const sizeMin = preview?.sizeMin;
+  const sizeMax = preview?.sizeMax;
   const drawText = useCallback(
     (text: string) => {
       const canvas = canvasRef.current;
@@ -198,7 +202,20 @@ export default function BoxPad({
         return a && d ? a + d : px * 1.25;
       };
       const strokeFrac = outline ? (outlineWidth ?? 0) : 0;
-      const { px, lines, lineH } = fitText(text, bw, bh, strokeFrac, measure, lineHeight, bh);
+      // The size clamps are fractions of the FRAME height (H here) — same rule as the
+      // render, so the preview sizes text exactly as the export will.
+      const px0 = Math.min(bh, Math.max(1, (sizeMax ?? 1) * H));
+      const pxMin = Math.max(6, (sizeMin ?? 0) * H);
+      const { px, lines, lineH } = fitText(
+        text,
+        bw,
+        bh,
+        strokeFrac,
+        measure,
+        lineHeight,
+        px0,
+        pxMin
+      );
       g.font = `${px}px "${fam}"`;
       g.textBaseline = "top";
       g.lineJoin = "round";
@@ -218,7 +235,7 @@ export default function BoxPad({
         y += lineH;
       }
     },
-    [view.x, view.y, view.w, view.h, fontFamily, align, outline, outlineWidth]
+    [view.x, view.y, view.w, view.h, fontFamily, align, outline, outlineWidth, sizeMin, sizeMax]
   );
 
   // Draw the CURRENT frame: the revealed text at the playhead while playing (empty between

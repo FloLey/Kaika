@@ -45,6 +45,10 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     box: "The text box: drag the rectangle to move it, drag a corner to resize. Text wraps and fills it (defines size + placement).",
     outline: "Draw a black outline under the text so it stays readable over anything.",
     outlineWidth: "Outline thickness, as a fraction of the font size.",
+    sizeMin:
+      "Floor for the auto-fit, as % of the frame height \u2014 a long line stops shrinking here (it may then overflow the box: readable beats unreadable). 0% = no floor.",
+    sizeMax:
+      "Cap for the auto-fit, as % of the frame height \u2014 a short line stops growing here instead of filling the whole box. 100% = no cap (the box alone limits it).",
     opacity: "Text opacity over the video.",
     fillColor: "Wire a Colour card here to drive the text fill colour (else white).",
     outlineColor: "Wire a Colour card here to drive the outline colour (else black).",

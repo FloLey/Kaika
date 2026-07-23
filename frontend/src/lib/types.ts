@@ -270,6 +270,11 @@ export interface LyricsData {
   box_h: number;
   outline: boolean; // black outline under the fill (readable over anything)
   outlineWidth: number; // outline thickness as a fraction of the font size
+  // Auto-fit clamps as fractions of the FRAME height (resolution-independent, like
+  // the box). Absent = unclamped: max grows to the box, min floors at a hair above
+  // zero. sizeMin wins over the box (readable-but-clipped beats unreadable).
+  sizeMin?: number;
+  sizeMax?: number;
   ports: Record<string, FluidPort>;
 }
 

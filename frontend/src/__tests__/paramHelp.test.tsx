@@ -29,7 +29,7 @@ const EXPECTED_BADGES: Record<string, number> = {
   pattern: 6, // layout/count/radius/rotation/offsetX/offsetY (seed hidden unless scatter)
   "animate-points": 3, // mode/amount/rate (angle/length/taper are mode-specific)
   "merge-points": 0,
-  lyrics: 8, // font + align/case/reveal + box (visual pad) + outline + outlineWidth + opacity port
+  lyrics: 10, // font + align/case/reveal + box (visual pad) + outline + outlineWidth + sizeMin/sizeMax + opacity port
   image: 3, // fit + box (visual pad) + opacity port
   slideshow: 6, // threshold + hysteresis + fit + box + opacity/trigger ports
   imagegen: 2, // seed + model (prompts use plain title tooltips)
@@ -78,7 +78,17 @@ const INLINE_ARGS: Record<string, string[]> = {
   slideshow: ["threshold", "hysteresis", "fit", "box"],
   color: ["mode"],
   colorgrade: ["mode", "map", "colorA", "colorB", "tint"],
-  lyrics: ["font", "align", "case", "reveal", "box", "outline", "outlineWidth"],
+  lyrics: [
+    "font",
+    "align",
+    "case",
+    "reveal",
+    "box",
+    "outline",
+    "outlineWidth",
+    "sizeMin",
+    "sizeMax",
+  ],
   image: ["fit", "box"],
   video: ["fit", "sync", "start", "speed", "loop", "box"],
   backdrop: ["color"],

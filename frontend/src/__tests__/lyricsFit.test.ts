@@ -26,4 +26,24 @@ describe("lyricsFit", () => {
     const stroked = fitText("HELLO", 100, 100, 0.2, measure, lineHeight, 100).px;
     expect(stroked).toBeLessThanOrEqual(bare);
   });
+
+  it("pxMin floors the shrink — the block may overflow, readable beats unreadable", () => {
+    // Unclamped this long line shrinks well below 40px in a 60×40 box…
+    const free = fitText("hello world this is a long line", 60, 40, 0, measure, lineHeight, 200);
+    expect(free.px).toBeLessThan(40);
+    // …with a 40px floor it stops there, even though the block no longer fits.
+    const floored = fitText(
+      "hello world this is a long line",
+      60,
+      40,
+      0,
+      measure,
+      lineHeight,
+      200,
+      40
+    );
+    expect(floored.px).toBe(40);
+    // A px0 below the floor starts AT the floor (min wins over max).
+    expect(fitText("hi", 1000, 1000, 0, measure, lineHeight, 20, 40).px).toBe(40);
+  });
 });

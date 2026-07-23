@@ -73,13 +73,15 @@ def _wrap(text: str, font, max_w: float, draw) -> list[str]:
     return lines or [""]
 
 
-def _fit(text, key, px0, box_w, box_h, draw, stroke_frac):
+def _fit(text, key, px0, box_w, box_h, draw, stroke_frac, px_min=8):
     """Shrink the font from `px0` until the wrapped text block — INCLUDING its outline
     stroke — actually fits inside the box (both width and height). Measured with PIL's
     own `multiline_textbbox` (which accounts for `stroke_width`) so the fit matches what
-    `multiline_text` draws — otherwise the stroke makes the text overflow. Returns
+    `multiline_text` draws — otherwise the stroke makes the text overflow. Stops at
+    `px_min` even if the block still overflows (the card's min-size promise beats the
+    box: readable-but-clipped over unreadable). Returns
     (font, px, block, stroke_px, spacing, bbox)."""
-    px = max(8, int(px0))
+    px = max(px_min, int(px0))
     while True:
         font = _font(px, key)
         sw = max(0, int(stroke_frac * px))
@@ -88,9 +90,9 @@ def _fit(text, key, px0, box_w, box_h, draw, stroke_frac):
         lines = _wrap(text, font, box_w - 2 * sw, draw)
         block = "\n".join(lines)
         bbox = draw.multiline_textbbox((0, 0), block, font=font, spacing=spacing, stroke_width=sw)
-        if px <= 8 or (bbox[2] - bbox[0] <= box_w and bbox[3] - bbox[1] <= box_h):
+        if px <= px_min or (bbox[2] - bbox[0] <= box_w and bbox[3] - bbox[1] <= box_h):
             return font, px, block, sw, spacing, bbox
-        px = max(8, int(px * 0.9) if px > 24 else px - 1)
+        px = max(px_min, int(px * 0.9) if px > 24 else px - 1)
 
 
 def _at(v, i):
@@ -139,6 +141,8 @@ def lyrics(
     outline_r=0.0,
     outline_g=0.0,
     outline_b=0.0,
+    size_min=0.0,
+    size_max=1.0,
     frame_offset=0,
 ) -> np.ndarray:
     """Render the segment's aligned lyric lines as a timed RGBA dye layer. `lines`
@@ -146,7 +150,12 @@ def lyrics(
     clip. With reveal="word" the active line fills in word-by-word over its [t0, t1].
 
     Text word-wraps and auto-shrinks to fill the box (`box_x/y/w/h`, fractions 0..1) —
-    the box defines both size and placement — and is centred vertically within it;
+    the box defines both size and placement — and is centred vertically within it.
+    `size_min`/`size_max` clamp the auto-fit, as fractions of the FRAME height
+    (resolution-independent, like the box): `size_max` caps how large a short line may
+    grow, `size_min` floors how small a long line may shrink — and wins over the box
+    (readable-but-clipped beats unreadable). Defaults (0.0 / 1.0) reproduce the
+    unclamped fit exactly, so cards without the fields keep their output;
     `align` justifies horizontally. `outline` draws a stroke (width = `outline_width` *
     font px, colour `outline_r/g/b`, default black) under the fill (colour `r/g/b`,
     default white) so the text stays readable over anything — the returned alpha covers
@@ -190,7 +199,13 @@ def lyrics(
         # layout instead of rescaling/reflowing the already-shown words every frame.
         fit = fits.get(text)
         if fit is None:
-            fit = fits[text] = _fit(text, font, bh, bw, bh, draw, outline_width if outline else 0.0)
+            # The auto-fit's start/floor, clamped by the card's size limits (fractions
+            # of the frame height `th` — the same resolution-independence as the box).
+            px0 = min(bh, max(1, int(round(size_max * th))))
+            px_min = max(8, int(round(size_min * th)))
+            fit = fits[text] = _fit(
+                text, font, px0, bw, bh, draw, outline_width if outline else 0.0, px_min
+            )
         fnt, px, full_block, sw, spacing, bbox = fit
         if reveal == "word":
             words = text.split()

@@ -6,7 +6,7 @@ import Ctl, { Toggle } from "../../../ui/Ctl";
 import ArgInfo from "./ArgInfo";
 import { videoSource } from "../../../lib/graphModel";
 import { useNodeData } from "./useNodeData";
-import { dp2 } from "./nodeConstants";
+import { dp2, pct } from "./nodeConstants";
 import { argHelp } from "../../../lib/paramHelp";
 import { LYRICS_PARAMS } from "../../../lib/nodeParams";
 import { ctxAspect } from "../../../lib/output";
@@ -136,6 +136,8 @@ export default function LyricsNode({
       align: d.align,
       outline: d.outline,
       outlineWidth: d.outlineWidth,
+      sizeMin: d.sizeMin,
+      sizeMax: d.sizeMax,
       clock: ctx?.groupClock,
       playing: !!ctx?.groupPlaying,
       time0: ctx?.segStart ?? 0,
@@ -147,6 +149,8 @@ export default function LyricsNode({
       d.align,
       d.outline,
       d.outlineWidth,
+      d.sizeMin,
+      d.sizeMax,
       ctx?.groupClock,
       ctx?.groupPlaying,
       ctx?.segStart,
@@ -270,6 +274,28 @@ export default function LyricsNode({
           fmt={dp2}
           onChange={(v) => set({ outlineWidth: v })}
           {...argHelp("lyrics", "outlineWidth")}
+        />
+        {/* Auto-fit clamps, % of the frame height — resolution-independent, so the
+            export sizes exactly like the preview. 0% min / 100% max = the plain fit. */}
+        <Ctl
+          label="min size"
+          value={d.sizeMin ?? 0}
+          min={0}
+          max={0.3}
+          step={0.005}
+          fmt={pct}
+          onChange={(v) => set({ sizeMin: v })}
+          {...argHelp("lyrics", "sizeMin")}
+        />
+        <Ctl
+          label="max size"
+          value={d.sizeMax ?? 1}
+          min={0.05}
+          max={1}
+          step={0.01}
+          fmt={pct}
+          onChange={(v) => set({ sizeMax: v })}
+          {...argHelp("lyrics", "sizeMax")}
         />
       </div>
       <ParamRows

@@ -79,7 +79,10 @@ export default function Sources() {
           <em>font</em>, an <em>alignment</em> and <em>case</em>, and <em>line</em> vs <em>word</em>{" "}
           reveal (word fills the line in as it's sung). Drag the <em>text box</em> to place it and
           pull a corner to size it — the text word-wraps and fills the box (the box defines size +
-          placement). A black <em>outline</em> keeps it readable over anything. Wire a{" "}
+          placement). <strong>min size / max size</strong> clamp that auto-fit (as % of the frame
+          height, so preview and export agree): max stops a short line from growing huge, min stops
+          a long line from shrinking unreadable — a floored line may then overflow the box, which is
+          the point. A black <em>outline</em> keeps it readable over anything. Wire a{" "}
           <a href="#animation-fx">color card</a> into the <em>fill</em> or <em>outline</em> input to
           recolour the text (defaults: white fill, black outline) — the outline stays opaque so it
           keeps occluding the video. Opacity is modulatable. Needs lyrics on the track.

@@ -28,6 +28,8 @@ export function wrapText(text: string, maxW: number, measure: (t: string) => num
 
 // Shrink from `px0` until the wrapped block + stroke fits `boxW`×`boxH`.
 // `measure(text, px)` -> pixel width; `lineHeight(px)` -> line height at that size.
+// `pxMin` floors the shrink (the lyrics card's min size) — the block may then
+// overflow the box, exactly like the backend: readable-but-clipped beats unreadable.
 export function fitText(
   text: string,
   boxW: number,
@@ -35,17 +37,18 @@ export function fitText(
   strokeFrac: number,
   measure: (t: string, px: number) => number,
   lineHeight: (px: number) => number,
-  px0: number
+  px0: number,
+  pxMin = 6
 ): FitResult {
-  let px = Math.max(6, Math.floor(px0));
+  let px = Math.max(pxMin, Math.floor(px0));
   for (;;) {
     const sw = Math.max(0, strokeFrac * px);
     const lines = wrapText(text, boxW - 2 * sw, (t) => measure(t, px));
     const lineH = lineHeight(px);
     const totalH = lineH * lines.length + 2 * sw;
     const widest = lines.reduce((m, l) => Math.max(m, measure(l, px)), 0) + 2 * sw;
-    if (px <= 6 || (totalH <= boxH && widest <= boxW)) return { px, lines, lineH };
+    if (px <= pxMin || (totalH <= boxH && widest <= boxW)) return { px, lines, lineH };
     px = px > 24 ? Math.floor(px * 0.9) : px - 1;
-    if (px < 6) px = 6;
+    if (px < pxMin) px = pxMin;
   }
 }

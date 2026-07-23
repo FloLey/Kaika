@@ -772,6 +772,10 @@ def _lyrics_static(d: dict) -> dict:
         box_h=float(d.get("box_h", 0.84)),
         outline=bool(d.get("outline", True)),
         outline_width=float(d.get("outlineWidth", 0.12)),
+        # Auto-fit clamps, fractions of the frame height. Absent (older cards) = the
+        # unclamped fit, byte-identical to before the fields existed — no version bump.
+        size_min=float(d.get("sizeMin", 0.0)),
+        size_max=float(d.get("sizeMax", 1.0)),
     )
 
 

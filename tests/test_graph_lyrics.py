@@ -48,6 +48,57 @@ def test_lyrics_is_rgba_with_white_fill_and_opaque_black_outline():
     assert int(white.sum()) > 0 and int(black.sum()) > 0
 
 
+def _cover(size_min=0.0, size_max=1.0, text="AB"):
+    """Lit-pixel count of a 1-frame render — a proxy for the fitted font size."""
+    n = 1
+    f = sources.lyrics(
+        n,
+        128,
+        96,
+        8,
+        lines=[{"t0": 0, "t1": 2, "text": text}],
+        seg_start=0.0,
+        align="center",
+        case="none",
+        reveal="line",
+        r=_arr(n, 1),
+        g=_arr(n, 1),
+        b=_arr(n, 1),
+        opacity=_arr(n, 1),
+        font="anton",
+        outline=False,
+        size_min=size_min,
+        size_max=size_max,
+    )
+    return int((f[0, ..., 3] > 0).sum())
+
+
+def test_lyrics_size_max_caps_the_auto_fit():
+    # A short line normally grows to the box height; capped at 8% of the frame it
+    # must come out much smaller — and the defaults reproduce the unclamped render.
+    assert _cover(size_max=0.08) < _cover() * 0.6
+    assert _cover() == _cover(size_min=0.0, size_max=1.0)
+
+
+def test_lyrics_size_min_floors_the_auto_fit():
+    # A long line normally shrinks far below the floor; with `px_min` the shrink
+    # stops there even though the block then overflows the box (the card's explicit
+    # choice: readable-but-clipped beats unreadable).
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGBA", (200, 200)))
+    long = "a very long lyric line that has to shrink hard to fit the box"
+    _, px_free, *_ = sources._fit(long, "anton", 100, 100, 40, draw, 0.0)
+    _, px_floor, *_ = sources._fit(long, "anton", 100, 100, 40, draw, 0.0, px_min=60)
+    assert px_free < 60
+    assert px_floor == 60
+    # A floor above the start size wins over it too (min beats max).
+    _, px_hi, *_ = sources._fit("hi", "anton", 20, 1000, 1000, draw, 0.0, px_min=60)
+    assert px_hi == 60
+    # …and the same floor through the public surface: more lit pixels than the free fit.
+    assert _cover(size_min=0.2, text=long) > _cover(text=long)
+
+
 def test_lyrics_wraps_long_line_inside_the_box():
     long = " ".join(["mot"] * 24)
     f = sources.lyrics(
