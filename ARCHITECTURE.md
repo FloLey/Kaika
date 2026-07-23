@@ -459,6 +459,9 @@ deployment model changes:
   Those clips survive on recency alone and then age out; a wrongly-swept one
   rebuilds fast from the never-swept raw-frame cache. The clips the sweep DOES
   protect exactly are every root's (`_hashes_from` walks the pool closure).
+  **Master trims** (`/export/trim` — `trim-<key>.mp4`, keyed on master+range,
+  a state the DB never stores) live on the same recency terms and re-cut in
+  seconds from the master.
 - **`delete_project` leaves files until the next GC sweep** — reachability reaps
   them; deletion isn't immediate on disk.
 - **Cross-job asset reads**: a graph may reference `/assets/<other-job>/…`; the

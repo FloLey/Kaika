@@ -6,6 +6,7 @@ import { aspectOf, fitToRatio, ratioLabel } from "../../lib/output";
 import { useRenderJob } from "../../lib/useRenderJob";
 import { finalOutputIdOf, rootCompositionOf } from "../../lib/compositions";
 import { usePreservePlayback } from "../animation/nodes/usePreservePlayback";
+import TrimRow from "./TrimRow";
 import type { ExportSettings } from "../../lib/export";
 import type { CompositionPool, OutputSettings, Segment } from "../../lib/types";
 import Info from "../../ui/Info";
@@ -372,6 +373,9 @@ export default function ExportStep({
               ⬇ download video
             </a>
           )}
+          {/* Platform-length cuts out of the finished master (Insta caps a reel at
+              ~3 min) — the master itself stays whole. */}
+          {finalUrl && <TrimRow finalUrl={finalUrl} videoRef={videoRef} />}
         </div>
       </div>
     </div>

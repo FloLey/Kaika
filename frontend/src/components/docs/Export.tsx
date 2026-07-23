@@ -37,6 +37,14 @@ export default function Export() {
           vocal stem. Then generate: the render streams progressively — a growing preview plays
           while it works — and finishes with a <strong>download</strong> link.
         </li>
+        <li>
+          <strong>✂ trim a cut</strong> — once the master is rendered, cut a shorter clip out of it
+          without re-rendering anything: drag the <em>start</em> and <em>end</em> handles (the
+          preview seeks along, so you pick the points by eye), and <strong>✂ cut</strong> re-encodes
+          just that range at the master's quality with its audio — e.g. the 3-minute extract an
+          Instagram reel allows. The master stays whole; cut as many variants as you like, each with
+          its own download button, and an identical re-cut returns instantly from cache.
+        </li>
       </ul>
       <div className="note">
         <strong>The export is encoded at a higher quality than the editor's previews.</strong> Cards

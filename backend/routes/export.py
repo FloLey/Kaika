@@ -565,6 +565,59 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
         n["data"] = {**d, "assetUrl": url}
 
 
+@bp.post("/export/trim")
+@json_body
+def export_trim(body):
+    """Cut [start, end] (seconds) out of a finished master -> {url} — the
+    platform-length trim (an Instagram reel caps at ~3 minutes; the master is the
+    whole song). Synchronous: a RE-ENCODE of the kept range (input-side `-ss` +
+    re-encode is frame-accurate; a stream copy would snap to the master's keyframes,
+    seconds apart at HD GOP sizes) at the master's own CRF, with the audio cut and
+    re-encoded alongside. Cached by (master name, start, end) in the same clip dir —
+    an identical re-cut returns instantly. The GC sweep can't recompute trim keys
+    from the DB, so like child-composition previews they live on recency and rebuild
+    cheaply (ARCHITECTURE, accepted trade-offs)."""
+    url = str(body.get("url") or "")
+    name = url.rsplit("/", 1)[-1]
+    src = ANIM_DIR / name
+    # The url must name a file DIRECTLY in the clip dir (no traversal, no stream subdir).
+    if not url.startswith("/fluid/") or "/" in name or ".." in name or not src.is_file():
+        return error_response("unknown master", 404)
+    try:
+        start = max(0.0, float(body.get("start", 0)))
+        end = float(body.get("end", 0))
+    except (TypeError, ValueError):
+        return error_response("bad start/end", 400)
+    if not end > start + 0.1:
+        return error_response("end must be after start", 400)
+    key = hashlib.sha1(f"{name}|{start:.3f}|{end:.3f}".encode()).hexdigest()[:16]
+    out = ANIM_DIR / f"trim-{key}.mp4"
+    if not out.is_file():
+        import subprocess
+
+        from .. import fluid
+
+        tmp = out.with_name(f"{out.stem}.{key}.tmp.mp4")
+        # fmt: off
+        cmd = [
+            "ffmpeg", "-y", "-v", "error",
+            "-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(src),
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", str(fluid.CRF_EXPORT),
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart", str(tmp),
+        ]
+        # fmt: on
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            tmp.replace(out)
+        except subprocess.CalledProcessError as e:
+            tmp.unlink(missing_ok=True)
+            log.warning("export trim failed: %s", (e.stderr or b"").decode()[-400:])
+            return error_response("trim failed — see server log", 500)
+    return jsonify({"url": f"/fluid/{out.name}"})
+
+
 @bp.get("/export/stream/<render_id>")
 def export_status(render_id):
     st = render_jobs.get(render_id)

@@ -156,3 +156,52 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- the platform-length trim under a finished master ------------------------ */
+.export-trim {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.export-trim-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.export-trim-title {
+  font-weight: 600;
+  font-size: 12px;
+}
+.export-trim-kept {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.export-trim-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.export-trim-slider > span:first-child {
+  width: 34px;
+  color: var(--muted);
+}
+.export-trim-slider input[type="range"] {
+  flex: 1;
+}
+.export-trim-t {
+  width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.export-trim-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

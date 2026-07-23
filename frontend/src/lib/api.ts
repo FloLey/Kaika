@@ -337,6 +337,17 @@ export async function startExport(jobId: string): Promise<StreamStartResult> {
   return postJson<StreamStartResult>("/export/stream", { job_id: jobId });
 }
 
+// Cut [start, end] (seconds) out of a finished master (its /fluid/... url) — the
+// platform-length trim. Synchronous re-encode server-side (frame-accurate), cached:
+// an identical re-cut returns instantly.
+export async function trimExport(
+  url: string,
+  start: number,
+  end: number
+): Promise<{ url: string }> {
+  return postJson<{ url: string }>("/export/trim", { url, start, end });
+}
+
 // HD render of ONE segment, at the final export's settings (an Output card's "HD"
 // button). The segment + graph travel in the body — autosave is debounced, so the
 // DB copy can lag what's on screen and this must render exactly what the user sees;
