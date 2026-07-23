@@ -420,6 +420,12 @@ export async function saveProject(jobId: string, payload: unknown): Promise<{ ok
   return postJson<{ ok: boolean }>(`/projects/${jobId}`, payload, "PUT");
 }
 
+// Duplicate a project: new job id, row copied with its urls rewritten, files
+// hardlinked server-side (instant, no extra disk). Returns the new project's id.
+export async function duplicateProject(jobId: string): Promise<{ job_id: string; title?: string }> {
+  return postJson<{ job_id: string; title?: string }>(`/projects/${jobId}/duplicate`, {});
+}
+
 export async function deleteProject(jobId: string): Promise<{ ok: boolean }> {
   return jsonOrThrow<{ ok: boolean }>(await fetch(`/projects/${jobId}`, { method: "DELETE" }));
 }

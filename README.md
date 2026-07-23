@@ -157,7 +157,9 @@ return a `job_id` immediately and the UI polls `/jobs/<id>`. A finished job's
 - `GET /projects` · `GET|PUT|DELETE /projects/<job_id>` — list / load / autosave
   / delete a project (segments, the **composition pool** they reference, and
   per-segment isolation edits live in Postgres). `POST /playground` ensures the
-  seeded demo project exists.
+  seeded demo project exists. `POST /projects/<job_id>/duplicate` copies a
+  project under a fresh id (row rewritten, per-job files hardlinked — instant,
+  no extra disk).
 - `GET /audio/<job>/<stem>` (Range/seek) · `GET /spectrogram/<job>/<stem>`.
 - `POST /upload-asset/<job>` · `POST /asset-from-youtube/<job>` ·
   `GET /assets/<job>` · `DELETE /assets/<job>/<id>` — the per-project image/video

@@ -21,6 +21,12 @@ export default function Projects() {
           segments and per-segment edits load exactly as you saved them.
         </li>
         <li>
+          <strong>⧉ Duplicate</strong> — an instant, fully <em>independent</em> copy of the project
+          (title gets “(copy)”): segments, animations, assets, everything. Duplicate before a risky
+          experiment, or to fork variants of the same track; the copy survives even if the original
+          is later deleted.
+        </li>
+        <li>
           <strong>Delete</strong> — removes the project <em>and</em> its audio, stems, and
           spectrograms from disk. This can't be undone.
         </li>

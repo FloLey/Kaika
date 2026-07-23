@@ -121,6 +121,36 @@ def project_save(job_id: str):
     return jsonify({"ok": True})
 
 
+@bp.route("/projects/<job_id>/duplicate", methods=["POST"])
+def project_duplicate(job_id: str):
+    """Duplicate a project under a fresh job id -> {job_id, title}.
+
+    The row is copied with every job-scoped URL rewritten (db.duplicate_project);
+    the per-job files are HARDLINKED, not copied — an asset library can run to tens
+    of GB, links are instant and free, the files are immutable once uploaded, and a
+    link keeps its file alive even if the ORIGINAL project is deleted later (its
+    delete unlinks names, never the shared bytes). Cross-device fallback: real copy."""
+    import os
+    from uuid import uuid4
+
+    new_id = uuid4().hex[:8]
+    row = db.duplicate_project(job_id, new_id)
+    if row is None:
+        abort(404)
+    for d in (UPLOAD_DIR, SEPARATED_DIR, SPECTRO_DIR, ASSETS_DIR):
+        src = d / job_id
+        if src.is_dir():
+            try:
+                shutil.copytree(src, d / new_id, copy_function=os.link)
+            except OSError:
+                shutil.rmtree(d / new_id, ignore_errors=True)
+                shutil.copytree(src, d / new_id)
+    lines = ANALYSIS_DIR / f"{job_id}.json"
+    if lines.is_file():
+        shutil.copy2(lines, ANALYSIS_DIR / f"{new_id}.json")
+    return jsonify({"job_id": new_id, "title": row.get("title")})
+
+
 @bp.route("/projects/<job_id>", methods=["DELETE"])
 def project_delete(job_id: str):
     existed = db.delete_project(job_id)

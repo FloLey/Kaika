@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
-import { listProjects, deleteProject } from "../lib/api";
+import { listProjects, deleteProject, duplicateProject } from "../lib/api";
 import { fmtTime } from "../lib/mel";
 import ConfirmDialog from "../ui/ConfirmDialog";
 
@@ -43,6 +43,23 @@ export default function ProjectList({ onNew, onOpen, onPlayground }: ProjectList
   function askRemove(e: MouseEvent, p: Project) {
     e.stopPropagation();
     setPendingDelete(p);
+  }
+
+  // Duplicate: instant server-side (hardlinked files, rewritten row) — the copy is
+  // fully independent, so it's the "save a version before I experiment" gesture.
+  const [duplicating, setDuplicating] = useState<string | null>(null);
+  async function duplicate(e: MouseEvent, p: Project) {
+    e.stopPropagation();
+    if (duplicating) return;
+    setDuplicating(p.job_id);
+    try {
+      await duplicateProject(p.job_id);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDuplicating(null);
+    }
   }
 
   async function confirmRemove() {
@@ -97,6 +114,14 @@ export default function ProjectList({ onNew, onOpen, onPlayground }: ProjectList
             <div className="project-sub">
               {(p.updated_at || "").replace("T", " ").replace("Z", "")}
             </div>
+            <span
+              className="project-dup"
+              title="Duplicate — an independent copy to experiment on"
+              role="button"
+              onClick={(e) => duplicate(e, p)}
+            >
+              {duplicating === p.job_id ? "…" : "⧉"}
+            </span>
             <span
               className="project-del"
               title="Delete"

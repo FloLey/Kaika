@@ -230,6 +230,40 @@ def delete_project(job_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def duplicate_project(src_id: str, new_id: str) -> dict[str, Any] | None:
+    """Copy a project row under `new_id`, with every job-scoped URL in its data
+    (`/assets/<id>/…`, `/audio/<id>/…`, `/spectrogram/<id>/…`) rewritten onto the
+    new id — the id only ever appears as a path segment, so the slash-bounded
+    replace can't touch anything else. Returns the new row, or None if the source
+    doesn't exist. The route copies the per-job files (hardlinks) alongside."""
+    import json as _json
+
+    row = get_project(src_id)
+    if row is None:
+        return None
+    blob = _json.dumps(row["data"]).replace(f"/{src_id}/", f"/{new_id}/")
+    title = f"{row.get('title') or src_id} (copy)"
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO projects
+              (job_id, title, source, duration, fmin, has_lyrics, step, data)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                new_id,
+                title,
+                row.get("source"),
+                row.get("duration"),
+                row.get("fmin"),
+                row.get("has_lyrics"),
+                row.get("step"),
+                Jsonb(_json.loads(blob)),
+            ),
+        )
+    return get_project(new_id)
+
+
 # --------------------------------------------------------------------------- #
 # Per-project asset library (data.assets) — server-managed (upload/YouTube routes
 # append; a card/library pick just references the url). Kept OUT of the frontend

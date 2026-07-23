@@ -539,6 +539,18 @@ header {
 .project-del:hover {
   color: #a33a52;
 }
+.project-dup {
+  position: absolute;
+  top: 8px;
+  right: 30px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+}
+.project-dup:hover {
+  color: var(--courant, #7aa2f7);
+}
 
 /* Hover help "?" */
 .info {
