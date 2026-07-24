@@ -1090,6 +1090,24 @@
 .anim-toolbar-spacer {
   flex: 1 1 auto;
 }
+
+/* The toolbar's right side, grouped by what each button ACTS ON: health (⚠), edit
+   (undo/redo + copy/paste), view (fit / arrange / fullscreen), settings (⚙ output).
+   Before this they were a flat row of six concerns in a row, so `⚙ output` — which
+   configures the whole render — sat between the view controls and fullscreen.
+
+   The hairline is on `+ .tb-group`, so whichever group happens to come first never
+   gets a leading border: `.tb-health` only exists when there ARE problems. */
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-group + .tb-group {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
 /* undo/redo: a tight pair, dimmed when there's nothing to step through */
 .anim-history-btns {
   display: flex;

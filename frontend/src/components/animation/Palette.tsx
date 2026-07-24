@@ -218,7 +218,7 @@ export default function Palette({
       {problems.length > 0 && (
         // Dead-wiring warnings: things the render happily produces WRONG (flat-0
         // modulators, flattened ranges, unwired outputs) with no error anywhere.
-        <div className="anim-problems" ref={problemsRef}>
+        <div className="anim-problems tb-group tb-health" ref={problemsRef}>
           <button
             className={"btn sm anim-problems-btn" + (problemsOpen ? " on" : "")}
             aria-haspopup="menu"
@@ -247,93 +247,113 @@ export default function Palette({
           )}
         </div>
       )}
-      {(onUndo || onRedo) && (
-        // Undo/redo was keyboard-only (⌘Z) and undiscoverable; the disabled state also
-        // tells you when a step is available. Session-only, per segment.
-        <div className="anim-history-btns">
-          <button
-            className="btn sm anim-history-btn"
-            title="Undo (⌘Z)"
-            aria-label="Undo"
-            disabled={!canUndo}
-            onClick={onUndo}
-          >
-            {/* U+FE0E forces TEXT presentation — macOS renders a bare ↩ as a blue emoji */}
-            {"↩︎"}
-          </button>
-          <button
-            className="btn sm anim-history-btn"
-            title="Redo (⇧⌘Z)"
-            aria-label="Redo"
-            disabled={!canRedo}
-            onClick={onRedo}
-          >
-            {"↪︎"}
-          </button>
+      {/* EDIT — the two undo-able pairs. They were two sibling divs sharing one class
+          and reading as four loose buttons; one group with a hairline between the
+          pairs says "these all change the graph, and both are reversible". */}
+      {(onUndo || onRedo || onCopy || onPaste) && (
+        <div className="tb-group tb-edit">
+          {(onUndo || onRedo) && (
+            // Undo/redo was keyboard-only (⌘Z) and undiscoverable; the disabled state
+            // also tells you when a step is available. Session-only, per segment.
+            <div className="anim-history-btns">
+              <button
+                className="btn sm anim-history-btn"
+                title="Undo (⌘Z)"
+                aria-label="Undo"
+                disabled={!canUndo}
+                onClick={onUndo}
+              >
+                {/* U+FE0E forces TEXT presentation — macOS renders a bare ↩ as a blue emoji */}
+                {"↩︎"}
+              </button>
+              <button
+                className="btn sm anim-history-btn"
+                title="Redo (⇧⌘Z)"
+                aria-label="Redo"
+                disabled={!canRedo}
+                onClick={onRedo}
+              >
+                {"↪︎"}
+              </button>
+            </div>
+          )}
+          {(onCopy || onPaste) && (
+            // The group-move story: select cards (shift-click / marquee), copy, switch
+            // segment, paste — the clipboard is app-level, so it crosses editors.
+            <div className="anim-history-btns">
+              <button
+                className="btn sm anim-history-btn"
+                title="Copy the selected cards (⌘C) — paste them here or in another segment"
+                aria-label="Copy selection"
+                disabled={!canCopy}
+                onClick={onCopy}
+              >
+                ⧉
+              </button>
+              <button
+                className="btn sm anim-history-btn"
+                title="Paste the copied cards (⌘V) — they land selected, ready to drag into place"
+                aria-label="Paste"
+                disabled={!canPaste}
+                onClick={onPaste}
+              >
+                ⎘
+              </button>
+            </div>
+          )}
         </div>
       )}
-      {(onCopy || onPaste) && (
-        // The group-move story: select cards (shift-click / marquee), copy, switch
-        // segment, paste — the clipboard is app-level, so it crosses editors.
-        <div className="anim-history-btns">
-          <button
-            className="btn sm anim-history-btn"
-            title="Copy the selected cards (⌘C) — paste them here or in another segment"
-            aria-label="Copy selection"
-            disabled={!canCopy}
-            onClick={onCopy}
-          >
-            ⧉
-          </button>
-          <button
-            className="btn sm anim-history-btn"
-            title="Paste the copied cards (⌘V) — they land selected, ready to drag into place"
-            aria-label="Paste"
-            disabled={!canPaste}
-            onClick={onPaste}
-          >
-            ⎘
-          </button>
+
+      {/* VIEW — changes what you SEE, never the graph. `⛶ fullscreen` belongs here
+          rather than off on its own: it is the third way of getting more of the
+          canvas in front of you, after fit and arrange. */}
+      {(onFitView || onReorganize || onToggleFullscreen) && (
+        <div className="tb-group tb-view">
+          {onFitView && (
+            <button
+              className="btn sm"
+              title="Fit view — pan/zoom so every card is visible (double-click empty canvas does the same)"
+              onClick={onFitView}
+            >
+              ⊙ fit
+            </button>
+          )}
+          {onReorganize && (
+            // Per-view layout cleanup: each view keeps its OWN card positions, and this
+            // lays out the one you're looking at along the data flow, untangling wires.
+            <button
+              className="btn sm"
+              title="Arrange — lay the cards out along the data flow with the wires untangled"
+              onClick={onReorganize}
+            >
+              ✨ arrange
+            </button>
+          )}
+          {onToggleFullscreen && (
+            <button
+              className="btn sm"
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen playground"}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen playground"}
+              onClick={onToggleFullscreen}
+            >
+              {isFullscreen ? "🗗 exit" : "⛶ fullscreen"}
+            </button>
+          )}
         </div>
       )}
-      {onFitView && (
-        <button
-          className="btn sm"
-          title="Fit view — pan/zoom so every card is visible (double-click empty canvas does the same)"
-          onClick={onFitView}
-        >
-          ⊙ fit
-        </button>
-      )}
-      {onReorganize && (
-        // Per-view layout cleanup: each view keeps its OWN card positions, and this
-        // lays out the one you're looking at along the data flow, untangling wires.
-        <button
-          className="btn sm"
-          title="Arrange — lay the cards out along the data flow with the wires untangled"
-          onClick={onReorganize}
-        >
-          ✨ arrange
-        </button>
-      )}
+
+      {/* SETTINGS — the whole render's output, not this view's. Last, because it is
+          the least-touched thing in the bar. */}
       {onOpenOutput && (
-        <button
-          className="btn sm output-gear"
-          title="Output settings (size, quality, fps, background)"
-          onClick={onOpenOutput}
-        >
-          ⚙ output
-        </button>
-      )}
-      {onToggleFullscreen && (
-        <button
-          className="btn sm"
-          title={isFullscreen ? "Exit fullscreen" : "Fullscreen playground"}
-          aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen playground"}
-          onClick={onToggleFullscreen}
-        >
-          {isFullscreen ? "🗗 exit" : "⛶ fullscreen"}
-        </button>
+        <div className="tb-group tb-settings">
+          <button
+            className="btn sm output-gear"
+            title="Output settings (size, quality, fps, background)"
+            onClick={onOpenOutput}
+          >
+            ⚙ output
+          </button>
+        </div>
       )}
     </div>
   );
