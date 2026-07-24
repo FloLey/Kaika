@@ -338,14 +338,14 @@ export async function startExport(jobId: string): Promise<StreamStartResult> {
 }
 
 // Cut [start, end] (seconds) out of a finished master (its /fluid/... url) — the
-// platform-length trim. Synchronous re-encode server-side (frame-accurate), cached:
-// an identical re-cut returns instantly.
+// platform-length trim. Cache hit -> {url}; else -> {render_id} to poll via
+// getExportStatus (a 4K re-encode runs for minutes — it's a background job).
 export async function trimExport(
   url: string,
   start: number,
   end: number
-): Promise<{ url: string }> {
-  return postJson<{ url: string }>("/export/trim", { url, start, end });
+): Promise<{ url?: string; render_id?: string }> {
+  return postJson<{ url?: string; render_id?: string }>("/export/trim", { url, start, end });
 }
 
 // HD render of ONE segment, at the final export's settings (an Output card's "HD"

@@ -572,15 +572,19 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
 @bp.post("/export/trim")
 @json_body
 def export_trim(body):
-    """Cut [start, end] (seconds) out of a finished master -> {url} — the
-    platform-length trim (an Instagram reel caps at ~3 minutes; the master is the
-    whole song). Synchronous: a RE-ENCODE of the kept range (input-side `-ss` +
-    re-encode is frame-accurate; a stream copy would snap to the master's keyframes,
-    seconds apart at HD GOP sizes) at the master's own CRF, with the audio cut and
-    re-encoded alongside. Cached by (master name, start, end) in the same clip dir —
-    an identical re-cut returns instantly. The GC sweep can't recompute trim keys
-    from the DB, so like child-composition previews they live on recency and rebuild
-    cheaply (ARCHITECTURE, accepted trade-offs)."""
+    """Cut [start, end] (seconds) out of a finished master — the platform-length
+    trim (an Instagram reel caps at ~3 minutes; the master is the whole song).
+    Cache hit -> {url} immediately; else -> {render_id} for a BACKGROUND job on the
+    normal poll contract (GET /export/stream/<id>): a 4K master re-encodes for
+    minutes, and the first version did it synchronously inside the request — the
+    button said "cutting…" with no progress and no proof of life. The job parses
+    ffmpeg's `-progress` frame counter into frames_done/total.
+
+    A RE-ENCODE of the kept range (input-side `-ss` + re-encode is frame-accurate;
+    a stream copy would snap to the master's keyframes, seconds apart at HD GOP
+    sizes) at the master's own CRF, audio cut and re-encoded alongside. Cached by
+    (master name, start, end) in the clip dir; trim keys aren't derivable from the
+    DB, so the GC keeps them on recency like child previews (ARCHITECTURE)."""
     url = str(body.get("url") or "")
     name = url.rsplit("/", 1)[-1]
     src = ANIM_DIR / name
@@ -596,15 +600,38 @@ def export_trim(body):
         return error_response("end must be after start", 400)
     key = hashlib.sha1(f"{name}|{start:.3f}|{end:.3f}".encode()).hexdigest()[:16]
     out = ANIM_DIR / f"trim-{key}.mp4"
-    if not out.is_file():
-        import subprocess
+    if out.is_file():
+        return jsonify({"url": f"/fluid/{out.name}"})
 
-        from .. import fluid
+    import subprocess
 
+    from .. import fluid
+
+    # The master's fps -> a frame total for the progress bar (best-effort: 0 keeps
+    # the bar indeterminate rather than failing the cut).
+    try:
+        probe = subprocess.run(
+            # fmt: off
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=r_frame_rate", "-of", "default=nw=1:nk=1", str(src),
+            ],
+            # fmt: on
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        num, den = (probe.stdout.strip().split("/") + ["1"])[:2]
+        fps = float(num) / max(1.0, float(den))
+    except Exception:  # noqa: BLE001 — progress total only
+        fps = 0.0
+    total = int(round((end - start) * fps)) if fps else 0
+
+    def run(on_progress, should_cancel):
         tmp = out.with_name(f"{out.stem}.{key}.tmp.mp4")
         # fmt: off
         cmd = [
-            "ffmpeg", "-y", "-v", "error",
+            "ffmpeg", "-y", "-v", "error", "-nostats", "-progress", "pipe:1",
             "-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(src),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", str(fluid.CRF_EXPORT),
             "-pix_fmt", "yuv420p",
@@ -612,14 +639,32 @@ def export_trim(body):
             "-movflags", "+faststart", str(tmp),
         ]
         # fmt: on
+        on_progress(0, total, None, phase="render")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
-            subprocess.run(cmd, check=True, capture_output=True)
+            for line in proc.stdout:  # `-progress` keys, one per line
+                if should_cancel():
+                    proc.kill()
+                    break
+                if line.startswith(b"frame="):
+                    try:
+                        on_progress(min(int(line[6:]), total or 1 << 30), total, None)
+                    except ValueError:
+                        pass
+            err = (proc.stderr.read() or b"").decode(errors="replace")
+            if proc.wait() != 0 or should_cancel():
+                tmp.unlink(missing_ok=True)
+                if should_cancel():
+                    return None
+                raise RuntimeError(f"trim encode failed: {err[-400:]}")
             tmp.replace(out)
-        except subprocess.CalledProcessError as e:
-            tmp.unlink(missing_ok=True)
-            log.warning("export trim failed: %s", (e.stderr or b"").decode()[-400:])
-            return error_response("trim failed — see server log", 500)
-    return jsonify({"url": f"/fluid/{out.name}"})
+        finally:
+            proc.stdout.close()
+            proc.stderr.close()
+        on_progress(total or 1, total or 1, None)
+        return f"/fluid/{out.name}"
+
+    return jsonify({"render_id": render_jobs.start(run)})
 
 
 @bp.get("/export/stream/<render_id>")

@@ -21,6 +21,7 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [pct, setPct] = useState<number | null>(null); // encode progress (null = starting)
   const [error, setError] = useState<string | null>(null);
   const [cut, setCut] = useState<{ url: string; start: number; end: number } | null>(null);
 
@@ -58,13 +59,33 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
   async function doCut() {
     setBusy(true);
     setError(null);
+    setPct(null);
     try {
       const r = await api.trimExport(finalUrl, start, end);
-      setCut({ url: r.url, start, end });
+      if (r.url) {
+        setCut({ url: r.url, start, end }); // cache hit — instant
+        return;
+      }
+      // A fresh cut is a background job (a 4K re-encode runs for minutes) — poll
+      // the normal render contract and surface the encoder's frame counter.
+      for (;;) {
+        const st = await api.getExportStatus(r.render_id!);
+        if (st.state === "done" && st.url) {
+          setCut({ url: st.url, start, end });
+          return;
+        }
+        if (st.state !== "running") {
+          setError(st.error || "trim failed");
+          return;
+        }
+        setPct(st.total ? Math.round((st.frames_done / st.total) * 100) : null);
+        await new Promise((res) => setTimeout(res, 700));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "trim failed");
     } finally {
       setBusy(false);
+      setPct(null);
     }
   }
 
@@ -110,7 +131,7 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
       </label>
       <div className="export-trim-actions">
         <button className="btn sm" onClick={doCut} disabled={busy || whole}>
-          {busy ? "cutting…" : "✂ cut"}
+          {busy ? `cutting…${pct != null ? ` ${pct}%` : ""}` : "✂ cut"}
         </button>
         {whole && !busy && (
           <span className="anim-fx-hint">move a handle first — this is the whole master</span>

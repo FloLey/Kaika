@@ -48,12 +48,30 @@ def _duration(path) -> float:
     return float(p.stdout.strip())
 
 
+def _finish(client, body, timeout=30.0):
+    """A fresh cut is a background job ({render_id}, poll to done); a cached one
+    answers {url} directly. Either way -> the final url."""
+    import time
+
+    if "url" in body:
+        return body["url"]
+    rid = body["render_id"]
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        st = client.get(f"/export/stream/{rid}").get_json()
+        if st["state"] == "done":
+            return st["url"]
+        assert st["state"] == "running", st
+        time.sleep(0.05)
+    raise AssertionError("trim job never finished")
+
+
 @_needs_ffmpeg
 def test_trim_cuts_the_requested_range_and_caches(client):
     _make_master()
     r = client.post("/export/trim", json={"url": "/fluid/master-abc.mp4", "start": 1, "end": 3})
     assert r.status_code == 200, r.get_json()
-    url = r.get_json()["url"]
+    url = _finish(client, r.get_json())
     assert url.startswith("/fluid/trim-")
     out = paths.ANIM_DIR / url.rsplit("/", 1)[-1]
     assert abs(_duration(out) - 2.0) < 0.2
