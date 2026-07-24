@@ -3,6 +3,7 @@ import type { MutableRefObject, PointerEvent as RPointerEvent, ReactNode } from 
 import usePanZoom, { fitView } from "./usePanZoom";
 import type { View } from "./usePanZoom";
 import { portKey, centerInContainer, edgePath, canConnect, connectIssue } from "./ports";
+import EdgeLayer from "./EdgeLayer";
 import { useWindowPointer } from "./useWindowPointer";
 import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
 import type { NodeHelpers } from "./nodes/nodeProps";
@@ -640,42 +641,13 @@ export default function GraphCanvas({
         fitToNodes();
       }}
     >
-      <svg className="gc-edges gc-edges-base" width="100%" height="100%">
-        {edges.map((e) => (
-          <g
-            key={e.id}
-            className={
-              "gc-edge" +
-              (selected.has(e.id) ? " sel" : "") +
-              (e.edge.targetPort === LOOSE_PORT ? " unassigned" : "")
-            }
-          >
-            <path
-              className="gc-edge-hit"
-              d={e.d}
-              onPointerDown={(ev) => {
-                ev.stopPropagation();
-                if (ev.shiftKey || ev.metaKey || ev.ctrlKey) toggleSel(e.id);
-                else replaceSel(e.id);
-              }}
-            />
-            <path className="gc-edge-line" d={e.d} />
-            <g
-              className="gc-edge-del"
-              transform={`translate(${e.mx}, ${e.my})`}
-              onPointerDown={(ev) => {
-                ev.stopPropagation();
-                removeEdge(e.edge);
-              }}
-            >
-              <circle r="9" />
-              <text textAnchor="middle" dominantBaseline="central">
-                ✕
-              </text>
-            </g>
-          </g>
-        ))}
-      </svg>
+      <EdgeLayer
+        edges={edges}
+        selected={selected}
+        toggleSel={toggleSel}
+        replaceSel={replaceSel}
+        removeEdge={removeEdge}
+      />
 
       <div
         className="gc-stage"
