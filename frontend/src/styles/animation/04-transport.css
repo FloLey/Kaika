@@ -1,0 +1,108 @@
+/* ---- shared segment transport (Studio results-head, visible in both tabs) -- */
+
+/* Let the controls row fill the width to the right of the section title so the
+   timeline has room to stretch (scoped to the studio so Review is untouched).
+   The transport is now the row's ONLY occupant — the actions that used to share it
+   moved to `.studio-bar`. That also retires the faint left-border divider this rule
+   carried: it separated the transport from the action cluster, and with the cluster
+   gone the border had nothing on its left but the segment title. */
+.studio-main .results-head .controls {
+  flex: 1 1 auto;
+}
+.rh-transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto; /* the timeline lives here and eats the slack */
+  min-width: 0;
+}
+
+/* Segmented copy control: "⧉ copy" label + butted prev/next buttons. */
+.rh-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rh-copy-label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.rh-copy .rh-copy-btn {
+  border-radius: 0;
+}
+.rh-copy .rh-copy-btn:first-of-type {
+  border-radius: 6px 0 0 6px;
+}
+.rh-copy .rh-copy-btn:last-of-type {
+  border-radius: 0 6px 6px 0;
+  margin-left: -1px;
+}
+
+/* Fixed-width icon play/pause so toggling ▶ <-> ❚❚ never reflows the timeline. */
+.seg-play {
+  flex: none;
+  width: 40px;
+  text-align: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.seg-timeline {
+  flex: 1 1 auto;
+  min-width: 200px;
+  accent-color: var(--petale);
+  cursor: pointer;
+}
+.seg-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* speaker button + click-to-open vertical volume popover */
+.seg-volume {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+.vol-btn {
+  padding: 4px 7px;
+  line-height: 1;
+}
+.vol-pop {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.vol-pct {
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+}
+/* rotate a horizontal range to vertical — reliable across browsers */
+.vol-track {
+  height: 96px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vol-track input[type="range"] {
+  width: 96px;
+  transform: rotate(-90deg);
+  accent-color: var(--petale);
+  cursor: pointer;
+}

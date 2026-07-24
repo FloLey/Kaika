@@ -1,0 +1,555 @@
+/* ---- imagegen slideshow strip ----------------------------------------------- */
+.anim-imagegen-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.anim-imagegen-slot {
+  position: relative;
+  width: 44px;
+  height: 30px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.anim-imagegen-slot img,
+.anim-imagegen-slot video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Own slots are draggable (reorder) — the grab cursor + a highlight on the one lifted. */
+.anim-imagegen-slot.draggable {
+  cursor: grab;
+}
+.anim-imagegen-slot.dragging {
+  opacity: 0.4;
+}
+/* 🎞 badge marking a video item apart from a still. */
+.anim-imagegen-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 2px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 0 4px 0 0;
+  pointer-events: none;
+}
+.anim-imagegen-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 3px;
+  cursor: pointer;
+  border-radius: 0 0 0 4px;
+}
+
+.anim-imagegen-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+.anim-imagegen-prompt-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Compact-card previews: small variants of the points pad / render well so a
+   compacted fluid/combine/points card shows its output without taking full height. */
+.anim-points-pad-sm {
+  max-height: 72px;
+}
+/* Compact producer previews (fluid/combine) render at the full output aspect — the
+   same size as the Output card's well — just with a smaller loader. */
+.anim-output-well-sm .anim-loader-orb {
+  width: 5px;
+  height: 5px;
+}
+.anim-imagegen-slot.gen {
+  border-style: dashed; /* generated (wired-in) slots read differently from own picks */
+}
+.anim-slideshow-count strong {
+  color: var(--text);
+}
+/* The video in-point mini-editor (SlideshowItemEditor): a small popover anchored over
+   the card with a scrubbable <video> + range slider. */
+.anim-slide-editor-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: inherit;
+}
+.anim-slide-editor {
+  width: 90%;
+  max-width: 240px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.anim-slide-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.anim-slide-editor-close {
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.anim-slide-editor video {
+  width: 100%;
+  border-radius: 4px;
+  background: #000;
+  display: block;
+}
+.anim-slide-editor input[type="range"] {
+  width: 100%;
+}
+.anim-slide-editor-time {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text);
+}
+.anim-slide-editor-dur {
+  color: var(--muted);
+}
+/* the images flow gets its own port hue so slideshow/imagegen wiring reads at a glance */
+.gc-port-images {
+  background: #b07ad6;
+}
+
+.anim-imagegen-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.anim-imagegen-seed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.anim-imagegen-seed input {
+  width: 56px;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+/* the ✨ generate action: a full-width block so it always sits INSIDE the card */
+.anim-imagegen-generate {
+  width: 100%;
+  justify-content: center;
+  margin-top: 2px;
+}
+.anim-imagegen-prompt {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+
+/* ---- lyrics line editor modal ---------------------------------------------- */
+.anim-modal.lyrics-editor {
+  width: min(620px, 92vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+.lyrics-editor-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lyrics-editor-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+.lyrics-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lyrics-editor-flag {
+  font-size: 10px;
+  color: var(--muted);
+  width: 12px;
+  text-align: center;
+  flex: none;
+}
+.lyrics-editor-dash {
+  color: var(--muted);
+  flex: none;
+}
+.lyrics-editor-time {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  width: 68px;
+  flex: none;
+  text-align: center;
+  padding: 5px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+.lyrics-editor-time.bad {
+  border-color: var(--petale-soft);
+  color: var(--petale-soft);
+}
+.lyrics-editor-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text);
+}
+.lyrics-editor-empty {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.lyrics-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.anim-lyrics-lines {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---- asset library modal --------------------------------------------------- */
+.anim-modal.asset-lib {
+  width: min(680px, 92vw);
+  max-height: 82vh;
+}
+.asset-lib-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.asset-lib-actions .asset-lib-yt {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0;
+}
+/* Placeholder while a video's server-side thumb isn't generated yet (or failed). */
+.asset-lib-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 28px;
+  opacity: 0.5;
+}
+.asset-lib-empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.asset-lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+/* Folder-upload group header: the relative path a batch of assets was uploaded under. */
+.asset-lib-folder {
+  margin: 12px 0 6px;
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 4px;
+}
+.asset-lib-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.asset-lib-item.pickable {
+  cursor: pointer;
+}
+.asset-lib-item.pickable:hover {
+  border-color: color-mix(in srgb, var(--courant) 55%, var(--line));
+}
+.asset-lib-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+.asset-lib-thumb img,
+.asset-lib-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.asset-lib-kind {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px #000);
+}
+.asset-lib-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.asset-lib-del {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  opacity: 0;
+  background: color-mix(in srgb, #000 55%, transparent);
+}
+.asset-lib-item:hover .asset-lib-del {
+  opacity: 1;
+}
+/* ---- lyrics text-box editor (drag to move, corners to resize) -------------- */
+.anim-box-editor {
+  margin: 4px 0 6px;
+}
+.anim-box-pad {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--out-aspect, 1 / 1);
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 25% 100%,
+    var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+}
+.anim-box-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* live clip preview inside the placement box (video card); the rect + handles sit on top */
+.anim-box-video,
+.anim-box-image {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+}
+/* the box-shaped window the video card's clip preview is laid out in: the (cropped)
+   source is positioned in pixels inside it and the overflow clipped, so the preview
+   shows exactly the region the crop + fit select */
+.anim-box-clip {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 3px;
+  pointer-events: none;
+}
+/* source-crop editor (video card): the whole clip fills the pad at its own aspect… */
+.anim-crop-src {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+/* …and the selection rect dims everything outside it (the huge shadow is clipped by the
+   pad's overflow:hidden) */
+.anim-crop-rect {
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+}
+.anim-crop-rect.full {
+  box-shadow: none; /* nothing is cropped away yet — don't dim the frame edge */
+}
+/* compact one-line drop/replace affordance (video card — the preview is the box) */
+.anim-asset-drop-row {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.anim-asset-drop-row .anim-asset-icon {
+  font-size: 15px;
+}
+.anim-box-rect {
+  position: absolute;
+  box-sizing: border-box;
+  /* transparent fill so the text preview underneath reads; the border marks the box */
+  background: transparent;
+  border: 1.5px solid var(--courant);
+  border-radius: 3px;
+  cursor: grab;
+}
+.anim-box-rect:active {
+  cursor: grabbing;
+}
+.anim-box-handle {
+  position: absolute;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  background: var(--courant);
+  border: 2px solid var(--panel);
+  border-radius: 2px;
+}
+.anim-box-handle.nw {
+  left: -6px;
+  top: -6px;
+  cursor: nwse-resize;
+}
+.anim-box-handle.ne {
+  right: -6px;
+  top: -6px;
+  cursor: nesw-resize;
+}
+.anim-box-handle.sw {
+  left: -6px;
+  bottom: -6px;
+  cursor: nesw-resize;
+}
+.anim-box-handle.se {
+  right: -6px;
+  bottom: -6px;
+  cursor: nwse-resize;
+}
+.anim-box-readout {
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.anim-points-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--courant);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--courant);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+}
+.anim-points-marker:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--courant) 40%, transparent);
+}
+.anim-points-marker:active {
+  cursor: grabbing;
+}
+.anim-points-hint {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* read-only preview pad (pattern card): not interactive, markers don't grab */
+.anim-points-pad-ro {
+  cursor: default;
+}
+.anim-points-marker-ro {
+  width: 9px;
+  height: 9px;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* fluid's labelled `positions` input row (spec 11) */
+.anim-pos-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 8px;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: 8px;
+}
+.anim-pos-row > .gc-port {
+  flex: none;
+}
+.anim-pos-label {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--courant);
+}
+.anim-pos-count {
+  margin-left: auto;
+  font: 10px/1 var(--mono);
+  color: var(--muted);
+}
+
+/* scope card: a small chip naming the monitored source type */
+.anim-scope-chip {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--mod);
+  background: color-mix(in srgb, var(--mod) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--mod) 30%, var(--line));
+  border-radius: 5px;
+  padding: 3px 6px;
+  text-transform: lowercase;
+}

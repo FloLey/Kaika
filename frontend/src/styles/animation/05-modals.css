@@ -1,0 +1,479 @@
+/* ---- output settings modal ------------------------------------------------ */
+
+.anim-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100; /* above every tooltip (.info-tip 60 / .anim-add-tip 70) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+  backdrop-filter: blur(2px);
+}
+.anim-modal {
+  width: 340px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  overscroll-behavior: contain; /* the modal's own scroll never chains to the page */
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+/* the app's confirm prompt for destructive actions (ui/ConfirmDialog) */
+.confirm-dialog {
+  padding: 18px;
+}
+.confirm-dialog-msg {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirm-dialog-actions .btn.danger {
+  background: var(--petale);
+  border-color: var(--petale);
+  color: #fff;
+}
+.anim-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.anim-modal-title {
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+.anim-modal-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---- node settings modal (a full card rendered in a modal) ----------------- */
+
+/* Header spans the top; LEFT column = INPUTS panel + the card's controls; RIGHT column
+   = one big live preview (CompactPreview). The card's own inline preview suppresses
+   itself (ctx.previewInPanel), so the right column is the single visual. */
+.anim-modal.node-settings {
+  width: min(1000px, 95vw);
+  max-height: 86vh;
+  padding: 0;
+  overflow: hidden; /* the columns scroll internally, not the whole modal */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 460px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "head head"
+    "main visual";
+}
+/* Pure-editor cards (points) drop the preview column — one column only. */
+.anim-modal.node-settings.single {
+  width: min(600px, 94vw);
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "head"
+    "main";
+}
+
+.node-settings-head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.node-settings-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, var(--petale)) 22%, transparent);
+}
+.node-settings-name {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.1;
+  color: var(--text);
+  cursor: text;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-settings-name-edit {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.1;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--accent, var(--petale));
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  outline: none;
+}
+.node-settings-type {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* lyrics window tab bar: layout | lyrics */
+.node-settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+}
+.node-settings-tab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.node-settings-tab.on {
+  color: var(--text);
+  border-color: var(--accent, var(--petale));
+  background: color-mix(in srgb, var(--accent, var(--petale)) 14%, transparent);
+}
+/* the lyrics-lines tab spans the full width under the header */
+.node-settings-tab-panel {
+  grid-column: 1 / -1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px;
+}
+.node-settings-close {
+  margin-left: auto;
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.node-settings-close:hover {
+  color: var(--text);
+  background: var(--line);
+}
+
+.node-settings-main {
+  grid-area: main;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  min-width: 0;
+}
+.node-settings-visual {
+  grid-area: visual;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  border-left: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 88%, #000);
+  display: flex;
+  flex-direction: column;
+}
+/* SettingsVisual wrapper — the single, large, per-type visual. */
+.sv {
+  width: 100%;
+}
+/* value cards: a small curve+pad, centred in the column */
+.sv-pad {
+  margin: auto 0;
+  display: flex;
+  justify-content: center;
+}
+.sv-pad .anim-signal-viz {
+  width: 100%;
+  max-width: 300px;
+}
+/* shaped previews (points/pattern/animate/merge/fluid/combine): fill the width, the
+   child's own aspect-ratio (--out-aspect) drives the height (no compact -sm clamp) */
+.sv-fill > * {
+  width: 100%;
+  max-width: none;
+}
+/* colour / backdrop: a big block of the resulting colour or gradient */
+.sv-color {
+  width: 100%;
+  height: 240px;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+/* deferred cards still show the compact summary — centre it for now */
+.sv-fallback {
+  margin: auto 0;
+  display: flex;
+  justify-content: center;
+}
+/* image / video: the editable placement box (with the content inside), full width */
+.sv-box > * {
+  width: 100%;
+}
+/* output: the big render preview + the ★ mark-final button */
+.sv-output {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sv-output .anim-final-btn {
+  align-self: center;
+}
+
+/* imagegen gallery: a grid of every generated image; click one to open the lightbox */
+.imagegen-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
+.imagegen-gallery-cell {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 0;
+  background: #0c0d12;
+  cursor: zoom-in;
+  aspect-ratio: 1;
+}
+.imagegen-gallery-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.imagegen-gallery-cell:hover {
+  border-color: var(--accent, var(--petale));
+}
+/* lightbox: the image big + ‹ › nav, over the standard scrim */
+.imagegen-lightbox {
+  gap: 12px;
+  z-index: 120;
+}
+.imagegen-lb-img {
+  max-width: 82vw;
+  max-height: 82vh;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.imagegen-lb-nav {
+  border: none;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: none;
+}
+.imagegen-lb-nav:hover {
+  background: var(--panel);
+}
+.imagegen-lb-count {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 600 11px/1 var(--mono);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  padding: 4px 8px;
+  border-radius: 10px;
+}
+
+/* the on-canvas output well is clickable to open its big window */
+.anim-output-well-open {
+  cursor: zoom-in;
+}
+.anim-output-open-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.anim-output-well-open:hover .anim-output-open-badge {
+  opacity: 0.85;
+}
+
+/* the card fills the LEFT column, flat — its own chrome is redundant with the modal */
+.node-settings .anim-node {
+  width: 100%;
+  box-shadow: none;
+  border: none;
+  background: none;
+}
+.node-settings .gc-port {
+  display: none; /* port dots are meaningless without a canvas to wire on */
+}
+.node-settings .anim-node-head {
+  display: none; /* the modal header shows the name (rename lives there) */
+}
+/* The right column (SettingsVisual) owns the card's PREVIEW, so hide the display-only
+   inline copies in the left column: signal/scope's curve+pad (rendered directly, not via
+   ValuePreview which the previewInPanel flag already null-s) and the colour gradient BAR.
+   The colour/backdrop swatch stays — it's the editable colour control, not just a preview. */
+.node-settings-main .anim-signal-viz,
+.node-settings-main .anim-gradient-bar {
+  display: none;
+}
+/* The INPUTS panel (a sibling of the card, so NOT .anim-node) owns all input editing —
+   value + source + "?". Hide the card BODY's duplicate input controls in the modal:
+   modulatable param rows, the fluid param GROUPS, and the fluid positions/colour rows.
+   The card body keeps its structural controls (mode, box, toggles). */
+.node-settings .anim-node .anim-param-row,
+.node-settings .anim-node .anim-group,
+.node-settings .anim-node .anim-pos-row {
+  display: none;
+}
+
+/* Narrow: stack to one column — preview on top, then controls. */
+@media (max-width: 640px) {
+  .anim-modal.node-settings {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "head"
+      "visual"
+      "main";
+    width: min(560px, 94vw);
+    overflow: auto; /* stacked content scrolls as one */
+  }
+  .node-settings-main,
+  .node-settings-visual {
+    overflow: visible;
+  }
+  .node-settings-visual {
+    border-left: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .node-settings-visual > * {
+    position: static;
+  }
+}
+
+.out-preview-wrap {
+  display: flex;
+  justify-content: center;
+}
+.out-preview {
+  /* sized by the inline aspect-ratio: both maxes transfer through it, so a wide
+     (16:9) shape shrinks instead of distorting against a fixed height */
+  width: auto;
+  height: auto;
+  max-height: 110px;
+  max-width: 100%;
+  background: #0c0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.out-preview-dim {
+  font: 600 10px/1 var(--mono);
+  color: #8a93a6;
+  padding: 4px 6px;
+}
+
+.out-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.out-label {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.out-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.out-ratio {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.7;
+}
+.out-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.out-size .hz-input {
+  width: 84px;
+}
+.out-lock {
+  margin-left: auto;
+  font-size: 14px;
+}
+.out-lock.on {
+  color: var(--petale);
+}
+/* Read-only badge: the export shape is pinned to the studio canvas ratio. */
+.export-ratio-lock {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.out-x,
+.out-unit {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.out-bg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.out-color {
+  width: 38px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.out-bg-hex {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  text-transform: uppercase;
+}

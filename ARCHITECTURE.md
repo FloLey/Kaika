@@ -65,6 +65,9 @@ frontend/src/
   lib/              domain logic (graph model, api, params, segments)
   lib/graph/        ← the graph model package; graphModel.ts is its barrel
   components/       studio / animation (+ nodes/) / assets / export / review / upload
+  styles/           one file per area, imported base-first by index.css
+  styles/animation/  ← the editor's stylesheet, cut into ordered parts (01…09);
+                       animation.css is its barrel — the NUMBERS are the cascade
 tests/              pytest (backend); frontend/src/__tests__/ is vitest
 specs/              design records per shipped wave (the why, not a roadmap)
 docs/               only what is still live: open backlogs, changelogs, archive

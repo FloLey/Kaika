@@ -1,0 +1,304 @@
+/* ---- add-node toolbar (top of the panel, not on the canvas) --------------- */
+
+.anim-toolbar {
+  position: relative;
+  z-index: 20; /* keep the toolbar (and its Add-node dropdown) above the canvas */
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  border-radius: 14px 14px 0 0; /* match .anim-wrap's rounded top */
+}
+.anim-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+/* The toolbar's right side, grouped by what each button ACTS ON: health (⚠), edit
+   (undo/redo + copy/paste), view (fit / arrange / fullscreen), settings (⚙ output).
+   Before this they were a flat row of six concerns in a row, so `⚙ output` — which
+   configures the whole render — sat between the view controls and fullscreen.
+
+   The hairline is on `+ .tb-group`, so whichever group happens to come first never
+   gets a leading border: `.tb-health` only exists when there ARE problems. */
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-group + .tb-group {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+/* undo/redo: a tight pair, dimmed when there's nothing to step through */
+.anim-history-btns {
+  display: flex;
+  gap: 2px;
+}
+.anim-history-btn {
+  /* the bare arrow glyph is thin at the toolbar's font size — give it weight and a
+     line-height that keeps the pair the same height as the neighbouring buttons */
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  min-width: 30px;
+  text-align: center;
+}
+.anim-history-btn:disabled {
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: default;
+}
+.anim-history-btn:disabled:hover {
+  background: var(--panel);
+  border-color: var(--line);
+}
+/* the row of per-category add buttons (wraps on a narrow panel) */
+.anim-add-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* anchors each category's dropdown and the signal picker */
+.anim-add-menu {
+  position: relative;
+  display: flex;
+}
+/* the open category button reads active */
+.anim-add-btn.on {
+  border-color: var(--petale-soft);
+  color: var(--petale);
+}
+
+/* the grouped Add-node dropdown */
+.anim-add-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  width: 200px;
+  /* overflow stays visible so the per-item hover help (anchored to the right) isn't
+     clipped; each category holds ≤5 items, so no scroll is needed. */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 30;
+}
+.anim-add-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.anim-add-group + .anim-add-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.anim-add-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 4px 8px 2px;
+}
+.anim-add-item {
+  position: relative;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.anim-add-item:hover {
+  background: var(--panel-2);
+}
+
+/* per-item hover help: what it does + the input → output flow. Anchored to the RIGHT
+   of the item (modelled on .info-tip) so a wide tip doesn't reflow the narrow menu. */
+.anim-add-tip {
+  position: absolute;
+  top: -2px;
+  left: calc(100% + 8px);
+  z-index: 70;
+  width: max-content;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-family: var(--mono);
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.12s,
+    transform 0.12s;
+  pointer-events: none;
+}
+.anim-add-item:hover .anim-add-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+/* Near the panel's right edge the right-anchored tip would be clipped by
+   .anim-wrap's overflow:hidden — Palette measures and flips it to the LEFT. */
+.anim-add-dropdown.tip-left .anim-add-tip {
+  left: auto;
+  right: calc(100% + 8px);
+  transform: translateX(4px);
+}
+.anim-add-dropdown.tip-left .anim-add-item:hover .anim-add-tip {
+  transform: translateX(0);
+}
+.anim-add-tip-help {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+/* ⚠ dead-wiring warnings: a chip in the toolbar's right cluster + a dropdown of
+   clickable rows (click = select + center the offending card). Hint tones — these
+   are "renders silently wrong", not fatal errors. */
+.anim-problems {
+  position: relative;
+  display: flex;
+}
+.anim-problems-btn {
+  border-color: var(--hint-border);
+  color: var(--hint-text);
+}
+.anim-problems-btn.on,
+.anim-problems-btn:hover {
+  background: var(--hint-bg);
+  border-color: var(--hint-border);
+  color: var(--hint-text);
+}
+.anim-problems-list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  width: min(340px, 80vw);
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--hint-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 30;
+}
+.anim-problems-item {
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.anim-problems-item:hover {
+  background: var(--hint-bg);
+  color: var(--hint-text);
+}
+
+.anim-add-tip-io {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--courant);
+  border-top: 1px dashed var(--line);
+  padding-top: 4px;
+}
+
+.anim-signal-picker {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  width: 220px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.anim-picker-empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px;
+}
+.anim-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.anim-picker-item:hover {
+  background: var(--panel-2);
+}
+.anim-picker-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, var(--petale));
+  flex: none;
+}
+
+/* ---- signal node viz: sparkline + live pulse pad, side by side ------------- */
+
+.anim-signal-viz {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.anim-signal-viz .anim-signal-spark {
+  flex: 1;
+  height: 44px;
+}
+/* CurveView's `.curve` is 80px tall by default; let it fill the 44px spark box
+   instead of being clipped to its top (same as studio's `.curve-mini .curve`). */
+.anim-signal-viz .anim-signal-spark .curve {
+  height: 100%;
+}
+.anim-signal-viz .pulse-pad {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 8px;
+}

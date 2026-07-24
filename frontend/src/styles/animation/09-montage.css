@@ -1,0 +1,356 @@
+/* ---- the montage editor (segment ▸ montage — a full-area breadcrumb level) ---- */
+/* Lives INSIDE .anim-wrap (flex column, 72vh, overflow hidden) — so it must fill
+   that height, scroll its own overflow, and pin the strip/timeline at natural size
+   (a shrinkable flex child inside a fixed-height column otherwise gets crushed to
+   a sliver, which is exactly the bug this comment is the tombstone of). */
+.montage-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+/* The extract strip: tiles side by side, scrolling horizontally past the viewport. */
+.montage-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  flex: 0 0 auto;
+}
+.montage-tile {
+  flex: 0 0 164px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  cursor: grab;
+  font-size: 11px;
+  color: var(--muted);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.montage-tile:hover {
+  border-color: var(--fx, #b8860b);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.montage-tile.short {
+  border-color: #f87171;
+}
+.montage-tile.unused {
+  opacity: 0.55;
+}
+.montage-tile-thumb {
+  height: 88px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #0c0d12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.montage-tile-thumb img,
+.montage-tile-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.montage-tile-anim {
+  font-size: 22px;
+  color: var(--muted);
+}
+.montage-tile-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.montage-tile-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 14px;
+}
+.montage-tile-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.montage-tile-add {
+  flex: 0 0 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-style: dashed;
+  color: var(--muted);
+  font-size: 12px;
+  box-shadow: none;
+}
+.montage-tile-add:hover {
+  color: var(--text);
+  border-color: var(--fx, #b8860b);
+}
+/* Live view left (grows, fills the remaining height), wiring rail right. */
+.montage-editor-body {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 260px;
+}
+.montage-live {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+/* The live view sizes by HEIGHT (aspect-ratio derives the width), so a portrait
+   project doesn't become a wall-height poster that crushes the strip above. */
+.montage-live .anim-output-well {
+  width: auto;
+  max-width: 100%;
+  height: clamp(220px, 46vh, 520px);
+}
+.montage-rail {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow-y: auto;
+}
+
+/* ---- the breakpoints timeline (montage editor) ------------------------------ */
+.bp-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.bp-rail {
+  position: relative;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: copy; /* "click to place a manual cut" */
+}
+.bp-mark {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 4px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.bp-gate {
+  background: #22d3ee; /* the gate's colour — cuts born from the music */
+}
+.bp-gate.off {
+  background: transparent;
+  border-left: 2px dashed #22d3ee66; /* still visible (provenance), just not cutting */
+  width: 0;
+}
+.bp-manual {
+  background: #fbbf24; /* the hand-placed colour */
+  cursor: grab;
+}
+.bp-manual.off {
+  /* silenced by a disabled entry at the same time — visible, not cutting */
+  background: transparent;
+  border-left: 2px dashed #fbbf2466;
+  width: 0;
+}
+.bp-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bp-key {
+  display: inline-block;
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+}
+.bp-key-gate {
+  background: #22d3ee;
+}
+.bp-key-manual {
+  background: #fbbf24;
+}
+
+/* ---- the reuse picker (DAG sharing) + breadcrumb rename ---------------------- */
+.montage-reuse {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.montage-reuse-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+.montage-reuse-row:hover {
+  border-color: var(--accent, #22d3ee);
+}
+.montage-reuse-uses {
+  color: var(--muted);
+}
+.crumb-rename {
+  font: inherit;
+  letter-spacing: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* Compact value tiles: the sparkline joins the pulse (tighter than the full card). */
+.anim-signal-viz.compact .anim-signal-spark {
+  height: 36px;
+}
+.anim-signal-viz.compact .pulse-pad {
+  width: 36px;
+  height: 36px;
+}
+
+/* The two timeline lanes share one positioning context so the playhead can run
+   through both: the EXTRACTS lane (clickable coverage bands) above, the cuts rail
+   below. */
+.bp-lanes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bp-extracts {
+  position: relative;
+  height: 12px;
+}
+/* Coverage bands, one per stretch: tinted = an extract has material there,
+   near-black = the export will render BLACK there (short clip with loop off, or a
+   dangling reference). Each band is a BUTTON — click to select its extract's tile. */
+.bp-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: none;
+  padding: 0;
+  border-radius: 3px;
+  background: transparent; /* covered bands take their per-extract colour inline */
+  cursor: pointer;
+}
+.bp-band-black {
+  background: #15161c;
+}
+.bp-key-covered {
+  background: linear-gradient(90deg, #60a5fa, #34d399, #fbbf24);
+}
+.bp-key-black {
+  background: #15161c;
+  border: 1px solid var(--line);
+}
+
+/* The transport playhead across the strip — follows play AND scrub. */
+.bp-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--petale, #e2557b);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* The tile's key dot — the same colour its stretch wears on the timeline. */
+.montage-tile-key {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: baseline;
+}
+
+/* The extract under the playhead: its band brightens (inline alpha) and gets a
+   ring; its strip tile wears an outline in ITS colour (inline outline-color). */
+.bp-band-live {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+.montage-tile.live {
+  outline: 2px solid var(--fx, #b8860b);
+  outline-offset: -1px;
+}
+
+/* A tile SELECTED from the timeline (or by click): dashed, in the extract's
+   colour — distinct from the solid `live` ring that tracks the playhead. */
+.montage-tile.picked {
+  outline: 2px dashed var(--fx, #b8860b);
+  outline-offset: -1px;
+}
+
+/* The text card's caption input — a small textarea in the select-row layout. */
+.anim-text-row {
+  align-items: flex-start;
+}
+.anim-text-input {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  background: var(--panel);
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+/* The picked extract's framing pad in the montage rail. */
+.montage-crop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

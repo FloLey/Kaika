@@ -1,0 +1,341 @@
+/* ---- combine node (spec 10) ----------------------------------------------- */
+
+.anim-node-combine {
+  width: 250px;
+}
+
+/* merge / layered segmented toggle */
+.anim-combine-modes {
+  display: flex;
+  gap: 0;
+  margin-bottom: 4px;
+}
+.anim-mode-btn {
+  flex: 1;
+  padding: 5px 8px;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.anim-mode-btn:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.anim-mode-btn:last-child {
+  border-radius: 0 7px 7px 0;
+  border-left: none;
+}
+.anim-mode-btn:hover {
+  color: var(--text);
+}
+.anim-mode-btn.on {
+  color: #fff;
+  background: var(--fx);
+  border-color: transparent;
+}
+.anim-combine-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+/* input slots */
+.anim-combine-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: 8px;
+}
+.anim-combine-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.anim-combine-row > .gc-port {
+  flex: none;
+}
+/* A slot whose clip runs out with loop off goes BLACK in the render. Make the row itself
+   loud — a per-row ⚠ badge was missed in a 37-row list (an export shipped with black in
+   it), so the whole line carries the warning now, not just its badge. */
+.anim-combine-row.short {
+  background: color-mix(in srgb, var(--danger, #d9534f) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--danger, #d9534f);
+  border-radius: 3px;
+}
+.anim-combine-slot {
+  flex: none;
+  width: 34px;
+  font-size: 11px;
+  color: var(--text);
+}
+.anim-combine-opacity {
+  flex: 1;
+  min-width: 0; /* the 230px card: slot label + range + ✕ must not blow out */
+  accent-color: var(--fx);
+  cursor: pointer;
+}
+.anim-combine-rm {
+  flex: none;
+  margin-left: auto;
+}
+/* The montage's per-slot span cycler (×1 → ×2 … — cuts the slot swallows). */
+.anim-montage-span {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  padding: 2px 4px;
+}
+.anim-montage-span.on {
+  color: var(--fx);
+}
+/* The montage's "this clip can't fill its slot" flag (⚠ −1.2s). */
+.anim-montage-short {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  color: var(--danger, #d9534f);
+  white-space: nowrap;
+  cursor: help;
+}
+/* "⧉ N repeats" on the status line — the duplicate roll-up beside the black one. Muted
+   when the in-points differ, red (`.same`) when frame-identical (reads as a loop). */
+.anim-montage-dup-roll {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.anim-montage-dup-roll.same {
+  color: var(--danger, #d9534f);
+}
+/* "⧉ 1" — this slot plays a clip an earlier slot already used. Muted when the
+   in-points differ (often deliberate), red when they match: identical frames, which
+   reads on screen as the video looping rather than cutting. */
+.anim-montage-dup {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.anim-montage-dup.same {
+  color: var(--danger, #d9534f);
+}
+
+/* The montage's per-slot duration read-off ("2.8s", "unwired", "unused"). */
+.anim-montage-dur {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anim-combine-add {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* merge medium block */
+.anim-combine-medium-head {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 2px 0 4px;
+}
+
+/* ---- points node (spec 11) ------------------------------------------------ */
+
+/* points-flow ports read teal ("current") to distinguish from value/video. */
+.gc-port-points {
+  border-color: var(--courant);
+}
+.gc-port-points.gc-port-out {
+  background: var(--courant);
+}
+
+/* color-flow ports read petal-pink (the dye colour the card carries). */
+.gc-port-color {
+  border-color: var(--petale);
+}
+.gc-port-color.gc-port-out {
+  background: var(--petale);
+}
+
+/* The colour card's swatch row: the native colour well + its label. */
+.anim-color-swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.anim-color-swatch input[type="color"],
+.anim-gradient-stop input[type="color"] {
+  width: 32px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line, #333);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  flex: none;
+}
+
+/* The colour card's gradient editor: a preview bar + one row per colour stop. */
+.anim-gradient {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.anim-gradient-bar {
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--line, #333);
+  background: var(--grad, #000);
+}
+.anim-gradient-stop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.anim-gradient-stop input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.anim-gradient-t {
+  width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.anim-points-pad {
+  position: relative;
+  width: 100%;
+  /* same sizing as the output preview well — full card width at the output aspect */
+  aspect-ratio: var(--out-aspect, 1 / 1);
+  margin: 0 0 6px;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 25% 100%,
+    var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: crosshair;
+  overflow: hidden;
+  touch-action: none;
+}
+/* ---- image / video layer cards: the upload drop zone + asset thumbnail ------ */
+.anim-asset-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  margin-bottom: 8px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+}
+.anim-asset-drop:hover {
+  border-color: color-mix(in srgb, var(--courant) 45%, var(--line));
+  color: var(--text);
+}
+.anim-asset-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.anim-asset-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+.anim-asset-err {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--petale);
+}
+/* the "📚 library" button under a card's drop zone + the inline youtube row */
+.anim-asset-libbtn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.asset-lib-yt {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.asset-lib-yt .hz-input {
+  flex: 1;
+  min-width: 0;
+}
+/* Compact optional start/end timestamps next to the URL (section-only download). */
+.asset-lib-yt .hz-input.asset-lib-yt-ts {
+  flex: 0 0 52px;
+}
+
+/* ---- settings-window wiring panel ---------------------------------------------- */
+.port-connections {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.port-connections-head {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.port-connections-loose {
+  color: var(--courant, var(--muted));
+  letter-spacing: 0;
+}
+.port-connections-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.port-connections-label {
+  font-size: 12px;
+  min-width: 72px;
+  color: var(--text);
+}
+.port-connections-row .anim-select {
+  /* bounded: the source dropdown must never starve the lo–hi range slider that
+     shares the row (flex:1 here collapsed the dual-slider to a 0px track) */
+  flex: 0 1 200px;
+  min-width: 90px;
+}
+.port-connections-row .anim-param-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---- loose (unassigned) edges ------------------------------------------------ */
+/* A wire parked on a card without a port yet: gray + dashed, so it reads as
+   "connected but not used" until the settings window assigns it. */
+.gc-edge.unassigned .gc-edge-line {
+  stroke: var(--muted);
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}

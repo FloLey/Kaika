@@ -1,0 +1,192 @@
+/* ---- modulator (value) cards: math / lfo / noise / shaper ----------------- */
+
+.anim-mod {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* generator shape preview — a small well that mirrors the points/output wells */
+.anim-mini-spark {
+  display: block;
+  width: 100%;
+  height: 38px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* a labelled native <select> styled to sit with the Ctl rows */
+.anim-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.anim-select-label {
+  flex: none;
+  width: 48px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.anim-select {
+  flex: 1;
+  min-width: 0; /* let it shrink below intrinsic size (number inputs overflow the card otherwise) */
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.anim-select:hover {
+  border-color: color-mix(in srgb, var(--mod) 45%, var(--line));
+}
+
+/* segmented waveform picker (LFO) */
+.anim-shape-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.anim-shape-btn {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 2px;
+  cursor: pointer;
+  text-transform: lowercase;
+}
+.anim-shape-btn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--mod) 45%, var(--line));
+}
+.anim-shape-btn.on {
+  color: var(--mod);
+  border-color: color-mix(in srgb, var(--mod) 55%, var(--line));
+  background: color-mix(in srgb, var(--mod) 12%, var(--panel));
+}
+
+/* math inputs — mirrors the combine input rows */
+.anim-math-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.anim-math-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.anim-math-row > .gc-port {
+  flex: none;
+}
+.anim-math-slot {
+  font-size: 11px;
+  color: var(--text);
+}
+.anim-math-rm {
+  margin-left: auto;
+}
+.anim-math-add {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* ---- video FX cards: transform / color ------------------------------------ */
+.anim-fx-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+.anim-fx-static {
+  margin-top: 6px;
+  margin-bottom: 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: none;
+  padding-top: 6px;
+}
+
+/* shaper output-remap sub-block */
+.anim-mod-remap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--line);
+}
+.anim-mod-remap-label {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- ⚙ app settings modal (remote inference) ------------------------------------ */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-toggle input:disabled + span {
+  color: var(--muted);
+}
+.settings-ops {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.settings-probe {
+  font-size: 12px;
+}
+.settings-probe.ok {
+  color: var(--ok, #7dc87d);
+}
+.settings-probe.err {
+  color: var(--err, #e07a7a);
+}
+.settings-probe.busy {
+  color: var(--muted);
+}
+.settings-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* Library header hint / running count while picking cards onto the canvas. */
+.asset-lib-hint {
+  margin-left: 10px;
+  font: 400 11px/1 var(--mono);
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* "open this extract" — the drill-in chevron on a montage extract row. */
+.anim-extract-open {
+  color: var(--muted);
+}
+.anim-extract-open:hover {
+  color: var(--text);
+}

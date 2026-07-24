@@ -1,0 +1,310 @@
+/* ---- shell + bottom bar --------------------------------------------------- */
+
+.anim-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 72vh;
+  min-height: 460px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+/* the canvas area below the toolbar; anchors the absolute .gc-root */
+.anim-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* fullscreen: Studio fullscreens the WHOLE panel (.studio-main) — not just the
+   canvas — so the segment transport (timeline) stays on top and the output-settings
+   modal, which lives in this subtree, still renders. The canvas grows to fill the
+   space left under the transport; keep the paper background (else the browser paints
+   the fullscreen element black). */
+.studio-main:fullscreen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 12px 16px;
+  background: var(--bg);
+  overflow: auto;
+}
+.studio-main:fullscreen .anim-wrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  margin-top: 12px;
+  border-radius: 0;
+}
+.studio-main:fullscreen .anim-toolbar {
+  border-radius: 0;
+}
+/* no tab switcher in fullscreen — the toolbar's ✕/exit handles leaving */
+.studio-main:fullscreen .studio-bar .mode-tabs {
+  display: none;
+}
+/* trim the header to just the transport: drop the segment label + edit-split */
+.studio-main:fullscreen .results-head .section-title,
+.studio-main:fullscreen .studio-bar .edit-split {
+  display: none;
+}
+
+/* ---- studio bar (view tabs + segment actions + step nav) ------------------- */
+
+/* Sticky to the TOP, directly under the header whose title names the active tab.
+   It used to be `.mode-bar`, sticky to the bottom of the page — the tabs were
+   reachable while scrolling, which is the property worth keeping, but they sat a
+   full stage height away from everything that told you which one was on. */
+.studio-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3; /* above the canvas and the sticky card content beneath it */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+/* The tabs keep their segmented look but size to content now — at `flex: 1` each
+   they would eat the whole bar and push both action clusters off the end. */
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* Segment actions take the slack, so the step nav parks against the right edge —
+   "leave this step" is the one thing here that should never sit mid-row. */
+.studio-bar .rh-segment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.studio-bar .rh-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+/* Narrow: the clusters wrap onto their own lines, where a left border reads as a
+   stray tick rather than a divider. */
+@media (max-width: 900px) {
+  .studio-bar .rh-nav {
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+.mode-tab {
+  padding: 9px 14px;
+  font: 600 12px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    box-shadow 0.12s;
+}
+.mode-tab:hover {
+  color: var(--text);
+}
+.mode-tab.on {
+  color: #fff;
+  background: var(--petal-grad);
+  border-color: transparent;
+  box-shadow:
+    0 1px 2px rgba(31, 36, 51, 0.12),
+    0 6px 18px rgba(184, 74, 116, 0.22);
+}
+
+/* ---- canvas (pan/zoom stage + edge overlay) ------------------------------- */
+
+.gc-root {
+  --gc-grid: 26px; /* paper-grid dot spacing (offset by half to centre dots) */
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  /* faint paper grid: loose dots in the hairline tone on lifted paper */
+  background-color: var(--panel-2);
+  background-image: radial-gradient(var(--line) 1px, transparent 1.2px);
+  background-size: var(--gc-grid) var(--gc-grid);
+  background-position: calc(var(--gc-grid) / -2) calc(var(--gc-grid) / -2);
+  touch-action: none;
+}
+.gc-root:active {
+  cursor: grabbing;
+}
+
+.gc-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+.gc-node-pos {
+  position: absolute;
+}
+
+.gc-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.gc-edge-line {
+  fill: none;
+  stroke: var(--courant);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.gc-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.gc-edge.sel .gc-edge-line {
+  stroke: var(--petale);
+  stroke-width: 2.6;
+  opacity: 1;
+}
+.gc-edge:hover .gc-edge-line {
+  opacity: 1;
+}
+.gc-wire {
+  stroke: var(--petale-soft);
+  stroke-dasharray: 5 5;
+  opacity: 0.9;
+}
+.gc-wire.ok {
+  stroke: var(--courant);
+  stroke-dasharray: none;
+  opacity: 1;
+}
+
+/* Toast explaining why a connect attempt was refused — bottom-centre of the
+   canvas, fades in, and clears itself after a beat. */
+.gc-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(440px, 88%);
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: var(--hint-bg);
+  border: 1px solid var(--hint-border);
+  color: var(--hint-text);
+  font-size: 12px;
+  font-family: var(--mono);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: gc-hint-in 0.14s ease-out;
+}
+.gc-hint-icon {
+  flex: none;
+}
+@keyframes gc-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ✕ handle to cut a wire — hidden until the edge is hovered or selected. */
+.gc-edge-del {
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+.gc-edge:hover .gc-edge-del,
+.gc-edge.sel .gc-edge-del {
+  opacity: 1;
+  pointer-events: auto;
+}
+.gc-edge-del circle {
+  fill: var(--panel);
+  stroke: var(--petale);
+  stroke-width: 1.5;
+}
+.gc-edge-del text {
+  fill: var(--petale);
+  font: 700 11px/1 var(--mono);
+  pointer-events: none;
+  user-select: none;
+}
+.gc-edge-del:hover circle {
+  fill: var(--petale);
+}
+.gc-edge-del:hover text {
+  fill: #fff;
+}
+
+/* ---- ports ---------------------------------------------------------------- */
+
+.gc-port {
+  position: relative;
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent, var(--petale));
+  box-sizing: border-box;
+  cursor: crosshair;
+  transition:
+    transform 0.1s,
+    background 0.1s,
+    box-shadow 0.1s;
+}
+/* Invisible enlarged hit target so a wire is easy to start/drop on the small dot.
+   Part of the same element, so elementFromPoint still resolves to the port. */
+.gc-port::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+}
+.gc-port-out {
+  background: var(--accent, var(--petale));
+}
+.gc-port-video {
+  border-color: var(--text);
+}
+.gc-port-video.gc-port-out {
+  background: var(--text);
+}
+.gc-port:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(184, 74, 116, 0.16);
+}
