@@ -40,10 +40,14 @@ export default function Export() {
         <li>
           <strong>✂ trim a cut</strong> — once the master is rendered, cut a shorter clip out of it
           without re-rendering anything: drag the <em>start</em> and <em>end</em> handles (the
-          preview seeks along, so you pick the points by eye), and <strong>✂ cut</strong> re-encodes
-          just that range at the master's quality with its audio — e.g. the 3-minute extract an
-          Instagram reel allows. The master stays whole; cut as many variants as you like, each with
-          its own download button, and an identical re-cut returns instantly from cache.
+          preview seeks along), then <strong>▶ preview selection</strong> loops the player over
+          exactly that range — what the cut will contain, before cutting. <strong>✂ cut</strong>{" "}
+          then produces it near-instantly (a smart cut: only the sub-second head is re-encoded, the
+          rest is copied losslessly) and the player switches to the <strong>finished cut</strong> so
+          you see the actual result — <em>↩ master</em> brings the whole track back. E.g. the
+          3-minute extract an Instagram reel allows. The master stays whole; cut as many variants as
+          you like, each with its own download button, and an identical re-cut returns instantly
+          from cache.
         </li>
       </ul>
       <div className="note">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
@@ -9,6 +9,10 @@ interface TrimRowProps {
   // The stage's preview player — dragging a handle seeks it there, so you pick the
   // cut points by eye on the actual footage.
   videoRef: RefObject<HTMLVideoElement | null>;
+  // Swap the stage player onto another file (the finished cut) / back (null) — the
+  // "show me what the result will BE" half of the trim.
+  onPreviewCut: (url: string | null) => void;
+  previewingCut: boolean;
 }
 
 // The platform-length trim under a finished master: pick a start and an end on two
@@ -16,7 +20,7 @@ interface TrimRowProps {
 // server-side (frame-accurate, the master's quality), and the cut gets its own
 // download button. The master file is untouched — cut as many variants as needed
 // (an Instagram reel caps at ~3 minutes; the master is the whole song).
-export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
+export default function TrimRow({ finalUrl, videoRef, onPreviewCut, previewingCut }: TrimRowProps) {
   const [dur, setDur] = useState(0);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
@@ -24,6 +28,32 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
   const [pct, setPct] = useState<number | null>(null); // cut progress (steps, not frames)
   const [error, setError] = useState<string | null>(null);
   const [cut, setCut] = useState<{ url: string; start: number; end: number } | null>(null);
+  // ▶ preview selection: loop the stage player over [start, end] of the MASTER —
+  // exactly what the cut will contain, heard and seen before cutting anything.
+  const [looping, setLooping] = useState(false);
+  const startRef = useRef(start);
+  const endRef = useRef(end);
+  startRef.current = start;
+  endRef.current = end;
+  useEffect(() => {
+    if (!looping) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const onTime = () => {
+      if (v.currentTime >= endRef.current - 0.03 || v.currentTime < startRef.current - 0.25) {
+        v.currentTime = startRef.current;
+      }
+    };
+    v.currentTime = startRef.current;
+    v.play().catch(() => {});
+    v.addEventListener("timeupdate", onTime);
+    return () => v.removeEventListener("timeupdate", onTime);
+  }, [looping, videoRef]);
+  // Leaving for the cut preview (or a fresh master) stops the loop.
+  useEffect(() => {
+    if (previewingCut) setLooping(false);
+  }, [previewingCut]);
+  useEffect(() => setLooping(false), [finalUrl]);
 
   // The song duration comes from the preview player's metadata (it is the master).
   useEffect(() => {
@@ -48,11 +78,13 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
   const onStart = (v: number) => {
     setStart(Math.min(v, end - 0.5));
     setCut(null);
+    onPreviewCut(null); // handles move on MASTER time — leave the cut preview
     seek(Math.min(v, end - 0.5));
   };
   const onEnd = (v: number) => {
     setEnd(Math.max(v, start + 0.5));
     setCut(null);
+    onPreviewCut(null);
     seek(Math.max(v, start + 0.5));
   };
 
@@ -64,6 +96,7 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
       const r = await api.trimExport(finalUrl, start, end);
       if (r.url) {
         setCut({ url: r.url, start, end }); // cache hit — instant
+        onPreviewCut(r.url); // the player now SHOWS the result
         return;
       }
       // A fresh cut is a background job (a 4K re-encode runs for minutes) — poll
@@ -72,6 +105,7 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
         const st = await api.getExportStatus(r.render_id!);
         if (st.state === "done" && st.url) {
           setCut({ url: st.url, start, end });
+          onPreviewCut(st.url); // the player now SHOWS the result
           return;
         }
         if (st.state !== "running") {
@@ -102,6 +136,7 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
           text="Cut a shorter clip out of the finished master — e.g. the 3-minute extract an Instagram reel allows. Drag start/end (the preview seeks along), then ✂ cut re-encodes just that range at the master's quality. The master stays untouched; cut as many variants as you like."
         />
         <span className="export-trim-kept">
+          {previewingCut && <strong>viewing the cut · </strong>}
           {fmtTime(start)} – {fmtTime(end)} · keeps {fmtTime(kept)}
         </span>
       </div>
@@ -130,9 +165,29 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
         <span className="export-trim-t">{fmtTime(end)}</span>
       </label>
       <div className="export-trim-actions">
+        <button
+          className={"btn sm" + (looping ? " on" : "")}
+          title="loop the player over the selection — exactly what the cut will contain"
+          onClick={() => {
+            onPreviewCut(null); // back on the master before looping master times
+            setLooping((l) => !l);
+          }}
+          disabled={busy}
+        >
+          {looping ? "■ stop" : "▶ preview selection"}
+        </button>
         <button className="btn sm" onClick={doCut} disabled={busy || whole}>
           {busy ? `cutting…${pct != null ? ` ${pct}%` : ""}` : "✂ cut"}
         </button>
+        {previewingCut && (
+          <button
+            className="btn sm"
+            title="the player is showing the finished cut — switch back to the whole master"
+            onClick={() => onPreviewCut(null)}
+          >
+            ↩ master
+          </button>
+        )}
         {whole && !busy && (
           <span className="anim-fx-hint">move a handle first — this is the whole master</span>
         )}

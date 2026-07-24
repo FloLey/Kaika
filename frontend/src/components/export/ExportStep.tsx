@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
@@ -70,6 +70,9 @@ export default function ExportStep({
   }, [canvasRatio]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  // The trim row can point the stage player at the FINISHED CUT (then back) — the
+  // player is where "what will the result be" gets answered, not a second player.
+  const [previewCut, setPreviewCut] = useState<string | null>(null);
   const fps = exportSettings.fps || 30;
   // Persist the in-flight render id so leaving and returning to this stage re-attaches to
   // the SAME backend render instead of losing it (leaving no longer cancels the render).
@@ -94,6 +97,7 @@ export default function ExportStep({
   async function generate() {
     if (!job) return;
     resetPlayback(); // a fresh export plays from the top
+    setPreviewCut(null);
     start(() => api.startExport(job));
   }
 
@@ -344,7 +348,7 @@ export default function ExportStep({
               <video
                 ref={videoRef}
                 className="anim-output-video"
-                src={videoUrl}
+                src={previewCut ?? videoUrl}
                 muted
                 playsInline
                 preload="auto"
@@ -375,7 +379,14 @@ export default function ExportStep({
           )}
           {/* Platform-length cuts out of the finished master (Insta caps a reel at
               ~3 min) — the master itself stays whole. */}
-          {finalUrl && <TrimRow finalUrl={finalUrl} videoRef={videoRef} />}
+          {finalUrl && (
+            <TrimRow
+              finalUrl={finalUrl}
+              videoRef={videoRef}
+              onPreviewCut={setPreviewCut}
+              previewingCut={previewCut != null}
+            />
+          )}
         </div>
       </div>
     </div>
