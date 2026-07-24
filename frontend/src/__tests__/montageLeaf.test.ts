@@ -66,3 +66,23 @@ describe("leafVideoCard", () => {
     expect(leafVideoCard(g)).toBeNull();
   });
 });
+
+// The crop pad's aspect lock: a resized rect snaps to the target height-per-width
+// with the corner OPPOSITE the handle anchored, inside [0,1]².
+import { lockAspect } from "../components/animation/nodes/BoxPad";
+
+describe("lockAspect", () => {
+  it("re-shapes to the ratio, anchored opposite the dragged corner", () => {
+    const out = lockAspect({ x: 0.1, y: 0.1, w: 0.4, h: 0.1 }, "se", 0.5);
+    expect(out.x).toBeCloseTo(0.1); // nw anchor held
+    expect(out.y).toBeCloseTo(0.1);
+    expect(out.h).toBeCloseTo(out.w * 0.5);
+  });
+
+  it("shrinks to stay inside the frame instead of spilling", () => {
+    const out = lockAspect({ x: 0.8, y: 0.8, w: 0.5, h: 0.5 }, "se", 2);
+    expect(out.x + out.w).toBeLessThanOrEqual(1.0001);
+    expect(out.y + out.h).toBeLessThanOrEqual(1.0001);
+    expect(out.h).toBeCloseTo(out.w * 2, 5);
+  });
+});

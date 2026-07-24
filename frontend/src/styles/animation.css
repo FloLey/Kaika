@@ -3366,3 +3366,10 @@
   font-size: 11px;
   padding: 4px 6px;
 }
+
+/* The picked extract's framing pad in the montage rail. */
+.montage-crop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

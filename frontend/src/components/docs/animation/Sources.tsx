@@ -61,17 +61,20 @@ export default function Sources() {
           in: <strong>import from YouTube</strong> right on the card (paste a URL; optional
           start/end timestamps fetch only that section of the video, not the whole file). A{" "}
           <strong>crop</strong> pad below the placement box selects{" "}
-          <em>which part of the source frame is used</em>: drag a corner to cut a region out of the
-          clip (drag the rectangle to move it) and only that region gets fitted into the box — so
-          when a clip is too wide or tall for the project format, you choose what survives instead
-          of a centre crop. The clip plays live inside the placement box, showing exactly what will
-          render. Timing controls: <em>sync</em> (<em>song</em> keeps a background clip
-          phase-continuous across segments; <em>segment</em> restarts it at each cut), a{" "}
-          <em>start</em> offset into the source, and <em>loop</em> (off = past the end the card
-          renders <strong>nothing</strong>, so it shows as black unless another layer is beneath).
-          Both <em>opacity</em> and <em>speed</em> are modulatable — a signal on <em>speed</em>{" "}
-          <strong>time-warps the clip</strong> (slow-motion in the quiet bars, whip-fast on the
-          drop).
+          <em>which part of the source frame is used</em> — and with <em>cover</em> (the default)
+          the rectangle is <strong>locked to the output's shape</strong>: what's inside it{" "}
+          <em>is</em> the final image, exactly, nothing silently trimmed afterwards.{" "}
+          <strong>⬚ frame output</strong> sets it to the default centered result so you can see
+          (then drag) what survives; the same framing pad appears in the{" "}
+          <strong>montage editor</strong> for the selected tile, so a whole reel's clips can be
+          reframed without opening each extract. The clip plays live inside the placement box,
+          showing exactly what will render. Timing controls: <em>sync</em> (<em>song</em> keeps a
+          background clip phase-continuous across segments; <em>segment</em> restarts it at each
+          cut), a <em>start</em> offset into the source, and <em>loop</em> (off = past the end the
+          card renders <strong>nothing</strong>, so it shows as black unless another layer is
+          beneath). Both <em>opacity</em> and <em>speed</em> are modulatable — a signal on{" "}
+          <em>speed</em> <strong>time-warps the clip</strong> (slow-motion in the quiet bars,
+          whip-fast on the drop).
         </li>
         <li>
           <strong>Text</strong> — a <strong>free-typed caption</strong> placed in the frame, like an

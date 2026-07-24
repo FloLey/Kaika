@@ -65,10 +65,37 @@ export type Corner = (typeof CORNERS)[number];
 // offset stays under the cursor), drag a corner to RESIZE (the opposite corner anchors),
 // everything clamped to the pad. Live drags stay in local state; `onChange` commits once
 // on pointer-up (no graph churn per move).
+// Re-shape a freshly resized box to a FIXED height-per-width ratio, keeping the
+// corner opposite the dragged handle anchored and staying inside [0,1]². The crop
+// pad uses it to lock the selection to the OUTPUT's aspect — what's inside the
+// rect is then exactly the final image, nothing more to guess.
+export function lockAspect(raw: Box, c: Corner, hPerW: number): Box {
+  const ax = c === "se" || c === "ne" ? raw.x : raw.x + raw.w; // anchored x edge
+  const ay = c === "se" || c === "sw" ? raw.y : raw.y + raw.h; // anchored y edge
+  let w = Math.max(raw.w, MIN);
+  let h = w * hPerW;
+  const maxW = c === "se" || c === "ne" ? 1 - ax : ax;
+  const maxH = c === "se" || c === "sw" ? 1 - ay : ay;
+  if (h > maxH) {
+    h = maxH;
+    w = h / hPerW;
+  }
+  if (w > maxW) {
+    w = maxW;
+    h = w * hPerW;
+  }
+  const x = c === "se" || c === "ne" ? ax : ax - w;
+  const y = c === "se" || c === "sw" ? ay : ay - h;
+  return { x: clamp(x, 0, 1 - w), y: clamp(y, 0, 1 - h), w, h };
+}
+
 export function useBoxEdit(
   box: Box,
   onChange: (box: Box) => void,
-  padRef: RefObject<HTMLDivElement | null>
+  padRef: RefObject<HTMLDivElement | null>,
+  // Applied to every RESIZE (live drag + commit) — the aspect lock above. Moves
+  // keep the box's shape, so they pass through untouched.
+  constrain?: (raw: Box, corner: Corner) => Box
 ) {
   const { norm, startDrag } = useDragPad(padRef);
   const [drag, setDrag] = useState<Box | null>(null);
@@ -108,7 +135,8 @@ export function useBoxEdit(
       y = clamp(cy, 0, bottom - MIN);
       h = bottom - y;
     }
-    return { x, y, w, h };
+    const raw = { x, y, w, h };
+    return constrain ? constrain(raw, c) : raw;
   };
 
   const onHandleDown = (c: Corner, e: PointerEvent) => {

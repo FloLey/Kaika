@@ -103,7 +103,7 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
   },
   video: {
     box: "Placement box: drag the rectangle to move it, drag a corner to resize. The clip is scaled into it by `fit`.",
-    crop: "Select which part of the SOURCE clip is used: drag a corner to cut a region out of the frame, drag the rectangle to move it. Only that region gets fitted into the box — pick the part that matters when the clip is too wide/tall for the format.",
+    crop: "Which part of the SOURCE clip survives. With fit=cover the rectangle is LOCKED to the output's shape \u2014 what's inside it IS the final image, exactly. \u2b1a frame output sets it to the default centered result; drag it sideways to choose the slice. (contain/stretch never trim, so their crop is free-form.)",
     fit: "cover = fill the box, cropping overflow; contain = fit inside, letterboxed; stretch = distort to the box.",
     sync: "song = the playhead follows the whole song's clock; segment = it restarts at this segment's (or, inside a montage extract, that extract's) start. A montage's picked clips are created on the segment clock so they start at their in-point on the cut.",
     start: "Start offset into the source clip, in seconds.",

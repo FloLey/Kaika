@@ -171,6 +171,14 @@ export default function VideoNode(props: NodeProps) {
               crop={{ x: d.crop_x ?? 0, y: d.crop_y ?? 0, w: d.crop_w ?? 1, h: d.crop_h ?? 1 }}
               src={d.assetUrl}
               onChange={(c) => set({ crop_x: c.x, crop_y: c.y, crop_w: c.w, crop_h: c.h })}
+              // fit "cover" CROPS: lock the rect to the box's output shape so the
+              // selection IS the final image (contain/stretch never trim — free crop).
+              targetAspect={
+                d.fit !== "contain" && d.fit !== "stretch"
+                  ? ((d.box_w || 1) * (ctx?.output?.width || 1080)) /
+                    Math.max(1e-6, (d.box_h || 1) * (ctx?.output?.height || 1920))
+                  : undefined
+              }
             />
           </div>
         ) : undefined

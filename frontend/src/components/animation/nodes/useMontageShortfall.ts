@@ -11,9 +11,14 @@ import type { NodeCtx } from "./nodeProps";
 // slots are walked in slot order and the first branch that reaches a video card
 // wins; text/backdrop/fluid branches resolve to nothing and are skipped). null when
 // no video feeds the output at all — nothing to thumbnail or duration-check.
-export function leafVideoCard(
-  graph: Graph | undefined
-): { url: string; start: number; loop: boolean; speed: number } | null {
+export function leafVideoCard(graph: Graph | undefined): {
+  url: string;
+  start: number;
+  loop: boolean;
+  speed: number;
+  nodeId: string; // the video card itself — the montage editor's crop pad edits it
+  crop: { x: number; y: number; w: number; h: number };
+} | null {
   if (!graph) return null;
   const out = graph.nodes.find((n) => n.type === "output");
   const walk = (id: string | null | undefined, hops: number): ReturnType<typeof leafVideoCard> => {
@@ -31,6 +36,8 @@ export function leafVideoCard(
         // A wired speed varies per frame — assume 1 rather than guess (we'd rather miss a
         // warning than invent one).
         speed: sp?.kind === "const" ? Math.max(0.01, Number(sp.value) || 1) : 1,
+        nodeId: n.id,
+        crop: { x: d.crop_x ?? 0, y: d.crop_y ?? 0, w: d.crop_w ?? 1, h: d.crop_h ?? 1 },
       };
     }
     if (n.type === "combine") {

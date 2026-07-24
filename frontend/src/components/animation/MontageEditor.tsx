@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import BreakpointTimeline, { extractColor, useLiveExtract } from "./BreakpointTimeline";
+import CropPad from "./nodes/CropPad";
 import StreamPreview from "./nodes/StreamPreview";
 import InputPicker from "./InputPicker";
 import AssetLibrary from "../assets/AssetLibrary";
@@ -348,6 +349,44 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
         </div>
 
         <div className="montage-rail">
+          {/* The picked tile's FRAMING, right here in the editor: the rect is locked
+              to the export shape (what's inside IS the final image), ⬚ shows the
+              default centered cover — no diving into each extract to fix a crop. */}
+          {picked != null && clips[picked] && comps[picked] && (
+            <div className="anim-static montage-crop">
+              <span className="anim-mod-remap-label">
+                framing — extract {picked + 1} <ArgInfo type="video" k="crop" />
+              </span>
+              <CropPad
+                crop={clips[picked]!.crop}
+                src={clips[picked]!.url}
+                targetAspect={(ctx.output?.width || 1080) / Math.max(1, ctx.output?.height || 1920)}
+                onChange={(c) => {
+                  const compId = comps[picked]!.id;
+                  const videoId = clips[picked]!.nodeId;
+                  ctx.updateCompositions?.((pool) => {
+                    const comp = pool[compId];
+                    if (!comp) return pool;
+                    const nodes = comp.graph.nodes.map((n) =>
+                      n.id === videoId
+                        ? ({
+                            ...n,
+                            data: {
+                              ...n.data,
+                              crop_x: c.x,
+                              crop_y: c.y,
+                              crop_w: c.w,
+                              crop_h: c.h,
+                            },
+                          } as typeof n)
+                        : n
+                    );
+                    return { ...pool, [compId]: { ...comp, graph: { ...comp.graph, nodes } } };
+                  });
+                }}
+              />
+            </div>
+          )}
           <div className="anim-static">
             <Ctl
               label="threshold"
