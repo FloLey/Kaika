@@ -271,7 +271,8 @@ def _render_song_from_segments(
         clip = paths.ANIM_DIR / f"{h}.mp4"
         window = max(1, round(_clip_dims(seg2, out_dict)[0] * fps))
         if on_segment:
-            on_segment(i, len(ordered), seg.get("label") or f"segment {i + 1}")
+            # 1-based, like the continuous path — "0/5" read as stuck-before-start.
+            on_segment(i + 1, len(ordered), seg.get("label") or f"segment {i + 1}")
         if clip.exists():
             render_cache.touch(clip)  # reused — keep it hot
         else:
@@ -284,6 +285,10 @@ def _render_song_from_segments(
             graphmod.render_stream(
                 job_id, seg2, comp["graph"], stem_audio_path, out_dict, oid,
                 on_progress=prog, should_cancel=should_cancel, pool=compositions,
+                # The HD block cap, NOT the preview default: a default 5s block at
+                # 4K is gigabytes of frames in flight — the machine swaps and the
+                # export reads as frozen. Same knob the segment-HD route passes.
+                block_seconds=hd_block_seconds(out_dict["width"], out_dict["height"]),
             )  # fmt: skip
             if should_cancel and should_cancel():
                 return None
