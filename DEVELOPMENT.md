@@ -58,9 +58,11 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
     `render_stream`). Import from `backend.graph`; implement in the submodules.
   - `fluid.py` — the stable-fluids sim (FFT Poisson solve), per-dye-layer advection
     (per-component wrap), tonemap, the mp4 encoders, resumable `FluidClip`.
-  - `sources.py` — every non-fluid video layer: lyrics, image, slideshow, video,
-    backdrop and the six generative simulations (waves / lightning / fire /
-    aurora / rain / clouds) + the persistent `VideoClip` block decoder.
+  - `sources.py` — a facade over `sources_text` (lyrics + font fit), `sources_gen`
+    (backdrop + the generative simulations: waves / lightning / aurora / rain /
+    clouds), `sources_media` (image, slideshow, video + the persistent `VideoClip`
+    block decoder) and `sources_common` (`SOURCE_PARAMS`, `_at`). Import from
+    `backend.sources`; implement in the submodules.
   - `animation_params.py` — **the** param specs (`FLUID_PARAM_SPEC`,
     `COLOR_PARAM_SPEC`, `SOURCE_PARAM_SPEC`); the executor views and the generated
     frontend `fluidParams.js` all derive from them.

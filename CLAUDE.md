@@ -62,8 +62,10 @@ Backend tests run as `.venv/bin/python -m pytest -q`; frontend as
 - **Version bumps**: `RENDER_VERSION` (`backend/graph_hash.py`) when render
   semantics change; `GRAPH_VERSION` (`frontend/src/lib/graph/factories.ts`) + a
   `normalizeGraph` migration when the persisted graph shape changes.
-- **`graph.py` / `graphModel.ts` are facades** — import from them, implement in
-  `backend/graph_*.py` / `frontend/src/lib/graph/*`.
+- **`graph.py` / `sources.py` / `graphModel.ts` are facades** — import from them,
+  implement in `backend/graph_*.py` / `backend/sources_*.py` /
+  `frontend/src/lib/graph/*`. A name earns a place in a facade's re-export list by
+  having a caller outside the package, not by having been public before a split.
 - **Tests patch `backend.paths`** for data directories (render code reads them
   late-bound); don't reintroduce per-module dir constants.
 - **`/logs` must never log** (it would feed itself).

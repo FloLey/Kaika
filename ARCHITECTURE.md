@@ -57,7 +57,7 @@ backend/            Flask API + the render engine
   routes/           ten blueprints (absolute URLs, no prefixes)
   graph.py          ← 66-line facade; the executor lives in graph_*.py
   fluid.py          the fluid simulation (+ fire mode) + encoders
-  sources.py        non-fluid video layers (lyrics/image/video/backdrop + sim cards)
+  sources.py        facade over sources_{common,text,gen,media} — non-fluid layers
   procgen.py        the simulation kit (wave spectra, caustics, DBM, spectral ripple…)
   song_render.py    whole-song HD export
   *_cache.py, cache_gc.py, jobs.py, render_jobs.py, db.py, paths.py …
@@ -189,7 +189,12 @@ must not contain itself). Every modulatable port is either a `const` or a
   whole emitter system (paths, gates, points, per-frame modulation), the frame
   cache, block streaming and the merge combine (fire merges with fire AND with
   dye fluids: dye + fire tonemaps screen-blend).
-- **`sources.py`** — the non-fluid layers. Lyrics rasterise the aligned lines
+- **`sources.py`** — a facade; the non-fluid layers themselves are split by where
+  their pixels come from: **`sources_text`** (lyrics + font/wrap/fit),
+  **`sources_gen`** (backdrop + the simulation cards), **`sources_media`** (the
+  file-backed image/video/slideshow cards + the box-placement helpers only they
+  use), over a small **`sources_common`** (`SOURCE_PARAMS`, `_at`).
+  Lyrics rasterise the aligned lines
   (font fit solved once per distinct line); image/video place an asset into a
   normalized box; **`VideoClip`** mirrors `FluidClip` — one persistent ffmpeg
   decoder read forward across blocks, reopened only on a backward seek. The
