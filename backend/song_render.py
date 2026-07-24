@@ -38,6 +38,7 @@ from .compositions import (
     root_composition,
 )
 from .config import ENCODE_TIMEOUT
+from . import graph_hash
 from .graph_hash import RENDER_VERSION
 from .graph_render import Dag, _clip_dims, _grid_dims
 
@@ -218,6 +219,114 @@ def song_total_frames(segments: list, export: dict) -> int:
     out_dict = output_from_export(export)
     fps = out_dict["fps"]
     return sum(max(1, round(_clip_dims(seg, out_dict)[0] * fps)) for seg in segments)
+
+
+def independent_segments(segments: list, compositions: dict) -> bool:
+    """True when NO fluid field can carry across segments — the precondition for the
+    INCREMENTAL export path. Field layers key continuity by `data.layer` OR their
+    1-based discovery order (`field_layers`), so any TWO field-bearing segments may
+    couple even without explicit layer numbers; the check is therefore deliberately
+    coarse — at most ONE segment's root may hold a potential field card (a `fluid`,
+    or a merge `combine`). A false negative just takes the continuous path."""
+    n = 0
+    for seg in segments:
+        g = (root_composition(compositions, seg) or {}).get("graph") or {}
+        if any(
+            x.get("type") == "fluid"
+            or (x.get("type") == "combine" and (x.get("data") or {}).get("mode") != "stack")
+            for x in g.get("nodes", [])
+        ):
+            n += 1
+    return n <= 1
+
+
+def _render_song_from_segments(
+    job_id, segments, compositions, lyric_lines, export, stem_audio_path,
+    out_path, url, on_progress, on_segment, should_cancel
+) -> str | None:  # fmt: skip
+    """The INCREMENTAL whole-song export, for projects with no cross-segment fluid
+    continuity (`independent_segments`): each segment renders to its own HD clip
+    keyed by `output_hash` — THE SAME cache entry the single-segment HD button
+    writes — so an unchanged segment is reused as-is and an edit re-renders only
+    its own segment. The master is then a stream-copy CONCAT of the clips (every
+    one comes from the same encoder settings: same size/fps/codec/no-B-frames)
+    with the song audio muxed once at the end. The continuous path renders a
+    39-segment re-export from scratch after a one-segment edit; this one renders
+    one segment and copies bytes for the rest."""
+    from . import graph as graphmod
+
+    out_dict = output_from_export(export)
+    fps = out_dict["fps"]
+    ordered = sorted(segments, key=lambda s: float(s.get("start", 0.0)))
+    total = song_total_frames(segments, export)
+    done = 0
+    clips = []
+    for i, seg in enumerate(ordered):
+        comp = root_composition(compositions, seg)
+        oid = final_output_id(comp)
+        if not comp or not oid:
+            raise ValueError(f"segment {seg.get('id')} has no final output marked")
+        seg2 = {**seg, "lyric_lines": seg.get("lyric_lines") or lyric_lines}
+        h = graph_hash.output_hash(job_id, seg2, comp["graph"], oid, out_dict, compositions)
+        clip = paths.ANIM_DIR / f"{h}.mp4"
+        window = max(1, round(_clip_dims(seg2, out_dict)[0] * fps))
+        if on_segment:
+            on_segment(i, len(ordered), seg.get("label") or f"segment {i + 1}")
+        if clip.exists():
+            render_cache.touch(clip)  # reused — keep it hot
+        else:
+            base = done
+
+            def prog(d, t, u, _base=base):
+                if on_progress:
+                    on_progress(_base + d, total, u)
+
+            graphmod.render_stream(
+                job_id, seg2, comp["graph"], stem_audio_path, out_dict, oid,
+                on_progress=prog, should_cancel=should_cancel, pool=compositions,
+            )  # fmt: skip
+            if should_cancel and should_cancel():
+                return None
+            if not clip.exists():
+                raise RuntimeError(f"segment render produced no clip for {seg.get('id')}")
+        done += window
+        if on_progress:
+            on_progress(done, total, None)
+        clips.append(clip)
+
+    # Stitch: concat demuxer + stream copy (no re-encode — the clips share encoder
+    # settings by construction), then the song audio in one mux.
+    scratch = paths.STREAM_DIR / f"songcat{uuid.uuid4().hex[:8]}"
+    scratch.mkdir(parents=True, exist_ok=True)
+    try:
+        listing = scratch / "clips.txt"
+        listing.write_text("".join(f"file '{c}'\n" for c in clips))
+        silent = scratch / "video.mp4"
+        # fmt: off
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-y", "-v", "error",
+                "-f", "concat", "-safe", "0", "-i", str(listing),
+                "-c", "copy", "-movflags", "+faststart", str(silent),
+            ],
+            capture_output=True, timeout=ENCODE_TIMEOUT,
+        )
+        # fmt: on
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "song concat failed: " + (proc.stderr or b"").decode(errors="replace")[-400:]
+            )
+        audio = export_audio_path(job_id, export, stem_audio_path)
+        if audio is not None:
+            _mux_audio(silent, audio, out_path)
+        else:
+            shutil.move(str(silent), str(out_path))
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    render_cache.evict(paths.ANIM_DIR)
+    if on_progress:
+        on_progress(total, total, url)
+    return url
 
 
 def build_plan(
@@ -446,6 +555,15 @@ def render_song(
             total = song_total_frames(segments, export)
             on_progress(total, total, url)
         return url
+
+    # No cross-segment fluid continuity -> the INCREMENTAL path: per-segment cached
+    # clips (shared with the segment-HD button), concat + mux. An edit re-renders
+    # only its own segment instead of the whole song.
+    if independent_segments(segments, compositions):
+        return _render_song_from_segments(
+            job_id, segments, compositions, lyric_lines, export, stem_audio_path,
+            out_path, url, on_progress, on_segment, should_cancel,
+        )  # fmt: skip
 
     ctx = build_plan(job_id, segments, compositions, lyric_lines, export, stem_audio_path)
     # Each Dag may hold ffmpeg decoders (a video / slideshow / stylize card registers

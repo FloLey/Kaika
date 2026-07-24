@@ -207,12 +207,23 @@ must not contain itself). Every modulatable port is either a `const` or a
   (`sim_dims`/`upscale`).
 - **`signals.py`** — audio features (energy/onset/flux/brightness/harmonic/
   chroma/beat/bar) + shaping into 0..1 curves; the STFT is LRU-cached.
-- **`song_render.py`** — the whole-song export. Instead of stitching segment
-  previews, it keeps **one persistent `FluidSim` per layer number** and advances
-  it across the entire song; crossing a segment boundary only swaps the injected
-  rules (emitters/medium/colours), so velocity and dye flow through the cut.
-  Each segment's window is then styled through its own DAG (lyrics, layers,
-  combines) and streamed to a single encoder; audio is muxed at the end.
+- **`song_render.py`** — the whole-song export, on two paths chosen by
+  `independent_segments`:
+  - **Incremental** (no fluid field in more than one segment — montage/video/
+    text projects): each segment renders to its own HD clip keyed by
+    `output_hash` — the SAME cache entry the single-segment HD button writes —
+    so a re-export after editing one segment re-renders that segment only and
+    stream-copy CONCATs the rest (every clip shares encoder settings by
+    construction); audio muxed once at the end.
+  - **Continuous** (any potential cross-segment layer): one persistent
+    `FluidSim` per layer number advances across the entire song; crossing a
+    segment boundary only swaps the injected rules (emitters/medium/colours),
+    so velocity and dye flow through the cut. Each segment's window is styled
+    through its own DAG and streamed to a single encoder; audio muxed at the
+    end. Full re-render on any edit — the price of continuity. The detection is
+    deliberately coarse (field layers key continuity by `data.layer` OR
+    discovery order, so any two field-bearing segments may couple); a false
+    negative just takes this slower path.
 
 ### Jobs
 

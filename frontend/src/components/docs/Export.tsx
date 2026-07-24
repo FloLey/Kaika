@@ -58,12 +58,15 @@ export default function Export() {
         what the same segment's preview would suggest — that is the quality, not a bug.
       </div>
       <div className="note">
-        The export is <strong>not</strong> the segment previews stitched together: the fluid
-        simulation runs <strong>continuously across segment boundaries</strong> (each layer's
-        velocity and dye carry through the cut; only the wiring rules swap), so transitions are
-        seamless. Cards that share a <em>layer</em> number across segments continue into each other;
-        a layer absent in a segment keeps drifting and fades. Like the previews, un-dyed pixels are
-        black — backdrops are layers.
+        <strong>Re-exports are incremental</strong> when no fluid layer spans two segments (montage
+        / video / text projects): each segment renders to its own cached HD clip — the same cache
+        the per-segment HD button uses — so after editing one segment, a re-export{" "}
+        <strong>re-renders only that segment</strong> and byte-copies the rest together. When fluid
+        layers DO span segments, the export runs <strong>continuously across boundaries</strong>{" "}
+        instead (each layer's velocity and dye carry through the cut) so transitions stay seamless —
+        cards sharing a <em>layer</em> number continue into each other, and a full re-render is the
+        price of that continuity. Like the previews, un-dyed pixels are black — backdrops are
+        layers.
       </div>
     </section>
   );

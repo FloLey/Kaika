@@ -9,6 +9,7 @@ plus layer-number continuity, per-segment styling, and the frame/grid bookkeepin
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import numpy as np
 import pytest
@@ -175,7 +176,9 @@ def test_progress_preview_url_is_servable(tmp_path, monkeypatch):
         on_progress=lambda done, total, url: urls.append(url),
     )
 
-    previews = [u for u in urls if u.startswith("/fluid/stream/")]
+    # `preview_url` is nullable in the progress contract (the incremental path ticks
+    # segment boundaries without a new preview frame) — filter, then assert substance.
+    previews = [u for u in urls if u and u.startswith("/fluid/stream/")]
     assert previews, "the export reported no in-progress preview URL"
     for u in previews:
         render_id = u.split("/")[3]
@@ -424,3 +427,83 @@ def test_layer_continuity_stops_at_the_root_composition():
     # fluid in the ROOT graph inherits segment 1's dye).
     s2_first = frames[-1][0] if frames[-1].shape[0] else frames[-1]
     assert float(s2_first[..., :3].mean()) < 1.0
+
+
+# --------------------------------------------------------------------------- #
+# The INCREMENTAL export path (no cross-segment fluid continuity)
+# --------------------------------------------------------------------------- #
+def _image_graph(url="/assets/job/red.png"):
+    return {
+        "version": 1,
+        "nodes": [
+            {
+                "id": "im",
+                "type": "image",
+                "data": {"assetUrl": url, "box_x": 0, "box_y": 0, "box_w": 1, "box_h": 1},
+            },
+            {"id": "o", "type": "output", "data": {}},
+        ],
+        "edges": [_edge("im", "o", "video")],
+    }
+
+
+def test_independent_segments_detection():
+    # Two image segments: nothing can carry -> incremental. Two FLUID segments: their
+    # fields may share a layer (explicitly or by discovery order) -> continuous path.
+    imgs = [_seg("a", 0, 1, _image_graph()), _seg("b", 1, 2, _image_graph())]
+    assert SR.independent_segments(imgs, _pool(imgs))
+    fluids = [_seg("a", 0, 1, _fluid_out(0.5)), _seg("b", 1, 2, _fluid_out(0.5))]
+    assert not SR.independent_segments(fluids, _pool(fluids))
+    one = [_seg("a", 0, 1, _fluid_out(0.5)), _seg("b", 1, 2, _image_graph())]
+    assert SR.independent_segments(one, _pool(one))
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_incremental_export_reuses_unchanged_segment_clips(tmp_path, monkeypatch):
+    """The point: after editing ONE segment, a re-export renders that segment only —
+    the other segment's HD clip is reused from the shared per-segment cache, and the
+    master is a stream-copy concat (same duration, both contents present)."""
+    from PIL import Image
+
+    from backend import paths as P
+    from backend import sources as S
+
+    d = tmp_path / "assets" / "job"
+    d.mkdir(parents=True)
+    Image.new("RGB", (8, 8), (255, 0, 0)).save(d / "red.png")
+    Image.new("RGB", (8, 8), (0, 0, 255)).save(d / "blue.png")
+    monkeypatch.setattr(P, "ASSETS_DIR", tmp_path / "assets")
+
+    segs = [
+        _seg("a", 0, 1, _image_graph("/assets/job/red.png")),
+        _seg("b", 1, 2, _image_graph("/assets/job/red.png")),
+    ]
+    url1 = SR.render_song("job", segs, _pool(segs), [], EXPORT, NOAUDIO)
+    assert url1 and url1.startswith("/fluid/song_")
+
+    # Edit segment b (swap its asset): only b re-renders on the next export.
+    segs2 = [
+        _seg("a", 0, 1, _image_graph("/assets/job/red.png")),
+        _seg("b", 1, 2, _image_graph("/assets/job/blue.png")),
+    ]
+    calls = []
+    real = S.image
+    monkeypatch.setattr(S, "image", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    url2 = SR.render_song("job", segs2, _pool(segs2), [], EXPORT, NOAUDIO)
+    assert url2 and url2 != url1  # the master's key moved with the edit
+    assert len(calls) == 1  # segment a came off its cached clip; only b rendered
+
+    # The concat master really carries both segments, in full.
+    out = P.ANIM_DIR / url2.rsplit("/", 1)[-1]
+    probe = subprocess.run(
+        # fmt: off
+        [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=nw=1:nk=1", str(out),
+        ],
+        # fmt: on
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert abs(float(probe.stdout.strip()) - 2.0) < 0.2
