@@ -373,8 +373,11 @@ export default function ExportStep({
           )}
 
           {finalUrl && (
-            <a className="btn export-download" href={finalUrl} download>
-              ⬇ download video
+            // Download-what-you-see: after a trim the player switches to the CUT,
+            // and this button follows it — clicking the big obvious button after
+            // cutting used to hand back the whole master.
+            <a className="btn export-download" href={previewCut ?? finalUrl} download>
+              {previewCut ? "⬇ download this cut" : "⬇ download video"}
             </a>
           )}
           {/* Platform-length cuts out of the finished master (Insta caps a reel at
