@@ -338,8 +338,9 @@ export async function startExport(jobId: string): Promise<StreamStartResult> {
 }
 
 // Cut [start, end] (seconds) out of a finished master (its /fluid/... url) — the
-// platform-length trim. Cache hit -> {url}; else -> {render_id} to poll via
-// getExportStatus (a 4K re-encode runs for minutes — it's a background job).
+// platform-length trim. A SMART CUT server-side: frame-precise at stream-copy
+// speed (only the sub-GOP head re-encodes). Cache hit -> {url}; else ->
+// {render_id} to poll via getExportStatus.
 export async function trimExport(
   url: string,
   start: number,

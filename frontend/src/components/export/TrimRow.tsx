@@ -21,7 +21,7 @@ export default function TrimRow({ finalUrl, videoRef }: TrimRowProps) {
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [pct, setPct] = useState<number | null>(null); // encode progress (null = starting)
+  const [pct, setPct] = useState<number | null>(null); // cut progress (steps, not frames)
   const [error, setError] = useState<string | null>(null);
   const [cut, setCut] = useState<{ url: string; start: number; end: number } | null>(null);
 

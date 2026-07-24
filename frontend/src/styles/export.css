@@ -205,3 +205,12 @@
   align-items: center;
   gap: 10px;
 }
+
+.export-trim-precise {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}

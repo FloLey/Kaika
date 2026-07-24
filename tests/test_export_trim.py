@@ -1,9 +1,10 @@
 """POST /export/trim — the platform-length cut out of a finished master.
 
-Pinned: a valid [start, end] re-encodes exactly that range (duration checked via
-ffprobe) and caches it (an identical re-cut returns the same file with no second
-encode); the url must name a file directly in the clip dir (traversal / unknown →
-404); a degenerate range → 400.
+The cut is `backend.trim.cut_master`'s SMART CUT: frame-precise at copy speed (only
+the sub-GOP head re-encodes). Pinned: a mid-GOP [start, end] measures EXACTLY that
+range (the head splice, not a keyframe snap); an identical re-cut returns the same
+file with no second encode; the url must name a file directly in the clip dir
+(traversal / unknown → 404); a degenerate range → 400.
 """
 
 import shutil
@@ -17,6 +18,8 @@ _needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpe
 
 
 def _make_master(name="master-abc.mp4", secs=4):
+    """A miniature of a REAL master: 1-second GOPs, no B-frames (the streaming
+    encoder's shape) — so a mid-GOP cut exercises the head+body splice."""
     paths.ANIM_DIR.mkdir(parents=True, exist_ok=True)
     out = paths.ANIM_DIR / name
     subprocess.run(
@@ -25,7 +28,9 @@ def _make_master(name="master-abc.mp4", secs=4):
             "ffmpeg", "-v", "error", "-y",
             "-f", "lavfi", "-i", f"testsrc=size=64x64:rate=12:duration={secs}",
             "-f", "lavfi", "-i", f"sine=frequency=440:duration={secs}",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-bf", "0",
+            "-g", "12", "-keyint_min", "12", "-sc_threshold", "0",
+            "-c:a", "aac", "-shortest",
             str(out),
         ],
         # fmt: on
@@ -67,17 +72,36 @@ def _finish(client, body, timeout=30.0):
 
 
 @_needs_ffmpeg
+def test_trim_mid_gop_cut_is_frame_precise(client):
+    """A start BETWEEN keyframes (1.5s, keyframes at whole seconds) still measures
+    exactly the requested range — the smart cut's re-encoded head supplies the
+    frames a stream copy cannot start on."""
+    _make_master()
+    r = client.post("/export/trim", json={"url": "/fluid/master-abc.mp4", "start": 1.5, "end": 3})
+    assert r.status_code == 200, r.get_json()
+    url = _finish(client, r.get_json())
+    dur = _duration(paths.ANIM_DIR / url.rsplit("/", 1)[-1])
+    assert abs(dur - 1.5) < 0.15
+
+
+@_needs_ffmpeg
 def test_trim_cuts_the_requested_range_and_caches(client):
     _make_master()
-    r = client.post("/export/trim", json={"url": "/fluid/master-abc.mp4", "start": 1, "end": 3})
+    r = client.post(
+        "/export/trim",
+        json={"url": "/fluid/master-abc.mp4", "start": 1, "end": 3},
+    )
     assert r.status_code == 200, r.get_json()
     url = _finish(client, r.get_json())
     assert url.startswith("/fluid/trim-")
     out = paths.ANIM_DIR / url.rsplit("/", 1)[-1]
     assert abs(_duration(out) - 2.0) < 0.2
-    # Identical re-cut: same key, same file, no re-encode (mtime unchanged).
+    # Identical re-cut: same key (mode included), same file, no re-encode.
     stamp = out.stat().st_mtime_ns
-    r2 = client.post("/export/trim", json={"url": "/fluid/master-abc.mp4", "start": 1, "end": 3})
+    r2 = client.post(
+        "/export/trim",
+        json={"url": "/fluid/master-abc.mp4", "start": 1, "end": 3},
+    )
     assert r2.get_json()["url"] == url
     assert out.stat().st_mtime_ns == stamp
 
