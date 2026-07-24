@@ -28,6 +28,23 @@
   flex-direction: column;
   gap: 14px;
 }
+/* FORMAT (what the file IS) and QUALITY (how much work goes into each frame) —
+   the five fields used to run size / fps / detail-grid / HD-image-size / audio, so
+   the two axes alternated and "detail / grid", which does not change the output
+   size at all, sat between fps and the image resolution. */
+.export-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.export-group-head {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+}
 .export-hint {
   font-size: 11px;
   color: var(--muted);

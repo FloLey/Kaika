@@ -124,142 +124,155 @@ export default function ExportStep({
 
       <div className="export-body">
         <div className="export-settings">
-          {/* HD render settings */}
-          <div className="out-field">
-            <span className="out-label">size</span>
-            <Info
-              text="The master's pixel dimensions. Every segment renders at this size, so it also sets how much work the export is — doubling it roughly quadruples the render time."
-              section="export"
-            />
-            <div className="out-size">
+          {/* FORMAT — what the finished file IS: its dimensions, its frame rate, its
+              audio track. These interleaved with the quality knobs before, so
+              "detail / grid" (which does not change the output size at all) sat
+              between fps and the image resolution. */}
+          <div className="export-group">
+            <div className="export-group-head">FORMAT</div>
+            <div className="out-field">
+              <span className="out-label">size</span>
+              <Info
+                text="The master's pixel dimensions. Every segment renders at this size, so it also sets how much work the export is — doubling it roughly quadruples the render time."
+                section="export"
+              />
+              <div className="out-size">
+                <input
+                  type="number"
+                  className="hz-input"
+                  min={16}
+                  max={4096}
+                  step={2}
+                  value={exportSettings.width}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const w = clampDim(parseFloat(e.target.value));
+                    set({ width: w, height: clampDim(w / canvasRatio) });
+                  }}
+                />
+                <span className="out-x">×</span>
+                <input
+                  type="number"
+                  className="hz-input"
+                  min={16}
+                  max={4096}
+                  step={2}
+                  value={exportSettings.height}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const h = clampDim(parseFloat(e.target.value));
+                    set({ width: clampDim(h * canvasRatio), height: h });
+                  }}
+                />
+                <span className="out-unit">px</span>
+                <span
+                  className="export-ratio-lock"
+                  title="The export keeps your canvas shape (output settings) so the animation isn't reframed — change the orientation in the editor's ⚙ output."
+                >
+                  🔒 {ratioLabel(output)}
+                </span>
+              </div>
+            </div>
+
+            <div className="out-field">
+              <span className="out-label">fps</span>
+              <Info
+                text="Frames per second of the exported video. The simulation advances per frame, so a higher fps is both smoother and proportionally slower to render."
+                section="export"
+              />
               <input
                 type="number"
                 className="hz-input"
-                min={16}
-                max={4096}
-                step={2}
-                value={exportSettings.width}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  const w = clampDim(parseFloat(e.target.value));
-                  set({ width: w, height: clampDim(w / canvasRatio) });
-                }}
+                min={1}
+                max={120}
+                step={1}
+                value={exportSettings.fps}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  set({
+                    fps: Math.max(1, Math.min(120, Math.round(parseFloat(e.target.value) || 0))),
+                  })
+                }
               />
-              <span className="out-x">×</span>
-              <input
-                type="number"
-                className="hz-input"
-                min={16}
-                max={4096}
-                step={2}
-                value={exportSettings.height}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  const h = clampDim(parseFloat(e.target.value));
-                  set({ width: clampDim(h * canvasRatio), height: h });
-                }}
+            </div>
+
+            <div className="out-field">
+              <span className="out-label">audio</span>
+              <Info
+                text="Which audio track is muxed into the master: the original mix, or the vocals-removed instrumental mixed from the separated stems."
+                section="export"
               />
-              <span className="out-unit">px</span>
-              <span
-                className="export-ratio-lock"
-                title="The export keeps your canvas shape (output settings) so the animation isn't reframed — change the orientation in the editor's ⚙ output."
+              <select
+                className="anim-select"
+                value={exportSettings.audioMode}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                  set({ audioMode: e.target.value as ExportSettings["audioMode"] })
+                }
               >
-                🔒 {ratioLabel(output)}
+                <option value="original">original (full mix)</option>
+                <option value="instrumental">instrumental (vocals removed)</option>
+              </select>
+              <span className="export-hint">
+                instrumental = the separated stems minus the vocal — for covers / karaoke
               </span>
             </div>
           </div>
 
-          <div className="out-field">
-            <span className="out-label">fps</span>
-            <Info
-              text="Frames per second of the exported video. The simulation advances per frame, so a higher fps is both smoother and proportionally slower to render."
-              section="export"
-            />
-            <input
-              type="number"
-              className="hz-input"
-              min={1}
-              max={120}
-              step={1}
-              value={exportSettings.fps}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                set({
-                  fps: Math.max(1, Math.min(120, Math.round(parseFloat(e.target.value) || 0))),
-                })
-              }
-            />
-          </div>
+          {/* QUALITY — how much work goes INTO each frame. Neither of these changes the
+              file's dimensions; both trade render time for detail, which is exactly the
+              thing you want to weigh in one place. */}
+          <div className="export-group">
+            <div className="export-group-head">QUALITY</div>
 
-          <div className="out-field">
-            <span className="out-label">detail / grid</span>
-            <Info
-              text="How fine the fluid simulation grid is. Higher means more detail in the swirls and a slower render; it does not change the output size. A graph with no simulation ignores it and renders at native resolution."
-              section="export"
-            />
-            <input
-              type="number"
-              className="hz-input"
-              min={16}
-              max={1024}
-              step={8}
-              value={exportSettings.gridCells}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                set({
-                  gridCells: Math.max(
-                    16,
-                    Math.min(1024, Math.round(parseFloat(e.target.value) || 0))
-                  ),
-                })
-              }
-            />
-            <span className="export-hint">higher = crisper simulation, but slower to render</span>
-          </div>
+            <div className="out-field">
+              <span className="out-label">detail / grid</span>
+              <Info
+                text="How fine the fluid simulation grid is. Higher means more detail in the swirls and a slower render; it does not change the output size. A graph with no simulation ignores it and renders at native resolution."
+                section="export"
+              />
+              <input
+                type="number"
+                className="hz-input"
+                min={16}
+                max={1024}
+                step={8}
+                value={exportSettings.gridCells}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  set({
+                    gridCells: Math.max(
+                      16,
+                      Math.min(1024, Math.round(parseFloat(e.target.value) || 0))
+                    ),
+                  })
+                }
+              />
+              <span className="export-hint">higher = crisper simulation, but slower to render</span>
+            </div>
 
-          <div className="out-field">
-            <span className="out-label">HD image size</span>
-            <Info
-              text="The resolution generated images are re-made at for the master. The editor previews use a smaller, faster size; this is what the final export bakes in."
-              section="animation-output-hd"
-            />
-            <input
-              type="number"
-              className="hz-input"
-              min={256}
-              max={1024}
-              step={64}
-              value={exportSettings.imageSize}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                set({
-                  imageSize: Math.max(
-                    256,
-                    Math.min(1024, Math.round(parseFloat(e.target.value) || 0))
-                  ),
-                })
-              }
-            />
-            <span className="export-hint">
-              Image-gen cards regenerate in HD at export — long edge (px), scaled to your aspect.
-              Higher = sharper but much slower.
-            </span>
-          </div>
-
-          <div className="out-field">
-            <span className="out-label">audio</span>
-            <Info
-              text="Which audio track is muxed into the master: the original mix, or the vocals-removed instrumental mixed from the separated stems."
-              section="export"
-            />
-            <select
-              className="anim-select"
-              value={exportSettings.audioMode}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                set({ audioMode: e.target.value as ExportSettings["audioMode"] })
-              }
-            >
-              <option value="original">original (full mix)</option>
-              <option value="instrumental">instrumental (vocals removed)</option>
-            </select>
-            <span className="export-hint">
-              instrumental = the separated stems minus the vocal — for covers / karaoke
-            </span>
+            <div className="out-field">
+              <span className="out-label">HD image size</span>
+              <Info
+                text="The resolution generated images are re-made at for the master. The editor previews use a smaller, faster size; this is what the final export bakes in."
+                section="animation-output-hd"
+              />
+              <input
+                type="number"
+                className="hz-input"
+                min={256}
+                max={1024}
+                step={64}
+                value={exportSettings.imageSize}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  set({
+                    imageSize: Math.max(
+                      256,
+                      Math.min(1024, Math.round(parseFloat(e.target.value) || 0))
+                    ),
+                  })
+                }
+              />
+              <span className="export-hint">
+                Image-gen cards regenerate in HD at export — long edge (px), scaled to your aspect.
+                Higher = sharper but much slower.
+              </span>
+            </div>
           </div>
 
           {/* per-segment readiness checklist */}
