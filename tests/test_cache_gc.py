@@ -401,3 +401,13 @@ def test_reachable_walks_the_composition_closure(wired):
     assert with_pool != without_pool  # the closure genuinely folds in
     assert with_pool in cache_gc.reachable_hashes()  # …and the GC uses the pool form
     assert without_pool not in cache_gc.reachable_hashes()
+
+
+def test_clip_cache_cap_fits_a_4k_export_working_set():
+    """Tripwire: the byte cap must hold an HD export's WORKING SET (a ~1.5 GB 4K
+    master + ~2 GB of per-segment HD clips + trims + previews). At the old 2 GB the
+    LRU evicted the very clips the incremental export exists to reuse, and every
+    re-export silently paid a full re-render."""
+    from backend import render_cache
+
+    assert render_cache.CACHE_MAX_BYTES >= 8 * 1024**3

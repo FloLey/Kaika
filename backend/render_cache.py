@@ -20,8 +20,13 @@ from pathlib import Path
 log = logging.getLogger("kaika.cache")
 
 # Backstop only: the reachability sweep (cache_gc.py) is the primary cleaner now, so
-# these caps just bound a long UNSAVED editing session between sweeps — kept modest.
-CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(2 * 1024**3)))  # 2 GB
+# these caps just bound a long UNSAVED editing session between sweeps. NOT modest any
+# more: the old 2 GB was sized for card previews and could not even hold ONE 4K
+# export's working set (a ~1.5 GB master + ~2 GB of per-segment HD clips + trims) —
+# the LRU crushed the segment clips the INCREMENTAL export exists to reuse, and every
+# re-export silently paid a full re-render. The cap must fit the HD working set with
+# room for previews; the age limit and the sweep still bound long-term growth.
+CACHE_MAX_BYTES = int(os.environ.get("FLUID_CACHE_MAX_BYTES", str(16 * 1024**3)))  # 16 GB
 CACHE_MAX_AGE_DAYS = float(os.environ.get("FLUID_CACHE_MAX_AGE_DAYS", "14"))
 
 
