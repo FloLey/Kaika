@@ -497,55 +497,10 @@ export default function Studio({
               </>
             )}
           </span>
+          {/* The header row is now IDENTITY + TRANSPORT only. Everything that acts on
+              something — the mode tabs, the segment actions, the step nav — moved down
+              to `.studio-bar`, grouped by what it acts ON. */}
           <div className="controls">
-            {/* Segment ACTIONS — kept visually distinct from the transport cluster. */}
-            <div className="rh-actions">
-              <button className="btn sm edit-split" onClick={onEditSplit}>
-                ↩ edit split
-              </button>
-              {onExport && (
-                <button
-                  className="btn sm final-export"
-                  onClick={onExport}
-                  title="Render the whole track in HD (mark a final output per segment first)"
-                >
-                  Final export ▸
-                </button>
-              )}
-              {tab === "animation" && !navFrame && (
-                // One segmented control: copy this segment's card layout onto the
-                // previous / next neighbour. Each side disables at its end of the track.
-                // Hidden inside an extract — copying is a segment-root affair.
-                <span className="rh-copy" role="group" aria-label="copy layout to a neighbour">
-                  <span className="rh-copy-label">⧉ copy</span>
-                  <button
-                    className="btn sm rh-copy-btn"
-                    onClick={() => copyLayoutTo(prevSeg)}
-                    disabled={!(prevSeg && hasCards)}
-                    title={
-                      prevSeg
-                        ? `Copy these cards to the previous segment (${prevSeg.label})`
-                        : "No previous segment to copy to"
-                    }
-                  >
-                    ‹ prev
-                  </button>
-                  <button
-                    className="btn sm rh-copy-btn"
-                    onClick={() => copyLayoutTo(nextSeg)}
-                    disabled={!(nextSeg && hasCards)}
-                    title={
-                      nextSeg
-                        ? `Copy these cards to the next segment (${nextSeg.label})`
-                        : "No next segment to copy to"
-                    }
-                  >
-                    next ›
-                  </button>
-                </span>
-              )}
-            </div>
-            {/* TRANSPORT — grows to fill the row so the timeline stretches. */}
             <div className="rh-transport">
               <button
                 className="btn on seg-play"
@@ -573,6 +528,92 @@ export default function Studio({
             </div>
           </div>
         </div>
+
+        {/* One bar, three clusters, ordered by widening scope: which VIEW of this
+            segment (the tabs — they used to live at the far bottom of the page, a full
+            stage away from the title that names the active one), what acts on THIS
+            SEGMENT, and what leaves the step entirely. `📚 assets` sits in the segment
+            cluster because it is an action (it opens a modal) — as a third tab it read
+            as a mode you could switch to, which it never was. */}
+        <nav className="studio-bar">
+          <div className="mode-tabs" role="tablist" aria-label="segment view">
+            <button
+              className={"mode-tab" + (tab === "signals" ? " on" : "")}
+              role="tab"
+              aria-selected={tab === "signals"}
+              onClick={() => setTab("signals")}
+            >
+              extract signals by track
+            </button>
+            <button
+              className={"mode-tab" + (tab === "animation" ? " on" : "")}
+              role="tab"
+              aria-selected={tab === "animation"}
+              onClick={() => setTab("animation")}
+            >
+              create animation
+            </button>
+          </div>
+
+          {/* Acts on THIS segment. */}
+          <div className="rh-segment">
+            {tab === "animation" && !navFrame && (
+              // One segmented control: copy this segment's card layout onto the
+              // previous / next neighbour. Each side disables at its end of the track.
+              // Hidden inside an extract — copying is a segment-root affair.
+              <span className="rh-copy" role="group" aria-label="copy layout to a neighbour">
+                <span className="rh-copy-label">⧉ copy</span>
+                <button
+                  className="btn sm rh-copy-btn"
+                  onClick={() => copyLayoutTo(prevSeg)}
+                  disabled={!(prevSeg && hasCards)}
+                  title={
+                    prevSeg
+                      ? `Copy these cards to the previous segment (${prevSeg.label})`
+                      : "No previous segment to copy to"
+                  }
+                >
+                  ‹ prev
+                </button>
+                <button
+                  className="btn sm rh-copy-btn"
+                  onClick={() => copyLayoutTo(nextSeg)}
+                  disabled={!(nextSeg && hasCards)}
+                  title={
+                    nextSeg
+                      ? `Copy these cards to the next segment (${nextSeg.label})`
+                      : "No next segment to copy to"
+                  }
+                >
+                  next ›
+                </button>
+              </span>
+            )}
+            <button
+              className="btn sm"
+              onClick={() => setShowAssets(true)}
+              title="Images, videos and audio you've uploaded — pick one to drop a card"
+            >
+              📚 assets
+            </button>
+          </div>
+
+          {/* Leaves the step: back to the split, or on to the final export. */}
+          <div className="rh-nav">
+            <button className="btn sm edit-split" onClick={onEditSplit}>
+              ↩ edit split
+            </button>
+            {onExport && (
+              <button
+                className="btn sm final-export"
+                onClick={onExport}
+                title="Render the whole track in HD (mark a final output per segment first)"
+              >
+                Final export ▸
+              </button>
+            )}
+          </div>
+        </nav>
 
         {tab === "signals"
           ? activeSeg &&
@@ -678,24 +719,6 @@ export default function Studio({
             }}
           />
         )}
-
-        <nav className="mode-bar">
-          <button
-            className={"mode-tab" + (tab === "signals" ? " on" : "")}
-            onClick={() => setTab("signals")}
-          >
-            extract signals by track
-          </button>
-          <button
-            className={"mode-tab" + (tab === "animation" ? " on" : "")}
-            onClick={() => setTab("animation")}
-          >
-            create animation
-          </button>
-          <button className="mode-tab mode-tab-assets" onClick={() => setShowAssets(true)}>
-            📚 assets
-          </button>
-        </nav>
       </div>
 
       <ConfirmDialog

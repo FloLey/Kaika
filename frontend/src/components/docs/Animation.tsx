@@ -17,9 +17,11 @@ export default function Animation() {
         <span className="num">6</span>Create animation — the node graph
       </h2>
       <p>
-        The Studio has two tabs, switched by the bar at the bottom of the workspace:{" "}
-        <strong>extract signals by track</strong> (everything above) and{" "}
-        <strong>create animation</strong>. The animation tab is a drag-and-drop
+        The Studio has two tabs, switched by the bar just under the segment title:{" "}
+        <strong>extract signals by track</strong> and <strong>create animation</strong>. That same
+        bar carries the actions that work on the segment you are looking at (⧉ copy, 📚 assets) and,
+        at its right edge, the two that leave the step — ↩ edit split and Final export ▸. The
+        animation tab is a drag-and-drop
         <strong> playground</strong> where you wire a segment's signals into a fluid simulation to
         produce a looping video that reacts to the music. Each segment has its own graph, and it
         autosaves like everything else.
