@@ -308,3 +308,121 @@
   transform: scale(1.35);
   box-shadow: 0 0 0 4px rgba(184, 74, 116, 0.16);
 }
+
+/* The port menu a dropped wire opens on a compact card (?ui=next). Anchored at the
+   drop point in the canvas's own coordinate space, above the cards but below the
+   modal scrim — it is part of a gesture in progress, not a window. */
+.gc-drop-menu {
+  position: absolute;
+  z-index: 40;
+  width: 232px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  animation: gc-hint-in 0.1s ease-out;
+}
+.gc-drop-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gc-drop-src,
+.gc-drop-tgt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 42%;
+}
+.gc-drop-tgt {
+  color: var(--text);
+}
+.gc-drop-arrow {
+  flex: none;
+  color: var(--courant);
+}
+.gc-drop-filter {
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 5px 7px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+}
+.gc-drop-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.gc-drop-list {
+  max-height: 236px;
+  overflow-y: auto;
+}
+.gc-drop-group {
+  padding: 6px 7px 2px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gc-drop-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 7px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.gc-drop-row.on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--petale);
+}
+.gc-drop-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gc-drop-taken {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.gc-drop-empty {
+  padding: 8px 7px;
+  color: var(--muted);
+}
+.gc-drop-foot {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.gc-drop-row.alt {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.gc-drop-row.alt.on {
+  color: var(--petale);
+}

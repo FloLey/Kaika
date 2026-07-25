@@ -6,6 +6,7 @@ import {
   connectVideo,
   connectLoose,
   resolveDropPort,
+  wirePort,
   disconnect,
   removeNode,
   renameNode,
@@ -21,8 +22,36 @@ import type { GraphHistory } from "../../lib/graph/history";
 import { FLOW_GAPS, estimateCardSize, flowLayout } from "../../lib/graph/layout";
 import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
-import type { Graph, GraphEdge, LyricLine, OutputSettings, Segment } from "../../lib/types";
+import { isNext } from "../../lib/uiFlag";
+import { chromeFor } from "./nodes/registry";
+import { cardInputs } from "./nodeInputs";
+import { planDrop } from "./dropPlan";
+import type { DropCandidate, DropPlan } from "./dropPlan";
+import type {
+  Graph,
+  GraphEdge,
+  LyricLine,
+  OutputSettings,
+  PortFlow,
+  Segment,
+} from "../../lib/types";
 import type { NodeCtx } from "./nodes/nodeProps";
+
+// Where a wire was released, in the canvas's own screen-space coordinates (the space
+// `.gc-hint` and the wire overlay already use), so the menu opens under the cursor.
+export interface DropPoint {
+  x: number;
+  y: number;
+}
+
+// An open port-drop menu: which wire is being landed, where, and on what.
+export interface DropMenu extends DropPoint {
+  srcId: string;
+  tgtId: string;
+  flow: PortFlow;
+  candidates: DropCandidate[];
+  dynamic?: Extract<DropPlan, { kind: "menu" }>["dynamic"];
+}
 
 // The animation editor "brain": graph state (the active composition's graph), the
 // selection, the mutation handlers (connect / delete / minimize), and the assembled
@@ -237,15 +266,90 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater]
   );
 
+  // ?ui=next — resolve a drop onto a COMPACT card at the drop point instead of
+  // parking it. `null` = no menu open. Held here rather than in the canvas because
+  // the decision is about the graph, not about pixels; the canvas only places it.
+  const [dropMenu, setDropMenu] = useState<DropMenu | null>(null);
+  const closeDropMenu = useCallback(() => setDropMenu(null), []);
+
+  // The shared compact-drop path. Both wire gestures (onto the consolidated input
+  // dot, and onto the card body) end up here, so they can't behave differently.
+  const compactDrop = useCallback(
+    (srcId: string, tgtId: string, at?: DropPoint) => {
+      const g = graphRef.current;
+      const src = g.nodes.find((n) => n.id === srcId);
+      if (!src) return;
+      const flow = chromeFor(src.type).outFlow as PortFlow;
+      const plan = planDrop(g, flow, tgtId);
+      if (plan.kind === "connect") {
+        applyUpdater((gg) => wirePort(gg, srcId, "out", tgtId, plan.portId));
+        return;
+      }
+      if (plan.kind === "park" || !at) {
+        applyUpdater((gg) => connectLoose(gg, srcId, tgtId));
+        return;
+      }
+      setDropMenu({
+        srcId,
+        tgtId,
+        flow,
+        ...at,
+        candidates: plan.candidates,
+        dynamic: plan.dynamic,
+      });
+    },
+    [applyUpdater]
+  );
+
+  // Take one entry from the open drop menu.
+  const pickDropPort = useCallback(
+    (portId: string) => {
+      const m = dropMenu;
+      if (!m) return;
+      applyUpdater((g) => wirePort(g, m.srcId, "out", m.tgtId, portId));
+      setDropMenu(null);
+    },
+    [applyUpdater, dropMenu]
+  );
+
+  // "+ new layer/input": grow the card's dynamic group and land the wire on the row
+  // that just appeared. Reading the new port back off `cardInputs` (rather than
+  // guessing an id) keeps this working for any dynamic group the registry grows.
+  const addDropPort = useCallback(() => {
+    const m = dropMenu;
+    if (!m?.dynamic) return;
+    const dyn = m.dynamic;
+    applyUpdater((g) => {
+      const g2 = dyn.add(g, m.tgtId);
+      const node = g2.nodes.find((n) => n.id === m.tgtId);
+      if (!node) return g2;
+      const rows = cardInputs(node).inputs.filter((i) => i.flow === m.flow);
+      const fresh = rows[rows.length - 1];
+      return fresh ? wirePort(g2, m.srcId, "out", m.tgtId, fresh.portId) : g2;
+    });
+    setDropMenu(null);
+  }, [applyUpdater, dropMenu]);
+
+  // "park for later": the pre-flag behaviour, now an explicit choice.
+  const parkDrop = useCallback(() => {
+    const m = dropMenu;
+    if (!m) return;
+    applyUpdater((g) => connectLoose(g, m.srcId, m.tgtId));
+    setDropMenu(null);
+  }, [applyUpdater, dropMenu]);
+
   // Accept a wire: a value source into a fluid param via connect(); anything else
   // (fluid/combine/points -> output or combine slot) as a plain video/points edge.
   const onConnect = useCallback(
-    (srcId: string, srcPort: string, tgtId: string, tgtPort: string) => {
+    (srcId: string, srcPort: string, tgtId: string, tgtPort: string, at?: DropPoint) => {
+      // A COMPACT card has one consolidated input dot standing in for every port, so
+      // a direct drop can't know WHICH input is meant. Under ?ui=next we resolve it
+      // at the drop point; otherwise it parks gray/loose for the settings window.
+      if (minimized.has(tgtId)) {
+        if (isNext()) return compactDrop(srcId, tgtId, at);
+        return applyUpdater((g) => connectLoose(g, srcId, tgtId));
+      }
       applyUpdater((g) => {
-        // A COMPACT card has one consolidated input dot standing in for every port,
-        // so a direct drop can't know WHICH input is meant — park it gray/loose and
-        // let the settings window assign it. Detailed cards keep direct-port wiring.
-        if (minimized.has(tgtId)) return connectLoose(g, srcId, tgtId);
         const tgt = g.nodes.find((n) => n.id === tgtId);
         if (tgt && nodeParam(tgt.type, tgtPort)) {
           return connect(g, srcId, tgtId, tgtPort);
@@ -253,7 +357,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
         return connectVideo(g, srcId, srcPort, tgtId, tgtPort); // last-wins per port
       });
     },
-    [applyUpdater, minimized]
+    [applyUpdater, compactDrop, minimized]
   );
 
   // A wire released over a CARD (not a specific port): auto-assign when the
@@ -261,11 +365,12 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   // the only unbound param), else PARK it as a loose gray edge — the settings
   // window assigns it later.
   const onCardDrop = useCallback(
-    (srcId: string, srcFlow: string, tgtId: string) => {
+    (srcId: string, srcFlow: string, tgtId: string, at?: DropPoint) => {
+      if (minimized.has(tgtId)) {
+        if (isNext()) return compactDrop(srcId, tgtId, at);
+        return applyUpdater((g) => connectLoose(g, srcId, tgtId));
+      }
       applyUpdater((g) => {
-        // Compact target → always park loose (see onConnect): the one input dot is
-        // ambiguous, so the settings window does the assignment.
-        if (minimized.has(tgtId)) return connectLoose(g, srcId, tgtId);
         const port = resolveDropPort(g, tgtId, srcFlow);
         if (!port) return connectLoose(g, srcId, tgtId);
         const tgt = g.nodes.find((n) => n.id === tgtId);
@@ -273,7 +378,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
         return connectVideo(g, srcId, "out", tgtId, port);
       });
     },
-    [applyUpdater, minimized]
+    [applyUpdater, compactDrop, minimized]
   );
 
   const onEdgeDelete = useCallback(
@@ -408,8 +513,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   );
 
   return {
-    // The DISPLAY graph (compact mode swaps in cx/cy) — what the canvas renders.
-    // Commits flow back through `applyUpdater` (the translating wrapper below).
+    // The graph the canvas renders — one coordinate set since the detailed view was
+    // removed (there is no display/canonical translation any more). Commits flow
+    // back through `applyUpdater`.
     graph,
     selected,
     setSelected,
@@ -421,6 +527,11 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     minimizedKey,
     onConnect,
     onCardDrop,
+    dropMenu,
+    pickDropPort,
+    addDropPort,
+    parkDrop,
+    closeDropMenu,
     onEdgeDelete,
     onDeleteSelection,
     undo,

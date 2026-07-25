@@ -519,19 +519,40 @@ export function connectLoose(graph: Graph, sourceId: string, targetId: string): 
   };
 }
 
-// Promote a loose edge onto a real port: for a modulatable param this IS `connect`
-// (binding + edge written together — the invariant holds again); for the special
-// inputs (video/positions/color) it's a plain retarget. The loose edge is dropped
-// either way (connect/connectVideo replace any existing edge into that port).
+// Land a source on a target PORT, dispatching on what the port is: a modulatable
+// param goes through `connect` (binding + edge written together — §3.3), anything
+// else (video/positions/color/layer slots) is a plain typed edge. Any wire the same
+// source had PARKED on this card is consumed by the assignment, so promoting a
+// parked wire and dropping a fresh one converge on the same graph.
+//
+// The single place that decision is made: `assignEdge` (the picker's dropdown) and
+// the canvas drop menu both route here, so the two entry points can't drift.
+export function wirePort(
+  graph: Graph,
+  sourceId: string,
+  sourcePort: string,
+  targetId: string,
+  portKey: string
+): Graph {
+  const g = {
+    ...graph,
+    edges: (graph.edges || []).filter(
+      (e) => !(e.source === sourceId && e.target === targetId && isLooseEdge(e))
+    ),
+  };
+  const target = g.nodes.find((n) => n.id === targetId);
+  if (target && nodeParam(target.type, portKey)) {
+    return connect(g, sourceId, targetId, portKey);
+  }
+  return connectVideo(g, sourceId, sourcePort, targetId, portKey);
+}
+
+// Promote a loose edge onto a real port. The loose edge is dropped either way
+// (connect/connectVideo replace any existing edge into that port).
 export function assignEdge(graph: Graph, edgeId: string, portKey: string): Graph {
   const edge = (graph.edges || []).find((e) => e.id === edgeId);
   if (!edge || !isLooseEdge(edge)) return graph;
-  const without = { ...graph, edges: graph.edges.filter((e) => e.id !== edgeId) };
-  const target = graph.nodes.find((n) => n.id === edge.target);
-  if (target && nodeParam(target.type, portKey)) {
-    return connect(without, edge.source, edge.target, portKey);
-  }
-  return connectVideo(without, edge.source, edge.sourcePort, edge.target, portKey);
+  return wirePort(graph, edge.source, edge.sourcePort, edge.target, portKey);
 }
 
 // Demote an assigned input back to loose: clear the binding (for a param port) and

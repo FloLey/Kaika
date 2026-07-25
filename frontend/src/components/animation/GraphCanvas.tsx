@@ -54,9 +54,21 @@ interface GraphCanvasProps {
   graph: Graph;
   layoutKey?: string;
   onGraphChange?: (updater: Updater) => void;
-  onConnect?: (srcId: string, srcPort: string, tgtId: string, tgtPort: string) => void;
-  // A wire released over a CARD (not a port): the editor auto-assigns or parks it loose.
-  onCardDrop?: (srcId: string, srcFlow: string, tgtId: string) => void;
+  onConnect?: (
+    srcId: string,
+    srcPort: string,
+    tgtId: string,
+    tgtPort: string,
+    at?: { x: number; y: number }
+  ) => void;
+  // A wire released over a CARD (not a port): the editor auto-assigns, opens a port
+  // menu at `at`, or parks it loose.
+  onCardDrop?: (
+    srcId: string,
+    srcFlow: string,
+    tgtId: string,
+    at?: { x: number; y: number }
+  ) => void;
   onEdgeDelete?: (edge: GraphEdge) => void;
   onDeleteSelection?: (ids: string[]) => void;
   // The active selection: node ids and/or a single edge id. Several nodes can be
@@ -448,8 +460,14 @@ export default function GraphCanvas({
     },
     (e) => {
       const w = wireRef.current;
+      // Where the wire was let go, in canvas-local coordinates — the editor opens its
+      // port menu here, so the choice appears under the cursor that made the drop.
+      const dropRect = rootRef.current?.getBoundingClientRect();
+      const at = dropRect
+        ? { x: e.clientX - dropRect.left, y: e.clientY - dropRect.top }
+        : undefined;
       if (w && w.target) {
-        onConnect?.(w.source.nodeId, w.source.portId, w.target.nodeId, w.target.portId);
+        onConnect?.(w.source.nodeId, w.source.portId, w.target.nodeId, w.target.portId, at);
       } else if (w) {
         // Dropped without a valid port target. Landing anywhere on a CARD hands the
         // wire to the editor (auto-assign or park it loose); a drop on a port that
@@ -458,7 +476,7 @@ export default function GraphCanvas({
         const cardDom = hit?.closest("[data-node-id]");
         const tgtId = cardDom?.getAttribute("data-node-id");
         if (tgtId && tgtId !== w.source.nodeId && onCardDrop) {
-          onCardDrop(w.source.nodeId, w.source.flow, tgtId);
+          onCardDrop(w.source.nodeId, w.source.flow, tgtId, at);
           setWire(null);
           return;
         }

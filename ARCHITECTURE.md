@@ -324,20 +324,17 @@ Framework-free domain logic, imported through the barrel:
 Every card is one component registered in **`registry.ts`** (`NODE_TYPES`):
 component + chrome (title/accent/out-flow) + palette entry + factory. The
 canvas, palette, compact card and dispatch all read the registry — adding a
-card touches no shared component. The canvas has two **view modes** switched
-from the toolbar — `graph.viewMode`: "detailed" (default, classic full cards) or
-"compact" (header + live preview + one in/one out anchor; the body opens the
-full card in a settings modal) — with `graph.viewOverrides` listing per-card
-exceptions (added at GRAPH_VERSION 16, now 28 — see `factories.ts` for the log;
-the earlier `expanded`/`minimized` sets are
-stripped on load); `output` never compacts. Each view keeps its **own card
-positions** (v20): `x/y` is the detailed position, optional `cx/cy` the compact
-one — `useGraphEditor` hands the canvas a display graph and translates commits
-back. `lib/graph/layout.ts` holds the layout passes: minimal-movement
-de-overlap/tighten behind the mode switch, and `flowLayout` (layered columns
-along the data flow; dummy-node routing for long wires + greedy barycenter/
-swap crossing reduction + y-alignment of wired cards) behind the ✨ arrange
-button (positions are node-level, never hashed).
+card touches no shared component. There is **one view**: every card renders
+**compact** (header + live preview + one in/one out anchor; the body opens the
+full card in a settings modal), except `output`, whose body IS the render
+preview. The old "detailed" mode, its toolbar toggle, `graph.viewMode`,
+`graph.viewOverrides` and the second coordinate set (`cx/cy`) were all removed
+at GRAPH_VERSION 29 — see [`specs/remove-detailed-mode/`](specs/remove-detailed-mode/)
+and `factories.ts` for the version log. `normalizeGraph` folds any of those
+fields away on load, so `x/y` is the only position. `lib/graph/layout.ts` holds
+`flowLayout` (layered columns along the data flow; dummy-node routing for long
+wires + greedy barycenter/swap crossing reduction + y-alignment of wired cards)
+behind the ✨ arrange button (positions are node-level, never hashed).
 Shared plumbing: `NodeFrame` (chrome + ports),
 `useNodeData` (the patch-`data` hook), `AssetLayerCard` (the image/video shell),
 `BoxPad` (normalized placement box), `useAssetUpload` (upload/YouTube flow).
@@ -361,6 +358,31 @@ Codegen).
   re-renders on timeupdate ticks. Each `OutputNode` owns its own streaming
   render (debounced on its `outputHash`, cancelled on edit, polled with
   backoff).
+
+### UI proposals behind `?ui=next` (`lib/uiFlag.ts`)
+
+A UI change big enough to argue about ships as **live code beside the current
+UI** rather than as a mockup: `isNext()` reads `?ui=next` off the URL, so the
+same project opens both ways, one URL apart, and nothing is deleted until one
+version wins. (`main.tsx` already branches the whole root on `?doc=`; this is
+the same idea one level down.) Read live, never cached — a test flips it with
+`history.replaceState`, and it is only consulted on discrete gestures.
+
+Live today:
+
+- **The port drop menu.** Every card but `output` is compact, so its one
+  consolidated input dot can't say WHICH port a dropped wire meant; the editor's
+  answer was to park every drop as a gray loose wire and make you assign it in
+  the settings window. `dropPlan.ts` (pure) decides instead: `resolveDropPort`
+  first — the existing auto-assign heuristic, which compact-only had made
+  unreachable — then the card's own flow-compatible inputs; a lone free one
+  wires itself, several open `PortDropMenu` at the drop point, and a card that
+  can't take the flow at all still parks. Parking stays as the last row of the
+  menu. `useGraphEditor` holds the open menu (the decision is about the graph);
+  `AnimationCanvas` places it. Both entry points — a drop on the input dot and a
+  drop on the card body — route through one `compactDrop`, and every outcome
+  goes through `mutations.wirePort`, the shared helper `assignEdge` also uses,
+  so the binding↔edge invariant holds by construction.
 
 ### API layer
 

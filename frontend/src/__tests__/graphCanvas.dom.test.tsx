@@ -158,7 +158,10 @@ describe("drop-anywhere wiring (jsdom)", () => {
       window.dispatchEvent(Object.assign(new Event("pointerup"), { clientX: 210, clientY: 10 }));
     });
     document.elementFromPoint = orig;
-    expect(onCardDrop).toHaveBeenCalledWith("src", "value", "tgt");
+    // …carrying WHERE it was released (canvas-local), so the editor can open its
+    // port menu under the cursor that made the drop. jsdom's rects are all zero, so
+    // the client coords pass through unchanged.
+    expect(onCardDrop).toHaveBeenCalledWith("src", "value", "tgt", { x: 210, y: 10 });
   });
 });
 

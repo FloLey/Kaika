@@ -94,6 +94,7 @@ export {
   removeNode,
   resolveDropPort,
   connectLoose,
+  wirePort,
   assignEdge,
   unassignEdge,
   renameNode,

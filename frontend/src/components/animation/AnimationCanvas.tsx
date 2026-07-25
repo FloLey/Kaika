@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 import GraphCanvas from "./GraphCanvas";
 import MontageEditor from "./MontageEditor";
 import Palette from "./Palette";
+import PortDropMenu from "./PortDropMenu";
 import renderAnimNode from "./renderAnimNode";
+import { chromeFor } from "./nodes/registry";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
 import { problemsFor } from "../../lib/graphModel";
@@ -39,6 +41,13 @@ interface AnimationCanvasProps {
   onGraphChange: (g: Graph) => void;
   setFinalOutput?: NodeCtx["setFinalOutput"];
 }
+
+// A card's display name: what the user named it, else its type's palette title —
+// the same fallback NodeFrame renders in the title bar.
+const cardName = (graph: Graph, id: string): string => {
+  const n = graph.nodes.find((x) => x.id === id);
+  return n ? (n.name ?? chromeFor(n.type).title) : id;
+};
 
 // 07 — the per-composition animation container (the VIEW). The graph state +
 // mutation handlers + node `ctx` live in useGraphEditor; this component owns layout:
@@ -87,6 +96,11 @@ export default function AnimationCanvas({
     minimizedKey,
     onConnect,
     onCardDrop,
+    dropMenu,
+    pickDropPort,
+    addDropPort,
+    parkDrop,
+    closeDropMenu,
     onEdgeDelete,
     onDeleteSelection,
     undo,
@@ -226,6 +240,25 @@ export default function AnimationCanvas({
             renderNode={renderNode}
           />
         </MinimizeContext.Provider>
+        {/* ?ui=next — the dropped wire picks its port here, over the canvas, instead
+            of parking gray and sending you to the settings window. Placed in the
+            stage (not inside GraphCanvas) because it lives in the stage's coordinate
+            space, which is the canvas root's own: .gc-root is inset-0 inside it. */}
+        {dropMenu && (
+          <PortDropMenu
+            x={dropMenu.x}
+            y={dropMenu.y}
+            sourceName={cardName(graph, dropMenu.srcId)}
+            targetName={cardName(graph, dropMenu.tgtId)}
+            candidates={dropMenu.candidates}
+            nameOf={(id) => cardName(graph, id)}
+            dynamicLabel={dropMenu.dynamic?.label}
+            onPick={pickDropPort}
+            onAddDynamic={addDropPort}
+            onPark={parkDrop}
+            onCancel={closeDropMenu}
+          />
+        )}
       </div>
     </div>
   );
