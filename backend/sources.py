@@ -37,6 +37,7 @@ from .sources_gen import (  # noqa: F401
 from .sources_media import (  # noqa: F401
     SlideshowClip,
     VideoClip,
+    _video_meta,
     apply_video_opacity,
     image,
     video_src_times,
