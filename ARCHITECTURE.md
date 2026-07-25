@@ -391,10 +391,43 @@ Live today:
   word-start > anywhere in the terms) so `co` offers `color` before `echo`. An
   added card wires itself from the selection only when `planDrop` — the same
   planner the drop menu uses — calls the port unambiguous.
+- **The routed shell** (`lib/route.ts` + `components/next/AppShell.tsx`). The
+  current shell keeps the screen in a `useState` string, so Back does nothing and
+  nothing is linkable. `route.ts` is ~70 lines over the hash (no dependency; the
+  space is one enum plus two ids): `#/p/<job>/studio/<seg>[/graph]`. The URL is
+  authoritative for the stage and the segment; state reconciles back to it ONCE
+  per load (a project resumes at the step the DB remembers) and skips a URL that
+  already names that stage, so a deep link isn't honoured then undone. `Stepper`
+  replaces the three one-way buttons scattered across Studio and ExportStep, and
+  refuses export off the same predicate ExportConsole computes for its checklist.
+  ⚠ **Not yet in the grammar**: the breadcrumb descent into a child composition —
+  it lives in Studio's nav stack, and a route field that parses into nothing is
+  worse than one that isn't there.
+- **One transport** (`lib/transport.ts` + `TransportBar`). Three players today,
+  only Studio's good one; Review re-renders its whole tree ~4×/s and Export has
+  none, and none is shared. The store creates the `<audio>` itself and never puts
+  it in the React tree — that is what lets playback survive a stage change.
+  Position and snapshot are separate stores (position is ~4 Hz and read by
+  leaves). `useStudioPlayback` and `ReviewStep` each gained a `shared` mode
+  re-implementing their surface against it.
+- **The docked inspector** (`NodeInspector`). `NodeSettingsModal`'s body,
+  extracted whole and scrim-free, so the modal and the dock show the SAME editor.
+  `.node-settings` stays on the element in both, which is why the existing rules
+  that hide the card's own param rows keep applying. A compact body selects
+  (`ctx.inspectNode`) instead of opening a window over the graph it edits.
+- **The export console** (`ExportConsole`). The readiness checklist and the
+  progress display become one list, and the backend's `phase` — which
+  `ExportStep` drops on the floor — is on screen.
+- **The signal card** (`SignalCardNext` + `signalSummary.ts`). ~19 controls with
+  no hierarchy become a derived one-line summary plus three self-describing
+  disclosures. Presentation only: `SignalCard` keeps all the logic.
 
-Styles for all of these live in **`styles/animation/10-next.css`**, imported
-last by the `animation.css` barrel: they must land on top of the current UI's,
-and one file means a proposal that loses is deleted by deleting a file.
+`ui/Field.tsx` (`NumberField`/`SelectField`/`clampTo`) finishes the vocabulary
+`Ctl`/`Toggle`/`Info` started — it is NOT flagged, since a clamped number field
+is right for every caller. Styles for the proposals live in
+**`styles/animation/10-next.css`**, imported last by the `animation.css` barrel:
+they must land on top of the current UI's, and one file means a proposal that
+loses is deleted by deleting a file.
 
 ### API layer
 
