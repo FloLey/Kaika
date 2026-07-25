@@ -15,11 +15,11 @@ import ProjectList from "../ProjectList";
 import UploadStep from "../upload/UploadStep";
 import ReviewStep from "../review/ReviewStep";
 import Studio from "../studio/Studio";
-import ExportStep from "../export/ExportStep";
 import Processing from "../Processing";
 import LogsPanel from "../LogsPanel";
 import SettingsModal from "../SettingsModal";
 import ErrorToast from "../ErrorToast";
+import ExportConsole from "./ExportConsole";
 import Stepper from "./Stepper";
 import type { Stage } from "./Stepper";
 import TransportBar from "./TransportBar";
@@ -270,14 +270,16 @@ export default function AppShell() {
         )}
 
         {!busy && route.name === "export" && (
-          <ExportStep
+          // The console, not ExportStep: same job, but the checklist and the progress
+          // are one list and the backend's `phase` is on screen. `↩ studio` is gone —
+          // the stepper is the way back now.
+          <ExportConsole
             job={p.job ?? undefined}
             segments={p.segments}
             compositions={p.compositions}
             exportSettings={p.exportSettings}
             setExportSettings={p.setExportSettings}
             output={p.output}
-            onBack={() => go("studio")}
             onOpenSegment={(id) => goSegment(id, "graph")}
           />
         )}

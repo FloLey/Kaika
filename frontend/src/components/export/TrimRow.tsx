@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
+import { useRenderJob } from "../../lib/useRenderJob";
 import Info from "../../ui/Info";
 
 interface TrimRowProps {
@@ -24,10 +25,35 @@ export default function TrimRow({ finalUrl, videoRef, onPreviewCut, previewingCu
   const [dur, setDur] = useState(0);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [pct, setPct] = useState<number | null>(null); // cut progress (steps, not frames)
   const [error, setError] = useState<string | null>(null);
   const [cut, setCut] = useState<{ url: string; start: number; end: number } | null>(null);
+  // The cut job, on the shared long-render contract (persisted id, re-attach on
+  // remount, never cancelled by unmounting). `null` storeKey: a trim is cheap to
+  // redo and its range lives only in this component, so resuming one across a
+  // reload would show progress for a range the sliders no longer agree with.
+  const job = useRenderJob(null);
+  // The range the in-flight job is cutting — captured at kick-off, because the
+  // sliders keep moving while it runs.
+  const [pendingRange, setPendingRange] = useState<{ start: number; end: number } | null>(null);
+  const busy = job.busy || !!pendingRange;
+  const pct =
+    job.progress && job.progress.total
+      ? Math.round((job.progress.done / job.progress.total) * 100)
+      : null;
+
+  // Adopt the finished cut: the hook reports the url, and the range it belongs to
+  // is the one captured at kick-off.
+  useEffect(() => {
+    if (!job.finalUrl || !pendingRange) return;
+    setCut({ url: job.finalUrl, ...pendingRange });
+    onPreviewCut(job.finalUrl); // the player now SHOWS the result
+    setPendingRange(null);
+  }, [job.finalUrl, pendingRange, onPreviewCut]);
+  useEffect(() => {
+    if (!job.error) return;
+    setError(job.error);
+    setPendingRange(null);
+  }, [job.error]);
   // ▶ preview selection: loop the stage player over [start, end] of the MASTER —
   // exactly what the cut will contain, heard and seen before cutting anything.
   const [looping, setLooping] = useState(false);
@@ -88,38 +114,26 @@ export default function TrimRow({ finalUrl, videoRef, onPreviewCut, previewingCu
     seek(Math.max(v, start + 0.5));
   };
 
+  // A fresh cut is a background job (a 4K re-encode runs for minutes). It follows
+  // exactly the render contract `useRenderJob` already implements — this used to be
+  // a hand-written `for(;;)` loop with its own busy/pct/error state beside the hook
+  // that does the same thing, and only this copy could lose a cut by unmounting.
   async function doCut() {
-    setBusy(true);
     setError(null);
-    setPct(null);
+    setPendingRange({ start, end });
     try {
       const r = await api.trimExport(finalUrl, start, end);
       if (r.url) {
-        setCut({ url: r.url, start, end }); // cache hit — instant
+        // Cache hit — the same range was cut before, so there is no job to follow.
+        setPendingRange(null);
+        setCut({ url: r.url, start, end });
         onPreviewCut(r.url); // the player now SHOWS the result
         return;
       }
-      // A fresh cut is a background job (a 4K re-encode runs for minutes) — poll
-      // the normal render contract and surface the encoder's frame counter.
-      for (;;) {
-        const st = await api.getExportStatus(r.render_id!);
-        if (st.state === "done" && st.url) {
-          setCut({ url: st.url, start, end });
-          onPreviewCut(st.url); // the player now SHOWS the result
-          return;
-        }
-        if (st.state !== "running") {
-          setError(st.error || "trim failed");
-          return;
-        }
-        setPct(st.total ? Math.round((st.frames_done / st.total) * 100) : null);
-        await new Promise((res) => setTimeout(res, 700));
-      }
+      job.start(async () => ({ render_id: r.render_id! }));
     } catch (e) {
+      setPendingRange(null);
       setError(e instanceof Error ? e.message : "trim failed");
-    } finally {
-      setBusy(false);
-      setPct(null);
     }
   }
 
