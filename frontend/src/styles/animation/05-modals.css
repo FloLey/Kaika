@@ -403,16 +403,41 @@
   padding: 4px 6px;
 }
 
+/* A labelled control: the label (+ its "?") on the first row, the control itself on
+   the rows under it.
+
+   This was a plain column flex, which gave the "?" a row of ITS OWN — a badge that
+   explains the label, sitting under the label with the control pushed down past it.
+   Two columns on the first row fixes that without touching the markup at any of the
+   five call sites: the label takes column 1, the `.info` badge column 2, and every
+   other child spans the full width on its own row exactly as before. A field with no
+   "?" is unaffected — the label simply sits alone in column 1. */
+/* Column 2 is `1fr`, not `max-content`: the full-width children below span both
+   columns, and against two max-content tracks their width bleeds back into column 1 —
+   which parks the "?" halfway across the field, further from its label than it was
+   stacked underneath. Letting column 2 absorb all the slack pins column 1 to exactly
+   the label's width, so the badge lands right beside it whatever sits below. */
 .out-field {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: max-content 1fr;
   gap: 6px;
+}
+.out-field > .out-label {
+  grid-column: 1;
+}
+.out-field > .info {
+  grid-column: 2;
+  justify-self: start; /* a grid item stretches by default — that would oval the badge */
+}
+.out-field > *:not(.out-label):not(.info) {
+  grid-column: 1 / -1;
 }
 .out-label {
   font: 600 10px/1 var(--mono);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
+  align-self: center;
 }
 .out-presets {
   display: flex;
@@ -476,4 +501,107 @@
   font-size: 11px;
   color: var(--text);
   text-transform: uppercase;
+}
+
+/* ⌘K — the add/jump box (?ui=next). Sits on the modal scrim layer but reads as a
+   way to get somewhere rather than a window: no title bar, no buttons, dismissed
+   by Escape or a click anywhere off it. */
+.cmdk-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 14vh;
+  background: rgba(31, 36, 51, 0.28);
+  backdrop-filter: blur(2px);
+}
+.cmdk {
+  width: min(560px, 92vw);
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.cmdk-input {
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.cmdk-input:focus {
+  outline: none;
+}
+.cmdk-list {
+  overflow-y: auto;
+  padding: 6px;
+}
+.cmdk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.cmdk-row.on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.cmdk-kind {
+  flex: none;
+  width: 58px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cmdk-kind.k-add {
+  color: var(--petale);
+}
+.cmdk-kind.k-card {
+  color: var(--courant);
+}
+.cmdk-kind.k-segment {
+  color: var(--mod);
+}
+.cmdk-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmdk-hint {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.cmdk-empty {
+  padding: 14px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.cmdk-foot {
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
 }
