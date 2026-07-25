@@ -670,7 +670,9 @@ export default function Studio({
                         no signals — add a frequency band to extract one
                       </div>
                     )}
-                    <div className="signals">
+                    {/* ?ui=next lays the cards out in a grid: four bands on one
+                        stem in a single column is mostly scrolling. */}
+                    <div className={"signals" + (sharedTransport ? " signal-list-next" : "")}>
                       {sigs.map((sg) => (
                         <SignalCard
                           key={sg.id}

@@ -10,6 +10,8 @@ import { fmtTime, fmtHz, clamp } from "../../lib/mel";
 import { stemColor } from "../../lib/segments";
 import { FEATURES, FEATURE_HELP, HELP } from "./signalCatalog";
 import { useSignalCurve } from "./useSignalCurve";
+import { isNext } from "../../lib/uiFlag";
+import SignalCardNext from "../next/SignalCardNext";
 import type { Signal, StemInfo } from "../../lib/types";
 
 interface SignalCardProps {
@@ -162,6 +164,68 @@ export default function SignalCard({
     />
   );
 
+  // One element, rendered by whichever layout is active — it carries the band-pass
+  // registration, so a layout that forgot it would silently lose solo playback.
+  const audioEl = (
+    <audio
+      ref={audioRef}
+      src={info.audio}
+      preload="metadata"
+      onTimeUpdate={onTime}
+      onPlay={() => {
+        setPlaying(true);
+        onPlayingChange(signal.id, true);
+      }}
+      onPause={() => {
+        setPlaying(false);
+        onPlayingChange(signal.id, false);
+      }}
+      onEnded={() => {
+        setPlaying(false);
+        onPlayingChange(signal.id, false);
+      }}
+    />
+  );
+
+  const spectrogram = (
+    <Spectrogram
+      track={specTrack}
+      frac={frac}
+      onSeek={seek}
+      onBandChange={(lo, hi) => patch({ minHz: lo, maxHz: hi })}
+      winStart={segStart}
+      winEnd={segEnd}
+      duration={duration}
+    />
+  );
+
+  // ?ui=next — the same signal, presented in three bands of disclosure. Only the
+  // LAYOUT moves: everything above (the audio element, the band-pass, the curve
+  // extraction, the shared clock) stays here, so there is one implementation of the
+  // part that is hard to get right.
+  if (isNext()) {
+    return (
+      <>
+        <SignalCardNext
+          signal={signal}
+          patch={patch}
+          onRemove={onRemove}
+          color={color}
+          nyq={nyq}
+          bandIgnored={bandIgnored}
+          playing={playing}
+          onTogglePlay={togglePlay}
+          setBandMin={setBandMin}
+          setBandMax={setBandMax}
+          spectrogram={spectrogram}
+          curveView={curveView}
+          pulsePad={pulsePad}
+        />
+        {audioEl}
+      </>
+    );
+  }
+
   return (
     <div
       className={"signal" + (collapsed ? " collapsed" : "")}
@@ -250,15 +314,7 @@ export default function SignalCard({
           </div>
           <div className="signal-body">
             <div className={"signal-graphs" + (bandIgnored ? " band-ignored" : "")}>
-              <Spectrogram
-                track={specTrack}
-                frac={frac}
-                onSeek={seek}
-                onBandChange={(lo, hi) => patch({ minHz: lo, maxHz: hi })}
-                winStart={segStart}
-                winEnd={segEnd}
-                duration={duration}
-              />
+              {spectrogram}
               {curveView}
             </div>
             {pulsePad}
@@ -338,24 +394,7 @@ export default function SignalCard({
         </>
       )}
 
-      <audio
-        ref={audioRef}
-        src={info.audio}
-        preload="metadata"
-        onTimeUpdate={onTime}
-        onPlay={() => {
-          setPlaying(true);
-          onPlayingChange(signal.id, true);
-        }}
-        onPause={() => {
-          setPlaying(false);
-          onPlayingChange(signal.id, false);
-        }}
-        onEnded={() => {
-          setPlaying(false);
-          onPlayingChange(signal.id, false);
-        }}
-      />
+      {audioEl}
     </div>
   );
 }
