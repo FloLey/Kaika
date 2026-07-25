@@ -383,6 +383,18 @@ Live today:
   drop on the card body — route through one `compactDrop`, and every outcome
   goes through `mutations.wirePort`, the shared helper `assignEdge` also uses,
   so the binding↔edge invariant holds by construction.
+- **⌘K** (`components/next/`). 35 card types behind seven unsearchable category
+  dropdowns, and nothing that jumps to a card or a segment by name. One box does
+  all three: `commandItems.ts` (pure) builds the reachable set — every addable
+  type, the segment's signals listed individually, the current composition's
+  cards, the other segments — and ranks a query in three tiers (label-prefix >
+  word-start > anywhere in the terms) so `co` offers `color` before `echo`. An
+  added card wires itself from the selection only when `planDrop` — the same
+  planner the drop menu uses — calls the port unambiguous.
+
+Styles for all of these live in **`styles/animation/10-next.css`**, imported
+last by the `animation.css` barrel: they must land on top of the current UI's,
+and one file means a proposal that loses is deleted by deleting a file.
 
 ### API layer
 
