@@ -142,15 +142,19 @@ export default function CompactCard({
           title={
             node.type === "montage" && ctx?.enterMontage
               ? "open the montage editor"
-              : "open settings"
+              : ctx?.inspectNode
+                ? "edit in the inspector"
+                : "open settings"
           }
-          onClick={() =>
+          onClick={() => {
             // A montage's full surface is the EDITOR (its own breadcrumb level) —
             // the modal stays the fallback where no navigation exists (tests, stubs).
-            node.type === "montage" && ctx?.enterMontage
-              ? ctx.enterMontage(node.id)
-              : setSettingsOpen(true)
-          }
+            if (node.type === "montage" && ctx?.enterMontage) return ctx.enterMontage(node.id);
+            // With a dock present, the body SELECTS: the panel swaps, the graph stays
+            // visible, and there is no open/close cycle between two cards.
+            if (ctx?.inspectNode) return ctx.inspectNode(node.id);
+            setSettingsOpen(true);
+          }}
         >
           <CompactPreview node={node} ctx={ctx} accent={accent} />
           {/* A montage's black-hole warning must survive being collapsed — see the

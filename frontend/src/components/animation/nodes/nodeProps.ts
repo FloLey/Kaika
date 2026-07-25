@@ -79,6 +79,10 @@ export interface NodeCtx {
   // segment ▸ montage). When present, a montage's compact body opens this instead
   // of the settings modal — the editor is the card's full surface.
   enterMontage?: (montageNodeId: string) => void;
+  // ?ui=next — the editor shows the selected card in a DOCK beside the canvas, so a
+  // compact body selects instead of opening its own modal. Absent = the modal, which
+  // is the only surface without a dock to send it to.
+  inspectNode?: (nodeId: string) => void;
   stems?: Record<string, StemInfo>;
   job?: string;
   output?: OutputSettings | null;

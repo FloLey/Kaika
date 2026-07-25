@@ -4,6 +4,7 @@ import GraphCanvas from "./GraphCanvas";
 import MontageEditor from "./MontageEditor";
 import Palette from "./Palette";
 import PortDropMenu from "./PortDropMenu";
+import NodeInspector from "./NodeInspector";
 import CommandPalette from "../next/CommandPalette";
 import { buildCommandItems } from "../next/commandItems";
 import type { CommandItem } from "../next/commandItems";
@@ -274,6 +275,19 @@ export default function AnimationCanvas({
     [applyUpdater, centerGraph, onSelectSegment, setSelected, wireFrom]
   );
 
+  // ?ui=next — the card being edited, shown in a dock BESIDE the canvas instead of
+  // a modal over it. Exactly one selected node qualifies: with several selected
+  // there is no single card to show, and with none the dock says so.
+  const inspected = useMemo(() => {
+    if (!isNext()) return null;
+    const ids = [...selected].filter((id) => graph.nodes.some((n) => n.id === id));
+    return ids.length === 1 ? (graph.nodes.find((n) => n.id === ids[0]) ?? null) : null;
+  }, [selected, graph]);
+  const selectedCount = useMemo(
+    () => [...selected].filter((id) => graph.nodes.some((n) => n.id === id)).length,
+    [selected, graph]
+  );
+
   // Portalled, so it rides above whichever surface the stage is showing.
   const commandPalette = cmdOpen ? (
     <CommandPalette
@@ -321,44 +335,74 @@ export default function AnimationCanvas({
         canCopy={canCopy}
         canPaste={canPaste}
       />
-      <div className="anim-stage" ref={wrapRef}>
-        <MinimizeContext.Provider value={minimizeCtx}>
-          <GraphCanvas
-            graph={graph}
-            layoutKey={minimizedKey}
-            onGraphChange={applyUpdater}
-            onConnect={onConnect}
-            onCardDrop={onCardDrop}
-            onEdgeDelete={onEdgeDelete}
-            onDeleteSelection={onDeleteSelection}
-            selected={selected}
-            onSelectionChange={setSelected}
-            onViewChange={(v) => {
-              viewRef.current = v;
-            }}
-            fitRef={fitRef}
-            measureRef={measureRef}
-            renderNode={renderNode}
-          />
-        </MinimizeContext.Provider>
-        {/* ?ui=next — the dropped wire picks its port here, over the canvas, instead
+      <div className={"anim-stage" + (isNext() ? " anim-stage-docked" : "")}>
+        {/* The canvas gets its own positioning context so the dock can sit beside
+            it: .gc-root is inset-0, and without this it would fill the dock too.
+            `wrapRef` measures THIS, so a new card still lands in the middle of what
+            you can actually see. */}
+        <div className="anim-canvas-col" ref={wrapRef}>
+          <MinimizeContext.Provider value={minimizeCtx}>
+            <GraphCanvas
+              graph={graph}
+              layoutKey={minimizedKey}
+              onGraphChange={applyUpdater}
+              onConnect={onConnect}
+              onCardDrop={onCardDrop}
+              onEdgeDelete={onEdgeDelete}
+              onDeleteSelection={onDeleteSelection}
+              selected={selected}
+              onSelectionChange={setSelected}
+              onViewChange={(v) => {
+                viewRef.current = v;
+              }}
+              fitRef={fitRef}
+              measureRef={measureRef}
+              renderNode={renderNode}
+            />
+          </MinimizeContext.Provider>
+          {/* ?ui=next — the dropped wire picks its port here, over the canvas, instead
             of parking gray and sending you to the settings window. Placed in the
             stage (not inside GraphCanvas) because it lives in the stage's coordinate
             space, which is the canvas root's own: .gc-root is inset-0 inside it. */}
-        {dropMenu && (
-          <PortDropMenu
-            x={dropMenu.x}
-            y={dropMenu.y}
-            sourceName={cardName(graph, dropMenu.srcId)}
-            targetName={cardName(graph, dropMenu.tgtId)}
-            candidates={dropMenu.candidates}
-            nameOf={(id) => cardName(graph, id)}
-            dynamicLabel={dropMenu.dynamic?.label}
-            onPick={pickDropPort}
-            onAddDynamic={addDropPort}
-            onPark={parkDrop}
-            onCancel={closeDropMenu}
-          />
+          {dropMenu && (
+            <PortDropMenu
+              x={dropMenu.x}
+              y={dropMenu.y}
+              sourceName={cardName(graph, dropMenu.srcId)}
+              targetName={cardName(graph, dropMenu.tgtId)}
+              candidates={dropMenu.candidates}
+              nameOf={(id) => cardName(graph, id)}
+              dynamicLabel={dropMenu.dynamic?.label}
+              onPick={pickDropPort}
+              onAddDynamic={addDropPort}
+              onPark={parkDrop}
+              onCancel={closeDropMenu}
+            />
+          )}
+        </div>
+
+        {/* The inspector, docked. Same component the modal renders, so the two
+            arrangements can be compared on identical contents — the difference is
+            that here the graph it edits stays on screen, and moving to another card
+            swaps the panel instead of closing and reopening a window. */}
+        {isNext() && (
+          <aside className="anim-dock">
+            {inspected ? (
+              <NodeInspector
+                node={inspected}
+                ctx={ctx}
+                onGraphChange={applyUpdater}
+                onDetach={ctx.onDetach}
+                className="node-settings anim-dock-panel"
+              />
+            ) : (
+              <div className="anim-dock-empty">
+                {selectedCount > 1
+                  ? `${selectedCount} cards selected — pick one to edit it`
+                  : "select a card to edit it"}
+              </div>
+            )}
+          </aside>
         )}
       </div>
       {commandPalette}

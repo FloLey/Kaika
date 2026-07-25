@@ -436,6 +436,14 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const minimizeCtx = useMemo(() => ({ minimized, rename: renameCard }), [minimized, renameCard]);
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 
+  // ?ui=next — a compact body selects the card so the DOCK shows it, instead of
+  // opening a modal over the graph it edits. Undefined without the flag, which is
+  // what makes CompactCard fall back to its modal.
+  const inspectNode = useMemo(
+    () => (isNext() ? (id: string) => setSelected(new Set([id])) : undefined),
+    []
+  );
+
   const onDetach = useCallback(
     (fluidId: string, key: string) => applyUpdater((g) => disconnect(g, fluidId, key)),
     [applyUpdater]
@@ -464,6 +472,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       updateCompositions,
       enterExtract,
       enterMontage,
+      inspectNode,
       stems,
       job,
       output,
@@ -492,6 +501,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       updateCompositions,
       enterExtract,
       enterMontage,
+      inspectNode,
       stems,
       job,
       output,
