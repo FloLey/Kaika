@@ -223,13 +223,28 @@ def test_repeat_song_export_hits_the_cache(tmp_path, monkeypatch, stem_wav):
         }
         for i in range(6)
     ]
+    # The pool the segments reference. Graphs moved off segments in the compositions
+    # wave (9ed15ff) and both calls below gained a `compositions` argument with it —
+    # which this benchmark never learned, because `bench` is deselected by default and
+    # so it has not executed since. Wave 3 caught the inverse of this (a deselect that
+    # was documented but never real); here the deselect is real and hid the rot.
+    pool = {
+        f"c-{s['id']}": {
+            "id": f"c-{s['id']}",
+            "name": s["id"],
+            "graph": s["graph"],
+            "outputId": s["finalOutputId"],
+        }
+        for s in segs
+    }
+    segs = [{**s, "rootCompositionId": f"c-{s['id']}"} for s in segs]
     export = {**song_render.EXPORT_DEFAULTS, "width": 1920, "height": 1080, "fps": 24}
-    dest = tmp_path / f"song_{song_render._export_hash('bench', segs, [], export)}.mp4"
+    dest = tmp_path / f"song_{song_render._export_hash('bench', segs, pool, [], export)}.mp4"
     dest.write_bytes(b"x")  # the file the export is about to find
 
     url, elapsed = timed(
         "repeat song export (cache hit)",
-        lambda: song_render.render_song("bench", segs, [], export, stem_wav),
+        lambda: song_render.render_song("bench", segs, pool, [], export, stem_wav),
     )
     assert url is not None
     assert elapsed < BUDGETS["song_cache_hit"], f"{elapsed:.1f}s"
