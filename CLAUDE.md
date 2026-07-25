@@ -16,11 +16,10 @@ whole-song HD export. Flask JSON API (`:5000`) + React/Vite (`:5173`) + Postgres
 | `frontend/src/components/docs/` | The in-app **user guide** (`/?doc=<section>`), one file per section behind a thin `Docs.tsx`; every "?" in the UI deep-links into it — update it when user-facing behavior changes (a test guards its anchors) |
 | [`specs/`](specs/) | **All specs live here** — design records per feature, whether shipped or not yet built. One folder per wave. An unbuilt spec says so at its top |
 | [`specs/generative-cards/`](specs/generative-cards/) | The six shipped generative cards (waves…clouds). The code diverged from these specs — the README says how |
-| [`specs/cleanup/`](specs/cleanup/) | The code-quality series, waves 1–2 (`00`–`15`), done |
 | [`specs/ai-stylize/`](specs/ai-stylize/) | The AI Stylize wave — **the one exception in `specs/`: only half of it was built.** Its README carries the per-step status; trust that, not the step prose |
 | [`specs/compositions/`](specs/compositions/) | The composition-DAG montage rework (pool of compositions, montage extracts, breadcrumb navigation) — BUILT; the README carries the step ledger and the locked decisions |
 | [`docs/`](docs/) | Only LIVING things: open backlogs, changelogs, archives. Nothing finished belongs here |
-| [`docs/cleanup/`](docs/cleanup/) | The code-quality backlog, wave 3 (`16`–`28`) — **open**. Each step records what was deliberately **not** done and why |
+| [`specs/cleanup/`](specs/cleanup/) | The code-quality series, waves 1–4 (`00`–`29`), **all done**. Each step records what was deliberately **not** done and why — usually the more useful half. Read a step's own status header, never the summary table |
 | [`docs/generative-cards/`](docs/generative-cards/) | 21 UNBUILT card proposals (`07`–`27`) — a backlog nobody has committed to |
 | [`docs/render-versions.md`](docs/render-versions.md) | The `RENDER_VERSION` changelog — why each bump invalidated the cache |
 | [`docs/history/`](docs/history/) | Archived review backlog + old TODOs |

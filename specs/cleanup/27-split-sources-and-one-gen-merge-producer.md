@@ -1,6 +1,19 @@
 # Step 27 — Split `sources.py`; one gen-merge producer
 
-**Status: item 2 and item 3 DONE** — `52604a4` (combine derives), `e3cfd60` (`/animate` deleted).
+**Status: DONE** — item 1 `7608377` + `1ca2bfa` (wave 4), item 2 `52604a4` (combine derives),
+item 3 `e3cfd60` (`/animate` deleted).
+
+> Item 1 was done as this step asked — deliberately, on the readability argument alone, not
+> because the backlog said so. Split by WHERE THE PIXELS COME FROM (`sources_text` /
+> `sources_gen` / `sources_media` over a small `sources_common`), which is the seam the
+> dependency graph actually has: the three groups never call each other, and `_at` is the one
+> genuinely shared helper. All 37 top-level symbols moved with byte-identical bodies.
+>
+> ⚠ **The facade missed a name on the first pass** (`1ca2bfa`). The completeness check
+> grepped `sources.X` attribute access; `routes/assets.py:173` reaches in via a LAZY
+> `from ..sources import _video_meta` inside a function, which that grep never saw and which
+> 719 passing tests never executed. A grep shaped like the pattern you expect will not find
+> the pattern you did not.
 
 Item 2 needed no new abstraction in the end: `combine`'s per-kind state is created fresh
 for a single-block scan (rain's `state` starts `None`, lightning's `bolt_cache` defaults

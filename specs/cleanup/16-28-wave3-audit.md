@@ -1,4 +1,22 @@
-# Cleanup series — wave 3 (open)
+# Wave 3 — the audit (CLOSED; kept for the "do not re-audit" list)
+
+> **This was `docs/cleanup/README.md`, the wave-3 index. Wave 3 is done** — every step
+> `16`–`28` closed, several of them *on measurement* rather than by being built. The file is
+> preserved here for two things that stay useful long after the wave: the **"Checked and
+> found fine — do not re-audit"** list near the bottom, and the **"Corrections to the audit
+> itself"** section, which is the best worked example in this repo of how a claim goes wrong.
+>
+> ⚠ **Its status line below was WRONG when wave 4 found it** — stale by a dozen commits. It
+> said steps 16, 18 and 19a had landed and 17 and 20–28 had not; in fact 16, 18, 19, 20, 21,
+> 23, 24 and 28 were done, 17 was resolved by a different fix than the one it proposed, and
+> 26 and 25-item-2 had been **closed with an explicit "do not do this"**.
+>
+> That is this file's own *Corrections* lesson one level up: a summary table is a claim too,
+> and nobody re-ran it. It is left unedited below so the failure stays legible. **Trust each
+> step file's own status header, not the table.** See
+> [`29`](29-wave4-layout-and-the-unaudited-layer.md).
+
+---
 
 The code-quality series, one file per step. **This is the open wave**: speed work plus the
 leftovers wave 2 did not finish. Steps 16, 18 and 19a have landed; 17 and 20–28 have not.

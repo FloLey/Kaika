@@ -1,6 +1,12 @@
 # Step 25 — GraphCanvas: an edge layer, and free panning
 
-**Status: item 3 DONE** (`737b29a`) — the zoom limit measures once per gesture instead of
+**Status: DONE** — item 1 `dc5b9db` (wave 4), item 2 CLOSED on measurement, item 3 `737b29a`.
+
+> Item 1 (`<EdgeLayer>`) landed as a JSX-only extraction: 759 → 731 lines. The rect read and
+> the geometry `.map` deliberately STAYED in the parent — moving them would have re-opened
+> `2f7bb48`'s hoist invisibly, since the rendered output looks identical either way.
+
+**item 3 DONE** (`737b29a`) — the zoom limit measures once per gesture instead of
 once per wheel tick. **Counted: 400 forced layout reads → 40** for 20 cards over 10 ticks.
 
 ⚠ **Counted, not timed.** jsdom reports `offsetWidth` as 0 and cannot price a layout

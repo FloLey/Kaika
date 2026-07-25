@@ -1,6 +1,15 @@
 # Step 22 — Cover the HD-export seam
 
-**Status: PARTLY DONE** — `ca6c396`. `routes/export.py` 46% → 53%, `procgen.py` 95% → 99%.
+**Status: DONE** — `ca6c396`, then `66175d9` (wave 4). `routes/export.py` 46% → 53% → **80%**,
+`procgen.py` 95% → 99%.
+
+> The job bodies this step called "still uncovered, deliberately" are covered now, using the
+> way out this step itself argued for: assert properties, never mock a renderer and check the
+> mock. Every test was mutation-checked — and one did **not** survive that check on the first
+> pass, comparing the test file's own key helper against itself. See
+> [`29`](29-wave4-layout-and-the-unaudited-layer.md). What remains uncovered (the diffusion
+> body, the `generate` arm, the ffmpeg mux arm) is listed with a reason in
+> `tests/test_export_hd_jobs.py`'s docstring.
 
 The procgen half is the interesting one and it argues against reading these numbers at
 all: procgen was *already* 95% line-covered with almost no direct tests, because every line

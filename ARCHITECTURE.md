@@ -536,10 +536,14 @@ is still moving.
   and 4 were never built. Its README carries a per-step status table; the step
   files themselves are still written in the forward-looking voice they were
   drafted in.
-- [`docs/cleanup/`](docs/cleanup/) — the code-quality backlog, **wave 3 (`16`–`28`),
-  open**. Each step records what was deliberately NOT done and why, which is
-  usually the more useful half. Waves 1–2 are done and live in
-  [`specs/cleanup/`](specs/cleanup/).
+- [`specs/cleanup/`](specs/cleanup/) — the code-quality series, **waves 1–4
+  (`00`–`29`), all done**. Each step records what was deliberately NOT done and
+  why, which is usually the more useful half. There is no open cleanup backlog;
+  `docs/cleanup/` is gone because an empty one is not a living thing.
+  ⚠ Read a step's own status header, not the README's summary table — wave 3's
+  table claimed ten of thirteen steps were unbuilt when nearly all had landed,
+  which is the finding [`29`](specs/cleanup/29-wave4-layout-and-the-unaudited-layer.md)
+  opens on.
 - [`docs/generative-cards/`](docs/generative-cards/) — 21 **unbuilt** card
   proposals (`07`–`27`). A backlog nobody has committed to; the six that were
   built moved to [`specs/generative-cards/`](specs/generative-cards/).

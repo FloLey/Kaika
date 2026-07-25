@@ -1,20 +1,34 @@
-# Cleanup series — waves 1 and 2 (done)
+# Cleanup series — waves 1 to 4 (all done)
 
-The code-quality series, one file per step. **These two waves have landed**, which is why
-they live in `specs/` — the reasoning is kept because it is still the best statement of why
-the work existed, not because anything is pending.
+The code-quality series, one file per step. **Every wave has landed**, which is why the whole
+series lives in `specs/` — the reasoning is kept because it is still the best statement of
+why the work existed, not because anything is pending.
 
 | Wave | Steps | Audited | Theme | State |
 |---|---|---|---|---|
 | 1 | `00`–`01` | — | the original backlog | **done** — see [`00-backlog.md`](00-backlog.md)'s status table |
 | 2 | `02`–`15` | 2026-07-19 | correctness infrastructure | **done** — last commit `7b36ff6` (step 14) |
+| 3 | `16`–`28` + [audit](16-28-wave3-audit.md) | 2026-07-20 | speed, and wave 2's leftovers | **done** — several steps closed on *measurement* rather than by being built |
+| 4 | [`29`](29-wave4-layout-and-the-unaudited-layer.md) | 2026-07-25 | UI grouping + the CSS layer + the honest tails | **done** — last commit `6dfad27` |
 
-**Wave 3 (`16`–`28`) is still open** and stays a backlog:
-[`docs/cleanup/`](../../docs/cleanup/README.md).
+**There is no open cleanup backlog.** `docs/cleanup/` used to hold wave 3 and no longer
+exists: under `CLAUDE.md`'s rule that `docs/` carries only living things, an empty backlog is
+not one. A wave 5 starts by auditing the tree.
 
-A caveat worth keeping: `00-backlog.md`'s status table marks several wave-1 rows *partial*
-or *open* and forward-links to the wave-2 step that picked each one up. Those links still
-resolve — every file they point at is in this folder.
+⚠ **Read a step's own status header, never a summary table, when you want to know what is
+done.** Wave 3's index claimed ten of its thirteen steps were unbuilt when nearly all of them
+had landed — stale by a dozen commits, and it would have sent the next reader off to redo
+finished work. Wave 4 (`29`) opens on that finding, and this table is the same kind of claim:
+if it disagrees with a step file, the step file is right.
+
+Two caveats worth keeping:
+
+- `00-backlog.md`'s status table marks several wave-1 rows *partial* or *open* and
+  forward-links to the wave-2 step that picked each one up. Those links still resolve —
+  every file they point at is in this folder.
+- Wave 3's steps were audited in 2026-07-20 and several carry **corrections to their own
+  earlier drafts** (steps 16, 25, 26, 27 especially). The corrections are the interesting
+  part: three of them are the same mistake — a claim written down without being run.
 
 ---
 
