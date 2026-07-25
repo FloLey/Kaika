@@ -48,6 +48,11 @@ interface StudioProps {
   onExport?: () => void;
   // Playground only: capture the live state into the committed fixture (💾 in the rail).
   onSaveFixture?: () => Promise<import("../../lib/api").FixtureExport>;
+  // Which of the two tabs is showing. Optional and CONTROLLED: pass both to hold it
+  // somewhere else — the ?ui=next shell keeps it in the URL so a link can open the
+  // graph. Omit both and Studio keeps it internally, as it always has.
+  tab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
 // Stage 3 — the studio. Owns all playback/ephemeral state (rail open, what's
@@ -75,11 +80,16 @@ export default function Studio({
   onEditSplit,
   onExport,
   onSaveFixture,
+  tab: tabProp,
+  onTabChange,
 }: StudioProps) {
   const [railOpen, setRailOpen] = useState(true);
   // The Playground is about the cards, so it lands on the animation tab; a normal
   // project opens on signals (extract first, then animate).
-  const [tab, setTab] = useState(job === "playground" ? "animation" : "signals"); // "signals" | "animation"
+  const [ownTab, setOwnTab] = useState(job === "playground" ? "animation" : "signals");
+  // "signals" | "animation" — controlled when the host passes both props, else ours.
+  const tab = tabProp ?? ownTab;
+  const setTab = onTabChange ?? setOwnTab;
   const [showOutput, setShowOutput] = useState(false); // output-settings modal
   const [showAssets, setShowAssets] = useState(false); // asset-library manager modal
 
@@ -393,7 +403,9 @@ export default function Studio({
       setAddedCount((n) => n + 1);
       setTab("animation"); // the card lands on the canvas — show it
     },
-    [activeSeg, activeComp, setActiveGraph]
+    // `setTab` is a real dependency now that the tab can be CONTROLLED: it is either
+    // our own state setter (stable) or the host's `onTabChange` (not necessarily).
+    [activeSeg, activeComp, setActiveGraph, setTab]
   );
 
   // Overwriting a segment that already has cards asks first (the target's animation

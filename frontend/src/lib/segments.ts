@@ -233,21 +233,34 @@ function withDefaults(existing: Signal[], stems: StemsMap): Signal[] {
 // Hydrate a server/proposal segment list (each gets a stable id + signals).
 // A fresh segment gets all the per-track defaults; an existing one keeps its
 // saved signals and gains any missing defaults.
+//
+// Ids are PRESERVED across a reload — `serializeSegments` has always written them,
+// and this used to throw them away and re-mint ("never trust stored ids (avoids
+// collisions)"). The concern was real but the remedy was too broad: it also made a
+// segment un-addressable from outside the session, so nothing could link to one.
+// The collision it guarded against is checked directly instead — a duplicate or
+// missing id re-mints, everything else survives. This is the `hydrateSignals` /
+// `hydrateCompositions` precedent, not `hydrateSegments`' old fresh-mint.
 export function hydrateSegments(raw: RawSegment[] | null | undefined, stems: StemsMap): Segment[] {
-  return (raw || []).map((s) => ({
-    id: mkSegId(), // always fresh — never trust stored ids (avoids collisions)
-    start: s.start,
-    end: s.end,
-    label: s.label,
-    signals:
-      s.signals && s.signals.length
-        ? withDefaults(hydrateSignals(s.signals), stems)
-        : defaultSignals(stems),
-    // The composition reference survives the reload verbatim — composition ids
-    // are stable (compositions.ts), so the pool entry it names still exists.
-    // undefined = no animation built yet.
-    rootCompositionId: s.rootCompositionId,
-  }));
+  const seen = new Set<string>();
+  return (raw || []).map((s) => {
+    const id = s.id && !seen.has(s.id) ? s.id : mkSegId();
+    seen.add(id);
+    return {
+      id,
+      start: s.start,
+      end: s.end,
+      label: s.label,
+      signals:
+        s.signals && s.signals.length
+          ? withDefaults(hydrateSignals(s.signals), stems)
+          : defaultSignals(stems),
+      // The composition reference survives the reload verbatim — composition ids
+      // are stable (compositions.ts), so the pool entry it names still exists.
+      // undefined = no animation built yet.
+      rootCompositionId: s.rootCompositionId,
+    };
+  });
 }
 
 // Strip to the persisted shape for autosave.

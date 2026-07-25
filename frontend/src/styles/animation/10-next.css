@@ -109,3 +109,134 @@
   font-size: 10px;
   color: var(--muted);
 }
+
+/* --- the routed shell -------------------------------------------------------
+   Full-bleed rather than the current `.wrap`'s centred 1100/1500px column: the
+   stepper needs a fixed home in the top bar, and the stage below it is where the
+   width actually matters. */
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.shell-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 16px;
+  height: 46px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.shell-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+}
+.shell-mark {
+  color: var(--petale);
+  font-size: 15px;
+}
+.shell-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+/* The open project's title, after a hairline — the current header hides this in a
+   subtitle slot that doubles as a tagline when nothing is open. */
+.shell-project {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+.shell-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px 16px 28px;
+}
+
+/* --- the stepper ------------------------------------------------------------
+   Replaces three one-way buttons in three different components. A blocked step
+   stays visible and carries its reason in the title, because "why can't I export
+   yet" is the question it exists to answer. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stepper-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+.stepper-step:hover:not(:disabled) {
+  border-color: var(--petale-soft);
+  color: var(--petale);
+}
+.stepper-step.on {
+  background: var(--petal-grad);
+  color: #fff;
+  border-color: transparent;
+}
+.stepper-step.done {
+  color: var(--courant);
+}
+/* Blocked reads as unavailable, not as absent: it keeps its place in the flow so
+   the shape of the work stays legible. */
+.stepper-step.blocked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.stepper-step:disabled {
+  cursor: default;
+}
+.stepper-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-family: var(--mono);
+  font-size: 9px;
+}
+.stepper-step.on .stepper-num {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.stepper-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+@media (max-width: 900px) {
+  .stepper-label {
+    display: none;
+  }
+}
