@@ -22,10 +22,12 @@ import SettingsModal from "../SettingsModal";
 import ErrorToast from "../ErrorToast";
 import Stepper from "./Stepper";
 import type { Stage } from "./Stepper";
+import TransportBar from "./TransportBar";
 import { useLogPoll } from "../../lib/useLogPoll";
 import { useProject } from "../../lib/useProject";
 import { currentRoute, navigate, subscribeRoute } from "../../lib/route";
 import type { Route } from "../../lib/route";
+import * as transport from "../../lib/transport";
 import * as logbus from "../../lib/logbus";
 
 // The route names a stage; `processing` and `error` are transient states the project
@@ -96,8 +98,26 @@ export default function AppShell() {
     );
   }, [p.job, p.step, p.activeSegId, busy, route.name]);
 
+  // --- the shared transport ---------------------------------------------------
+  // Point it at this project's mix. Idempotent, and Studio calls the same setter,
+  // so whichever mounts first wins and the other is a no-op.
+  useEffect(() => {
+    if (!p.job) return;
+    const mix = p.exportSettings.audioMode === "instrumental" ? "instrumental" : "original";
+    transport.setSource(`/audio/${p.job}/${mix}`);
+  }, [p.job, p.exportSettings.audioMode]);
+
+  // Outside the studio there is no segment to be inside, so the window is the whole
+  // song. Studio narrows it to the segment while it's up. No reseek — widening the
+  // window under a playing head must not jump it back to zero.
+  useEffect(() => {
+    if (route.name === "studio") return;
+    transport.setWindow(0, p.duration || 0);
+  }, [route.name, p.duration]);
+
   // Leaving a project clears its state; the URL follows.
   const toProjects = () => {
+    transport.reset();
     reconciled.current = null;
     loading.current = null;
     p.toProjects();
@@ -214,6 +234,7 @@ export default function AppShell() {
             envelopeTimes={p.envelopeTimes}
             onValidate={() => go("studio")}
             onBack={toProjects}
+            shared
           />
         )}
 
@@ -261,6 +282,18 @@ export default function AppShell() {
           />
         )}
       </main>
+
+      {/* One transport for every stage. It renders here — above the screen switch —
+          and `lib/transport` owns the <audio> outside the React tree entirely, so
+          moving between stages can't stop the music or lose the position. */}
+      {p.job && (
+        <TransportBar
+          duration={p.duration}
+          segments={p.segments}
+          activeSegId={p.activeSegId}
+          onSelectSegment={(id) => goSegment(id, route.name === "studio" ? route.tab : "signals")}
+        />
+      )}
 
       <ErrorToast onOpenLogs={() => setLogsOpen(true)} />
       <LogsPanel open={logsOpen} onClose={() => setLogsOpen(false)} />

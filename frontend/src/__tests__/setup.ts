@@ -36,6 +36,13 @@ if (typeof window !== "undefined") {
     writable: true,
     value: () => {},
   });
+  // `load()` is the third of the same family: jsdom throws "Not implemented" inside
+  // it, so re-pointing an element at a new source printed a stack trace per call.
+  Object.defineProperty(HTMLMediaElement.prototype, "load", {
+    configurable: true,
+    writable: true,
+    value: () => {},
+  });
   // Unconditional: jsdom DEFINES getContext and throws inside it, so a
   // `if (!prototype.getContext)` guard never fires. Returning null is what a browser does
   // for an unsupported context type, and every caller here already handles that.

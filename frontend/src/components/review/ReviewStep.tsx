@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type {
   CSSProperties,
   Dispatch,
@@ -8,7 +8,30 @@ import type {
 } from "react";
 import { fmtTime } from "../../lib/mel";
 import { LABELS, labelColor, mergeWithPrev, moveBoundary } from "../../lib/segments";
+import * as transport from "../../lib/transport";
 import type { Segment } from "../../lib/types";
+
+// The playhead, as three leaves that subscribe to the shared transport's position.
+// Module-scope on purpose: declared inside the render body they would be a NEW
+// component type every render, so React would unmount and remount them per tick —
+// worse than the whole-tree re-render they exist to avoid.
+const useSongPos = () =>
+  useSyncExternalStore(transport.subscribePosition, transport.positionSong, transport.positionSong);
+const pct = (t: number, duration: number) => (duration ? (t / duration) * 100 : 0);
+
+function SharedFill({ duration }: { duration: number }) {
+  return <div className="fill" style={{ width: pct(useSongPos(), duration) + "%" }} />;
+}
+function SharedHead({ duration }: { duration: number }) {
+  return <div className="playhead" style={{ left: pct(useSongPos(), duration) + "%" }} />;
+}
+function SharedClock({ duration }: { duration: number }) {
+  return (
+    <>
+      {fmtTime(useSongPos())} / {fmtTime(duration)}
+    </>
+  );
+}
 
 // Step 2 — review and edit the proposed split before opening the studio.
 // The full-mix spectrogram + vocal-activity envelope are the backdrop; play the
@@ -28,6 +51,9 @@ interface ReviewStepProps {
   envelopeTimes: number[];
   onValidate: () => void;
   onBack: () => void;
+  // ?ui=next — play through the shell's transport instead of a private <audio>, so
+  // the music survives leaving this screen.
+  shared?: boolean;
 }
 
 export default function ReviewStep({
@@ -41,23 +67,39 @@ export default function ReviewStep({
   envelopeTimes,
   onValidate,
   onBack,
+  shared = false,
 }: ReviewStepProps) {
   const railRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [cur, setCur] = useState(0);
+  // ?ui=next — the shell's transport, which keeps playing across stages. It also
+  // fixes what this screen does wrong on its own: `setCur` on every `timeupdate`
+  // re-renders the WHOLE review tree ~4×/s (every segment row, the rail, the
+  // envelope), which is exactly the cost useStudioPlayback's comment warns about.
+  // In shared mode the playhead is subscribed by two leaf components instead.
+  const sharedPlaying = useSyncExternalStore(
+    transport.subscribe,
+    transport.snapshot,
+    transport.snapshot
+  ).playing;
+  const isPlaying = shared ? sharedPlaying : playing;
 
   const timeAtX = (clientX: number) => {
     const r = railRef.current!.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * duration;
   };
 
-  function togglePlay() {
+  // Memoized because the Space-key effect depends on it: it now closes over
+  // `shared`, so a fresh identity every render would re-bind the listener per
+  // render (and an empty dep array would capture the first `shared` forever).
+  const togglePlay = useCallback(() => {
+    if (shared) return transport.toggle();
     const el = audioRef.current;
     if (!el) return;
     if (el.paused) el.play().catch(() => {});
     else el.pause();
-  }
+  }, [shared]);
 
   // Space toggles play/pause from anywhere on this screen.
   useEffect(() => {
@@ -69,9 +111,10 @@ export default function ReviewStep({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [togglePlay]);
 
   function seekTo(t: number) {
+    if (shared) return transport.seekSong(Math.max(0, Math.min(t, duration)));
     const el = audioRef.current;
     if (el && isFinite(el.duration)) el.currentTime = Math.max(0, Math.min(t, duration));
   }
@@ -89,7 +132,9 @@ export default function ReviewStep({
     window.addEventListener("pointerup", up);
   }
 
-  const splitHere = () => onSplitAt(cur);
+  // Read the playhead imperatively in shared mode: it is deliberately not state
+  // here, so there is nothing to read off a render.
+  const splitHere = () => onSplitAt(shared ? transport.positionSong() : cur);
 
   // Vocal-activity envelope as a stretched polyline.
   const envPath = (() => {
@@ -123,7 +168,7 @@ export default function ReviewStep({
 
       <div className="review-transport">
         <button className="play" onClick={togglePlay}>
-          {playing ? "❚❚" : "▶"}
+          {isPlaying ? "❚❚" : "▶"}
         </button>
         <div
           className="bar"
@@ -132,10 +177,20 @@ export default function ReviewStep({
             seekTo(((e.clientX - r.left) / r.width) * duration);
           }}
         >
-          <div className="fill" style={{ width: playFrac + "%" }} />
+          {shared ? (
+            <SharedFill duration={duration} />
+          ) : (
+            <div className="fill" style={{ width: playFrac + "%" }} />
+          )}
         </div>
         <div className="time">
-          {fmtTime(cur)} / {fmtTime(duration)}
+          {shared ? (
+            <SharedClock duration={duration} />
+          ) : (
+            <>
+              {fmtTime(cur)} / {fmtTime(duration)}
+            </>
+          )}
         </div>
         <button className="btn sm" onClick={splitHere} title="Add a cut at the playhead">
           ✂ split at playhead
@@ -194,7 +249,11 @@ export default function ReviewStep({
           );
         })}
 
-        <div className="playhead" style={{ left: playFrac + "%" }} />
+        {shared ? (
+          <SharedHead duration={duration} />
+        ) : (
+          <div className="playhead" style={{ left: playFrac + "%" }} />
+        )}
       </div>
 
       <div className="seg-list">
@@ -209,7 +268,8 @@ export default function ReviewStep({
               title="Play from here"
               onClick={() => {
                 seekTo(s.start);
-                audioRef.current?.play().catch(() => {});
+                if (shared) transport.play();
+                else audioRef.current?.play().catch(() => {});
               }}
             >
               ▶
@@ -245,15 +305,19 @@ export default function ReviewStep({
         ))}
       </div>
 
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        preload="metadata"
-        onTimeUpdate={(e: SyntheticEvent<HTMLAudioElement>) => setCur(e.currentTarget.currentTime)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-      />
+      {!shared && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="metadata"
+          onTimeUpdate={(e: SyntheticEvent<HTMLAudioElement>) =>
+            setCur(e.currentTarget.currentTime)
+          }
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+        />
+      )}
     </div>
   );
 }

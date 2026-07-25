@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { SyntheticEvent } from "react";
 import { engine } from "../../lib/audio";
+import * as transport from "../../lib/transport";
 
 interface SegLike {
   start: number;
@@ -12,6 +13,13 @@ interface PlaybackWindow {
   winStart: number;
   winEnd: number;
   segLen: number;
+  // ?ui=next — drive the app-wide transport (lib/transport) instead of owning a
+  // private <audio>. Same surface either way, so Studio and every card below it are
+  // unchanged; what differs is whether leaving the studio stops the music.
+  shared?: boolean;
+  // The full mix to play. Only read in shared mode — otherwise Studio puts it on
+  // the element it renders itself.
+  src?: string;
 }
 
 // The studio audio engine + transport, lifted out of the Studio view (spec 02).
@@ -24,7 +32,14 @@ interface PlaybackWindow {
 //   <audio ref={t.refAudio} {...t.audioProps} />   // bind the reference element
 //
 // SignalCard gets t.registerAudio / t.onPlayingChange / t.handleSolo / t.refAudio.
-export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: PlaybackWindow) {
+export function useStudioPlayback({
+  activeSeg,
+  winStart,
+  winEnd,
+  segLen,
+  shared = false,
+  src,
+}: PlaybackWindow) {
   const [allPlaying, setAllPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
   const [volume, setVolume] = useState(1); // full-mix playback volume (0..1)
@@ -164,6 +179,67 @@ export function useStudioPlayback({ activeSeg, winStart, winEnd, segLen }: Playb
     onEnded: () => setAllPlaying(false),
     onTimeUpdate,
   };
+
+  // --- shared mode (?ui=next) -------------------------------------------------
+  // Everything below re-implements the SAME surface against `lib/transport`, whose
+  // <audio> lives outside the React tree. Hooks run unconditionally either way (the
+  // branch is only in what gets returned), so the rule holds.
+  const shrState = useSyncExternalStore(
+    transport.subscribe,
+    transport.snapshot,
+    transport.snapshot
+  );
+  // A ref-shaped view of the shared element: `groupClock` is passed to every card
+  // and to useSyncedPlayback as a RefObject, so this has to look like one.
+  const sharedRef = useMemo(
+    () =>
+      ({
+        get current() {
+          return transport.audioEl();
+        },
+      }) as React.RefObject<HTMLAudioElement>,
+    []
+  );
+  useEffect(() => {
+    if (!shared || !src) return;
+    transport.setSource(src);
+  }, [shared, src]);
+  useEffect(() => {
+    if (!shared) return;
+    // `reseek` on a window change: entering a segment should start at its head, not
+    // wherever the previous segment's playhead happened to sit.
+    transport.setWindow(winStart, winEnd, { reseek: true });
+  }, [shared, winStart, winEnd]);
+  const sharedSeek = useCallback(
+    (t: number) => transport.seekSong(winStart + Math.min(Math.max(t, 0), segLen)),
+    [winStart, segLen]
+  );
+  const sharedSolo = useCallback((id: string) => {
+    audioEls.current.forEach((el, k) => {
+      if (k !== id) el.pause();
+    });
+    transport.pause(); // a single band must not play over the whole mix
+  }, []);
+
+  if (shared) {
+    return {
+      refAudio: sharedRef,
+      audioProps: {}, // the store owns its element's listeners
+      allPlaying: shrState.playing,
+      subscribeClock: transport.subscribePosition,
+      getClockT: transport.positionInWindow,
+      volume: shrState.volume,
+      setVolume: transport.setVolume,
+      loop: shrState.loop,
+      setLoop: transport.setLoop,
+      seek: sharedSeek,
+      playAll: transport.toggle,
+      resetTransport: transport.reset,
+      registerAudio,
+      onPlayingChange,
+      handleSolo: sharedSolo,
+    };
+  }
 
   return {
     refAudio,

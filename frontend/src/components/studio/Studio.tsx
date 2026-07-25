@@ -13,6 +13,7 @@ import VolumeControl from "./VolumeControl";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
+import { isNext } from "../../lib/uiFlag";
 import { STEM_META, seedSignal } from "../../lib/segments";
 import { copyLayout, createComposition, refCounts as poolRefCounts } from "../../lib/compositions";
 import type {
@@ -176,6 +177,14 @@ export default function Studio({
     [activeSeg, navFrame, winStart, winEnd]
   );
 
+  // The full mix this segment plays. `instrumental` while building a cover keeps the
+  // old vocal from fighting the new words.
+  const mixUrl = job
+    ? `/audio/${job}/${audioMode === "instrumental" ? "instrumental" : "original"}`
+    : "";
+  // Under ?ui=next the transport is the shell's, mounted above the screen switch.
+  const sharedTransport = isNext();
+
   // The audio engine + transport (full-mix clock, per-signal registry, play/seek/
   // solo/volume) lives in this hook; Studio just wires its output into the view.
   const {
@@ -194,7 +203,16 @@ export default function Studio({
     registerAudio,
     onPlayingChange,
     handleSolo,
-  } = useStudioPlayback({ activeSeg, winStart, winEnd, segLen });
+  } = useStudioPlayback({
+    activeSeg,
+    winStart,
+    winEnd,
+    segLen,
+    // ?ui=next drives the app-wide transport, so the music survives leaving the
+    // studio; the element then lives in lib/transport and we render none.
+    shared: sharedTransport,
+    src: mixUrl,
+  });
 
   const selectSegment = useCallback(
     (id: string) => {
@@ -437,18 +455,18 @@ export default function Studio({
         </button>
       )}
       <div className={"studio-main" + (isFull ? " full" : "")} ref={studioMainRef}>
-        <audio
-          ref={refAudio}
-          src={
-            job ? `/audio/${job}/${audioMode === "instrumental" ? "instrumental" : "original"}` : ""
-          }
-          preload="auto"
-          onLoadedMetadata={(e) => {
-            const d = e.currentTarget.duration;
-            if (isFinite(d)) setMediaDuration(d);
-          }}
-          {...audioProps}
-        />
+        {!sharedTransport && (
+          <audio
+            ref={refAudio}
+            src={mixUrl}
+            preload="auto"
+            onLoadedMetadata={(e) => {
+              const d = e.currentTarget.duration;
+              if (isFinite(d)) setMediaDuration(d);
+            }}
+            {...audioProps}
+          />
+        )}
         <div className="results-head">
           <span className="section-title">
             {navStack.length ? (

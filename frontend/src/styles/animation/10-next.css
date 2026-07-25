@@ -240,3 +240,98 @@
     display: none;
   }
 }
+
+/* --- the docked transport ---------------------------------------------------
+   Mounted once by the shell and alive on every stage. The scrub is over the WHOLE
+   song with the segments banded on it: the current UI only ever shows you the
+   segment you happen to be inside, so the shape of the track is invisible. */
+.tbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  flex: none;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 -6px 18px rgba(31, 36, 51, 0.05);
+}
+.tbar-play {
+  flex: none;
+  width: 40px;
+}
+.tbar-time {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tbar-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  overflow: hidden;
+}
+/* One band per segment, in its label colour — the same `labelColor` the rail and
+   the segment chips use, so a segment reads the same everywhere. */
+.tbar-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--panel);
+  background: color-mix(in srgb, var(--c, var(--muted)) 26%, transparent);
+  cursor: pointer;
+}
+.tbar-seg:hover {
+  background: color-mix(in srgb, var(--c, var(--muted)) 42%, transparent);
+}
+.tbar-seg.on {
+  background: color-mix(in srgb, var(--c, var(--muted)) 58%, transparent);
+}
+/* The loop window, when it is narrower than the song. */
+.tbar-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-left: 1px solid var(--petale);
+  border-right: 1px solid var(--petale);
+  background: color-mix(in srgb, var(--petale) 8%, transparent);
+}
+.tbar-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--petale);
+  pointer-events: none;
+}
+.tbar-vol,
+.tbar-loop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tbar-vol input[type="range"] {
+  width: 74px;
+}
+.tbar-scope {
+  flex: none;
+  min-width: 52px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
