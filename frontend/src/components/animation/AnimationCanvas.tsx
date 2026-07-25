@@ -1,16 +1,29 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import GraphCanvas from "./GraphCanvas";
 import MontageEditor from "./MontageEditor";
 import Palette from "./Palette";
 import PortDropMenu from "./PortDropMenu";
+import CommandPalette from "../next/CommandPalette";
+import { buildCommandItems } from "../next/commandItems";
+import type { CommandItem } from "../next/commandItems";
+import { planDrop } from "./dropPlan";
 import renderAnimNode from "./renderAnimNode";
+import { defaultCardName } from "./nodeInputs";
 import { chromeFor } from "./nodes/registry";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
-import { problemsFor } from "../../lib/graphModel";
+import { problemsFor, wirePort } from "../../lib/graphModel";
+import { isNext } from "../../lib/uiFlag";
 import type { View } from "./usePanZoom";
-import type { Graph, GraphNode, LyricLine, OutputSettings, Segment } from "../../lib/types";
+import type {
+  Graph,
+  GraphNode,
+  LyricLine,
+  OutputSettings,
+  PortFlow,
+  Segment,
+} from "../../lib/types";
 import type { NodeCtx, NodeHelpers } from "./nodes/nodeProps";
 
 interface AnimationCanvasProps {
@@ -40,6 +53,10 @@ interface AnimationCanvasProps {
   onToggleFullscreen?: () => void;
   onGraphChange: (g: Graph) => void;
   setFinalOutput?: NodeCtx["setFinalOutput"];
+  // ⌘K reach beyond this composition (?ui=next): the project's segments and how to
+  // switch. Optional — without them the palette still adds cards and jumps to them.
+  segments?: Segment[];
+  onSelectSegment?: (id: string) => void;
 }
 
 // A card's display name: what the user named it, else its type's palette title —
@@ -84,6 +101,8 @@ export default function AnimationCanvas({
   onToggleFullscreen,
   onGraphChange: commitGraph,
   setFinalOutput,
+  segments,
+  onSelectSegment,
 }: AnimationCanvasProps) {
   const {
     graph,
@@ -184,6 +203,87 @@ export default function AnimationCanvas({
     };
   }, [graph]);
 
+  // --- ⌘K (?ui=next) ---------------------------------------------------------
+  // 35 card types behind seven category dropdowns with no search; and nothing that
+  // jumps to a card or a segment by name. One box does all three.
+  const [cmdOpen, setCmdOpen] = useState(false);
+  useEffect(() => {
+    if (!isNext()) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      setCmdOpen((v) => !v);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const commandItems = useMemo(
+    () =>
+      cmdOpen
+        ? buildCommandItems({
+            graph,
+            segments,
+            activeSegmentId: segment.id,
+            signals: segment.signals,
+          })
+        : [],
+    [cmdOpen, graph, segments, segment.id, segment.signals]
+  );
+
+  // The lone selected card, when it could feed something — what an added card wires
+  // itself to. One selection only: guessing a source out of several is how you get a
+  // wire you did not ask for.
+  const wireFrom = useMemo(() => {
+    const ids = [...selected].filter((id) => graph.nodes.some((n) => n.id === id));
+    if (ids.length !== 1) return null;
+    const node = graph.nodes.find((n) => n.id === ids[0])!;
+    return { id: node.id, flow: chromeFor(node.type).outFlow as PortFlow };
+  }, [selected, graph]);
+
+  const runCommand = useCallback(
+    (item: CommandItem) => {
+      setCmdOpen(false);
+      if (item.kind === "segment") return onSelectSegment?.(item.segmentId);
+      if (item.kind === "card") {
+        setSelected(new Set([item.nodeId]));
+        fitRef.current?.([item.nodeId]);
+        return;
+      }
+      // Add: place it where a toolbar add would, name it the same way, then wire it
+      // from the selection if — and only if — the port is unambiguous. That is the
+      // same `planDrop` the canvas drop menu uses, so "obvious enough to do silently"
+      // means one thing in this editor, not two.
+      const { x, y } = centerGraph();
+      let addedId: string | null = null;
+      applyUpdater((g) => {
+        const node = item.factory(x, y);
+        addedId = node.id;
+        const withNode = {
+          ...g,
+          nodes: [...g.nodes, { ...node, name: node.name ?? defaultCardName(g, node.type) }],
+        };
+        if (!wireFrom) return withNode;
+        const plan = planDrop(withNode, wireFrom.flow, node.id);
+        return plan.kind === "connect"
+          ? wirePort(withNode, wireFrom.id, "out", node.id, plan.portId)
+          : withNode;
+      });
+      if (addedId) setSelected(new Set([addedId]));
+    },
+    [applyUpdater, centerGraph, onSelectSegment, setSelected, wireFrom]
+  );
+
+  // Portalled, so it rides above whichever surface the stage is showing.
+  const commandPalette = cmdOpen ? (
+    <CommandPalette
+      items={commandItems}
+      onRun={runCommand}
+      onClose={() => setCmdOpen(false)}
+      wireHint={wireFrom ? `from ${cardName(graph, wireFrom.id)}` : undefined}
+    />
+  ) : null;
+
   // A "montage" breadcrumb frame: the stage IS the montage editor (strip + live
   // view + wiring rail). Same graph state and ctx as the canvas — only the surface
   // changes; Studio pops the frame if the node vanishes.
@@ -194,6 +294,7 @@ export default function AnimationCanvas({
     return (
       <div className="anim-wrap">
         <MontageEditor node={editorNode} ctx={ctx} onGraphChange={applyUpdater} />
+        {commandPalette}
       </div>
     );
   }
@@ -260,6 +361,7 @@ export default function AnimationCanvas({
           />
         )}
       </div>
+      {commandPalette}
     </div>
   );
 }

@@ -696,6 +696,10 @@ export default function Studio({
                 onOpenOutput={() => setShowOutput(true)}
                 onGraphChange={setActiveGraph}
                 setFinalOutput={setFinalOutput}
+                // ⌘K's reach beyond this composition (?ui=next): jump to a segment
+                // without going back through the rail.
+                segments={segments}
+                onSelectSegment={selectSegment}
               />
             )}
 

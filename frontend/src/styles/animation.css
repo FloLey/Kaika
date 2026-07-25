@@ -22,3 +22,7 @@
 @import "./animation/07-assets-lyrics.css";
 @import "./animation/08-modulators-fx.css";
 @import "./animation/09-montage.css";
+/* Last on purpose: the `?ui=next` proposal styles must land on top of the current
+   UI's, and keeping them in one part means a proposal that loses is deleted by
+   deleting a file. */
+@import "./animation/10-next.css";
