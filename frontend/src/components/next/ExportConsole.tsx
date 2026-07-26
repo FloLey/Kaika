@@ -16,11 +16,11 @@
 // runs it is the progress. A segment goes pending → rendering (with its phase) →
 // done, and "45s / 210s" becomes "segment 3 of 9 · CHORUS · regenerating images".
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import * as api from "../../lib/api";
 import { fmtTime } from "../../lib/mel";
-import { aspectOf, ratioLabel } from "../../lib/output";
+import { aspectOf, fitToRatio, ratioLabel } from "../../lib/output";
 import { useRenderJob } from "../../lib/useRenderJob";
 import { finalOutputIdOf, rootCompositionOf } from "../../lib/compositions";
 import { usePreservePlayback } from "../animation/nodes/usePreservePlayback";
@@ -62,6 +62,30 @@ export default function ExportConsole({
   // fractional-box layers are composed for that shape, so a different export aspect
   // would reframe everything.
   const canvasRatio = output.width / (output.height || 1);
+
+  // Locked is not the same as correct: a project saved before the canvas was rotated
+  // still carries the old export size, and nothing else ever rewrites it. Snap it onto
+  // the canvas shape on entry and whenever the canvas orientation changes, keeping the
+  // longer edge so the resolution survives the rotation.
+  //
+  // Guarded by a ref rather than by the dep list because the effect WRITES state it is
+  // keyed near: a rounding disagreement between `fitToRatio` and the manual size
+  // handlers below would otherwise re-snap a size the user just typed. At most one snap
+  // per distinct ratio.
+  const snappedFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (snappedFor.current === canvasRatio) return;
+    snappedFor.current = canvasRatio;
+    const fitted = fitToRatio(exportSettings, canvasRatio);
+    if (fitted.width !== exportSettings.width || fitted.height !== exportSettings.height) {
+      set(fitted);
+    }
+    // `exportSettings`/`set` are deliberately omitted: this effect reacts to the CANVAS
+    // changing shape, not to the export size changing. Including them would re-run it on
+    // the very write it just made, and the ref guard would be the only thing stopping the
+    // loop — a guard doing the dep list's job.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasRatio]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [previewCut, setPreviewCut] = useState<string | null>(null);

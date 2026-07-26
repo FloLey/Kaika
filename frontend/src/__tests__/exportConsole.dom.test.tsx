@@ -171,6 +171,37 @@ describe("ExportConsole progress", () => {
   });
 });
 
+// Ported from `exportStep.dom.test.tsx` when the console replaced that screen. The
+// snap is the only thing that ever corrects a stored export size against a canvas that
+// has since been rotated, and it is invisible when it fails — the project just exports
+// at the wrong shape forever. Test the component, not `fitToRatio` (already covered in
+// `output.test.ts`): what broke here would be the effect going missing, not the maths.
+const canvas = (width: number, height: number) => ({ ...OUTPUT_DEFAULTS, width, height });
+
+describe("ExportConsole — export aspect locked to the canvas", () => {
+  it("snaps a mismatched export size onto the canvas ratio on mount (keeps the long edge)", () => {
+    const setExportSettings = vi.fn();
+    setup({
+      exportSettings: { ...EXPORT_DEFAULTS, width: 1080, height: 1920 }, // portrait
+      setExportSettings,
+      output: canvas(1920, 1080), // landscape 16:9 canvas
+    });
+    expect(setExportSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 1920, height: 1080 })
+    );
+  });
+
+  it("leaves an already-matching export size alone", () => {
+    const setExportSettings = vi.fn();
+    setup({
+      exportSettings: { ...EXPORT_DEFAULTS, width: 1080, height: 1920 },
+      setExportSettings,
+      output: canvas(1080, 1920), // portrait canvas — same shape
+    });
+    expect(setExportSettings).not.toHaveBeenCalled();
+  });
+});
+
 describe("NumberField", () => {
   it("clamps out of range, and rounds when asked", () => {
     expect(clampTo(5000, 16, 4096)).toBe(4096);
