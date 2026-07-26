@@ -28,6 +28,24 @@ export type Route =
 
 export const HOME: Route = { name: "projects" };
 
+// The always-present card demo, whose job id is fixed by the backend that seeds it
+// (`backend/seed_card_demo.py`'s `JOB_ID`). It was compared against as a bare string in
+// two places in Studio; the shell needs the same fact to build a route, and three
+// copies of a literal that must match a Python constant is one too many.
+export const PLAYGROUND_JOB = "playground";
+
+// Which studio tab a project opens on. The Playground is ABOUT the cards, so it lands
+// on the graph; a normal project opens on signals, because the flow is extract first,
+// then animate.
+//
+// This lives here rather than in Studio because the URL is what chooses the tab now:
+// Studio receives the answer, it no longer decides it. Leaving the rule in the
+// component meant the shell hardcoded "signals" at every navigation and the Playground
+// opened on an empty signals tab — a regression that nothing failed on, because the
+// component that still knew the rule was no longer the component being asked.
+export const defaultTab = (job: string): "signals" | "graph" =>
+  job === PLAYGROUND_JOB ? "graph" : "signals";
+
 // "#/p/j1/studio/s3/graph/c/comp-7" → the route above. Anything unrecognised falls
 // back to projects rather than throwing: a hand-edited URL should land somewhere
 // usable, not on a blank screen.
@@ -42,8 +60,19 @@ export function parseRoute(hash: string): Route {
   if (stage === "export") return { name: "export", job };
   if (stage === "studio") {
     const seg = parts[3] ? decodeURIComponent(parts[3]) : undefined;
-    // …/studio/<seg>  and  …/studio/<seg>/graph
-    const tab = parts[4] === "graph" ? ("graph" as const) : ("signals" as const);
+    // …/studio/<seg>, …/studio/<seg>/graph and …/studio/<seg>/signals.
+    //
+    // A URL that names no tab means "this project's default tab" — NOT literally
+    // signals. Hardcoding signals here is what made the Playground open on an empty
+    // signals tab even after every `navigate()` call was fixed: the shell's reconcile
+    // bails when the URL already names the right stage, and by then a bare
+    // `#/p/playground/studio` had already been read as signals.
+    const tab =
+      parts[4] === "graph"
+        ? ("graph" as const)
+        : parts[4] === "signals"
+          ? ("signals" as const)
+          : defaultTab(job);
     return { name: "studio", job, seg, tab };
   }
   return HOME;
@@ -63,9 +92,12 @@ export function formatRoute(r: Route): string {
     case "studio": {
       let out = `#/p/${enc(r.job)}/studio`;
       if (r.seg) out += `/${enc(r.seg)}`;
-      // The graph tab is in the URL; `signals` is the default and stays implicit, so
-      // the common link is the short one.
-      if (r.seg && r.tab === "graph") out += "/graph";
+      // Whichever tab is NOT this project's default is named; the default stays
+      // implicit, so the common link is the short one. Written against `defaultTab`
+      // rather than against the literal "graph" so that it round-trips for the
+      // Playground too — otherwise the Playground switched to signals would format to
+      // a URL that reads back as graph.
+      if (r.seg && r.tab && r.tab !== defaultTab(r.job)) out += `/${r.tab}`;
       return out;
     }
   }

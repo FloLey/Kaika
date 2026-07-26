@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRoute, formatRoute, HOME } from "../lib/route";
+import { parseRoute, formatRoute, defaultTab, HOME, PLAYGROUND_JOB } from "../lib/route";
 import type { Route } from "../lib/route";
 
 // The route space, round-tripped. Every URL a link can carry has to survive being
@@ -14,6 +14,14 @@ const cases: [string, Route][] = [
   ["#/p/j1/studio", { name: "studio", job: "j1", seg: undefined, tab: "signals" }],
   ["#/p/j1/studio/s3", { name: "studio", job: "j1", seg: "s3", tab: "signals" }],
   ["#/p/j1/studio/s3/graph", { name: "studio", job: "j1", seg: "s3", tab: "graph" }],
+  // A URL that names no tab means "this project's default tab", which for the
+  // Playground is the cards. The explicit `/signals` form exists so the Playground on
+  // signals still has a URL that reads back as signals.
+  ["#/p/playground/studio/s3", { name: "studio", job: "playground", seg: "s3", tab: "graph" }],
+  [
+    "#/p/playground/studio/s3/signals",
+    { name: "studio", job: "playground", seg: "s3", tab: "signals" },
+  ],
 ];
 
 describe("parseRoute", () => {
@@ -67,5 +75,26 @@ describe("formatRoute", () => {
 
   it("escapes ids that would otherwise break the path", () => {
     expect(formatRoute({ name: "review", job: "a/b" })).toBe("#/p/a%2Fb/review");
+  });
+});
+
+// Which tab a project opens on. Worth a test of its own because the rule used to live
+// inside Studio, where the routed shell could not reach it: the shell hardcoded
+// "signals" at every navigation, so the Playground — whose entire point is the cards —
+// opened on an empty signals tab. Nothing failed, because the component that still
+// knew the rule was no longer the component being asked.
+describe("defaultTab", () => {
+  it("opens the Playground on the cards", () => {
+    expect(defaultTab(PLAYGROUND_JOB)).toBe("graph");
+  });
+
+  it("opens a normal project on signals — extract first, then animate", () => {
+    expect(defaultTab("j1")).toBe("signals");
+  });
+
+  it("agrees with the backend's job id for the seeded demo", () => {
+    // `backend/seed_card_demo.py`'s JOB_ID. A rename there with no rename here would
+    // silently drop the Playground back onto the signals tab.
+    expect(PLAYGROUND_JOB).toBe("playground");
   });
 });

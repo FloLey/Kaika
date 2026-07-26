@@ -14,6 +14,7 @@ import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
 import { isNext } from "../../lib/uiFlag";
+import { PLAYGROUND_JOB, defaultTab } from "../../lib/route";
 import { STEM_META, seedSignal } from "../../lib/segments";
 import { copyLayout, createComposition, refCounts as poolRefCounts } from "../../lib/compositions";
 import type {
@@ -85,9 +86,10 @@ export default function Studio({
   onTabChange,
 }: StudioProps) {
   const [railOpen, setRailOpen] = useState(true);
-  // The Playground is about the cards, so it lands on the animation tab; a normal
-  // project opens on signals (extract first, then animate).
-  const [ownTab, setOwnTab] = useState(job === "playground" ? "animation" : "signals");
+  // The uncontrolled fallback, for a host that does not put the tab in the URL. The
+  // rule itself is `route.defaultTab` — a routed host asks it directly, and this line
+  // exists only to translate its answer into the two names this component uses.
+  const [ownTab, setOwnTab] = useState(defaultTab(job ?? "") === "graph" ? "animation" : "signals");
   // "signals" | "animation" — controlled when the host passes both props, else ours.
   const tab = tabProp ?? ownTab;
   const setTab = onTabChange ?? setOwnTab;
@@ -446,7 +448,7 @@ export default function Studio({
           activeSegId={activeSegId}
           onSelect={selectSegment}
           onCollapse={() => setRailOpen(false)}
-          grouped={job === "playground"}
+          grouped={job === PLAYGROUND_JOB}
           onSaveFixture={onSaveFixture}
         />
       ) : (

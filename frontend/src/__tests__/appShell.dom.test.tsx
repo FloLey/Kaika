@@ -99,6 +99,31 @@ describe("AppShell routing", () => {
     expect(on?.textContent).toContain("create animation");
   });
 
+  it("opens the Playground on the cards, not on an empty signals tab", async () => {
+    // The Playground carries one card per type and no signals at all, so landing on
+    // signals shows a blank screen with nothing to explain it. Studio knew this; the
+    // shell, which now chooses the tab, did not — it hardcoded "signals" at every
+    // navigation. Asserted at the shell because the rule being right (route.test.ts)
+    // and the shell asking for it are two different failures.
+    getProject.mockResolvedValue(project({ job_id: "playground", step: "studio" }));
+    setHash("#/p/playground/studio");
+    const { container } = await mount();
+    expect(container.querySelector(".mode-tab.on")?.textContent).toContain("create animation");
+    // And the short URL stays short: `graph` is this project's default, so naming it
+    // would be noise. What must NOT happen is a rewrite to an explicit signals form.
+    expect(window.location.hash).toBe("#/p/playground/studio");
+  });
+
+  it("still opens a normal project on signals", async () => {
+    // The other half of the same rule — without this, `defaultTab` returning "graph"
+    // unconditionally would pass the test above.
+    setHash("#/p/j1/studio");
+    const { container } = await mount();
+    expect(container.querySelector(".mode-tab.on")?.textContent).toContain(
+      "extract signals by track"
+    );
+  });
+
   it("an unknown URL lands on the projects list rather than a blank screen", async () => {
     setHash("#/total/nonsense");
     await mount();

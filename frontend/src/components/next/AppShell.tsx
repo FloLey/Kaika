@@ -25,7 +25,7 @@ import type { Stage } from "./Stepper";
 import TransportBar from "./TransportBar";
 import { useLogPoll } from "../../lib/useLogPoll";
 import { useProject } from "../../lib/useProject";
-import { currentRoute, navigate, subscribeRoute } from "../../lib/route";
+import { currentRoute, defaultTab, navigate, subscribeRoute } from "../../lib/route";
 import type { Route } from "../../lib/route";
 import * as transport from "../../lib/transport";
 import * as logbus from "../../lib/logbus";
@@ -92,7 +92,12 @@ export default function AppShell() {
     if (route.name === step) return;
     navigate(
       step === "studio"
-        ? { name: "studio", job: p.job, seg: p.activeSegId ?? undefined, tab: "signals" }
+        ? {
+            name: "studio",
+            job: p.job,
+            seg: p.activeSegId ?? undefined,
+            tab: defaultTab(p.job),
+          }
         : { name: step, job: p.job },
       { replace: true }
     );
@@ -129,14 +134,19 @@ export default function AppShell() {
     if (!p.job) return;
     navigate(
       s === "studio"
-        ? { name: "studio", job: p.job, seg: p.activeSegId ?? undefined, tab: "signals" }
+        ? {
+            name: "studio",
+            job: p.job,
+            seg: p.activeSegId ?? undefined,
+            tab: defaultTab(p.job),
+          }
         : { name: s, job: p.job }
     );
   };
 
-  const goSegment = (id: string, tab: "signals" | "graph" = "signals") => {
+  const goSegment = (id: string, tab?: "signals" | "graph") => {
     if (!p.job) return;
-    navigate({ name: "studio", job: p.job, seg: id, tab });
+    navigate({ name: "studio", job: p.job, seg: id, tab: tab ?? defaultTab(p.job) });
   };
 
   return (
