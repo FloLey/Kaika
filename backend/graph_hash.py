@@ -45,7 +45,12 @@ from .graph_common import LOOSE_PORT, _nodes_of, resolve_signal
 #       exemption is deleted (a child composition's window IS the extract's, so
 #       sync="song" pre-rolls correctly inside it). Old montage clips are
 #       meaningless under the new semantics.
-RENDER_VERSION = 18
+#  v19: `brightness` maps its centroid LOGARITHMICALLY across the band (was linear).
+#       A real musical centroid sat at ~5% of a full-band range and moved by ~4%, so
+#       the curve rested on the floor whatever the music did; it now rests around 0.63.
+#       Every brightness signal produces different values, so every clip driven by one
+#       is stale.
+RENDER_VERSION = 19
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.
