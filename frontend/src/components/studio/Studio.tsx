@@ -13,7 +13,6 @@ import VolumeControl from "./VolumeControl";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
 import { engine } from "../../lib/audio";
-import { isNext } from "../../lib/uiFlag";
 import { PLAYGROUND_JOB, defaultTab } from "../../lib/route";
 import { STEM_META, seedSignal } from "../../lib/segments";
 import { copyLayout, createComposition, refCounts as poolRefCounts } from "../../lib/compositions";
@@ -152,17 +151,17 @@ export default function Studio({
   }, [navFrame, compositions]);
 
   // No segment selected → the window is the whole track, so the full mix can play
-  // before any segment exists. Fall back to the audio element's own duration when
-  // the `duration` prop isn't known yet (otherwise winEnd=0 loops instantly = silence).
-  // Inside an extract, the window IS the extract's: the transport plays just that
-  // slice of the song, so the live view scrubs against the right bars.
-  const [mediaDuration, setMediaDuration] = useState(0);
+  // before any segment exists. Inside an extract, the window IS the extract's: the
+  // transport plays just that slice of the song, so the live view scrubs against the
+  // right bars.
+  //
+  // There used to be a fallback to the audio element's own duration here, because a
+  // `winEnd` of 0 made the private element's `timeupdate` handler loop to the start on
+  // every tick — silence. `lib/transport` guards that case at the source (`onTick` only
+  // clamps `if (windowEnd > 0)`), so the fallback protected against a failure mode that
+  // no longer exists, using a duration only the deleted element could report.
   const winStart = navFrame ? navFrame.window.start : activeSeg ? activeSeg.start : 0;
-  const winEnd = navFrame
-    ? navFrame.window.end
-    : activeSeg
-      ? activeSeg.end
-      : duration || mediaDuration || 0;
+  const winEnd = navFrame ? navFrame.window.end : activeSeg ? activeSeg.end : duration || 0;
   const segLen = Math.max(0.001, winEnd - winStart);
   // "used ×N" per composition (segment roots + extracts) — the reuse picker's
   // indicator and the last-reference confirm read it through ctx.
@@ -184,14 +183,13 @@ export default function Studio({
   const mixUrl = job
     ? `/audio/${job}/${audioMode === "instrumental" ? "instrumental" : "original"}`
     : "";
-  // Under ?ui=next the transport is the shell's, mounted above the screen switch.
-  const sharedTransport = isNext();
 
-  // The audio engine + transport (full-mix clock, per-signal registry, play/seek/
-  // solo/volume) lives in this hook; Studio just wires its output into the view.
+  // The playback surface (segment clock, per-signal registry, play/seek/solo/volume)
+  // lives in this hook, over `lib/transport`; Studio just wires its output into the
+  // view. The element itself is the shell's, mounted above the screen switch, so
+  // leaving the studio doesn't stop the music.
   const {
     refAudio,
-    audioProps,
     allPlaying,
     subscribeClock,
     getClockT,
@@ -205,16 +203,7 @@ export default function Studio({
     registerAudio,
     onPlayingChange,
     handleSolo,
-  } = useStudioPlayback({
-    activeSeg,
-    winStart,
-    winEnd,
-    segLen,
-    // ?ui=next drives the app-wide transport, so the music survives leaving the
-    // studio; the element then lives in lib/transport and we render none.
-    shared: sharedTransport,
-    src: mixUrl,
-  });
+  } = useStudioPlayback({ winStart, winEnd, segLen, src: mixUrl });
 
   const selectSegment = useCallback(
     (id: string) => {
@@ -457,18 +446,6 @@ export default function Studio({
         </button>
       )}
       <div className={"studio-main" + (isFull ? " full" : "")} ref={studioMainRef}>
-        {!sharedTransport && (
-          <audio
-            ref={refAudio}
-            src={mixUrl}
-            preload="auto"
-            onLoadedMetadata={(e) => {
-              const d = e.currentTarget.duration;
-              if (isFinite(d)) setMediaDuration(d);
-            }}
-            {...audioProps}
-          />
-        )}
         <div className="results-head">
           <span className="section-title">
             {navStack.length ? (
@@ -672,9 +649,11 @@ export default function Studio({
                         no signals — add a frequency band to extract one
                       </div>
                     )}
-                    {/* ?ui=next lays the cards out in a grid: four bands on one
-                        stem in a single column is mostly scrolling. */}
-                    <div className={"signals" + (sharedTransport ? " signal-list-next" : "")}>
+                    {/* A grid, not a column: four bands on one stem stacked vertically
+                        is mostly scrolling. `signal-list-next` is unconditional now and
+                        folds into `.signals` when that rule block relocates out of
+                        `10-next.css`. */}
+                    <div className="signals signal-list-next">
                       {sigs.map((sg) => (
                         <SignalCard
                           key={sg.id}

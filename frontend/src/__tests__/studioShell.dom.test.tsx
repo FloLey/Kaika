@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import Studio from "../components/studio/Studio";
 import * as transport from "../lib/transport";
-
-// `isNext()` is read during render, so a mutable flag lets one file cover both arms
-// while both exist. It stops being needed when the shared arm is the only arm.
-let nextMode = false;
-vi.mock("../lib/uiFlag", () => ({ isNext: () => nextMode }));
 
 // jsdom doesn't implement media playback; stub the transport calls Studio makes on
 // segment select / play so the shell logic runs without "Not implemented" noise.
@@ -57,13 +52,6 @@ describe("Studio shell", () => {
     expect(getByText(/EXTRACT SIGNALS BY TRACK/)).toBeTruthy();
   });
 
-  it("points the reference <audio> at the job's original mix", () => {
-    const { container } = renderStudio();
-    const audio = container.querySelector("audio");
-    expect(audio).toBeTruthy();
-    expect(audio!.getAttribute("src")).toBe("/audio/job123/original");
-  });
-
   it("renders both mode tabs", () => {
     const { getByText } = renderStudio();
     expect(getByText("extract signals by track")).toBeTruthy();
@@ -97,25 +85,18 @@ describe("Studio shell", () => {
   });
 });
 
-// The arm that is about to become the only arm.
+// Playback, which the studio no longer owns.
 //
-// Studio's playback hook carries two complete engines — its own <audio> plus clock, and
-// a delegation to `lib/transport`, whose element lives outside the React tree. The
-// second is what the routed shell mounts, and the first is about to be deleted. These
-// cover the delegation BEFORE that deletion, so what survives is verified rather than
-// merely still compiling.
+// The hook used to carry two complete engines — a private <audio> plus its own clock,
+// and a delegation to `lib/transport`, whose element lives outside the React tree —
+// selected by a flag. These were written against the delegation while both existed, so
+// that deleting the private one was verifiable rather than hopeful.
 //
 // The real store, not a mock, following `transport.dom.test.tsx`: the failure worth
 // catching is Studio wiring itself to the wrong thing, and a mocked module would accept
 // any wiring at all.
-describe("Studio shell — the shared transport", () => {
-  beforeEach(() => {
-    nextMode = true;
-    transport.__resetForTest();
-  });
-  afterEach(() => {
-    nextMode = false;
-  });
+describe("Studio shell — playback", () => {
+  beforeEach(() => transport.__resetForTest());
 
   it("mounts NO local <audio> — the store owns the element", () => {
     const { container } = renderStudio();
