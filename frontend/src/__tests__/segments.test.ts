@@ -220,8 +220,23 @@ describe("default signals", () => {
       (s) => s.stemKey === stem
     );
 
-  it("seeds fourteen, not twenty-seven", () => {
-    expect(names()).toHaveLength(14);
+  it("seeds fifteen, not twenty-seven", () => {
+    expect(names()).toHaveLength(15);
+  });
+
+  it("gives `other` a second dimension — it is often where the hook lives", () => {
+    // Guitars/synths/keys land in `other`, and one loudness curve is a thin
+    // description of them: energy says how much, brightness says how open.
+    expect(forStem("other").map((s) => s.feature)).toEqual(["energy", "brightness"]);
+  });
+
+  it("seeds brightness WITH a band — full-band brightness is a flat line", () => {
+    // raw_brightness maps the centroid linearly across [min,max]. Over the full
+    // 20 Hz–22 kHz range a real musical centroid (~1–2 kHz) lands at ~0.05 and
+    // swings ~0.04 over a whole segment. Measured, not assumed. A default that
+    // shipped full-band would be exactly the unreadable signal this cut removed.
+    const b = forStem("other").find((s) => s.feature === "brightness")!;
+    expect([b.minHz, b.maxHz]).toEqual([300, 4000]);
   });
 
   it("seeds nothing for a stem the separation didn't produce", () => {

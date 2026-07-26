@@ -156,7 +156,7 @@ function serializeSignals(signals: Signal[] | null | undefined): RawSignal[] {
 // {feature, label, minHz?, maxHz?, ...shaping} — omit the band for the full range.
 // Bands are rough starting points; drag the spectrogram handles to refine.
 //
-// FOURTEEN, down from 27. Every one of them has to be describable in one sentence
+// FIFTEEN, down from 27. Every one of them has to be describable in one sentence
 // of what you HEAR, because a signal you can't name is a signal you won't wire —
 // and at 27 per segment (216 on an eight-segment track) the list was mostly noise
 // you had to read past. Three rules produced this set:
@@ -179,6 +179,23 @@ function serializeSignals(signals: Signal[] | null | undefined): RawSignal[] {
 // `flux` and `brightness`, which are easier to hear than chroma ever was.
 const ENERGY = { feature: "energy", label: "energy" };
 const ONSET = { feature: "onset", label: "onset" };
+// Brightness MUST be seeded with a band, and this is the one thing about it that
+// is easy to get wrong. `raw_brightness` restricts the centroid to [min,max]
+// correctly, but then maps it LINEARLY across that range — while musical energy is
+// roughly logarithmic in frequency. So a full-band (20 Hz–22 kHz) brightness puts
+// a centroid that really sits around 1–2 kHz at ~0.05, and it moves by ~0.04 over
+// a whole segment: a flat line you would have to crank `gain` to ~20 to see.
+//
+// Measured over 30 s on four real stems (useful swing = max−min of the curve):
+//
+//   band            other/A  vocals/A  other/B  other/C
+//   full            0.043    0.477     0.158    0.094
+//   300–4000 Hz     0.224    0.681     0.275    0.254
+//
+// 300–4000 Hz is the presence region — guitars, synths and keys live there, and it
+// is where a filter opening up is actually audible. It was the only band with no
+// dead stem in the sample.
+const BRIGHTNESS = { feature: "brightness", label: "brightness", minHz: 300, maxHz: 4000 };
 // One band's LOUDNESS, named "<label> energy". Frequency-selective, so each of
 // kick/snare/hats follows its own element.
 const band = (label: string, minHz: number, maxHz: number, release?: number): AnyRec => ({
@@ -205,7 +222,11 @@ const STEM_DEFAULTS: Record<string, AnyRec[]> = {
     band("hats", 6000, 16000, 90),
   ],
   bass: [ONSET, band("sub", 30, 80), band("low", 80, 250)],
-  other: [ENERGY],
+  // `other` is whatever the separation couldn't name — guitars, synths, keys — so
+  // it is often where the hook lives, and one loudness curve is a thin description
+  // of it. Brightness is the cheapest second dimension: energy says how much, this
+  // says how open.
+  other: [ENERGY, BRIGHTNESS],
 };
 
 // Shaping fields a default entry may override on top of SIGNAL_DEFAULTS.

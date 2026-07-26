@@ -31,7 +31,7 @@ export default function Studio() {
 
       <h3>What you start with</h3>
       <p>
-        A new segment is seeded with <strong>fourteen signals</strong> — a deliberately small set
+        A new segment is seeded with <strong>fifteen signals</strong> — a deliberately small set
         where every one is something you can point at in the music:
       </p>
       <table>
@@ -58,7 +58,7 @@ export default function Studio() {
           </tr>
           <tr>
             <td>other</td>
-            <td>energy</td>
+            <td>energy, brightness (300 Hz – 4 kHz)</td>
           </tr>
         </tbody>
       </table>
@@ -73,9 +73,16 @@ export default function Studio() {
       </p>
       <p>
         Both are still one click away — <em>+ add band</em> on any track, then pick the feature. The
-        same goes for <em>flux</em> and <em>brightness</em>, which are usually easier to hear than
-        chroma.
+        same goes for <em>flux</em>, which is usually easier to hear than chroma ever was.
       </p>
+      <div className="note">
+        <strong>Brightness always wants a band.</strong> It reports where the energy sits{" "}
+        <em>inside the band you gave it</em>, spread across that range — so on the full 20 Hz–22 kHz
+        span, a real musical centroid (around 1–2 kHz) lands near 0.05 and barely moves. That is why{" "}
+        <em>other</em> seeds it at 300 Hz – 4 kHz, the presence region where guitars, synths and
+        keys live. If you add a brightness signal yourself, narrow the band to the range you
+        actually care about or the curve will look flat.
+      </div>
 
       <h3>Choosing the band</h3>
       <p>
