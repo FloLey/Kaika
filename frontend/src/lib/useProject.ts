@@ -10,7 +10,7 @@
 // `lastSaved` bookkeeping is load-bearing. `docs/cleanup` flagged the same thing from
 // the readability side; this is the same collapse, done because a caller needs it.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset, CompositionPool, LyricLine, OutputSettings, Segment } from "./types";
 import type { UploadResult, SegmentProposal } from "./api";
 import { hydrateSegments, serializeSegments } from "./segments";
@@ -349,43 +349,86 @@ export function useProject() {
     setStep("projects");
   }, [abortPoll]);
 
-  return {
-    // state
-    step,
-    status,
-    error,
-    saveError,
-    job,
-    title,
-    duration,
-    originalSpec,
-    assets,
-    stems,
-    segments,
-    compositions,
-    vocalEnvelope,
-    envelopeTimes,
-    lyricLines,
-    activeSegId,
-    output,
-    exportSettings,
-    // setters the screens drive directly
-    setStep,
-    setSegments,
-    setCompositions,
-    setActiveSegId,
-    setOutput,
-    setExportSettings,
-    // whole-project actions
-    handleUpload,
-    openProject,
-    openPlayground,
-    validateSplit,
-    splitSegmentsAt,
-    toProjects,
-    saveLyricLines,
-    saveFixture,
-  };
+  // ONE object per set of values, not one per render.
+  //
+  // A caller that wants "the project changed" has no other handle to depend on: the
+  // shell's URL-reconciling effects list `p` itself, because listing eight fields
+  // instead would drift the moment a ninth mattered. An object literal here would make
+  // those effects run on EVERY render and leave correctness to their internal ref
+  // guards — which held, but only by accident of what they guard.
+  //
+  // Every dependency below is either a `useState` value or a `useCallback`, so this
+  // memo changes identity exactly when the project does. The `useState` setters are
+  // stable by contract and are deliberately absent from the dep list.
+  // `useProject.dom.test.tsx` pins the identity behaviour, because a 26-entry dep list
+  // is its own drift hazard and prose will not catch an omission.
+  return useMemo(
+    () => ({
+      // state
+      step,
+      status,
+      error,
+      saveError,
+      job,
+      title,
+      duration,
+      originalSpec,
+      assets,
+      stems,
+      segments,
+      compositions,
+      vocalEnvelope,
+      envelopeTimes,
+      lyricLines,
+      activeSegId,
+      output,
+      exportSettings,
+      // setters the screens drive directly
+      setStep,
+      setSegments,
+      setCompositions,
+      setActiveSegId,
+      setOutput,
+      setExportSettings,
+      // whole-project actions
+      handleUpload,
+      openProject,
+      openPlayground,
+      validateSplit,
+      splitSegmentsAt,
+      toProjects,
+      saveLyricLines,
+      saveFixture,
+    }),
+    [
+      step,
+      status,
+      error,
+      saveError,
+      job,
+      title,
+      duration,
+      originalSpec,
+      assets,
+      stems,
+      segments,
+      compositions,
+      vocalEnvelope,
+      envelopeTimes,
+      lyricLines,
+      activeSegId,
+      output,
+      exportSettings,
+      handleUpload,
+      openProject,
+      openPlayground,
+      validateSplit,
+      splitSegmentsAt,
+      toProjects,
+      saveLyricLines,
+      saveFixture,
+    ]
+  );
 }
 
 export type Project = ReturnType<typeof useProject>;

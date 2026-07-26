@@ -180,6 +180,66 @@ describe("useProject", () => {
   });
 });
 
+// The shell's URL-reconciling effects depend on the whole project object, so its
+// identity IS the "did the project change" signal. Two ways that breaks: a literal
+// return (new identity every render, effects fire constantly) or a dep list missing a
+// field (identity goes stale, effects never fire). Both are invisible in review — the
+// app still works, because the effects' own ref guards paper over the first case and
+// the second only shows on a field nobody happened to test. Hence these.
+describe("useProject — the project object's identity", () => {
+  it("hands back the SAME object when nothing changed", async () => {
+    getProject.mockResolvedValue(project());
+    const { result, rerender } = renderHook(() => useProject());
+    await act(async () => {
+      await result.current.openProject("j1");
+    });
+
+    const before = result.current;
+    rerender();
+    expect(result.current).toBe(before);
+  });
+
+  // One case per setter the screens drive directly. A dep list that forgets one of
+  // these fields passes every other test in this file and still hands the shell a
+  // stale object forever.
+  const edits: [string, (p: ReturnType<typeof useProject>) => void][] = [
+    ["setStep", (p) => p.setStep("export")],
+    ["setSegments", (p) => p.setSegments((prev) => prev.map((s) => ({ ...s, label: "X" })))],
+    [
+      "setCompositions",
+      (p) =>
+        p.setCompositions({
+          c9: { id: "c9", name: "n", graph: { version: 1, nodes: [], edges: [] } },
+        }),
+    ],
+    ["setActiveSegId", (p) => p.setActiveSegId("other")],
+    ["setOutput", (p) => p.setOutput({ ...OUTPUT_DEFAULTS, width: 123 })],
+    ["setExportSettings", (p) => p.setExportSettings({ ...EXPORT_DEFAULTS, fps: 47 })],
+  ];
+
+  it.each(edits)("changes identity when %s runs", async (_name, edit) => {
+    getProject.mockResolvedValue(project());
+    const { result } = renderHook(() => useProject());
+    await act(async () => {
+      await result.current.openProject("j1");
+    });
+
+    const before = result.current;
+    act(() => edit(result.current));
+    expect(result.current).not.toBe(before);
+  });
+
+  it("changes identity when a project opens", async () => {
+    getProject.mockResolvedValue(project());
+    const { result } = renderHook(() => useProject());
+    const before = result.current;
+    await act(async () => {
+      await result.current.openProject("j1");
+    });
+    expect(result.current).not.toBe(before);
+  });
+});
+
 describe("buildSavePayload", () => {
   it("prunes compositions no segment reaches — from the PAYLOAD, not the state", () => {
     const segs = [{ id: "s1", label: "V", start: 0, end: 1, signals: [], rootCompositionId: "c1" }];
