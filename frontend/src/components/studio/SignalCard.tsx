@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, RefObject } from "react";
+import type { RefObject } from "react";
 import Spectrogram from "./Spectrogram";
 import CurveView from "./CurveView";
 import PulsePad from "./PulsePad";
-import Info from "../../ui/Info";
-import Ctl from "../../ui/Ctl";
 import { engine } from "../../lib/audio";
-import { fmtTime, fmtHz, clamp } from "../../lib/mel";
+import { clamp } from "../../lib/mel";
 import { stemColor } from "../../lib/segments";
-import { FEATURES, FEATURE_HELP, HELP } from "./signalCatalog";
 import { useSignalCurve } from "./useSignalCurve";
-import { isNext } from "../../lib/uiFlag";
-import SignalCardNext from "../next/SignalCardNext";
+import SignalCardView from "./SignalCardView";
 import type { Signal, StemInfo } from "../../lib/types";
 
 interface SignalCardProps {
@@ -50,7 +46,6 @@ export default function SignalCard({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [frac, setFrac] = useState(0);
-  const [collapsed, setCollapsed] = useState(true);
 
   const info: StemInfo = stems[signal.stemKey] || {};
   const sr = info.sr || 44100;
@@ -199,202 +194,29 @@ export default function SignalCard({
     />
   );
 
-  // ?ui=next — the same signal, presented in three bands of disclosure. Only the
-  // LAYOUT moves: everything above (the audio element, the band-pass, the curve
-  // extraction, the shared clock) stays here, so there is one implementation of the
-  // part that is hard to get right.
-  if (isNext()) {
-    return (
-      <>
-        <SignalCardNext
-          signal={signal}
-          patch={patch}
-          onRemove={onRemove}
-          color={color}
-          nyq={nyq}
-          bandIgnored={bandIgnored}
-          playing={playing}
-          onTogglePlay={togglePlay}
-          setBandMin={setBandMin}
-          setBandMax={setBandMax}
-          spectrogram={spectrogram}
-          curveView={curveView}
-          pulsePad={pulsePad}
-        />
-        {audioEl}
-      </>
-    );
-  }
-
+  // The layout lives in its own file. The split is deliberate and stays: everything
+  // above — the audio element, the band-pass registration, the curve extraction, the
+  // shared clock — is the part that is hard to get right, and there is one
+  // implementation of it. Merging the two files back together would recreate the
+  // 400-line component this came out of.
   return (
-    <div
-      className={"signal" + (collapsed ? " collapsed" : "")}
-      style={{ "--accent": color } as CSSProperties}
-    >
-      <div className="signal-head">
-        <button
-          className="iconbtn sm"
-          title={collapsed ? "Expand" : "Collapse"}
-          onClick={() => setCollapsed((c) => !c)}
-        >
-          {collapsed ? "▸" : "▾"}
-        </button>
-        <button className="play" onClick={togglePlay}>
-          {playing ? "❚❚" : "▶"}
-        </button>
-        <input
-          className="signal-name"
-          value={signal.name}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => patch({ name: e.target.value })}
-          placeholder="signal name"
-        />
-        <select
-          className="signal-feature"
-          value={signal.feature}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => patch({ feature: e.target.value })}
-          title="What to measure from this band"
-        >
-          {FEATURES.map((f) => (
-            <option key={f.key} value={f.key}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <Info text={FEATURE_HELP[signal.feature] || HELP.signal} section="studio-features" />
-        {collapsed && (
-          <span className="band-chip" title="Frequency band">
-            {bandIgnored ? "band n/a" : `${fmtHz(signal.minHz)}–${fmtHz(signal.maxHz)}`}
-          </span>
-        )}
-        {!collapsed && (
-          <span className="time">
-            {fmtTime(frac * winLen)} / {fmtTime(winLen)}
-          </span>
-        )}
-        {collapsed && (
-          <>
-            <div className="curve-mini">{curveView}</div>
-            <div className="pulse-mini">{pulsePad}</div>
-          </>
-        )}
-        <button className="iconbtn" title="Remove signal" onClick={() => onRemove(signal.id)}>
-          ✕
-        </button>
-      </div>
-
-      {!collapsed && (
-        <>
-          <div className="band-edit">
-            <span className="ctl-label">band</span>
-            <input
-              type="number"
-              className="hz-input"
-              value={Math.round(signal.minHz)}
-              min={0}
-              max={nyq}
-              step={10}
-              disabled={bandIgnored}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setBandMin(e.target.value)}
-            />
-            <span className="hz-dash">–</span>
-            <input
-              type="number"
-              className="hz-input"
-              value={Math.round(signal.maxHz)}
-              min={0}
-              max={nyq}
-              step={10}
-              disabled={bandIgnored}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setBandMax(e.target.value)}
-            />
-            <span className="hz-unit">Hz</span>
-            {bandIgnored && (
-              <span className="hz-note">band ignored for {signal.feature} phase</span>
-            )}
-          </div>
-          <div className="signal-body">
-            <div className={"signal-graphs" + (bandIgnored ? " band-ignored" : "")}>
-              {spectrogram}
-              {curveView}
-            </div>
-            {pulsePad}
-          </div>
-
-          <div className="signal-ctls">
-            <Ctl
-              label="attack"
-              value={signal.attack}
-              min={0}
-              max={1000}
-              step={1}
-              onChange={(v: number) => patch({ attack: v })}
-              fmt={(v: number) => v + "ms"}
-              help={HELP.attack}
-            />
-            <Ctl
-              label="release"
-              value={signal.release}
-              min={0}
-              max={2000}
-              step={5}
-              onChange={(v: number) => patch({ release: v })}
-              fmt={(v: number) => v + "ms"}
-              help={HELP.release}
-            />
-            <Ctl
-              label="gamma"
-              value={signal.gamma}
-              min={0.2}
-              max={4}
-              step={0.05}
-              onChange={(v: number) => patch({ gamma: v })}
-              fmt={(v: number) => v.toFixed(2)}
-              help={HELP.gamma}
-            />
-            <Ctl
-              label="thresh"
-              value={signal.threshold}
-              min={0}
-              max={0.9}
-              step={0.02}
-              onChange={(v: number) => patch({ threshold: v })}
-              fmt={(v: number) => v.toFixed(2)}
-              help={HELP.thresh}
-            />
-            <Ctl
-              label="gain"
-              value={signal.gain}
-              min={0}
-              max={2}
-              step={0.05}
-              onChange={(v: number) => patch({ gain: v })}
-              fmt={(v: number) => v.toFixed(2)}
-              help={HELP.gain}
-            />
-            <Ctl
-              label="offset"
-              value={signal.offset}
-              min={-0.5}
-              max={0.5}
-              step={0.02}
-              onChange={(v: number) => patch({ offset: v })}
-              fmt={(v: number) => v.toFixed(2)}
-              help={HELP.offset}
-            />
-            <div className="ctl ctl-toggle">
-              <button
-                className={"btn sm" + (signal.invert ? " on" : "")}
-                onClick={() => patch({ invert: !signal.invert })}
-              >
-                invert {signal.invert ? "on" : "off"}
-              </button>
-              <Info text={HELP.invert} section="studio-shaping" />
-            </div>
-          </div>
-        </>
-      )}
-
+    <>
+      <SignalCardView
+        signal={signal}
+        patch={patch}
+        onRemove={onRemove}
+        color={color}
+        nyq={nyq}
+        bandIgnored={bandIgnored}
+        playing={playing}
+        onTogglePlay={togglePlay}
+        setBandMin={setBandMin}
+        setBandMax={setBandMax}
+        spectrogram={spectrogram}
+        curveView={curveView}
+        pulsePad={pulsePad}
+      />
       {audioEl}
-    </div>
+    </>
   );
 }

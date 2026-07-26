@@ -1,24 +1,25 @@
-// The signal card, in three bands of disclosure (?ui=next).
+// The signal card's layout: three bands of disclosure.
 //
-// Expanded, the current card puts ~19 interactive things on screen at once — six
-// sliders, a toggle, two number inputs, a select, a draggable spectrogram, two
-// seekable views — with no hierarchy and no summary, so four bands on `drums` are
-// four identical blocks you open one at a time to tell apart. And they stack in a
-// single column per stem, so telling them apart also means scrolling.
+// It replaced a card that put ~19 interactive things on screen at once when expanded —
+// six sliders, a toggle, two number inputs, a select, a draggable spectrogram, two
+// seekable views — with no hierarchy and no summary, so four bands on `drums` were four
+// identical blocks you opened one at a time to tell apart, stacked in a single column
+// so telling them apart also meant scrolling.
 //
-// Presentation only: SignalCard keeps every piece of logic (audio element, band-pass,
-// curve extraction, the shared clock) and hands the built views down. That way there
-// is one implementation of the hard part and this file can be deleted if it loses.
+// Presentation only, and that split stays: `SignalCard` keeps every piece of logic (the
+// audio element, the band-pass, the curve extraction, the shared clock) and hands the
+// built views down. One implementation of the hard part, and a layout that can be
+// reworked without touching it.
 
 import { useState } from "react";
 import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 import Ctl, { Toggle } from "../../ui/Ctl";
 import Info from "../../ui/Info";
-import { FEATURES, FEATURE_HELP, HELP } from "../studio/signalCatalog";
-import { shapeWords, summariseSignal } from "../studio/signalSummary";
+import { FEATURES, FEATURE_HELP, HELP } from "./signalCatalog";
+import { shapeWords, summariseSignal } from "./signalSummary";
 import type { Signal } from "../../lib/types";
 
-export interface SignalCardNextProps {
+export interface SignalCardViewProps {
   signal: Signal;
   patch: (p: Partial<Signal>) => void;
   onRemove: (id: string) => void;
@@ -62,7 +63,7 @@ function Section({
   );
 }
 
-export default function SignalCardNext({
+export default function SignalCardView({
   signal,
   patch,
   onRemove,
@@ -76,7 +77,7 @@ export default function SignalCardNext({
   spectrogram,
   curveView,
   pulsePad,
-}: SignalCardNextProps) {
+}: SignalCardViewProps) {
   // All closed by default: the curve and the pulse below the header are what you
   // read most of the time, and they are never hidden.
   const [open, setOpen] = useState<Record<string, boolean>>({});

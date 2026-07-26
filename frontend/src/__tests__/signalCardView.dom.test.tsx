@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
-import SignalCardNext from "../components/next/SignalCardNext";
+import SignalCardView from "../components/studio/SignalCardView";
 import { summariseSignal, shapeWords, bandIgnoredFor } from "../components/studio/signalSummary";
 import type { Signal } from "../lib/types";
 
@@ -29,7 +29,7 @@ const sig = (over: Partial<Signal> = {}): Signal => ({
 function setup(signal = sig(), patch = vi.fn()) {
   const onRemove = vi.fn();
   const utils = render(
-    <SignalCardNext
+    <SignalCardView
       signal={signal}
       patch={patch}
       onRemove={onRemove}
@@ -84,7 +84,7 @@ describe("summariseSignal", () => {
   });
 });
 
-describe("SignalCardNext", () => {
+describe("SignalCardView", () => {
   it("keeps the curve and the pulse always visible — they are the point of the card", () => {
     const { getByTestId } = setup();
     expect(getByTestId("curve")).toBeTruthy();
