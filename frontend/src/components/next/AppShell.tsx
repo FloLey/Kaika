@@ -1,14 +1,14 @@
-// The `?ui=next` shell: the same screens, in a frame that knows where it is.
+// The app shell: every screen, in a frame that knows where it is.
 //
-// The current shell keeps the screen in a `useState` string, so browser back does
-// nothing, no view is linkable, and moving between stages is three one-way buttons
-// scattered across three components. Here the URL is the navigation, and a stepper
-// shows the whole flow with the parts you can't enter yet explained rather than
-// hidden.
+// The URL is the navigation. A stepper shows the whole flow, with the stages you can't
+// enter yet explained rather than hidden, and the transport lives above the screen
+// switch so the music survives moving between stages.
 //
-// The screens themselves are rendered UNCHANGED. That is deliberate: this proposal
-// is about the frame, and mixing a frame change with a screen change would make it
-// impossible to say which one you preferred.
+// This replaced a shell that kept the screen in a `useState` string, where browser Back
+// did nothing, no view was linkable, and moving between stages meant three one-way
+// buttons scattered across three components. It shipped as a live proposal beside that
+// one — reachable at `?ui=next`, screens rendered UNCHANGED so the comparison was about
+// the frame alone — and won.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import ProjectList from "../ProjectList";
@@ -280,9 +280,8 @@ export default function AppShell() {
         )}
 
         {!busy && route.name === "export" && (
-          // The console, not ExportStep: same job, but the checklist and the progress
-          // are one list and the backend's `phase` is on screen. `↩ studio` is gone —
-          // the stepper is the way back now.
+          // The checklist and the progress are one list, and the backend's `phase` is on
+          // screen. No `↩ studio` button — the stepper is the way back.
           <ExportConsole
             job={p.job ?? undefined}
             segments={p.segments}

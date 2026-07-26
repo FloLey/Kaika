@@ -1,13 +1,13 @@
 // Where you are in the flow, and where you may go — one always-visible control.
 //
-// Today those moves are three one-way buttons in three different places: "↩ edit
-// split" inside the Studio's own header, "Final export ▸" beside it, and "↩ studio"
-// in a header the export screen invents for itself. Nothing anywhere shows the shape
-// of the flow or which parts of it you have finished.
+// It replaced three one-way buttons in three different places — "↩ edit split" inside
+// the Studio's own header, "Final export ▸" beside it, and "↩ studio" in a header the
+// export screen invented for itself — none of which showed the shape of the flow or
+// which parts of it you had finished.
 //
 // Reachability is the honest part: export is refused until every segment carries a
-// ★-final output, using the SAME predicate ExportStep computes for its checklist, so
-// the stepper and the export button can't disagree about whether you are ready.
+// ★-final output, using the SAME predicate the export console computes for its
+// checklist, so the stepper and the Generate button can't disagree about readiness.
 
 import { finalOutputIdOf, rootCompositionOf } from "../../lib/compositions";
 import type { CompositionPool, Segment } from "../../lib/types";

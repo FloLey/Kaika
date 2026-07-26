@@ -1,20 +1,20 @@
-// The final export, as a job console (?ui=next).
+// The final export, as a job console.
 //
-// The whole-track export is the longest thing this app does — minutes, sometimes
-// tens of them — and the current screen shows a percentage that can sit still the
-// entire time. Two reasons, and they compound:
+// The whole-track export is the longest thing this app does — minutes, sometimes tens
+// of them — and the screen this replaced showed a percentage that could sit still the
+// entire time. Two reasons, and they compounded:
 //
-//   1. `ExportStep` destructures `useRenderJob` WITHOUT `phase`. That field is the
-//      one the hook exists to surface ("so a job doing slow work outside the frame
-//      loop doesn't look hung at 0%"): regenerating HD images and muxing audio both
-//      happen with the frame counter frozen. Only OutputNode ever read it.
-//   2. The readiness checklist and the progress bar are two separate things, so
-//      while it renders, the list of segments — the only structure the job has —
-//      just sits there greyed out.
+//   1. It destructured `useRenderJob` WITHOUT `phase` — the field the hook exists to
+//      surface ("so a job doing slow work outside the frame loop doesn't look hung at
+//      0%"). Regenerating HD images and muxing audio both happen with the frame counter
+//      frozen. Only OutputNode ever read it.
+//   2. The readiness checklist and the progress bar were two separate things, so while
+//      it rendered, the list of segments — the only structure the job has — just sat
+//      there greyed out.
 //
-// So: one list. Before you press Generate it is the readiness checklist; while it
-// runs it is the progress. A segment goes pending → rendering (with its phase) →
-// done, and "45s / 210s" becomes "segment 3 of 9 · CHORUS · regenerating images".
+// So: one list. Before you press Generate it is the readiness checklist; while it runs
+// it is the progress. A segment goes pending → rendering (with its phase) → done, and
+// "45s / 210s" becomes "segment 3 of 9 · CHORUS · regenerating images".
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";

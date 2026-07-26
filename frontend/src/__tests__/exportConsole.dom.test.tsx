@@ -82,6 +82,13 @@ describe("ExportConsole readiness", () => {
     );
     fireEvent.click(warn);
     expect(onOpenSegment).toHaveBeenCalledWith("s2");
+
+    // Only the blocking row is a target: a ✓ row that also looked clickable would
+    // invite a trip to the editor with nothing to do there. (Carried over from
+    // `exportStep.dom.test.tsx` when that screen was deleted — the console's own
+    // click-through case covered the jump but not the inert half.)
+    const rows = [...container.querySelectorAll(".export-seg")];
+    expect(rows.map((r) => r.tagName)).toEqual(["DIV", "BUTTON"]);
   });
 
   it("refuses to Generate until every segment is marked", () => {
