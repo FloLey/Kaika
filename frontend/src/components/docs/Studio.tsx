@@ -29,6 +29,54 @@ export default function Studio() {
         </li>
       </ul>
 
+      <h3>What you start with</h3>
+      <p>
+        A new segment is seeded with <strong>fourteen signals</strong> — a deliberately small set
+        where every one is something you can point at in the music:
+      </p>
+      <table>
+        <tbody>
+          <tr>
+            <th>Track</th>
+            <th>Seeded</th>
+          </tr>
+          <tr>
+            <td>full mix</td>
+            <td>energy, onset, and the tempo grid — bar phase &amp; beat phase</td>
+          </tr>
+          <tr>
+            <td>drums</td>
+            <td>onset, plus kick / snare / hats as three separate energy bands</td>
+          </tr>
+          <tr>
+            <td>bass</td>
+            <td>onset, plus sub (30–80 Hz) and low (80–250 Hz) energy</td>
+          </tr>
+          <tr>
+            <td>vocals</td>
+            <td>energy, onset</td>
+          </tr>
+          <tr>
+            <td>other</td>
+            <td>energy</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Two things are deliberately <em>absent</em>. There is only{" "}
+        <strong>one onset per track</strong>: a drum hit is a broadband transient, so a kick onset,
+        a snare onset and a hats onset would fire on almost exactly the same frames — it's the{" "}
+        <em>energy</em> bands that tell the elements apart, because those are frequency-selective.
+        And there is no <strong>chroma</strong>
+        anywhere: it reports which note dominates, which is meaningful on isolated pitched material
+        and close to random on drums or on the whole mix at once.
+      </p>
+      <p>
+        Both are still one click away — <em>+ add band</em> on any track, then pick the feature. The
+        same goes for <em>flux</em> and <em>brightness</em>, which are usually easier to hear than
+        chroma.
+      </p>
+
       <h3>Choosing the band</h3>
       <p>
         Each card shows that stem's spectrogram for the current segment. Drag the two horizontal

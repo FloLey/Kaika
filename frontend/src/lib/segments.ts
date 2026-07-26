@@ -152,43 +152,60 @@ function serializeSignals(signals: Signal[] | null | undefined): RawSignal[] {
   );
 }
 
-// Default signals seeded on a fresh segment. Every track gets full-band
-// energy + onset + chroma; the full mix also gets bar & beat phase
-// (track-independent).
-// Drums and bass additionally get the bands where their key elements live, so
-// you get kick / snare / hats and sub / low drivers out of the box. Each entry
-// is {feature, label, minHz?, maxHz?, ...shaping} — omit the band for the full
-// range. Bands are rough starting points; drag the spectrogram handles to refine.
+// Default signals seeded on a fresh segment. Each entry is
+// {feature, label, minHz?, maxHz?, ...shaping} — omit the band for the full range.
+// Bands are rough starting points; drag the spectrogram handles to refine.
 //
-// Each band ships in BOTH flavors: `energy` (band loudness — frequency selective,
-// so kick/snare/hats follow their own element) and `onset` (a spike per hit).
-// They read differently: a drum hit is a broadband transient, so the onset bands
-// tend to fire together, while the energy bands separate the elements.
-const FULL_BAND = [
-  { feature: "energy", label: "energy" },
-  { feature: "onset", label: "onset" },
-  { feature: "chroma", label: "chroma" },
-];
-// energy + onset variants of one band, named "<label> energy" / "<label> onset".
-const both = (label: string, minHz: number, maxHz: number, release?: number): AnyRec[] => [
-  { feature: "energy", label: `${label} energy`, minHz, maxHz, release },
-  { feature: "onset", label: `${label} onset`, minHz, maxHz },
-];
+// FOURTEEN, down from 27. Every one of them has to be describable in one sentence
+// of what you HEAR, because a signal you can't name is a signal you won't wire —
+// and at 27 per segment (216 on an eight-segment track) the list was mostly noise
+// you had to read past. Three rules produced this set:
+//
+//   - NO `chroma`. It is `argmax` over twelve pitch bins: a stepped curve saying
+//     which note dominates. On `drums` that is meaningless — a kit is noise, so
+//     the argmax of a snare is arbitrary and the curve just jumps around — and on
+//     the full mix it is the argmax of everything at once. It only reads on
+//     pitched, isolated material, which is a choice to make per project, not a
+//     default on five tracks.
+//   - ONE onset per stem, full-band. A drum hit is a BROADBAND transient, so
+//     `kick onset` / `snare onset` / `hats onset` fire on very nearly the same
+//     frames — three copies of `drums onset`. It is the ENERGY bands that
+//     separate the elements, because those are frequency-selective.
+//   - Bands only where the elements genuinely live apart: kick / snare / hats,
+//     sub / low. Their sum is the stem's own loudness, so a full-band energy
+//     beside them would be a fourth copy of the same thing.
+//
+// Everything dropped is still one click away under "+ add band" — including
+// `flux` and `brightness`, which are easier to hear than chroma ever was.
+const ENERGY = { feature: "energy", label: "energy" };
+const ONSET = { feature: "onset", label: "onset" };
+// One band's LOUDNESS, named "<label> energy". Frequency-selective, so each of
+// kick/snare/hats follows its own element.
+const band = (label: string, minHz: number, maxHz: number, release?: number): AnyRec => ({
+  feature: "energy",
+  label: `${label} energy`,
+  minHz,
+  maxHz,
+  release,
+});
 const STEM_DEFAULTS: Record<string, AnyRec[]> = {
+  // The full mix carries the tempo grid: bar/beat are track-independent ramps and
+  // have nowhere else to live.
   original: [
-    ...FULL_BAND,
+    ENERGY,
+    ONSET,
     { feature: "bar", label: "bar phase" },
     { feature: "beat", label: "beat phase" },
   ],
-  vocals: FULL_BAND,
+  vocals: [ENERGY, ONSET],
   drums: [
-    ...FULL_BAND,
-    ...both("kick", 40, 120, 120),
-    ...both("snare", 150, 800, 120),
-    ...both("hats", 6000, 16000, 90),
+    ONSET,
+    band("kick", 40, 120, 120),
+    band("snare", 150, 800, 120),
+    band("hats", 6000, 16000, 90),
   ],
-  bass: [...FULL_BAND, ...both("sub", 30, 80), ...both("low", 80, 250)],
-  other: FULL_BAND,
+  bass: [ONSET, band("sub", 30, 80), band("low", 80, 250)],
+  other: [ENERGY],
 };
 
 // Shaping fields a default entry may override on top of SIGNAL_DEFAULTS.

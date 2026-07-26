@@ -207,3 +207,70 @@ describe("hydrateCompositions", () => {
     expect("outputId" in pool.b).toBe(false);
   });
 });
+
+// The default signal set. It grew to 27 per segment (216 on an eight-segment
+// track) by adding a flavour at a time, until most of the list was signals nobody
+// could name. These pin the shape of the cut so it can't grow back unnoticed.
+describe("default signals", () => {
+  const ALL: Record<string, { sr: number }> = { ...STEMS, other: { sr: 44100 } };
+  const names = (stems: Record<string, { sr: number }> = ALL) =>
+    hydrateSegments([{ start: 0, end: 10, label: "V" }], stems)[0].signals.map((s) => s.name ?? "");
+  const forStem = (stem: string) =>
+    hydrateSegments([{ start: 0, end: 10, label: "V" }], ALL)[0].signals.filter(
+      (s) => s.stemKey === stem
+    );
+
+  it("seeds fourteen, not twenty-seven", () => {
+    expect(names()).toHaveLength(14);
+  });
+
+  it("seeds nothing for a stem the separation didn't produce", () => {
+    // Only the stems present get defaults — an instrumental has no vocals track.
+    const noVocals = { original: { sr: 44100 }, drums: { sr: 44100 } };
+    expect(names(noVocals).every((n) => !n.startsWith("vocals"))).toBe(true);
+    expect(names(noVocals)).toHaveLength(4 + 4);
+  });
+
+  it("has no chroma anywhere — it measures nothing audible on an unpitched stem", () => {
+    const feats = hydrateSegments([{ start: 0, end: 10, label: "V" }], ALL)[0].signals.map(
+      (s) => s.feature
+    );
+    expect(feats).not.toContain("chroma");
+  });
+
+  it("gives each stem AT MOST ONE onset — a drum hit fires every band at once", () => {
+    for (const stem of ["original", "vocals", "drums", "bass", "other"]) {
+      const onsets = forStem(stem).filter((s) => s.feature === "onset");
+      expect(onsets.length, `${stem} onsets`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("splits drums into kick/snare/hats by ENERGY, which is what separates them", () => {
+    const energies = forStem("drums").filter((s) => s.feature === "energy");
+    expect(energies.map((s) => s.name)).toEqual([
+      "drums kick energy",
+      "drums snare energy",
+      "drums hats energy",
+    ]);
+    // Frequency-selective and non-overlapping — that is the whole point.
+    expect(energies.map((s) => [s.minHz, s.maxHz])).toEqual([
+      [40, 120],
+      [150, 800],
+      [6000, 16000],
+    ]);
+  });
+
+  it("keeps the tempo grid on the full mix, where it has nowhere else to live", () => {
+    const feats = forStem("original").map((s) => s.feature);
+    expect(feats).toContain("beat");
+    expect(feats).toContain("bar");
+  });
+
+  it("clamps a band to Nyquist so a low-rate stem can't seed an impossible one", () => {
+    // hats sits at 6–16 kHz; at 16 kHz sample rate the Nyquist is 8 kHz.
+    const hats = hydrateSegments([{ start: 0, end: 10, label: "V" }], {
+      drums: { sr: 16000 },
+    })[0].signals.find((s) => s.name === "drums hats energy")!;
+    expect(hats.maxHz).toBe(8000);
+  });
+});
