@@ -1,14 +1,17 @@
-// The `?ui=next` opt-in for UI proposals.
+// The `?ui=next` opt-in, now a constant.
 //
-// `main.tsx` already branches the whole root on `?doc=`; this is the same idea one
-// level down. A UI proposal ships as LIVE code beside the current UI — same project,
-// same data, one URL apart — so the two can be compared on real work instead of on a
-// mockup, and nothing is deleted until one of them wins.
+// It shipped a UI proposal as LIVE code beside the current UI — same project, same
+// data, one URL apart — so the two could be compared on real work instead of on a
+// mockup, and nothing was deleted until one of them won. The routed shell won.
 //
-// Read live rather than cached at module load: a test flips it with
-// `history.replaceState`, and the flag is only consulted on discrete user gestures
-// (a wire drop, a keystroke), never in a hot loop.
+// This returns `true` rather than being deleted outright, and that is deliberate. Six
+// components branch on it. Folding all six de-branchings into the commit that flips the
+// root would make the flip unreviewable and its revert a rewrite; as a constant, the
+// flip is two files and six lines, and each branch site collapses — and reverts — on
+// its own.
+//
+// Scheduled for deletion with the last caller. If `grep -rn 'isNext' frontend/src`
+// finds only this file, delete it.
 export function isNext(): boolean {
-  if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("ui") === "next";
+  return true;
 }

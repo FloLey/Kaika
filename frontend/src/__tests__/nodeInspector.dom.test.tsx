@@ -38,14 +38,10 @@ const clickBody = (container: HTMLElement, id: string) =>
 const dock = () => document.querySelector(".anim-dock");
 const panelName = () => document.querySelector(".anim-dock .node-settings-name")?.textContent;
 
+// The "not there without the flag — the modal is" case is gone with the flag: the dock
+// is the only inspector a URL can reach now. `NodeSettingsModal` is NOT dead — OutputNode
+// opens it unconditionally, and `graphCanvas.dom.test.tsx` still covers that path.
 describe("the docked inspector", () => {
-  it("is not there without the flag — the modal is", () => {
-    setSearch("/");
-    const { container } = render(<Host initial={g([fluidNode(0, 0)])} />);
-    expect(dock()).toBeNull();
-    expect(container.querySelector(".anim-stage-docked")).toBeNull();
-  });
-
   it("says what to do when nothing is selected", () => {
     render(<Host initial={g([fluidNode(0, 0)])} />);
     expect(dock()?.textContent).toContain("select a card");

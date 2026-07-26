@@ -41,18 +41,11 @@ const g = (nodes: GraphNode[], edges: Graph["edges"] = []): Graph => ({
 });
 const at = { x: 120, y: 80 };
 
+// The park-it-gray case is gone with the flag it was contrasted against: a drop can no
+// longer take that path from any URL. Loose edges themselves are NOT gone — they are
+// still the parked-wire representation, covered in `graphModel.test.ts`.
 describe("dropping a wire on a compact card", () => {
-  it("without the flag: parks it gray, exactly as before", () => {
-    const lfo = lfoNode(0, 0);
-    const gate = gateNode(200, 0);
-    const { hook, state } = editor(g([lfo, gate]));
-    act(() => hook.result.current.onCardDrop(lfo.id, "value", gate.id, at));
-    expect(state.graph.edges).toHaveLength(1);
-    expect(isLooseEdge(state.graph.edges[0])).toBe(true);
-    expect(hook.result.current.dropMenu).toBeNull();
-  });
-
-  it("with the flag: an unambiguous drop wires itself, no menu", () => {
+  it("an unambiguous drop wires itself, no menu", () => {
     setSearch("/?ui=next");
     const lfo = lfoNode(0, 0);
     const gate = gateNode(200, 0);

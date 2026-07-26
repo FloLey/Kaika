@@ -44,14 +44,10 @@ const selectCard = (container: HTMLElement, id: string) =>
     .querySelector(`[data-node-id="${id}"] .anim-node-head`)!
     .dispatchEvent(Object.assign(new Event("pointerdown", { bubbles: true }), { button: 0 }));
 
+// The "does not exist without the flag" case is gone: the flag is a constant now, so
+// there is no without. Keeping it would have meant mocking `isNext` false to assert an
+// arm no URL can reach.
 describe("⌘K in the animation editor", () => {
-  it("does not exist without the flag", () => {
-    setSearch("/");
-    render(<Host initial={g()} />);
-    openK();
-    expect(document.querySelector(".cmdk")).toBeNull();
-  });
-
   it("opens on ⌘K and closes on a second press", () => {
     render(<Host initial={g()} />);
     openK();

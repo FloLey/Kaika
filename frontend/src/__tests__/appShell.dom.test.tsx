@@ -44,7 +44,8 @@ const project = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const setHash = (h: string) => window.history.replaceState(null, "", `/?ui=next${h}`);
+// No `?ui=next` prefix any more: the routed shell IS the app.
+const setHash = (h: string) => window.history.replaceState(null, "", h || "#/");
 
 beforeEach(() => {
   getProject.mockReset();
