@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python -m pytest)",
+      "Bash(.venv/bin/python -m pytest *)",
+      "Bash(black --check *)",
+      "Bash(.venv/bin/black --check *)",
+      "Bash(ruff check *)",
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(npm run test)",
+      "Bash(npm run test *)",
+      "Bash(npm run lint)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run coverage)",
+      "Bash(npm run format:check)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npx vitest run)",
+      "Bash(npx vitest run *)",
+      "Bash(make lint)",
+      "Bash(make test)",
+      "Bash(make typecheck)",
+      "Bash(make test-backend)",
+      "Bash(make test-frontend)",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__claude-in-chrome__tabs_create_mcp",
+      "mcp__claude-in-chrome__read_page",
+      "mcp__claude-in-chrome__read_console_messages",
+      "mcp__claude-in-chrome__read_network_requests",
+      "mcp__claude-in-chrome__find",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__computer",
+      "mcp__claude-in-chrome__browser_batch"
+    ]
+  }
+}

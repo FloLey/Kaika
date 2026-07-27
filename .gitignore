@@ -22,3 +22,8 @@ static/
 htmlcov/
 .coverage
 coverage/
+
+# Claude Code: the shared permission allowlist is checked in (.claude/settings.json);
+# settings.local.json is per-machine — it accumulates one-off command approvals and
+# absolute paths, so it is noise in a diff and wrong on anyone else's checkout.
+.claude/settings.local.json
