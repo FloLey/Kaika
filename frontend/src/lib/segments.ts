@@ -179,22 +179,21 @@ function serializeSignals(signals: Signal[] | null | undefined): RawSignal[] {
 // `flux` and `brightness`, which are easier to hear than chroma ever was.
 const ENERGY = { feature: "energy", label: "energy" };
 const ONSET = { feature: "onset", label: "onset" };
-// Brightness MUST be seeded with a band, and this is the one thing about it that
-// is easy to get wrong. `raw_brightness` restricts the centroid to [min,max]
-// correctly, but then maps it LINEARLY across that range — while musical energy is
-// roughly logarithmic in frequency. So a full-band (20 Hz–22 kHz) brightness puts
-// a centroid that really sits around 1–2 kHz at ~0.05, and it moves by ~0.04 over
-// a whole segment: a flat line you would have to crank `gain` to ~20 to see.
+// Brightness is seeded with a BAND rather than full-range. Not because full-range
+// is broken — `raw_brightness` maps by octaves now (RENDER v19), so a full-band
+// curve rests around 0.63 instead of on the floor — but because a narrower band
+// spends the whole 0..1 travel on the octaves you care about.
 //
-// Measured over 30 s on four real stems (useful swing = max−min of the curve):
+// Measured over 30 s on four real stems, useful swing (max−min of the curve):
 //
-//   band            other/A  vocals/A  other/B  other/C
-//   full            0.043    0.477     0.158    0.094
-//   300–4000 Hz     0.224    0.681     0.275    0.254
+//   band            other/A  vocals/A  other/B  other/C   mean
+//   full             0.122    0.380     0.183    0.217    0.225
+//   300–4000 Hz      0.316    0.627     0.283    0.328    0.389
 //
 // 300–4000 Hz is the presence region — guitars, synths and keys live there, and it
-// is where a filter opening up is actually audible. It was the only band with no
-// dead stem in the sample.
+// is where a filter opening up is audible. A high band (2–16 kHz) measures very
+// slightly more swing on `other` (0.363 vs 0.309) but reports brilliance/air, which
+// is a harder thing to name; presence wins on being explainable.
 const BRIGHTNESS = { feature: "brightness", label: "brightness", minHz: 300, maxHz: 4000 };
 // One band's LOUDNESS, named "<label> energy". Frequency-selective, so each of
 // kick/snare/hats follows its own element.

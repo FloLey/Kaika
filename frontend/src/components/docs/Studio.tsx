@@ -76,12 +76,14 @@ export default function Studio() {
         same goes for <em>flux</em>, which is usually easier to hear than chroma ever was.
       </p>
       <div className="note">
-        <strong>Brightness always wants a band.</strong> It reports where the energy sits{" "}
-        <em>inside the band you gave it</em>, spread across that range — so on the full 20 Hz–22 kHz
-        span, a real musical centroid (around 1–2 kHz) lands near 0.05 and barely moves. That is why{" "}
-        <em>other</em> seeds it at 300 Hz – 4 kHz, the presence region where guitars, synths and
-        keys live. If you add a brightness signal yourself, narrow the band to the range you
-        actually care about or the curve will look flat.
+        <strong>Brightness reads by octaves.</strong> It reports where the energy sits{" "}
+        <em>inside the band you gave it</em>, spread across that range <em>logarithmically</em> — so
+        each octave you climb moves the curve by the same amount, whether it's 100→200 Hz or 5→10
+        kHz. That matters because pitch is logarithmic: mapped by raw Hz, a normal centroid (around
+        1–2 kHz) would sit at five percent of a full-range band and never move. A narrower band
+        still reads better, though, because it spends the whole 0–1 travel on the octaves you care
+        about — which is why <em>other</em> seeds it at 300 Hz – 4 kHz, the presence region where
+        guitars, synths and keys live.
       </div>
 
       <h3>Choosing the band</h3>

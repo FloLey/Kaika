@@ -14,7 +14,7 @@ export const FEATURES = [
   {
     key: "brightness",
     label: "brightness",
-    help: "Where the energy sits in the band (low=dull, high=bright).",
+    help: "Where the energy sits in the band, by octaves (low=dull, high=bright). A narrower band reads better — it spends the whole 0-1 travel on the range you care about.",
   },
   {
     key: "harmonic",
