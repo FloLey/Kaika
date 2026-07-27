@@ -82,7 +82,7 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
   - `lib/fluidParams.js` — **generated** from the backend specs (do not hand-edit);
     `lib/nodeParams.ts` is the registry every card reads.
   - `components/animation/` — the node-graph editor (`GraphCanvas`, `nodes/*` —
-    34 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
+    33 cards behind `nodes/registry.ts` — `renderAnimNode`, `useGraphEditor`).
   - `components/studio/` — the studio shell, signal cards, transport.
   - `components/assets/`, `components/export/` — asset library, final export.
 
@@ -91,7 +91,7 @@ studio ──> per-segment SIGNALS (stem+band+shaping -> 0..1 curve)
 The backend param specs are the single source of truth; everything else derives
 or asserts. Three spec families live in `backend/animation_params.py`:
 `FLUID_PARAM_SPEC` (the fluid card), `COLOR_PARAM_SPEC` (the dye card), and
-`SOURCE_PARAM_SPEC` (per card, 16 of them: the source cards lyrics / image /
+`SOURCE_PARAM_SPEC` (per card, 17 of them: the source cards lyrics / text / image /
 slideshow / video / montage / backdrop, the six generative sims waves /
 lightning / fire / aurora / rain / clouds, and the FX cards transform / echo /
 colorgrade / stylize).

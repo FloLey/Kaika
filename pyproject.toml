@@ -37,13 +37,17 @@ omit = ["backend/rerender_spectrograms.py"]
 
 [tool.coverage.report]
 show_missing = true
-# A ratchet, not a target. Measured 79% on the full suite (2026-07-20); 72 leaves
+# A ratchet, not a target. Measured 81% on the full suite (2026-07-27); 76 leaves
 # room for a normal feature commit while still failing loudly if a large uncovered
 # surface lands at once. Raise it when a coverage step banks real ground — the
-# thin modules today are imagegen.py (23%), llm.py (28%), segment.py (43%) and
-# routes/export.py (46%).
+# thin modules today are imagegen.py (27%), llm.py (28%), routes/uploads.py (52%)
+# and segment.py (43%).
+#
+# Two figures in the previous version of this comment had gone badly stale, which is
+# the failure this block keeps warning about: routes/export.py was cited at 46% and is
+# 80%, and seed_card_demo.py at 17% is 81%. Re-measure when you touch this.
 # This replaces a comment that described an include/fail_under setting nobody had
 # written, so "coverage is a gate" was true in prose only. The figures above were
 # themselves stale by 2026-07-20 (they claimed 75% total and render_jobs.py at 25%,
 # which had since reached 99%) — re-measure when you touch this, do not inherit it.
-fail_under = 72
+fail_under = 76

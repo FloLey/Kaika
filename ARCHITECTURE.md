@@ -32,7 +32,7 @@ simulation.
         │  (signals.py)           /lyrics/image/video/backdrop      │
         │                         → combine → transform → output    │
         │                              │                            │
-        │                    /animate/stream (render_jobs.py)       │
+        │                    /export/stream    (render_jobs.py)     │
         │                    block-streamed, cached, cancel-on-edit │
         └──────────────────────────────┬────────────────────────────┘
                                        │  mark one output per segment ★ final
@@ -66,7 +66,7 @@ frontend/src/
   lib/graph/        ← the graph model package; graphModel.ts is its barrel
   components/       studio / animation (+ nodes/) / assets / export / review / upload
   styles/           one file per area, imported base-first by index.css
-  styles/animation/  ← the editor's stylesheet, cut into ordered parts (01…09);
+  styles/animation/  ← the editor's stylesheet, cut into ordered parts (01…10);
                        animation.css is its barrel — the NUMBERS are the cascade
 tests/              pytest (backend); frontend/src/__tests__/ is vitest
 specs/              design records per shipped wave (the why, not a roadmap)
@@ -88,11 +88,11 @@ data/               gitignored working data (uploads, stems, caches, assets)
 | `imagegen.py` | `/generate-image/<job>` |
 | `stylize.py` | `/stylize/<job>` — the AI Stylize card's diffusion restyle |
 | `jobs_routes.py` | `/jobs/<id>`, `/logs` |
-| `animation.py` | `/extract`, `/resolve`, `/resolve-points`, `/fluid`, `/animate`, `/animate/stream` (+ status/cancel) |
-| `export.py` | `/export/stream`, `/export/segment`, `/export/segment/cached` (+ shared status/cancel) |
-| `projects.py` | `/projects`, `/projects/<id>` GET/PUT/DELETE, `/playground`, `/playground/export` |
+| `animation.py` | `/extract`, `/resolve`, `/resolve-points`, `/fluid` |
+| `export.py` | `/export/stream`, `/export/segment`, `/export/segment/cached`, `/export/trim` (+ shared status/cancel) |
+| `projects.py` | `/projects`, `/projects/<id>` GET/PUT/DELETE, `/projects/<id>/duplicate`, `/playground`, `/playground/export` |
 | `settings.py` | `/settings` GET/PUT/POST, `/settings/test-remote` — remote-inference config |
-| `serving.py` | `/`, `/fonts`, `/fluid/<name>`, `/fluid/stream/...`, `/audio/...`, `/assets/<job>/<name>`, `/spectrogram/...` |
+| `serving.py` | `/`, `/fonts`, `/fonts/<key>`, `/fluid/<name>`, `/fluid/stream/...`, `/audio/...`, `/assets/<job>/<name>`, `/spectrogram/...` |
 
 ### The graph executor (`graph_*.py`)
 
@@ -359,16 +359,23 @@ Codegen).
   render (debounced on its `outputHash`, cancelled on edit, polled with
   backoff).
 
-### UI proposals behind `?ui=next` (`lib/uiFlag.ts`)
+### The routed shell
 
-A UI change big enough to argue about ships as **live code beside the current
-UI** rather than as a mockup: `isNext()` reads `?ui=next` off the URL, so the
-same project opens both ways, one URL apart, and nothing is deleted until one
-version wins. (`main.tsx` already branches the whole root on `?doc=`; this is
-the same idea one level down.) Read live, never cached — a test flips it with
-`history.replaceState`, and it is only consulted on discrete gestures.
+`main.tsx` mounts `components/next/AppShell`, which owns the frame every screen
+renders inside: the URL is the navigation (`lib/route.ts` — a hash grammar over
+one enum plus at most three ids, read through `useSyncExternalStore`), a stepper
+shows the whole flow and says why a stage is out of reach, and the transport
+lives above the screen switch so moving between stages cannot stop the music.
 
-Live today:
+⚠ **Historical, and worth knowing when reading commits before 2026-07-26.** All of
+this shipped first as a PROPOSAL behind `?ui=next` (`lib/uiFlag.ts`) — live code
+beside the shell it wanted to replace, same project, one URL apart, so the two
+could be compared on real work and nothing was deleted until one won. It won, and
+cleanup wave 5 removed the flag, the old `App.tsx` step-string shell, `ExportStep`,
+and the losing arms inside Studio, SignalCard, ReviewStep and the editor. The
+mechanism is worth reusing; there is nothing behind it today.
+
+What the shell carries:
 
 - **The port drop menu.** Every card but `output` is compact, so its one
   consolidated input dot can't say WHICH port a dropped wire meant; the editor's
@@ -398,7 +405,7 @@ Live today:
   authoritative for the stage and the segment; state reconciles back to it ONCE
   per load (a project resumes at the step the DB remembers) and skips a URL that
   already names that stage, so a deep link isn't honoured then undone. `Stepper`
-  replaces the three one-way buttons scattered across Studio and ExportStep, and
+  replaced the three one-way buttons scattered across Studio and the export screen, and
   refuses export off the same predicate ExportConsole computes for its checklist.
   ⚠ **Not yet in the grammar**: the breadcrumb descent into a child composition —
   it lives in Studio's nav stack, and a route field that parses into nothing is
@@ -417,17 +424,17 @@ Live today:
   (`ctx.inspectNode`) instead of opening a window over the graph it edits.
 - **The export console** (`ExportConsole`). The readiness checklist and the
   progress display become one list, and the backend's `phase` — which
-  `ExportStep` drops on the floor — is on screen.
+  the screen it replaced dropped on the floor — is on screen.
 - **The signal card** (`SignalCardNext` + `signalSummary.ts`). ~19 controls with
   no hierarchy become a derived one-line summary plus three self-describing
   disclosures. Presentation only: `SignalCard` keeps all the logic.
 
 `ui/Field.tsx` (`NumberField`/`SelectField`/`clampTo`) finishes the vocabulary
-`Ctl`/`Toggle`/`Info` started — it is NOT flagged, since a clamped number field
-is right for every caller. Styles for the proposals live in
-**`styles/animation/10-next.css`**, imported last by the `animation.css` barrel:
-they must land on top of the current UI's, and one file means a proposal that
-loses is deleted by deleting a file.
+`Ctl`/`Toggle`/`Info` started. Styles are filed by subsystem: **`styles/shell.css`**
+(shell bar, stepper, transport, ⌘K), the export rows in `export.css`, the signal
+card in `studio.css`, and the inspector dock in **`styles/animation/10-dock.css`**,
+which keeps part 10's slot because it is the only one with a cascade reason to be
+there — it lands on the stage rules from part 01 and the modal rules from part 05.
 
 ### API layer
 

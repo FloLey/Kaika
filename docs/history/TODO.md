@@ -1,5 +1,15 @@
 # TODO
 
+> **⚠ SUPERSEDED — kept as history, not as work.**
+>
+> Every unchecked box below shipped long ago, delivered by the node graph rather than by
+> the features this file imagined: the in-project sim design, the signal contract, the
+> combine multiply/mix/max modes, the derivative shaper and per-signal range remap all
+> exist as the `math`, `change` and `combine` cards and `[lo,hi]` bindings. The boxes were
+> never ticked, so anyone skimming this read shipped work as open work — which cleanup
+> step 14 asked to fix and nobody did. Do not treat any line here as a task.
+
+
 Signals support 8 feature types (`signals.py` `_RAW`): energy, onset, flux,
 brightness, harmonic, chroma, beat, bar — each with full shaping (attack/release/
 invert/gamma/gain/offset/threshold), drawn live + pulse-pad preview per segment,
