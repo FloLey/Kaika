@@ -72,17 +72,46 @@ def echo_scan(
             if mode == "ghost"
             else np.zeros(frames.shape[1:], np.float32)
         )
+    # Three scratch buffers, allocated once for the whole scan.
+    #
+    # Written out with `out=` kwargs rather than as expressions because this is the one
+    # measured hot loop in the FX layer: at 1080p the arithmetic below is ~19 ms/frame,
+    # and the dtype conversions plus temporaries were ~44% of it — the scan allocated
+    # about six full float frames per input frame. The expression form is easier to read,
+    # so the arithmetic each block computes is written above it.
+    #
+    # Every operation keeps its original operand order, so this is bit-identical to the
+    # expression form rather than merely close: the two additions that were reordered
+    # (`f + x` -> `x + f`) are commutative in IEEE-754 for non-NaN inputs, and
+    # `np.copyto(..., casting="unsafe")` truncates exactly as `.astype(np.uint8)` did.
+    # `test_look_fx.py` pins that; a difference here would be a RENDER_VERSION bump.
+    f = np.empty(frames.shape[1:], np.float32)
+    delta = np.empty(frames.shape[1:], np.float32)
+    tmp = np.empty(frames.shape[1:], np.float32)
     for i in range(len(frames)):
-        f = frames[i].astype(np.float32)
+        np.copyto(f, frames[i])  # uint8 -> float32, into the scratch buffer
         lf = float(length[i]) * fps
         p = 0.5 ** (1.0 / lf) if lf > 1e-6 else 0.0
         if mode == "ghost":
-            acc = f + (acc - f) * p  # exponential moving average of the past
-            delta = (acc - f) * 0.5  # signed, capped 50/50: the live frame stays readable
+            # acc = f + (acc - f) * p — exponential moving average of the past
+            np.subtract(acc, f, out=acc)
+            np.multiply(acc, p, out=acc)
+            np.add(acc, f, out=acc)
+            # delta = (acc - f) * 0.5 — signed, capped 50/50: the live frame stays readable
+            np.subtract(acc, f, out=delta)
+            np.multiply(delta, 0.5, out=delta)
         else:
-            np.maximum(f, acc * p, out=acc)  # decayed running max
-            delta = np.clip(acc - f, 0.0, 255.0)  # trails only ever ADD light
-        out[i] = np.clip(f + delta * float(amount[i]), 0.0, 255.0).astype(np.uint8)
+            # acc = max(f, acc * p) — decayed running max
+            np.multiply(acc, p, out=tmp)
+            np.maximum(f, tmp, out=acc)
+            # delta = clip(acc - f, 0, 255) — trails only ever ADD light
+            np.subtract(acc, f, out=delta)
+            np.clip(delta, 0.0, 255.0, out=delta)
+        # out[i] = clip(f + delta * amount, 0, 255)
+        np.multiply(delta, float(amount[i]), out=tmp)
+        np.add(tmp, f, out=tmp)
+        np.clip(tmp, 0.0, 255.0, out=tmp)
+        np.copyto(out[i], tmp, casting="unsafe")
     return out, acc
 
 

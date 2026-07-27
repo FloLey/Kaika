@@ -377,3 +377,78 @@ def test_colorgrade_rgba_alpha_passes_through():
         shift=np.zeros(n, np.float32),
     )
     assert np.array_equal(out[..., 3], frames[..., 3])
+
+
+# --------------------------------------------------------------------------- #
+# The scan's arithmetic, pinned against the expression form it replaced.
+# --------------------------------------------------------------------------- #
+def _echo_scan_expression_form(frames, acc, fps, mode="ghost", *, length, amount):
+    """The pre-optimisation loop, kept verbatim as the oracle.
+
+    `echo_scan`'s body was rewritten to preallocate three scratch buffers and drive every
+    operation through `out=` kwargs — at 1080p the dtype conversions and temporaries were
+    ~44% of a ~19 ms/frame scan, because it allocated about six full float frames per
+    input frame. The claim that came with that rewrite is BIT-IDENTICAL output, not
+    "close": echo feeds `output_hash`, so a one-level difference is a silent cache
+    invalidation and a RENDER_VERSION bump nobody made.
+
+    Kept as a copy rather than as a tolerance, because a tolerance is exactly how that
+    claim would stop being checked.
+    """
+    if mode == "dark":
+        out, acc = _echo_scan_expression_form(
+            255 - frames, acc, fps, "bright", length=length, amount=amount
+        )
+        return 255 - out, acc
+    if not np.any(length * fps > 1e-6):
+        return frames, frames[-1].astype(np.float32)
+    out = np.empty_like(frames)
+    if acc is None:
+        acc = (
+            frames[0].astype(np.float32)
+            if mode == "ghost"
+            else np.zeros(frames.shape[1:], np.float32)
+        )
+    for i in range(len(frames)):
+        f = frames[i].astype(np.float32)
+        lf = float(length[i]) * fps
+        p = 0.5 ** (1.0 / lf) if lf > 1e-6 else 0.0
+        if mode == "ghost":
+            acc = f + (acc - f) * p
+            delta = (acc - f) * 0.5
+        else:
+            np.maximum(f, acc * p, out=acc)
+            delta = np.clip(acc - f, 0.0, 255.0)
+        out[i] = np.clip(f + delta * float(amount[i]), 0.0, 255.0).astype(np.uint8)
+    return out, acc
+
+
+def test_scan_is_bit_identical_to_the_expression_form():
+    """Every mode, seeded and unseeded, against random frames and modulated controls."""
+    rng = np.random.default_rng(11)
+    for mode in ("ghost", "bright", "dark"):
+        for seeded in (False, True):
+            n, h, w = 16, 12, 10
+            frames = rng.integers(0, 255, (n, h, w, 3), dtype=np.uint8)
+            length = (rng.random(n) * 2.0).astype(np.float32)
+            amount = rng.random(n).astype(np.float32)
+            seed = (rng.random((h, w, 3)) * 255.0).astype(np.float32) if seeded else None
+
+            want, want_acc = _echo_scan_expression_form(
+                frames.copy(),
+                None if seed is None else seed.copy(),
+                30,
+                mode,
+                length=length,
+                amount=amount,
+            )
+            got, got_acc = look_fx.echo_scan(
+                frames.copy(),
+                None if seed is None else seed.copy(),
+                30,
+                mode,
+                length=length,
+                amount=amount,
+            )
+            assert np.array_equal(got, want), f"{mode} seeded={seeded}: frames differ"
+            assert np.array_equal(got_acc, want_acc), f"{mode} seeded={seeded}: acc differs"
