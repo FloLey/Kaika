@@ -10,6 +10,7 @@ import numpy as np
 
 from . import sources
 from .animation_params import COLOR_PARAMS, OUTPUT_DEFAULTS
+from .types import Signal
 
 # Modulatable-port specs for the non-fluid ported cards (FX + sources + the color
 # card): key -> (min, max, default). The single backend lookup for resolving their
@@ -164,7 +165,7 @@ def composite(layers: list, opacities: list) -> np.ndarray:
     return (np.clip(acc, 0.0, 1.0) * 255).astype(np.uint8)
 
 
-def resolve_signal(node_data: dict, signals_by_id: dict) -> dict | None:
+def resolve_signal(node_data: dict, signals_by_id: dict[str, Signal]) -> Signal | None:
     """The host-segment signal a `signal` node reads.
 
     Exact `signalId` first. When that dangles — the normal state for a SHARED

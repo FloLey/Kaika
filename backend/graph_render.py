@@ -38,6 +38,7 @@ from .graph_common import (
     resolve_port,
 )
 from .graph_hash import output_hash
+from .types import Node
 from .graph_modulators import (
     _animate_point_specs,
     _gate_curve,
@@ -1554,7 +1555,19 @@ def _whole_from_block(card: str):
     return whole
 
 
-_VIDEO_HANDLERS = {
+# The three registries a card type dispatches through. Typed because they ARE the card
+# contract: a handler with the wrong arity or return type is caught today only by
+# `test_graph_registry.py` at runtime, and the signature is the thing a new card needs to
+# know. `Dag` is quoted — it is defined above, but these tables are read as documentation
+# from the bottom of the file up.
+_VideoHandler = Callable[["Dag", Node], np.ndarray]
+_EmitterHandler = Callable[["Dag", Node], list]
+# A block handler is a FACTORY: given the node it returns `produce(a, b) -> frames`, which
+# is what lets a card carry cross-block state in the closure (fluid, output and fire are
+# the three that do).
+_BlockHandler = Callable[["Dag", Node], Callable[[int, int], np.ndarray]]
+
+_VIDEO_HANDLERS: dict[str, _VideoHandler] = {
     "fluid": _fluid_video,
     "output": _output_video,
     "combine": _whole_from_block("combine"),
@@ -1577,7 +1590,7 @@ _VIDEO_HANDLERS = {
     "rain": _whole_from_block("rain"),
     "clouds": _whole_from_block("clouds"),
 }
-_EMITTER_HANDLERS = {
+_EMITTER_HANDLERS: dict[str, _EmitterHandler] = {
     "fluid": _fluid_emitters_h,
     "output": _output_emitters_h,
     "combine": _combine_emitters_h,
@@ -2094,7 +2107,7 @@ def _colorgrade_block(dag: "Dag", node: dict):
     return produce
 
 
-_BLOCK_HANDLERS = {
+_BLOCK_HANDLERS: dict[str, _BlockHandler] = {
     "fluid": _fluid_block,
     "output": _output_block,
     "combine": _combine_block,

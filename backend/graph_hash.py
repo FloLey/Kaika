@@ -8,6 +8,7 @@ import hashlib
 import json
 
 from .graph_common import LOOSE_PORT, _nodes_of, resolve_signal
+from .types import Graph, Output, Segment
 
 # Bump when render SEMANTICS change so stale clips (cached under an old meaning of
 # the same graph) are invalidated. Folded into `output_hash`. The full history is in
@@ -187,11 +188,11 @@ def _composition_refs_payload(graph: dict, pool: dict | None, signals_by_id: dic
 
 def output_hash(
     job_id: str,
-    segment: dict,
-    graph: dict,
+    segment: Segment,
+    graph: Graph,
     output_id: str,
-    output: dict | None = None,
-    pool: dict | None = None,
+    output: Output | None = None,
+    pool: dict[str, dict] | None = None,
 ) -> str:
     """Stable SHA-1 over ONE output's CONTRIBUTING video DAG (spec 10).
 
