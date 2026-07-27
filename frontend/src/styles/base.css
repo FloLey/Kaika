@@ -95,11 +95,6 @@ header {
 }
 
 /* header right-side controls + the "?" link to the user guide */
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .save-warn {
   font-size: 11px;
   letter-spacing: 0.5px;

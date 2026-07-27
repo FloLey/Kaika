@@ -332,9 +332,7 @@ export default function AnimationCanvas({
         canCopy={canCopy}
         canPaste={canPaste}
       />
-      {/* `anim-stage-docked` is unconditional now; it folds into `.anim-stage` when
-          that rule block relocates out of `10-next.css`. */}
-      <div className="anim-stage anim-stage-docked">
+      <div className="anim-stage">
         {/* The canvas gets its own positioning context so the dock can sit beside
             it: .gc-root is inset-0, and without this it would fill the dock too.
             `wrapRef` measures THIS, so a new card still lands in the middle of what

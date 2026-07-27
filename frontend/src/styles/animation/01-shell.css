@@ -16,6 +16,10 @@
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  /* The canvas and the inspector dock, side by side. Was `.anim-stage-docked`, a
+     class that only ever appeared alongside this one. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
 }
 
 /* fullscreen: Studio fullscreens the WHOLE panel (.studio-main) — not just the

@@ -26,9 +26,11 @@
 }
 
 /* Signals (studio) */
+/* A grid, not a column: four bands on one stem stacked vertically is mostly
+   scrolling. Was `.signal-list-next`, which only ever appeared alongside this. */
 .signals {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 12px;
 }
 .signal {
@@ -45,26 +47,7 @@
 .signal.collapsed {
   padding: 8px 14px;
 }
-.signal-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 /* mini pulse shown in the header when a band is collapsed */
-.pulse-mini {
-  width: 34px;
-  height: 34px;
-  flex: none;
-}
-.pulse-mini .pulse-pad {
-  width: 34px;
-  height: 34px;
-  max-width: none;
-  border-radius: 7px;
-}
-.pulse-mini .pulse-dot {
-  border-radius: 6px;
-}
 .signal-name {
   flex: 0 1 130px;
   min-width: 56px;
@@ -77,14 +60,6 @@
   font-size: 13px;
 }
 /* collapsed-row mini curve (grows to fill the freed space) */
-.curve-mini {
-  flex: 1 1 auto;
-  min-width: 60px;
-  height: 34px;
-}
-.curve-mini .curve {
-  height: 34px;
-}
 .signal-feature {
   background: var(--panel-2);
   color: var(--text);
@@ -100,21 +75,6 @@
 
 /* collapsed-row frequency-band readout chip — fixed width so every row's mini
    curve starts at the same x (they must all share one length). */
-.band-chip {
-  flex: none;
-  width: 116px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-  padding: 3px 7px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-}
 /* expanded-row editable frequency band */
 .band-edit {
   display: flex;
@@ -156,21 +116,11 @@
   font-style: italic;
   margin-left: 4px;
 }
-.signal-body {
-  display: grid;
-  grid-template-columns: 1fr 120px;
-  gap: 12px;
-  align-items: center;
-}
 .signal-graphs {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-}
-.signal-body .spec {
-  width: 100%;
-  height: 130px;
 }
 
 /* live pulse preview */
@@ -198,9 +148,6 @@
 }
 
 @media (max-width: 760px) {
-  .signal-body {
-    grid-template-columns: 1fr;
-  }
   .pulse-pad {
     max-width: 90px;
   }
@@ -272,11 +219,6 @@
   color: var(--text);
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-.ctl-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 .signal-ctls .btn.sm {
   justify-self: start;
@@ -486,11 +428,6 @@
    Cards lay out in a grid per stem instead of one column, so four bands on `drums`
    fit on a screen; each one says what it is in a derived line, so telling them
    apart doesn't mean opening them. */
-.signal-list-next {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
-}
 .signal.sig-next {
   gap: 8px;
 }

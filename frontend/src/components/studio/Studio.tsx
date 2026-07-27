@@ -538,11 +538,7 @@ export default function Studio({
                         no signals — add a frequency band to extract one
                       </div>
                     )}
-                    {/* A grid, not a column: four bands on one stem stacked vertically
-                        is mostly scrolling. `signal-list-next` is unconditional now and
-                        folds into `.signals` when that rule block relocates out of
-                        `10-next.css`. */}
-                    <div className="signals signal-list-next">
+                    <div className="signals">
                       {sigs.map((sg) => (
                         <SignalCard
                           key={sg.id}
