@@ -162,14 +162,29 @@ twice. Thresholds: frontend 65/65/65/50 → 75/75/70/55; backend `fail_under` 72
 
 ---
 
-## Left open
+## Step 34 — backend domain types (2 commits)
 
-- **Step 34, backend TypedDicts.** Scoped in the plan (a `backend/types.py` for
-  `Node`/`Graph`/`Segment`/`Output`/`Export` plus a test tying the field names to the
-  existing codegen tables, then applied at seams only) and **not built**. Without a
-  checker a TypedDict is a docstring with syntax; the parity test is the only thing that
-  would make it load-bearing, and that test is arguably step 08's job rather than a typing
-  step's.
+- `4717966` — `backend/types.py`: `Signal`, `Node`, `GraphEdge`, `Graph`, `Segment`,
+  `Output`, `Export`. These enforce nothing (no runtime check, no type checker), so
+  `test_domain_types.py` is what makes them load-bearing, anchored to things that already
+  enforce the shapes: `_SIGNAL_HASH_FIELDS` and the 35 real graphs in
+  `playground_pipelines.json` that the FRONTEND wrote.
+- `1c20257` — applied at seams only: the three handler registries in `graph_render.py`,
+  plus `output_hash` and `resolve_signal`.
+
+**The parity test found drift on its first run**, which is the argument for having written
+it rather than shipping the types alone. Fixture nodes carry `cx`/`cy`, and some graphs
+carry `viewMode`/`viewOverrides` — exactly the keys `normalizeGraph` strips on load. The
+fixture is therefore PRE-migration data, and "no extra keys" was the wrong assertion. It
+asserts the DIFFERENCE instead, which is a stronger claim than the one intended: it pins
+the **migration surface**, so a new undeclared key means either a type is stale or a field
+was added with no migration to remove it.
+
+`Node.data` stays `dict[str, Any]`: 35 shapes selected by `type`, whose per-card bounds are
+already enforced by `animation_params.py`'s spec tables and `test_fluid_params_codegen.py`.
+A 35-member union would duplicate that without enforcing it.
+
+## Left open
 - `<StudioBar>` (above).
 - `lib/assetPreview.ts` has no tests and a known 1 GB-request bug class — the one item on
   the cut list that is a *bug class* rather than a percentage. First thing in wave 6.
