@@ -2,9 +2,12 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { MutableRefObject, PointerEvent as RPointerEvent, ReactNode } from "react";
 import usePanZoom, { fitView } from "./usePanZoom";
 import type { View } from "./usePanZoom";
-import { portKey, centerInContainer, edgePath, canConnect, connectIssue } from "./ports";
+import { portKey, centerInContainer, edgePath } from "./ports";
+import type { PortMeta } from "./ports";
 import EdgeLayer from "./EdgeLayer";
-import { useWindowPointer } from "./useWindowPointer";
+import { useNodeDrag } from "./useNodeDrag";
+import { useWireConnect } from "./useWireConnect";
+import { useMarquee } from "./useMarquee";
 import type { Graph, GraphEdge, GraphNode } from "../../lib/types";
 import type { NodeHelpers } from "./nodes/nodeProps";
 
@@ -15,12 +18,6 @@ import type { NodeHelpers } from "./nodes/nodeProps";
 // (supplied by 06/07) draws the cards; the canvas reports mutations up via
 // `onGraphChange(updater)`.
 
-interface PortMeta {
-  nodeId: string;
-  portId: string;
-  kind: string;
-  flow: string;
-}
 type Updater = (g: Graph) => Graph;
 
 const EMPTY_SEL: ReadonlySet<string> = new Set();
@@ -280,6 +277,11 @@ export default function GraphCanvas({
   const [, forceTick] = useState(0);
   const tick = useCallback(() => forceTick((n) => n + 1), []);
 
+  // Read live by the drag gesture: zooming mid-drag must not change how far the
+  // grabbed cards have travelled.
+  const scaleRef = useRef(view.scale);
+  scaleRef.current = view.scale;
+
   // Recompute edges after layout settles (refs attached) and on the triggers.
   useLayoutEffect(() => {
     tick();
@@ -296,252 +298,35 @@ export default function GraphCanvas({
     return () => ro.disconnect();
   }, [tick, invalidateBBox]);
 
-  // --- node dragging (moves the whole selection in one go) -------------------
-  // The gesture is LOCAL to the canvas: per pointermove we track the offset and
-  // re-render only this component (a tick) — the moving position wrappers update,
-  // while the memoized cards and the app-level graph state stay untouched. The
-  // graph is committed ONCE on pointer-up (one onGraphChange, one normalize pass),
-  // instead of per move.
-  interface DragItem {
-    id: string;
-    origX: number;
-    origY: number;
-  }
-  interface Drag {
-    startX: number;
-    startY: number;
-    items: DragItem[]; // every selected node, captured at grab time
-    clickedId: string;
-    wasGroup: boolean; // grabbed a node already part of a multi-selection
-    moved: boolean;
-    dx: number; // live offset in graph units (applied to items' wrappers)
-    dy: number;
-  }
-  const [drag, setDrag] = useState<Drag | null>(null);
-  const dragRef = useRef<Drag | null>(null);
-  dragRef.current = drag;
-  const scaleRef = useRef(view.scale);
-  scaleRef.current = view.scale;
+  // --- gestures ---------------------------------------------------------------
+  // Three window-level pointer machines, one file each. They stayed inline here long
+  // enough for the file to reach 749 lines; each is self-contained (its own state, its
+  // own refs, its own `useWindowPointer`) and none of them reads the JSX below.
+  const { dragRef, onTitlePointerDown } = useNodeDrag({
+    graphRef,
+    selectedRef,
+    scaleRef,
+    toggleSel,
+    onSelectionChange,
+    onGraphChange,
+    tick,
+  });
 
-  const onTitlePointerDown = useCallback(
-    (node: GraphNode) => (e: RPointerEvent) => {
-      if (e.button !== 0) return;
-      if ((e.target as HTMLElement).closest?.(".no-drag")) return;
-      e.stopPropagation();
-      // Shift / ⌘ / Ctrl-click toggles a card in the selection (no drag).
-      if (e.shiftKey || e.metaKey || e.ctrlKey) {
-        toggleSel(node.id);
-        return;
-      }
-      const cur = selectedRef.current;
-      const wasGroup = cur.has(node.id) && cur.size > 1;
-      // Grab inside the current multi-selection -> keep it (drag the group). Grab a
-      // node that wasn't selected -> it becomes the lone selection.
-      const sel: ReadonlySet<string> = cur.has(node.id) ? cur : new Set([node.id]);
-      if (!cur.has(node.id)) onSelectionChange?.(new Set(sel));
-      const byId = new Map(graphRef.current.nodes.map((n) => [n.id, n]));
-      const items: DragItem[] = [];
-      for (const id of sel) {
-        const n = byId.get(id);
-        if (n) items.push({ id: n.id, origX: n.x, origY: n.y });
-      }
-      setDrag({
-        startX: e.clientX,
-        startY: e.clientY,
-        items,
-        clickedId: node.id,
-        wasGroup,
-        moved: false,
-        dx: 0,
-        dy: 0,
-      });
-    },
-    [onSelectionChange, toggleSel]
-  );
+  const { wire, hint, startConnect } = useWireConnect({
+    rootRef,
+    portEls,
+    portMeta,
+    onConnect,
+    onCardDrop,
+  });
 
-  useWindowPointer(
-    !!drag,
-    (e) => {
-      const d = dragRef.current;
-      if (!d) return;
-      const dx = (e.clientX - d.startX) / scaleRef.current;
-      const dy = (e.clientY - d.startY) / scaleRef.current;
-      if (!d.moved && Math.abs(dx) + Math.abs(dy) > 0.5) d.moved = true;
-      d.dx = dx;
-      d.dy = dy;
-      tick(); // re-render the wrappers/edges only — no graph commit while dragging
-    },
-    () => {
-      const d = dragRef.current;
-      if (d && d.moved) {
-        // Commit the final positions in ONE graph update.
-        const { items, dx, dy } = d;
-        onGraphChange?.((g) => ({
-          ...g,
-          nodes: g.nodes.map((n) => {
-            const it = items.find((i) => i.id === n.id);
-            return it ? { ...n, x: it.origX + dx, y: it.origY + dy } : n;
-          }),
-        }));
-      }
-      // A plain click (no drag) on a node inside a group collapses to just that node.
-      if (d && !d.moved && d.wasGroup) onSelectionChange?.(new Set([d.clickedId]));
-      setDrag(null);
-    }
-  );
-
-  // --- connecting (drag from an out port to an in port) ----------------------
-  interface Wire {
-    source: PortMeta;
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    target: PortMeta | null;
-  }
-  const [wire, setWire] = useState<Wire | null>(null);
-  const wireRef = useRef<Wire | null>(null);
-  wireRef.current = wire;
-
-  // A brief toast explaining why the last connect attempt was rejected. Auto-
-  // clears; a fresh attempt replaces it (and resets the timer).
-  const [hint, setHint] = useState<string | null>(null);
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showHint = useCallback((msg: string) => {
-    setHint(msg);
-    if (hintTimer.current) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setHint(null), 2800);
-  }, []);
-  useEffect(() => () => void (hintTimer.current && clearTimeout(hintTimer.current)), []);
-
-  const startConnect = useCallback(
-    (nodeId: string, portId: string, flow: string, e: RPointerEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      const root = rootRef.current;
-      const el = portEls.current.get(portKey(nodeId, portId));
-      if (!root || !el) return;
-      const rect = root.getBoundingClientRect();
-      const c = centerInContainer(el, rect);
-      setWire({
-        source: { nodeId, portId, kind: "out", flow },
-        x1: c.x,
-        y1: c.y,
-        x2: c.x,
-        y2: c.y,
-        target: null,
-      });
-      (el as HTMLElement).setPointerCapture?.(e.pointerId);
-    },
-    []
-  );
-
-  // Track the cursor and highlight an eligible in-port under it.
-  useWindowPointer(
-    !!wire,
-    (e) => {
-      const root = rootRef.current;
-      if (!root) return;
-      const rect = root.getBoundingClientRect();
-      const x2 = e.clientX - rect.left;
-      const y2 = e.clientY - rect.top;
-      let target: PortMeta | null = null;
-      const hit = document.elementFromPoint(e.clientX, e.clientY);
-      const portDom = hit?.closest("[data-port]");
-      if (portDom) {
-        const key = portKey(
-          portDom.getAttribute("data-node") || "",
-          portDom.getAttribute("data-port") || ""
-        );
-        const meta = portMeta.current.get(key);
-        if (meta && canConnect(wireRef.current?.source, meta)) target = meta;
-      }
-      setWire((w) => (w ? { ...w, x2, y2, target } : w));
-    },
-    (e) => {
-      const w = wireRef.current;
-      // Where the wire was let go, in canvas-local coordinates — the editor opens its
-      // port menu here, so the choice appears under the cursor that made the drop.
-      const dropRect = rootRef.current?.getBoundingClientRect();
-      const at = dropRect
-        ? { x: e.clientX - dropRect.left, y: e.clientY - dropRect.top }
-        : undefined;
-      if (w && w.target) {
-        onConnect?.(w.source.nodeId, w.source.portId, w.target.nodeId, w.target.portId, at);
-      } else if (w) {
-        // Dropped without a valid port target. Landing anywhere on a CARD hands the
-        // wire to the editor (auto-assign or park it loose); a drop on a port that
-        // refused explains why; empty space is just a cancel (no toast).
-        const hit = document.elementFromPoint(e.clientX, e.clientY);
-        const cardDom = hit?.closest("[data-node-id]");
-        const tgtId = cardDom?.getAttribute("data-node-id");
-        if (tgtId && tgtId !== w.source.nodeId && onCardDrop) {
-          onCardDrop(w.source.nodeId, w.source.flow, tgtId, at);
-          setWire(null);
-          return;
-        }
-        const portDom = hit?.closest("[data-port]");
-        const meta = portDom
-          ? portMeta.current.get(
-              portKey(
-                portDom.getAttribute("data-node") || "",
-                portDom.getAttribute("data-port") || ""
-              )
-            )
-          : null;
-        const issue = connectIssue(w.source, meta);
-        if (issue) showHint(issue);
-      }
-      setWire(null);
-    }
-  );
-
-  // --- marquee (shift-drag the background to box-select cards) ---------------
-  interface Marquee {
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-  }
-  const [marquee, setMarquee] = useState<Marquee | null>(null);
-  const marqueeRef = useRef<Marquee | null>(null);
-  marqueeRef.current = marquee;
-
-  const startMarquee = useCallback((e: RPointerEvent) => {
-    const root = rootRef.current;
-    if (!root) return;
-    const rect = root.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setMarquee({ x0: x, y0: y, x1: x, y1: y });
-  }, []);
-
-  useWindowPointer(
-    !!marquee,
-    (e) => {
-      const root = rootRef.current;
-      if (!root) return;
-      const rect = root.getBoundingClientRect();
-      setMarquee((m) => (m ? { ...m, x1: e.clientX - rect.left, y1: e.clientY - rect.top } : m));
-    },
-    () => {
-      const m = marqueeRef.current;
-      if (m) {
-        // Box corners -> graph space, then AABB-overlap each node's rendered rect.
-        const a = screenToGraph(Math.min(m.x0, m.x1), Math.min(m.y0, m.y1));
-        const b = screenToGraph(Math.max(m.x0, m.x1), Math.max(m.y0, m.y1));
-        const hits = new Set<string>();
-        for (const n of graphRef.current.nodes) {
-          const el = nodeEls.current.get(n.id);
-          const w = el ? el.offsetWidth : 0;
-          const h = el ? el.offsetHeight : 0;
-          if (n.x < b.x && n.x + w > a.x && n.y < b.y && n.y + h > a.y) hits.add(n.id);
-        }
-        onSelectionChange?.(hits);
-      }
-      setMarquee(null);
-    }
-  );
+  const { marquee, startMarquee } = useMarquee({
+    rootRef,
+    graphRef,
+    nodeEls,
+    screenToGraph,
+    onSelectionChange,
+  });
 
   // --- background interactions (pan + clear selection) -----------------------
   const bgPointerDown = useCallback(

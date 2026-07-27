@@ -30,6 +30,13 @@ export interface PortSide {
   flow: string;
 }
 
+// A port side plus WHICH port it is. `PortSide` is everything the connect rules below
+// need; the canvas and the wire gesture also have to name the port to wire it, and both
+// were reaching for the same shape from opposite sides of the file boundary.
+export interface PortMeta extends PortSide {
+  portId: string;
+}
+
 // The reason a connect attempt (drag from an out port onto another port) is
 // rejected, as a short human message — or null when the connection is legal.
 // Returns null too when there's no target port yet (an in-progress drag over
