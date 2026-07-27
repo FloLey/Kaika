@@ -232,6 +232,16 @@ export function useStreamRender(
       }
       if (myRender) api.cancelStreamRender(myRender);
     };
+    // `segment` and `graph` are deliberately omitted: this effect is keyed on
+    // `renderKey`, which `useRenderKey` derives from BOTH of them via `outputHash` —
+    // every field that can change the picture is already in the key, so listing the
+    // objects too would restart an identical render whenever their identity changed.
+    //
+    // ⚠ Not a stale-closure bug, which is the obvious reading. A signal edit that alters
+    // the render changes `SIGNAL_HASH_FIELDS`, so it changes the key, so the cleanup
+    // below cancels the in-flight job and a fresh closure starts. Do NOT "fix" this with
+    // a ref: line 202 memoizes the finished clip UNDER `renderKey`, and a ref would let
+    // the POST body diverge from the key its result is filed under.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderKey, gate]);
 

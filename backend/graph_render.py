@@ -2124,7 +2124,6 @@ assert set(_VIDEO_HANDLERS) == set(VIDEO_PRODUCERS), (
     f"handler table and graph_common.VIDEO_PRODUCERS disagree: "
     f"{set(_VIDEO_HANDLERS) ^ set(VIDEO_PRODUCERS)}"
 )
-_VIDEO_PRODUCERS = VIDEO_PRODUCERS  # back-compat name for existing importers
 
 
 def render(

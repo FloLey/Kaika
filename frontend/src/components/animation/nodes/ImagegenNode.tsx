@@ -80,12 +80,20 @@ export default function ImagegenNode({
       patch.prompts = fitted;
     if (d.activeCount !== needed) patch.activeCount = needed;
     if (Object.keys(patch).length) set(patch);
+    // `set` and `d` are omitted on purpose: this effect WRITES `d` (prompts/activeCount)
+    // through `set`, so depending on either makes it re-run on its own write. It reacts
+    // only to the image COUNT changing, which is what the dep list names. The `if`s above
+    // are the idempotence guard that makes that safe — every branch is a no-op once the
+    // value already matches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needed]);
 
   // Gate unwired → drop the cap so every image shows and passes through again.
   useEffect(() => {
     if (!srcId && d.activeCount != null) set({ activeCount: undefined });
+    // Same shape as the effect above, and the same reason: it writes `activeCount` and so
+    // cannot depend on it. Guarded by `!= null`, so it fires once when the gate is
+    // unwired and is a no-op afterwards.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcId]);
 

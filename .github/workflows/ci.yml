@@ -93,7 +93,11 @@ jobs:
         run: npm run typecheck
       - name: Format check
         run: npm run format:check
-      - name: Test
-        run: npm test
+      # `npm run coverage`, not `npm test`. The thresholds in vite.config.js were
+      # configured but never enforced: CI ran the bare test command, so dropping a test
+      # file failed nothing. That was cleanup step 23's acceptance criterion and it went
+      # unmet for two waves.
+      - name: Test (+ coverage thresholds)
+        run: npm run coverage
       - name: Build
         run: npm run build
