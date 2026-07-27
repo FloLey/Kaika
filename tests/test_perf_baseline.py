@@ -7,7 +7,7 @@ flaky, and a flaky perf test gets muted, which is worse than not having it. So t
 the `bench` marker, which `pyproject.toml`'s `addopts` deselects by default.
 
 Run with `make bench` (or `pytest -m bench -s`). The numbers land in
-`docs/cleanup/16-parity-and-benchmark-harness.md` with a provenance header; the ceilings
+`specs/cleanup/16-parity-and-benchmark-harness.md` with a provenance header; the ceilings
 here exist only to catch a 10x regression, not to police the recorded value.
 
 ⚠ The graphs are built LOCALLY rather than taken from `card_demo.DEMOS`. The Playground

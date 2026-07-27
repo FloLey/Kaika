@@ -62,7 +62,7 @@ test-strict:
 # Recorded performance baselines — the "before" column for a perf change. Deselected from
 # every other target by `addopts` in pyproject.toml, so this is the ONLY way they run.
 # `-s` because the whole output is the printed numbers. Take the median of a few runs on an
-# idle machine and write it into docs/cleanup/16-parity-and-benchmark-harness.md.
+# idle machine and write it into specs/cleanup/16-parity-and-benchmark-harness.md.
 bench:
 	.venv/bin/python -m pytest -m bench -q -s
 

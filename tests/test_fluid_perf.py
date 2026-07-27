@@ -45,7 +45,7 @@ def test_add_dye_matches_the_broadcast_it_replaced_exactly():
 
     (The alternative optimisation — truncating the Gaussian at k*sigma — was measured and
     rejected: the sim is recursive, so a 1e-4 perturbation compounds to ~200 levels over a
-    5 s clip at every k tried. See docs/cleanup/17.)
+    5 s clip at every k tried. See specs/cleanup/17.)
     """
     sim = _sim()
     color = np.array([0.27, 0.69, 1.0], np.float32)
