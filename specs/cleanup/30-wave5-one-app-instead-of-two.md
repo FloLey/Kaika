@@ -1,6 +1,6 @@
 # Wave 5 — one app instead of two (done)
 
-**Status: done.** Commits `5a473a7` … `7ae510c`, 2026-07-26/27. Backend and frontend
+**Status: done.** Commits `5a473a7` … `1c20257`, 2026-07-26/27. 20 commits. Backend and frontend
 suites green at every commit; nothing was pushed mid-wave.
 
 Wave 4 closed with *"there is no open cleanup backlog. A wave 5 starts by auditing the

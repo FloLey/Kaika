@@ -10,7 +10,7 @@ why the work existed, not because anything is pending.
 | 2 | `02`–`15` | 2026-07-19 | correctness infrastructure | **done** — last commit `7b36ff6` (step 14) |
 | 3 | `16`–`28` + [audit](16-28-wave3-audit.md) | 2026-07-20 | speed, and wave 2's leftovers | **done** — several steps closed on *measurement* rather than by being built |
 | 4 | [`29`](29-wave4-layout-and-the-unaudited-layer.md) | 2026-07-25 | UI grouping + the CSS layer + the honest tails | **done** — last commit `6dfad27` |
-| 5 | [`30`](30-wave5-one-app-instead-of-two.md) | 2026-07-26 | the `?ui=next` migration + the deferred splits | **done** — last commit `7ae510c` |
+| 5 | [`30`](30-wave5-one-app-instead-of-two.md) | 2026-07-26 | the `?ui=next` migration + the deferred splits | **done** — last commit `1c20257` |
 
 **There is no open cleanup backlog.** `docs/cleanup/` used to hold wave 3 and no longer
 exists: under `CLAUDE.md`'s rule that `docs/` carries only living things, an empty backlog is
