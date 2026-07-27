@@ -1,6 +1,6 @@
 // A card's full editing surface: header, the INPUTS panel, the card's own component,
 // and one big live visual. Pure and scrim-free, so the same markup can be a modal
-// (NodeSettingsModal wraps it in one) or a dock beside the canvas (?ui=next).
+// (NodeSettingsModal wraps it in one) or a dock beside the canvas (the editor).
 //
 // Extracted rather than reimplemented: the two hosts must show the SAME editor, or
 // comparing them tells you nothing about which arrangement you prefer. Only the

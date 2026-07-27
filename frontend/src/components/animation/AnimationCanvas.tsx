@@ -15,7 +15,6 @@ import { chromeFor } from "./nodes/registry";
 import { MinimizeContext } from "./nodes/minimizeContext";
 import { useGraphEditor } from "./useGraphEditor";
 import { problemsFor, wirePort } from "../../lib/graphModel";
-import { isNext } from "../../lib/uiFlag";
 import type { View } from "./usePanZoom";
 import type {
   Graph,
@@ -54,7 +53,7 @@ interface AnimationCanvasProps {
   onToggleFullscreen?: () => void;
   onGraphChange: (g: Graph) => void;
   setFinalOutput?: NodeCtx["setFinalOutput"];
-  // ⌘K reach beyond this composition (?ui=next): the project's segments and how to
+  // ⌘K reach beyond this composition: the project's segments and how to
   // switch. Optional — without them the palette still adds cards and jumps to them.
   segments?: Segment[];
   onSelectSegment?: (id: string) => void;
@@ -204,12 +203,11 @@ export default function AnimationCanvas({
     };
   }, [graph]);
 
-  // --- ⌘K (?ui=next) ---------------------------------------------------------
+  // --- ⌘K ---------------------------------------------------------------------
   // 35 card types behind seven category dropdowns with no search; and nothing that
   // jumps to a card or a segment by name. One box does all three.
   const [cmdOpen, setCmdOpen] = useState(false);
   useEffect(() => {
-    if (!isNext()) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
@@ -275,11 +273,10 @@ export default function AnimationCanvas({
     [applyUpdater, centerGraph, onSelectSegment, setSelected, wireFrom]
   );
 
-  // ?ui=next — the card being edited, shown in a dock BESIDE the canvas instead of
-  // a modal over it. Exactly one selected node qualifies: with several selected
-  // there is no single card to show, and with none the dock says so.
+  // The card being edited, shown in a dock BESIDE the canvas rather than a modal over
+  // it. Exactly one selected node qualifies: with several selected there is no single
+  // card to show, and with none the dock says so.
   const inspected = useMemo(() => {
-    if (!isNext()) return null;
     const ids = [...selected].filter((id) => graph.nodes.some((n) => n.id === id));
     return ids.length === 1 ? (graph.nodes.find((n) => n.id === ids[0]) ?? null) : null;
   }, [selected, graph]);
@@ -335,7 +332,9 @@ export default function AnimationCanvas({
         canCopy={canCopy}
         canPaste={canPaste}
       />
-      <div className={"anim-stage" + (isNext() ? " anim-stage-docked" : "")}>
+      {/* `anim-stage-docked` is unconditional now; it folds into `.anim-stage` when
+          that rule block relocates out of `10-next.css`. */}
+      <div className="anim-stage anim-stage-docked">
         {/* The canvas gets its own positioning context so the dock can sit beside
             it: .gc-root is inset-0, and without this it would fill the dock too.
             `wrapRef` measures THIS, so a new card still lands in the middle of what
@@ -360,7 +359,7 @@ export default function AnimationCanvas({
               renderNode={renderNode}
             />
           </MinimizeContext.Provider>
-          {/* ?ui=next — the dropped wire picks its port here, over the canvas, instead
+          {/* The dropped wire picks its port here, over the canvas, instead
             of parking gray and sending you to the settings window. Placed in the
             stage (not inside GraphCanvas) because it lives in the stage's coordinate
             space, which is the canvas root's own: .gc-root is inset-0 inside it. */}
@@ -381,29 +380,28 @@ export default function AnimationCanvas({
           )}
         </div>
 
-        {/* The inspector, docked. Same component the modal renders, so the two
-            arrangements can be compared on identical contents — the difference is
-            that here the graph it edits stays on screen, and moving to another card
-            swaps the panel instead of closing and reopening a window. */}
-        {isNext() && (
-          <aside className="anim-dock">
-            {inspected ? (
-              <NodeInspector
-                node={inspected}
-                ctx={ctx}
-                onGraphChange={applyUpdater}
-                onDetach={ctx.onDetach}
-                className="node-settings anim-dock-panel"
-              />
-            ) : (
-              <div className="anim-dock-empty">
-                {selectedCount > 1
-                  ? `${selectedCount} cards selected — pick one to edit it`
-                  : "select a card to edit it"}
-              </div>
-            )}
-          </aside>
-        )}
+        {/* The inspector, docked. `NodeInspector` is the same component the modal
+            renders — OutputNode still opens that modal — so the two arrangements show
+            identical contents; the difference is that here the graph it edits stays on
+            screen, and moving to another card swaps the panel instead of closing and
+            reopening a window. */}
+        <aside className="anim-dock">
+          {inspected ? (
+            <NodeInspector
+              node={inspected}
+              ctx={ctx}
+              onGraphChange={applyUpdater}
+              onDetach={ctx.onDetach}
+              className="node-settings anim-dock-panel"
+            />
+          ) : (
+            <div className="anim-dock-empty">
+              {selectedCount > 1
+                ? `${selectedCount} cards selected — pick one to edit it`
+                : "select a card to edit it"}
+            </div>
+          )}
+        </aside>
       </div>
       {commandPalette}
     </div>

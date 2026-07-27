@@ -79,9 +79,11 @@ export interface NodeCtx {
   // segment ▸ montage). When present, a montage's compact body opens this instead
   // of the settings modal — the editor is the card's full surface.
   enterMontage?: (montageNodeId: string) => void;
-  // ?ui=next — the editor shows the selected card in a DOCK beside the canvas, so a
-  // compact body selects instead of opening its own modal. Absent = the modal, which
-  // is the only surface without a dock to send it to.
+  // The editor shows the selected card in a DOCK beside the canvas, so a compact body
+  // selects instead of opening its own modal. `useGraphEditor` always provides this;
+  // it stays optional because `ctx` itself is optional, and a card rendered without one
+  // (tests, stubs, previews) has no dock to send anything to and falls back to the
+  // modal. That fallback is not dead code — it is the no-context path.
   inspectNode?: (nodeId: string) => void;
   stems?: Record<string, StemInfo>;
   job?: string;

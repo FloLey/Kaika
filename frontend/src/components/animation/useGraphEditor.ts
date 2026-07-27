@@ -22,7 +22,6 @@ import type { GraphHistory } from "../../lib/graph/history";
 import { FLOW_GAPS, estimateCardSize, flowLayout } from "../../lib/graph/layout";
 import type { LayoutRect } from "../../lib/graph/layout";
 import { nodeParam } from "../../lib/nodeParams";
-import { isNext } from "../../lib/uiFlag";
 import { chromeFor } from "./nodes/registry";
 import { cardInputs } from "./nodeInputs";
 import { planDrop } from "./dropPlan";
@@ -266,7 +265,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     [applyUpdater]
   );
 
-  // ?ui=next — resolve a drop onto a COMPACT card at the drop point instead of
+  // Resolve a drop onto a COMPACT card at the drop point instead of
   // parking it. `null` = no menu open. Held here rather than in the canvas because
   // the decision is about the graph, not about pixels; the canvas only places it.
   const [dropMenu, setDropMenu] = useState<DropMenu | null>(null);
@@ -343,12 +342,8 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const onConnect = useCallback(
     (srcId: string, srcPort: string, tgtId: string, tgtPort: string, at?: DropPoint) => {
       // A COMPACT card has one consolidated input dot standing in for every port, so
-      // a direct drop can't know WHICH input is meant. Under ?ui=next we resolve it
-      // at the drop point; otherwise it parks gray/loose for the settings window.
-      if (minimized.has(tgtId)) {
-        if (isNext()) return compactDrop(srcId, tgtId, at);
-        return applyUpdater((g) => connectLoose(g, srcId, tgtId));
-      }
+      // a direct drop can't know WHICH input is meant — resolve it at the drop point.
+      if (minimized.has(tgtId)) return compactDrop(srcId, tgtId, at);
       applyUpdater((g) => {
         const tgt = g.nodes.find((n) => n.id === tgtId);
         if (tgt && nodeParam(tgt.type, tgtPort)) {
@@ -366,10 +361,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   // window assigns it later.
   const onCardDrop = useCallback(
     (srcId: string, srcFlow: string, tgtId: string, at?: DropPoint) => {
-      if (minimized.has(tgtId)) {
-        if (isNext()) return compactDrop(srcId, tgtId, at);
-        return applyUpdater((g) => connectLoose(g, srcId, tgtId));
-      }
+      if (minimized.has(tgtId)) return compactDrop(srcId, tgtId, at);
       applyUpdater((g) => {
         const port = resolveDropPort(g, tgtId, srcFlow);
         if (!port) return connectLoose(g, srcId, tgtId);
@@ -436,13 +428,9 @@ export function useGraphEditor(opts: GraphEditorOpts) {
   const minimizeCtx = useMemo(() => ({ minimized, rename: renameCard }), [minimized, renameCard]);
   const minimizedKey = useMemo(() => [...minimized].sort().join(","), [minimized]);
 
-  // ?ui=next — a compact body selects the card so the DOCK shows it, instead of
-  // opening a modal over the graph it edits. Undefined without the flag, which is
-  // what makes CompactCard fall back to its modal.
-  const inspectNode = useMemo(
-    () => (isNext() ? (id: string) => setSelected(new Set([id])) : undefined),
-    []
-  );
+  // A compact body selects the card so the DOCK shows it, rather than opening a modal
+  // over the graph it edits.
+  const inspectNode = useCallback((id: string) => setSelected(new Set([id])), []);
 
   const onDetach = useCallback(
     (fluidId: string, key: string) => applyUpdater((g) => disconnect(g, fluidId, key)),

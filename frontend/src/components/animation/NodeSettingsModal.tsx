@@ -13,7 +13,7 @@ import { useEscapeKey } from "../../lib/useEscapeKey";
 // is passed straight through from CompactCard — it updates on every graph commit, so
 // the modal always shows the LIVE node (never a stale snapshot).
 //
-// The contents live in `NodeInspector`, which the ?ui=next dock renders too: the two
+// The contents live in `NodeInspector`, which the editor's dock renders too: the two
 // arrangements have to show the same editor or comparing them proves nothing. This
 // file is now only the window around it — portal, scrim, Escape.
 export default function NodeSettingsModal({
