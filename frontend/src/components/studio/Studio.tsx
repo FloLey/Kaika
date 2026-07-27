@@ -12,6 +12,7 @@ import type { Asset as AssetT, LyricLine } from "../../lib/types";
 import VolumeControl from "./VolumeControl";
 import ConfirmDialog from "../../ui/ConfirmDialog";
 import { useStudioPlayback } from "./useStudioPlayback";
+import { useCompositionNav } from "./useCompositionNav";
 import { engine } from "../../lib/audio";
 import { PLAYGROUND_JOB, defaultTab } from "../../lib/route";
 import { STEM_META, seedSignal } from "../../lib/segments";
@@ -117,65 +118,32 @@ export default function Studio({
     [segments, activeSegId]
   );
 
-  // ---- composition navigation (the breadcrumb) --------------------------------
-  // Exactly ONE composition is on screen: the segment's root, or — after "open"
-  // on a montage extract — a child, any depth down. Each frame snapshots the
-  // extract's absolute song WINDOW at entry (computed by the montage card from
-  // its cut schedule): the child edits can't move the parent's cuts (the trigger
-  // lives in the parent), so the snapshot stays true while you're inside, and the
-  // transport/previews below simply follow the current window.
-  interface NavFrame {
-    // "comp" = a child composition's canvas; "montage" = the montage EDITOR over a
-    // montage card of the frame's composition (same composition, richer surface).
-    kind: "comp" | "montage";
-    compositionId: string;
-    montageNodeId?: string; // montage frames only
-    label: string; // "extract 3 · clip name" / the montage's name — the breadcrumb text
-    window: { start: number; end: number }; // absolute song seconds
-  }
-  const [navStack, setNavStack] = useState<NavFrame[]>([]);
-  useEffect(() => setNavStack([]), [activeSegId]); // a new segment starts at its root
-  const navFrame = navStack.length ? navStack[navStack.length - 1] : null;
-  const currentCompId = navFrame?.compositionId ?? activeSeg?.rootCompositionId;
-  const activeComp = (currentCompId && compositions[currentCompId]) || null;
-  // A frame whose composition — or, for a montage frame, whose montage card —
-  // vanished (deleted in another view) pops itself.
-  useEffect(() => {
-    if (!navFrame) return;
-    const comp = compositions[navFrame.compositionId];
-    const gone =
-      !comp ||
-      (navFrame.kind === "montage" &&
-        !comp.graph.nodes.some((n) => n.id === navFrame.montageNodeId && n.type === "montage"));
-    if (gone) setNavStack((s) => s.slice(0, -1));
-  }, [navFrame, compositions]);
+  // Which composition is on screen, the breadcrumb that got you there, and the song
+  // window that descent implies. The window feeds playback and every render key below,
+  // which is why the descent and the window are computed together.
+  const {
+    navStack,
+    navFrame,
+    currentCompId,
+    activeComp,
+    winStart,
+    winEnd,
+    segLen,
+    viewSegment,
+    resetNav,
+    enterExtract,
+    enterMontage,
+    navTo,
+    renameDraft,
+    setRenameDraft,
+    commitRename,
+  } = useCompositionNav({ activeSeg, activeSegId, compositions, setCompositions, duration });
 
-  // No segment selected → the window is the whole track, so the full mix can play
-  // before any segment exists. Inside an extract, the window IS the extract's: the
-  // transport plays just that slice of the song, so the live view scrubs against the
-  // right bars.
-  //
-  // There used to be a fallback to the audio element's own duration here, because a
-  // `winEnd` of 0 made the private element's `timeupdate` handler loop to the start on
-  // every tick — silence. `lib/transport` guards that case at the source (`onTick` only
-  // clamps `if (windowEnd > 0)`), so the fallback protected against a failure mode that
-  // no longer exists, using a duration only the deleted element could report.
-  const winStart = navFrame ? navFrame.window.start : activeSeg ? activeSeg.start : 0;
-  const winEnd = navFrame ? navFrame.window.end : activeSeg ? activeSeg.end : duration || 0;
-  const segLen = Math.max(0.001, winEnd - winStart);
   // "used ×N" per composition (segment roots + extracts) — the reuse picker's
   // indicator and the last-reference confirm read it through ctx.
   const compRefCounts = useMemo(
     () => poolRefCounts(compositions, segments),
     [compositions, segments]
-  );
-
-  // What the canvas edits: the host segment, re-windowed to the current frame —
-  // every consumer (previews, render keys, signal resolution) reads start/end +
-  // signals off ctx.segment, so re-windowing here drives them all at once.
-  const viewSegment = useMemo(
-    () => (activeSeg && navFrame ? { ...activeSeg, start: winStart, end: winEnd } : activeSeg),
-    [activeSeg, navFrame, winStart, winEnd]
   );
 
   // The full mix this segment plays. `instrumental` while building a cover keeps the
@@ -199,7 +167,6 @@ export default function Studio({
     setLoop,
     seek,
     playAll,
-    resetTransport,
     registerAudio,
     onPlayingChange,
     handleSolo,
@@ -207,89 +174,11 @@ export default function Studio({
 
   const selectSegment = useCallback(
     (id: string) => {
-      resetTransport();
-      setNavStack([]); // back to the root even when re-clicking the same segment
+      resetNav(); // back to the root even when re-clicking the same segment
       setActiveSegId(id);
     },
-    [resetTransport, setActiveSegId]
+    [resetNav, setActiveSegId]
   );
-
-  // "Open" on a montage extract: descend into its child composition. The card
-  // computes the window (it owns the cut schedule) and hands it over.
-  const enterExtract = useCallback(
-    (montageNodeId: string, extractId: string, window: { start: number; end: number }) => {
-      const comp = activeComp;
-      if (!comp) return;
-      const mg = comp.graph.nodes.find((n) => n.id === montageNodeId && n.type === "montage");
-      const extracts = mg?.type === "montage" ? mg.data.extracts : [];
-      const idx = extracts.findIndex((x) => x.id === extractId);
-      const child = idx >= 0 ? compositions[extracts[idx].compositionId] : undefined;
-      if (!child) return;
-      resetTransport();
-      setNavStack((s) => [
-        ...s,
-        {
-          kind: "comp",
-          compositionId: child.id,
-          label: `extract ${idx + 1} · ${child.name}`,
-          window,
-        },
-      ]);
-    },
-    [activeComp, compositions, resetTransport]
-  );
-
-  // A montage card's compact body opens the MONTAGE EDITOR — its own breadcrumb
-  // level over the SAME composition and window (the strip + live view + wiring
-  // rail want the full canvas area, not a modal).
-  const enterMontage = useCallback(
-    (montageNodeId: string) => {
-      const comp = activeComp;
-      if (!comp) return;
-      const mg = comp.graph.nodes.find((n) => n.id === montageNodeId && n.type === "montage");
-      if (!mg) return;
-      setNavStack((s) => [
-        ...s,
-        {
-          kind: "montage",
-          compositionId: comp.id,
-          montageNodeId,
-          label: mg.name || "montage",
-          window: { start: winStart, end: winEnd },
-        },
-      ]);
-    },
-    [activeComp, winStart, winEnd]
-  );
-
-  // The breadcrumb: click the segment crumb (depth -1) or any ancestor frame to
-  // pop back to it.
-  const navTo = useCallback(
-    (depth: number) => {
-      resetTransport();
-      setNavStack((s) => s.slice(0, Math.max(0, depth)));
-    },
-    [resetTransport]
-  );
-
-  // Double-click the CURRENT crumb to rename the open composition — a shared
-  // composition's name is how the reuse picker and every referencing strip tile
-  // identify it, so it's editable where you're already looking at it.
-  const [renameDraft, setRenameDraft] = useState<string | null>(null);
-  const commitRename = useCallback(() => {
-    const name = renameDraft?.trim();
-    setRenameDraft(null);
-    if (!name || !navFrame || navFrame.kind !== "comp" || !currentCompId) return;
-    setCompositions((pool) =>
-      pool[currentCompId] ? { ...pool, [currentCompId]: { ...pool[currentCompId], name } } : pool
-    );
-    // The frame label snapshots the name at entry — follow the rename.
-    setNavStack((s) =>
-      s.map((f, i) =>
-        i === s.length - 1 ? { ...f, label: f.label.replace(/·[^·]*$/, `· ${name}`) } : f
-      )
-    );
-  }, [renameDraft, navFrame, currentCompId, setCompositions]);
 
   // ---- per-segment signal edits --------------------------------------------
   const editActiveSignals = useCallback(
