@@ -476,3 +476,114 @@
 .comp-breadcrumb .crumb-up {
   margin-left: 10px;
 }
+
+/* The signal card in three bands of disclosure, and the grid its list sits in.
+   Moved here from the shell proposal's stylesheet. Appended at the END of this file
+   deliberately: `.signal.sig-next` has to keep landing on the `.signal` rules above,
+   which is the order it had when it lived in a later part. */
+
+/* --- the signal card, in three bands ----------------------------------------
+   Cards lay out in a grid per stem instead of one column, so four bands on `drums`
+   fit on a screen; each one says what it is in a derived line, so telling them
+   apart doesn't mean opening them. */
+.signal-list-next {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+}
+.signal.sig-next {
+  gap: 8px;
+}
+.sig-next-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sig-next-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* The derived one-liner. Ellipsised rather than wrapped: it is a glance, and the
+   full text is in the title attribute. */
+.sig-next-summary {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sig-next-live {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.sig-next-curve {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sig-sec {
+  border-top: 1px solid var(--line);
+}
+.sig-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sig-sec-caret {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+}
+.sig-sec-title {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sig-sec.open .sig-sec-title {
+  color: var(--accent, var(--petale));
+}
+/* A closed section still reports its own state — a disclosure that hides what it
+   holds has only moved the problem one click away. */
+.sig-sec-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-align: right;
+}
+.sig-sec-body {
+  padding: 2px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sig-feature-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sig-feature-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}

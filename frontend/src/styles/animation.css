@@ -22,7 +22,9 @@
 @import "./animation/07-assets-lyrics.css";
 @import "./animation/08-modulators-fx.css";
 @import "./animation/09-montage.css";
-/* Last on purpose: the `?ui=next` proposal styles must land on top of the current
-   UI's, and keeping them in one part means a proposal that loses is deleted by
-   deleting a file. */
-@import "./animation/10-next.css";
+/* Last on purpose: the docked inspector lands on the stage rules from `01` and the
+   modal rules from `05`. This part was `10-next.css` and carried four unrelated
+   subsystems, co-located only so a losing UI proposal could be deleted as one file.
+   The proposal won; the three that had no cascade reason to be here moved out to
+   `shell.css`, `export.css` and `studio.css`, and the dock kept the slot. */
+@import "./animation/10-dock.css";

@@ -1,6 +1,10 @@
 /* Entry point: split by area, imported base-first so the cascade matches the
    original single styles.css (base defines :root + shared primitives). */
 @import "./base.css";
+/* The frame around every screen (shell bar, stepper, transport, ⌘K). Early, beside
+   base: it is chrome, and every selector in it is unique to the shell, so nothing
+   later needs to override it. */
+@import "./shell.css";
 @import "./studio.css";
 @import "./fluid.css";
 @import "./docs.css";

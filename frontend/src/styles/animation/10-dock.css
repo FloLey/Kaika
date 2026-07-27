@@ -1,0 +1,68 @@
+/* The docked inspector: the card being edited sits BESIDE the canvas rather than in a
+   modal over the graph it edits.
+
+   Still part 10 of the animation cascade, and still last on purpose — `.anim-stage-docked`
+   and `.anim-dock-panel` land on the stage and modal rules defined in parts 01 and 05,
+   so this must come after them. Renamed from `10-next.css` when the proposal it belonged
+   to became the app; the other subsystems in that file moved to `shell.css`,
+   `export.css` and `studio.css`, none of which had a cascade reason to stay here. */
+
+/* --- the docked inspector ---------------------------------------------------
+   The same panel NodeSettingsModal shows, beside the canvas instead of over it.
+   `.node-settings` stays on the element in both hosts, so every existing rule that
+   makes the panel work — hiding the card's own param rows, ports and header,
+   because the INPUTS panel owns them — applies here untouched. */
+.anim-canvas-col {
+  position: absolute;
+  inset: 0;
+}
+.anim-stage-docked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+.anim-stage-docked .anim-canvas-col {
+  position: relative;
+  inset: auto;
+  min-width: 0;
+}
+.anim-dock {
+  min-width: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+/* One column here: at 380px the modal's side-by-side controls/visual would leave
+   neither enough room. Order is unchanged — inputs, card, visual — so the panel
+   reads the same, just stacked. */
+.anim-dock-panel {
+  display: block;
+  width: auto;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+.anim-dock-panel .node-settings-visual {
+  padding: 0 12px 14px;
+}
+.anim-dock-empty {
+  padding: 22px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--mono);
+  line-height: 1.6;
+}
+@media (max-width: 1200px) {
+  /* Below this the canvas stops being usable next to a 380px panel; the dock goes
+     under it rather than squeezing both. */
+  .anim-stage-docked {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .anim-dock {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 45%;
+  }
+}

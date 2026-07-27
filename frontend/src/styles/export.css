@@ -231,3 +231,37 @@
   color: var(--muted);
   cursor: pointer;
 }
+
+/* The job console's per-segment rows: pending -> running -> done, and the head that
+   becomes PROGRESS while a render is in flight. Moved here from the shell proposal's
+   stylesheet — these belong with the rest of the export screen. */
+
+/* --- the export console -----------------------------------------------------
+   The readiness checklist and the progress display are the same list: before you
+   press Generate it says what is missing, while it runs it says where the job is.
+   These states extend the existing `.export-seg` rows rather than replacing them. */
+.export-seg.st-done .export-seg-icon {
+  color: var(--courant);
+}
+.export-seg.st-running {
+  background: color-mix(in srgb, var(--petale) 9%, transparent);
+  border-radius: 6px;
+}
+.export-seg.st-running .export-seg-icon,
+.export-seg.st-running .export-seg-label {
+  color: var(--petale);
+}
+/* Not started: present, so the shape of the job is visible, but clearly not yet
+   the thing being worked on. */
+.export-seg.st-pending {
+  opacity: 0.5;
+}
+.export-checklist-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.export-progress-label strong {
+  font-weight: 600;
+}
