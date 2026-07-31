@@ -1,6 +1,8 @@
 """One-off driver: render the prompt x fluid matrix with Recipe A, reusing one pipe."""
+
 import sys, types
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ai_stylize_prototype as P
 
@@ -14,17 +16,30 @@ PROMPTS = {
 }
 # (source_key, prompt_key) still to render (dense lava/flowers already exist)
 JOBS = [
-    (DENSE, "lightning"), (DENSE, "trees"),
-    (SPARSE, "lava"), (SPARSE, "flowers"), (SPARSE, "lightning"), (SPARSE, "trees"),
+    (DENSE, "lightning"),
+    (DENSE, "trees"),
+    (SPARSE, "lava"),
+    (SPARSE, "flowers"),
+    (SPARSE, "lightning"),
+    (SPARSE, "trees"),
 ]
 
 pipe, device = P.build_pipe(P.DEFAULT_MODEL, P.DEFAULT_CONTROLNET)
 for src_key, pk in JOBS:
     src = P.load_source(src_key, 120)
     cfg = types.SimpleNamespace(
-        prompt=PROMPTS[pk], neg=P.DEFAULT_NEG, res=384, denoise=1.0, steps=0,
-        control_scale=0.8, per_frame=True, noise_inject=0.0, lab=0,
-        fixed_noise=True, seed=1, fps=24,
+        prompt=PROMPTS[pk],
+        neg=P.DEFAULT_NEG,
+        res=384,
+        denoise=1.0,
+        steps=0,
+        control_scale=0.8,
+        per_frame=True,
+        noise_inject=0.0,
+        lab=0,
+        fixed_noise=True,
+        seed=1,
+        fps=24,
     )
     tag = f"MTX_{src_key}_{pk}"
     P.run(cfg, pipe, device, src, tag)

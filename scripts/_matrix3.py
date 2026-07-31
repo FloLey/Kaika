@@ -1,9 +1,11 @@
 """Full matrix: 2 fluids x 4 prompts x 3 versions (start-noise / start-fluid / masked-gen).
 Reuses existing clips (copied to canonical V2_ names) and renders only the missing ones.
 """
+
 import sys, subprocess, time, shutil, gc, types
 from pathlib import Path
 import numpy as np, cv2
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ai_stylize_prototype as P
 import _maskgen as M
@@ -45,14 +47,27 @@ if fluid_jobs:
     pipe, device = P.build_pipe(P.DEFAULT_MODEL, P.DEFAULT_CONTROLNET)
     for fk, pk in fluid_jobs:
         src = P.load_source(FLU[fk], 120)
-        cfg = types.SimpleNamespace(prompt=PROMPTS[pk], neg=P.DEFAULT_NEG, res=384, denoise=0.8,
-            steps=0, control_scale=0.3, per_frame=True, noise_inject=0.0, lab=0,
-            fixed_noise=True, seed=1, fps=24)
+        cfg = types.SimpleNamespace(
+            prompt=PROMPTS[pk],
+            neg=P.DEFAULT_NEG,
+            res=384,
+            denoise=0.8,
+            steps=0,
+            control_scale=0.3,
+            per_frame=True,
+            noise_inject=0.0,
+            lab=0,
+            fixed_noise=True,
+            seed=1,
+            fps=24,
+        )
         P.run(cfg, pipe, device, src, f"V2_fluid_{fk}_{pk}")
     del pipe
     gc.collect()
     try:
-        import torch; torch.mps.empty_cache()
+        import torch
+
+        torch.mps.empty_cache()
     except Exception:
         pass
 
@@ -61,6 +76,7 @@ mask_jobs = [(fk, pk) for fk in FLU for pk in PK if not canon("mask", fk, pk).ex
 if mask_jobs:
     from PIL import Image
     import torch
+
     pipe = M.build_inpaint(P.DEFAULT_MODEL, P.DEFAULT_CONTROLNET)
     for fk, pk in mask_jobs:
         src = P.load_source(FLU[fk], 120)
@@ -75,14 +91,51 @@ if mask_jobs:
             mask = Image.fromarray((M.density_mask(src[t], W, H) * 255).astype(np.uint8))
             control = P.extract_control(dye, cv2)
             gen = torch.Generator(device="cpu").manual_seed(1)
-            out[t] = np.asarray(pipe(prompt=PROMPTS[pk], negative_prompt=P.DEFAULT_NEG,
-                image=black, mask_image=mask, control_image=control, height=H, width=W,
-                strength=1.0, num_inference_steps=steps, guidance_scale=0.0,
-                controlnet_conditioning_scale=0.8, generator=gen).images[0])
+            out[t] = np.asarray(
+                pipe(
+                    prompt=PROMPTS[pk],
+                    negative_prompt=P.DEFAULT_NEG,
+                    image=black,
+                    mask_image=mask,
+                    control_image=control,
+                    height=H,
+                    width=W,
+                    strength=1.0,
+                    num_inference_steps=steps,
+                    guidance_scale=0.0,
+                    controlnet_conditioning_scale=0.8,
+                    generator=gen,
+                ).images[0]
+            )
         p = canon("mask", fk, pk)
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-            "-s", f"{W}x{H}", "-r", "24", "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt",
-            "yuv420p", "-movflags", "+faststart", str(p)], input=out.tobytes(), check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgb24",
+                "-s",
+                f"{W}x{H}",
+                "-r",
+                "24",
+                "-i",
+                "-",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(p),
+            ],
+            input=out.tobytes(),
+            check=True,
+        )
         print(f"  [V2_mask_{fk}_{pk}] DONE {(time.time()-t0)/120:.2f}s/f -> {p}", flush=True)
 
 print("MATRIX3 DONE")

@@ -4,6 +4,7 @@
 - writes the HTML (base64-embedded) to the scratchpad; the Artifact call is done by the agent
 Only includes recipes whose result clips exist.
 """
+
 import base64, subprocess, sys
 from pathlib import Path
 import numpy as np, cv2
@@ -17,17 +18,46 @@ K = np.ones((3, 3), np.uint8)
 
 
 def read(p):
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(p), "-f", "rawvideo", "-pix_fmt",
-                          "rgb24", "-"], capture_output=True).stdout
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(p), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        capture_output=True,
+    ).stdout
     a = np.frombuffer(raw, np.uint8)
     n = a.size // (SW * SH * 3)
-    return a[:n * SW * SH * 3].reshape(n, SH, SW, 3) if n else None
+    return a[: n * SW * SH * 3].reshape(n, SH, SW, 3) if n else None
 
 
 def enc(frames, name):
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s",
-        f"{SW}x{SH}", "-r", "24", "-i", "-", "-an", "-c:v", "libx264", "-crf", "31", "-pix_fmt",
-        "yuv420p", "-movflags", "+faststart", str(SM / name)], input=frames.tobytes(), check=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{SW}x{SH}",
+            "-r",
+            "24",
+            "-i",
+            "-",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "31",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(SM / name),
+        ],
+        input=frames.tobytes(),
+        check=True,
+    )
 
 
 def fluid_frames(fk):
@@ -46,7 +76,9 @@ def intensity(dye, margin=True):
     v = dye.astype(np.float32).max(axis=2) / 255.0
     a = np.clip(cv2.GaussianBlur(v, (0, 0), 2) / 0.5, 0, 1)
     if margin:
-        a = cv2.dilate((a * 255).astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (27, 27)))
+        a = cv2.dilate(
+            (a * 255).astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (27, 27))
+        )
         a = cv2.GaussianBlur(a, (0, 0), 6) / 255.0
     return a[..., None]
 
@@ -74,7 +106,9 @@ def derive(recipe_src, tag, fn):
             if g is None:
                 continue
             n = min(len(g), len(dyes))
-            out = np.stack([(g[i].astype(np.float32) * fn(g[i], dyes[i])).astype(np.uint8) for i in range(n)])
+            out = np.stack(
+                [(g[i].astype(np.float32) * fn(g[i], dyes[i])).astype(np.uint8) for i in range(n)]
+            )
             enc(out, f"V2hd_{tag}_{fk}_{pk}.mp4")
 
 
@@ -88,19 +122,32 @@ def exists(name):
 
 def build_html(scratch):
     def vid(name, cls=""):
-        return f'<div class="screen {cls}"><video src="{b64(name)}" autoplay loop muted playsinline preload="none"></video></div>' if exists(name) else '<div class="screen empty">—</div>'
+        return (
+            f'<div class="screen {cls}"><video src="{b64(name)}" autoplay loop muted playsinline preload="none"></video></div>'
+            if exists(name)
+            else '<div class="screen empty">—</div>'
+        )
+
     # seeds reused from the SD-era illustrations (conceptual)
     # NOTE: recipes 2 & 5 are NOT separate generations — they post-process another recipe.
     # So their "seed" is that of their parent (2←1, 5←4), not a fake independent seed.
-    SEED = {"noise": {"dense": "SEED_noise.mp4", "sparse": "SEED_noise.mp4"},
-            "noisecut": {"dense": "SEED_noise.mp4", "sparse": "SEED_noise.mp4"},
-            "fluid": {"dense": "HDfluid_dense.mp4", "sparse": "HDfluid_sparse.mp4"},
-            "mask": {"dense": "SEED_mask_dense.mp4", "sparse": "SEED_mask_sparse.mp4"},
-            "intens": {"dense": "SEED_mask_dense.mp4", "sparse": "SEED_mask_sparse.mp4"}}
-    VERS = [("noise", "1 · Start from noise (txt2img)"),
-            ("noisecut", "2 · Découpe auto <span class='drv'>= recette 1 découpée</span>"),
-            ("fluid", "3 · Start from fluid (img2img 0.8)"), ("mask", "4 · Masked-gen (inpaint)"),
-            ("intens", "5 · Intensité continue <span class='drv'>= recette 4 × densité (post-traitement, pas de génération)</span>")]
+    SEED = {
+        "noise": {"dense": "SEED_noise.mp4", "sparse": "SEED_noise.mp4"},
+        "noisecut": {"dense": "SEED_noise.mp4", "sparse": "SEED_noise.mp4"},
+        "fluid": {"dense": "HDfluid_dense.mp4", "sparse": "HDfluid_sparse.mp4"},
+        "mask": {"dense": "SEED_mask_dense.mp4", "sparse": "SEED_mask_sparse.mp4"},
+        "intens": {"dense": "SEED_mask_dense.mp4", "sparse": "SEED_mask_sparse.mp4"},
+    }
+    VERS = [
+        ("noise", "1 · Start from noise (txt2img)"),
+        ("noisecut", "2 · Découpe auto <span class='drv'>= recette 1 découpée</span>"),
+        ("fluid", "3 · Start from fluid (img2img 0.8)"),
+        ("mask", "4 · Masked-gen (inpaint)"),
+        (
+            "intens",
+            "5 · Intensité continue <span class='drv'>= recette 4 × densité (post-traitement, pas de génération)</span>",
+        ),
+    ]
     sections = ""
     for ver, title in VERS:
         # skip a recipe entirely if none of its clips exist
@@ -112,12 +159,12 @@ def build_html(scratch):
             cells = "".join(vid(f"V2hd_{ver}_{fk}_{pk}.mp4") for _, pk in PKS)
             rows += f'<div class="row"><div class="rlab">{flab}</div>{vid("HDfluid_"+fk,"fluidcell")}{vid(SEED[ver][fk],"seed")}{cells}</div>'
         win = ver == "mask"
-        sections += f'''<section class="vblock{' win' if win else ''}">
+        sections += f"""<section class="vblock{' win' if win else ''}">
           <div class="vhead"><h2>{title}</h2></div>
           <div class="colhead"><span></span><span>Fluide</span><span>Seed</span><span>Lava</span><span>Flowers</span><span>Lightning</span><span>Trees</span></div>
           <div class="grid">{rows}</div>
-        </section>'''
-    html = f'''<div class="wrap">
+        </section>"""
+    html = f"""<div class="wrap">
       <div class="eyebrow">Kaika · AI-stylize · matrice HD (Z-Image Turbo)</div>
       <h1>La matrice, en modèle HD</h1>
       <p class="sub">Mêmes recettes, mais générées avec <b>Z-Image Turbo</b> (~6 Md param) au lieu de SD-Turbo. Chaque ligne&nbsp;: fluide source, seed, puis les 4 prompts. La recette 4 (inpaint) est photoréaliste.</p>
@@ -151,7 +198,7 @@ def build_html(scratch):
       .screen video{{ width:100%; height:100%; object-fit:cover; display:block; }}
       @media (max-width:640px){{ .colhead,.row{{ grid-template-columns:26px 1fr 1fr 1fr 1fr 1fr 1fr; gap:3px; }} .colhead span{{ font-size:7px; }} .rlab{{ font-size:8px; }} }}
       .foot{{ margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--faint); font-size:11.5px; font-family:ui-monospace,monospace; }}
-    </style>'''
+    </style>"""
     Path(scratch, "hd_matrix.html").write_text(html)
     print("wrote", len(html))
 
@@ -159,6 +206,6 @@ def build_html(scratch):
 if __name__ == "__main__":
     scratch = sys.argv[1]
     build_fluid_clips()
-    derive("mask", "intens", lambda g, d: intensity(d))     # recipe 5
+    derive("mask", "intens", lambda g, d: intensity(d))  # recipe 5
     derive("noise", "noisecut", lambda g, d: geo_cut(g, d))  # recipe 2 (if recipe 1 done)
     build_html(scratch)
