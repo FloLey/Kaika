@@ -50,6 +50,8 @@ from .graph_modulators import (
     resolve_node_curve,
 )
 from .graph_validate import validate
+from . import cut_schedule
+from .cut_schedule import effective_cuts, part_starts
 
 log = logging.getLogger("kaika.graph")
 
@@ -609,6 +611,118 @@ def stylize_source(job_id, segment, graph, node_id, stem_audio_path, output=None
     return frames, strength, dag.fps, control
 
 
+def _dream_lyric_cuts(dag: "Dag", d: dict):
+    """A `(fps, nframes) -> list[int]` factory for the card's lyric cuts, or None when
+    "follow the lyrics" is off.
+
+    The lines ride in on the segment (`lyric_lines`, song-absolute) rather than over an
+    edge — a card has one out-flow and the Lyrics card's is already `video`, so Dream
+    reads them the same way the Lyrics card does. `lyric_cuts` does the absolute→local
+    conversion. A factory rather than a list because `_cut_frames` may work in the
+    project's EDITING frame base rather than the render's."""
+    if not d.get("followLyrics"):
+        return None
+
+    def at(fps: float, nframes: int) -> list[int]:
+        return [
+            f
+            for f, _gap in cut_schedule.lyric_cuts(
+                dag.segment.get("lyric_lines") or [],
+                float(dag.segment.get("start", 0.0)),
+                fps,
+                nframes,
+                skip_unaligned=bool(d.get("skipUnaligned")),
+            )
+        ]
+
+    return at
+
+
+def _dream_schedule(dag: "Dag", graph: dict, node_id: str) -> tuple:
+    """The non-pixel half of a `dream` node, off an already-open Dag →
+    `(csrc, isrc, plan)`.
+
+    Split out so `dream_describe` and `dream_source` cannot disagree about what the
+    schedule is. They would otherwise: the HD export needs the plan to build a content
+    key BEFORE deciding whether to render anything, and a second hand-written copy of
+    the cut/reseed/plan resolution is exactly the kind of near-duplicate that drifts one
+    fps correction at a time.
+    """
+    csrc = _video_source(graph, node_id, "control")
+    isrc = _video_source(graph, node_id, "video")
+    if csrc is None and isrc is None:
+        raise ValueError("dream node has no control or video input wired")
+
+    node = dag.nodes[node_id]
+    d = node.get("data") or {}
+    params = dag._fx_params(node)
+    nframes = max(1, round(dag.duration * dag.fps))
+    # Both gates go through the schedule-fps-corrected wrapper: a 30fps export must
+    # find the same rise set the 24fps editor timeline drew, or every later prompt
+    # plays one part early (the montage's v-bug, which would read here as a prompt
+    # bug rather than a timing one).
+    cuts = _cut_frames(dag, node, d, params["trigger"], nframes, lyric=_dream_lyric_cuts(dag, d))
+    # "Unwired" means no NODE binding — every port carries a const binding by
+    # default, so testing for a binding at all would make the reseed port look wired
+    # from the moment the card is created and kill the fall-back-to-cuts default.
+    reseed = None
+    if (((d.get("ports") or {}).get("reseed") or {}).get("binding") or {}).get("kind") == "node":
+        reseed = _cut_frames(dag, node, d, params["reseed"], nframes, port="reseed")
+    plan = cut_schedule.dream_plan(
+        cuts,
+        d.get("prompts") or [],
+        dag.fps,
+        nframes,
+        seed=int(d.get("seed") or 1),
+        seed_mode=str(d.get("seedMode") or "gate"),
+        reseed_frames=reseed,
+        scale=params["control_scale"],
+        keep=params["keep"],
+        shape=float(d.get("fadeShape") or 1.0),
+    )
+    return csrc, isrc, plan
+
+
+def dream_describe(job_id, segment, graph, node_id, stem_audio_path, output=None) -> tuple:
+    """Everything about a `dream` node EXCEPT the pixels → `(csrc, isrc, plan, fps)`.
+
+    The cheap half of `dream_source`, and `stylize_describe`'s split for the same reason:
+    resolving one node's params and schedule is not what costs — the `dag.video()` calls
+    are. The HD export builds its content key from this, checks the cache, and only pays
+    for the control render on a miss. Without the split, every re-export would render the
+    upstream sim at export grid purely to derive a key it then throws away.
+    """
+    with Dag(job_id, segment, graph, stem_audio_path, output or {}) as dag:
+        csrc, isrc, plan = _dream_schedule(dag, graph, node_id)
+        return csrc, isrc, plan, dag.fps
+
+
+def dream_source(job_id, segment, graph, node_id, stem_audio_path, output=None) -> tuple:
+    """Render what feeds a `dream` node → (control, init, plan, fps).
+
+    The twin of `stylize_source`, and like it built on the real render `Dag` so there is
+    no second pipeline. `control` is the ControlNet map (an Extract card); `init` is the
+    OPTIONAL `video` input that gives each frame a start image (img2img). At least one
+    must be wired — with only a video, `dream_frames` cannies it for the control.
+
+    Everything schedule-shaped is resolved in `_dream_schedule` rather than in the job so
+    the job stays a thin "render, generate, encode, store" — and so the plan can be hashed
+    for staleness and for the export's content key.
+    """
+    with Dag(job_id, segment, graph, stem_audio_path, output or {}) as dag:
+        csrc, isrc, plan = _dream_schedule(dag, graph, node_id)
+
+        def _clip(sid):
+            c = dag.video(sid)
+            if c.shape[-1] == 4:  # a layer -> flatten onto black to a 3-channel clip
+                c = fluid.flatten(c)
+            return np.ascontiguousarray(c)
+
+        control = _clip(csrc) if csrc is not None else None
+        init = _clip(isrc) if isrc is not None else None
+    return control, init, plan, dag.fps
+
+
 # --------------------------------------------------------------------------- #
 # Node-type handler registry (spec 10)
 # --------------------------------------------------------------------------- #
@@ -705,7 +819,17 @@ def _combine_emitters_h(dag: "Dag", node: dict) -> list:
 # spectral sims / diffusion) — their presence anywhere in the graph keeps the render
 # on the coarse simulation grid. Everything else (video/image/montage/lyrics/stack
 # compositing/per-frame FX) is decode + numpy, cheap enough for the native grid.
-_HEAVY_TYPES = {"fluid", "waves", "lightning", "fire", "aurora", "rain", "clouds", "stylize"}
+_HEAVY_TYPES = {
+    "fluid",
+    "waves",
+    "lightning",
+    "fire",
+    "aurora",
+    "rain",
+    "clouds",
+    "stylize",
+    "dream",
+}
 
 # Cap on the native-resolution preview's SHORT side: a full 1080p block stream would
 # hold ~1 GB of frames in flight per producer; 540p stays sharp (≈30× the draft
@@ -921,64 +1045,6 @@ def _montage_extracts(node: dict) -> list:
     return out
 
 
-def _effective_cuts(trigger: "np.ndarray", d: dict, fps: int, nframes: int) -> list[int]:
-    """The montage's effective cut frames: GATE rises (the trigger through the card's
-    built-in hysteresis threshold, exactly like the slideshow) minus the individually
-    DISABLED ones, unioned with the MANUAL breakpoints — sorted, deduped at frame
-    granularity, clamped inside (0, nframes).
-
-    `disabledCuts` stores composition-LOCAL seconds; an entry suppresses ANY cut
-    within HALF A FRAME of it — gate or manual — so the match is deterministic and a
-    gate cut that MOVED (threshold edit) re-enables itself. Suppressing manuals too
-    matters (v17): a manual breakpoint sharing a disabled gate cut's frame used to
-    resurrect the cut the user just clicked off, while the timeline (where the gate
-    mark wins the collision pixel) showed it silenced — the render cut where the UI
-    said it wouldn't. The editor's gestures keep such data rare (disabling sweeps
-    same-frame manuals, placing a manual clears a stale disable), but saved projects
-    carry it. Manual breakpoints are local seconds too (frontend mirror:
-    lib/montageCuts.ts — the two must agree or the strip preview lies about where
-    the render will cut)."""
-    gate = _gate_curve(
-        trigger, {"threshold": d.get("threshold", 0.5), "hysteresis": d.get("hysteresis", 0.1)}
-    )
-    rises = np.nonzero(np.diff(gate) > 0)[0] + 1  # frame index where each cut lands
-    disabled = []
-    for t in d.get("disabledCuts") or []:
-        try:
-            disabled.append(float(t) * fps)
-        except (TypeError, ValueError):
-            continue
-
-    def silenced(frame: int) -> bool:
-        return any(abs(frame - f) <= 0.5 for f in disabled)
-
-    cuts = {int(r) for r in rises if not silenced(int(r))}
-    for bp in d.get("manualBreakpoints") or []:
-        try:
-            f = int(round(float((bp or {}).get("t")) * fps))
-        except (TypeError, ValueError):
-            continue
-        if not silenced(f):
-            cuts.add(f)
-    return sorted(c for c in cuts if 1 <= c < nframes)
-
-
-def _montage_starts(cuts: list[int], spans: list[int]) -> list[int]:
-    """Absolute start frame of each PLAYED extract. Frame 0 always starts extract 0;
-    extract k swallows `spans[k]` effective cuts before the next starts. Cuts beyond
-    the extracts are IGNORED — as is an extract whose starting cut never arrives — so
-    the last STARTED extract HOLDS to the segment end, its clock running on (no
-    restart). Extract k is active on [starts[k], starts[k+1])."""
-    starts = [0]
-    consumed = 0
-    for span in spans[:-1]:  # the last extract never hands over — its span is moot
-        consumed += span
-        if consumed - 1 >= len(cuts):
-            break  # not enough cuts left — the extract that just played holds
-        starts.append(int(cuts[consumed - 1]))
-    return starts
-
-
 def _to_rgba(frames: np.ndarray) -> np.ndarray:
     """Normalise a producer's frames to straight-alpha RGBA, compositing-exact.
 
@@ -1009,6 +1075,10 @@ def _window_sensitive(pool: dict | None, graph: dict, seen: set | None = None) -
     for n in (graph or {}).get("nodes") or []:
         t = n.get("type")
         if t in ("signal", "lyrics"):
+            return True
+        # A dream card following the lyrics is window-sensitive for the same reason a
+        # lyrics card is: the same composition under two windows sings different words.
+        if t == "dream" and (n.get("data") or {}).get("followLyrics"):
             return True
         if t in ("video", "slideshow") and (n.get("data") or {}).get("sync", "song") == "song":
             return True
@@ -1580,6 +1650,7 @@ _VIDEO_HANDLERS: dict[str, _VideoHandler] = {
     "backdrop": _whole_from_block("backdrop"),
     "transform": _whole_from_block("transform"),
     "stylize": _whole_from_block("stylize"),
+    "dream": _whole_from_block("dream"),
     "extract": _whole_from_block("extract"),
     "echo": _whole_from_block("echo"),
     "colorgrade": _whole_from_block("colorgrade"),
@@ -1761,8 +1832,10 @@ def _slideshow_block(dag: "Dag", node: dict):
     return produce
 
 
-def _montage_cut_frames(dag: "Dag", node: dict, d: dict, trigger, nframes: int) -> list[int]:
-    """The montage's effective cut frames at the RENDER fps — computed at the
+def _cut_frames(
+    dag: "Dag", node: dict, d: dict, trigger, nframes: int, port: str = "trigger", lyric=None
+) -> list[int]:
+    """A scheduled card's effective cut frames at the RENDER fps — computed at the
     SCHEDULE fps when the output dict carries one (`schedule_fps`, the project's
     editing fps — song_render.export_with_schedule sets it on HD exports whose fps
     differs). Gate-rise detection is sampling-dependent: a 30fps export once found
@@ -1770,12 +1843,24 @@ def _montage_cut_frames(dag: "Dag", node: dict, d: dict, trigger, nframes: int) 
     played one slot early and the export "wasn't aligned like the montage". Cuts are
     therefore detected on the trigger resolved at the EDITOR's rate — the same
     `resolve_node_curve` the timeline's /resolve uses, so the rise set is identical
-    by construction — then converted to render-fps frames as seconds."""
+    by construction — then converted to render-fps frames as seconds.
+
+    Serves the montage AND Dream: the same trap would hit Dream as one prompt out of
+    step for the rest of the song, which would read as a prompt bug, not a timing one.
+    `port` is which gate to re-resolve — Dream drives a second schedule off `reseed`.
+
+    `lyric` is a FACTORY `(fps, nframes) -> list[int]`, not a list: lyric cuts come from
+    exact times rather than from sampling a curve, so they have no rise-detection error
+    to correct — but they still have to be expressed in whichever frame base this call is
+    working in, so that `disabledCuts` can silence them alongside the gate cuts before the
+    conversion back."""
     sched = float((dag.output or {}).get("schedule_fps") or 0.0)
     if not sched or abs(sched - dag.fps) < 1e-6:
-        return _effective_cuts(trigger, d, dag.fps, nframes)
+        return effective_cuts(
+            trigger, d, dag.fps, nframes, lyric=lyric(dag.fps, nframes) if lyric else None
+        )
     n_s = max(1, round(dag.duration * sched))
-    b = ((d.get("ports") or {}).get("trigger") or {}).get("binding") or {}
+    b = ((d.get("ports") or {}).get(port) or {}).get("binding") or {}
     if b.get("kind") == "node" and b.get("nodeId"):
         r = resolve_node_curve(
             dag.job_id, dag.segment, dag.graph, b["nodeId"], dag.stem_audio_path, fps=int(sched)
@@ -1785,7 +1870,7 @@ def _montage_cut_frames(dag: "Dag", node: dict, d: dict, trigger, nframes: int) 
             trig_s = np.pad(trig_s, (0, n_s - len(trig_s)))
     else:
         trig_s = np.zeros(n_s, np.float32)  # no wired trigger: manual breakpoints only
-    cuts_s = _effective_cuts(trig_s, d, sched, n_s)
+    cuts_s = effective_cuts(trig_s, d, sched, n_s, lyric=lyric(sched, n_s) if lyric else None)
     conv = sorted({int(round(c / sched * dag.fps)) for c in cuts_s})
     return [c for c in conv if 1 <= c < nframes]
 
@@ -1812,8 +1897,8 @@ def _montage_block(dag: "Dag", node: dict):
     gh, gw = _grid_dims(dag)
     params = dag._fx_params(node)  # {opacity, trigger} full-segment arrays
     nframes = max(1, round(dag.duration * dag.fps))
-    cuts = _montage_cut_frames(dag, node, d, params["trigger"], nframes)
-    starts = _montage_starts(cuts, [span for _, span, _ in extracts])
+    cuts = _cut_frames(dag, node, d, params["trigger"], nframes)
+    starts = part_starts(cuts, [span for _, span, _ in extracts])
     bounds = np.array(starts + [nframes])
 
     # One frame-cache entry per extract, each comfortably under the per-entry ceiling,
@@ -2045,6 +2130,38 @@ def _stylize_block(dag: "Dag", node: dict):
     return dag._block_producer(src)
 
 
+def _dream_block(dag: "Dag", node: dict):
+    """Dream (control->video): decode the generated clip (`data.assetUrl`) through a
+    persistent VideoClip, or pass the CONTROL input through when nothing is generated yet.
+
+    Passthrough matters as much as the decode: an ungenerated card must be as cheap as
+    `transform`, so dropping one on the canvas never blocks a preview or an export on the
+    GPU. A STALE clip still decodes — see the note in specs/dream/04: the card badges it
+    instead, because silently replacing an expensive clip with the raw control map the
+    moment a fade is nudged would destroy work the user can see."""
+    ap = _asset_path(dag, node)
+    if ap:
+        gh, gw = _grid_dims(dag)
+        nframes = max(1, round(dag.duration * dag.fps))
+        src_t = np.arange(nframes, dtype=np.float64) / float(dag.fps)
+        clip = sources.VideoClip(gh, gw, dag.fps, asset_path=ap, loop=True)
+        dag._closers.append(clip.close)
+
+        def produce(a, b):
+            return np.ascontiguousarray(clip.frames(src_t[a:b])[..., :3])
+
+        return produce
+    # Passthrough shows the CONTROL when one is wired — the map that will drive the
+    # generation — and falls back to the `video` input when only that is (there is no
+    # control node to show; its map is derived at generation time).
+    src = _video_source(dag.graph, node["id"], "control") or _video_source(
+        dag.graph, node["id"], "video"
+    )
+    if src is None:
+        raise ValueError(f"dream '{node['id']}' has no control or video input")
+    return dag._block_producer(src)
+
+
 def _extract_block(dag: "Dag", node: dict):
     src = _video_source(dag.graph, node["id"], "video")
     if src is None:
@@ -2120,6 +2237,7 @@ _BLOCK_HANDLERS: dict[str, _BlockHandler] = {
     "backdrop": _backdrop_block,
     "transform": _transform_block,
     "stylize": _stylize_block,
+    "dream": _dream_block,
     "extract": _extract_block,
     "echo": _echo_block,
     "colorgrade": _colorgrade_block,

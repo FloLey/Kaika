@@ -200,7 +200,8 @@ Grouped by what they serve, so the list above stays about the main pipeline.
   `POST /resolve-points` (a points pipeline → its emitter positions),
   `POST /fluid` (the Playground's standalone fluid render).
 - **AI cards** — `POST /generate-image/<job>` (Image gen; async, poll `/jobs/<id>`),
-  `POST /stylize/<job>` (AI Stylize's diffusion restyle).
+  `POST /stylize/<job>` (AI Stylize's diffusion restyle),
+  `POST /dream/<job>` (Dream's per-frame txt2img+ControlNet generation).
 - **Remote inference** — `GET|PUT|POST /settings` (the stored config),
   `POST /settings/test-remote` (the ⚙ panel's *test connection*).
 - **Playground** — `POST /playground` (build/open it),
@@ -245,10 +246,13 @@ on restart).
 - **Caches** (see [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full story):
   `data/fluid/<hash>.mp4` — encoded clips keyed by the output's
   contributing-subgraph hash; `data/fluid_cache/*.npy` — raw simulation frames
-  keyed by physics params, so downstream-only edits skip the sim. The primary
-  cleaner is a **reachability sweep** (`cache_gc`, runs on save/startup) that
-  keeps only what saved projects still point to; LRU + age caps are the backstop
-  (`FLUID_CACHE_*` / `FLUID_FRAME_CACHE_*`); `make clean-cache` drops everything.
+  keyed by physics params, so downstream-only edits skip the sim;
+  `data/dream_cache/*.png` — one entry per GENERATED frame of a Dream card, so
+  nudging a cut only re-diffuses the frames whose prompt actually changed. The
+  primary cleaner is a **reachability sweep** (`cache_gc`, runs on save/startup)
+  that keeps only what saved projects still point to; LRU + age caps are the
+  backstop (`FLUID_CACHE_*` / `FLUID_FRAME_CACHE_*` / `DREAM_FRAME_CACHE_*`);
+  `make clean-cache` drops everything.
 
 The project JSONB carries a `schema_version`; graphs carry a `version`, migrated
 forward on load (`normalizeGraph`).

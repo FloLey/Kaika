@@ -172,11 +172,15 @@ export default function OutputNode({
   const hdLabel = hd.busy
     ? hd.phase === "assets"
       ? "HD · preparing assets…"
-      : hd.phase === "audio"
-        ? "HD · adding audio…"
-        : hd.progress
-          ? `HD · ${Math.round((hd.progress.done / Math.max(1, hd.progress.total)) * 100)}%`
-          : "HD · starting…"
+      : // Named apart from "assets" because it is the phase that takes the minutes —
+        // a Dream card diffuses one image per frame before the render even starts.
+        hd.phase === "dream"
+        ? `HD · dreaming${hd.progress ? ` ${hd.progress.done}/${hd.progress.total}` : ""}…`
+        : hd.phase === "audio"
+          ? "HD · adding audio…"
+          : hd.progress
+            ? `HD · ${Math.round((hd.progress.done / Math.max(1, hd.progress.total)) * 100)}%`
+            : "HD · starting…"
     : "⬛ HD";
 
   return (

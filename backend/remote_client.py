@@ -116,6 +116,39 @@ def stylize_remote(
     return np.concatenate(chunks, axis=0)
 
 
+def dream_remote(control, plan, model, short, url, token, init=None, on_progress=None):
+    """Remote twin of imagegen.dream_frames — batched like `stylize_remote`.
+
+    The PLAN travels as JSON in the params header, sliced per batch so each request
+    carries exactly the entries for the control frames it ships. The frame CACHE stays
+    on the client (imagegen.dream_frames consults it before this call and fills it
+    after), so a remote run still leaves a warm local cache. `init` is the optional
+    per-frame start clip — index-aligned with `control`, sliced the same way."""
+    import json
+
+    import numpy as np
+
+    total = len(plan)
+    chunks = []
+    for i in range(0, total, STYLIZE_BATCH):
+        hi = min(i + STYLIZE_BATCH, total)
+        # index-aligned slice; a shorter control clip holds its last frame, mirroring
+        # the local path's `min(i, len(control)-1)`.
+        idx = np.minimum(np.arange(i, hi), len(control) - 1)
+        arrays = {"control": np.ascontiguousarray(np.asarray(control)[idx])}
+        if init is not None and len(init) > 0:
+            arrays["init"] = np.ascontiguousarray(np.asarray(init)[idx])
+        params = dict(model=model, short=int(short), plan=json.dumps(plan[i:hi]))
+        out = _post(url, token, "/dream", pack_npz(**arrays), params, "dream")
+        frames = unpack_npz(out).get("frames")
+        if frames is None:
+            raise RuntimeError(f"remote inference ({url}): dream returned no frames")
+        chunks.append(frames)
+        if on_progress is not None:
+            on_progress(hi, total)
+    return np.concatenate(chunks, axis=0)
+
+
 def generate_remote(prompt, seed, count, model, long_edge, aspect, url, token) -> list:
     """Remote twin of imagegen.generate → list of PIL images."""
     from PIL import Image

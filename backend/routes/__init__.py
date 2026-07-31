@@ -14,6 +14,7 @@ from .animation import bp as animation_bp
 from .export import bp as export_bp
 from .serving import bp as serving_bp
 from .stylize import bp as stylize_bp
+from .dream import bp as dream_bp
 from .settings import bp as settings_bp
 
 all_blueprints = (
@@ -26,5 +27,6 @@ all_blueprints = (
     export_bp,
     serving_bp,
     stylize_bp,
+    dream_bp,
     settings_bp,
 )

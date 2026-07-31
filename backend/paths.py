@@ -22,6 +22,10 @@ ASSETS_DIR = DATA_DIR / "assets"  # user-uploaded image/video layer assets, per 
 # late-bound (`paths.ANIM_DIR`) so tests patch ONE place.
 ANIM_DIR = FLUID_DIR
 STREAM_DIR = FLUID_DIR / "stream"
+# The Dream card's per-FRAME generation cache (backend/dream_cache.py). One PNG per
+# generated frame, so nudging a cut re-diffuses only the frames whose prompt state
+# moved. Late-bound like the rest, so tests patch this one place.
+DREAM_CACHE_DIR = DATA_DIR / "dream_cache"
 # App-level settings (remote inference, …) — one JSON file, read late-bound
 # (`paths.SETTINGS_FILE`) so tests patch it like the directories above.
 SETTINGS_FILE = DATA_DIR / "settings.json"

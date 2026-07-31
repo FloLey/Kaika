@@ -26,6 +26,12 @@ Workflow A/B, velocity warping, drift control). Read it once before Step 0.
 One stale detail worth flagging rather than silently fixing: step 5 names a module
 `backend/videostylize.py` that never existed — the card lives in `backend/routes/stylize.py`.
 
+Step 5's **prompt crossfade** was later built for a DIFFERENT card, on a different
+mechanism: see [`specs/dream/`](../dream/), which fades between prompts by lerping their
+text embeddings on a per-part schedule. It does not make step 5 done — depth
+conditioning and song continuity are still unbuilt here, and AI Stylize itself still
+takes a single static prompt.
+
 ## Cross-cutting decisions (apply to every step)
 
 - **Generation never runs in a render request.** It runs as a `jobs.py` job (single GPU worker),

@@ -16,7 +16,7 @@ describe("graph constants", () => {
   it("the hand-written groupings add up to the generated producer set", () => {
     const grouped = new Set<string>([
       ...VIDEO_SOURCES,
-      ...VIDEO_FX,
+      ...VIDEO_FX.keys(),
       // Not in either grouping, deliberately: these take N slot inputs (combine, montage)
       // or are the terminal (output), and `fluid` is the simulation itself.
       "fluid",

@@ -13,7 +13,15 @@ import {
 } from "./core";
 import { combineSlot, imageNode, montageExtract, videoNode } from "./factories";
 import { nodeParam } from "../nodeParams";
-import type { Binding, CombineMedium, CombineNode, Graph, GraphNode, MontageNode } from "../types";
+import type {
+  Binding,
+  CombineMedium,
+  CombineNode,
+  Graph,
+  GraphNode,
+  ManualBreakpoint,
+  MontageNode,
+} from "../types";
 
 // Shallow-merge a patch into a node's `data` (op/knob/param edits on the simple
 // value cards). Generic across node types — the caller passes a typed patch.
@@ -249,18 +257,38 @@ export function setExtractInPoint(
   }));
 }
 
+// The breakpoint mutations below serve BOTH scheduled cards — the montage (one extract
+// per part) and Dream (one prompt per part). They only ever touch the schedule fields
+// both carry (`manualBreakpoints`, `disabledCuts`), so they patch through this
+// type-agnostic helper rather than `patchMontage`. Like the montage ones, none of them
+// touch edges: breakpoints are pure data.
+const SCHEDULED_TYPES = new Set(["montage", "dream"]);
+type ScheduledData = { manualBreakpoints: ManualBreakpoint[]; disabledCuts: number[] };
+const patchScheduled = (
+  graph: Graph,
+  nodeId: string,
+  fn: (d: ScheduledData) => ScheduledData
+): Graph => ({
+  ...graph,
+  nodes: graph.nodes.map((n) =>
+    n.id === nodeId && SCHEDULED_TYPES.has(n.type)
+      ? ({ ...n, data: fn(n.data as unknown as ScheduledData) } as typeof n)
+      : n
+  ),
+});
+
 // Placing (or moving) a manual cut at `t` also CLEARS any `disabledCuts` entry within
 // `tol` of it: a disabled entry silences EVERY cut source at that time (the render
-// rule, _effective_cuts/montageCuts), so without the sweep a fresh "cut here" landing
+// rule, _effective_cuts/cutSchedule), so without the sweep a fresh "cut here" landing
 // on an old "no cut here" would be silently ignored. The newest gesture wins.
 export function addManualBreakpoint(
   graph: Graph,
-  montageId: string,
+  nodeId: string,
   t: number,
   tol: number = 0
 ): Graph {
   if (!(t > 0)) return graph;
-  return patchMontage(graph, montageId, (d) => ({
+  return patchScheduled(graph, nodeId, (d) => ({
     ...d,
     manualBreakpoints: [...d.manualBreakpoints, { id: mkSlotId(), t }].sort((a, b) => a.t - b.t),
     disabledCuts: d.disabledCuts.filter((x) => Math.abs(x - t) > tol),
@@ -269,13 +297,13 @@ export function addManualBreakpoint(
 
 export function moveManualBreakpoint(
   graph: Graph,
-  montageId: string,
+  nodeId: string,
   breakpointId: string,
   t: number,
   tol: number = 0
 ): Graph {
   if (!(t > 0)) return graph;
-  return patchMontage(graph, montageId, (d) => ({
+  return patchScheduled(graph, nodeId, (d) => ({
     ...d,
     manualBreakpoints: d.manualBreakpoints
       .map((bp) => (bp.id === breakpointId ? { ...bp, t } : bp))
@@ -284,12 +312,8 @@ export function moveManualBreakpoint(
   }));
 }
 
-export function removeManualBreakpoint(
-  graph: Graph,
-  montageId: string,
-  breakpointId: string
-): Graph {
-  return patchMontage(graph, montageId, (d) => ({
+export function removeManualBreakpoint(graph: Graph, nodeId: string, breakpointId: string): Graph {
+  return patchScheduled(graph, nodeId, (d) => ({
     ...d,
     manualBreakpoints: d.manualBreakpoints.filter((bp) => bp.id !== breakpointId),
   }));
@@ -303,8 +327,8 @@ export function removeManualBreakpoint(
 // "no cut at this time", and a manual left on the same frame would keep cutting
 // (a disabled entry silences it too, but sweeping keeps the data honest — no
 // invisible breakpoint parked under a greyed gate mark).
-export function toggleAutoCut(graph: Graph, montageId: string, t: number, tol: number): Graph {
-  return patchMontage(graph, montageId, (d) => {
+export function toggleAutoCut(graph: Graph, nodeId: string, t: number, tol: number): Graph {
+  return patchScheduled(graph, nodeId, (d) => {
     const kept = d.disabledCuts.filter((x) => Math.abs(x - t) > tol);
     const disabling = kept.length === d.disabledCuts.length;
     return {

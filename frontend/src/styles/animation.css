@@ -22,6 +22,9 @@
 @import "./animation/07-assets-lyrics.css";
 @import "./animation/08-modulators-fx.css";
 @import "./animation/09-montage.css";
+/* Dream's timeline extras — after `09` because they restyle the shared `bp-*`
+   band rules that file defines. */
+@import "./animation/11-dream.css";
 /* Last on purpose: the docked inspector lands on the stage rules from `01` and the
    modal rules from `05`. This part was `10-next.css` and carried four unrelated
    subsystems, co-located only so a losing UI proposal could be deleted as one file.

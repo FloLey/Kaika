@@ -28,6 +28,7 @@ export interface SegmentProposal {
   vocal_envelope?: number[];
   envelope_times?: number[];
   lyric_lines?: LyricLine[];
+  lyric_lines_default?: LyricLine[];
   duration?: number;
 }
 
@@ -63,6 +64,8 @@ export interface Project {
   vocal_envelope?: number[];
   envelope_times?: number[];
   lyric_lines?: LyricLine[];
+  // The pristine alignment kept server-side, so a restore costs nothing.
+  lyric_lines_default?: LyricLine[];
 }
 
 export interface ExtractResult {
@@ -226,6 +229,13 @@ export async function stylizeClip(
   body: { graph: unknown; segment: unknown; output: unknown; node_id: string }
 ): Promise<JobAck> {
   return postJson<JobAck>(`/stylize/${jobId}`, body);
+}
+
+export async function dreamClip(
+  jobId: string,
+  body: { graph: unknown; segment: unknown; output: unknown; node_id: string }
+): Promise<JobAck> {
+  return postJson<JobAck>(`/dream/${jobId}`, body);
 }
 
 export async function getJob(jobId: string): Promise<JobStatus> {
@@ -439,7 +449,7 @@ export interface AppSettings {
     enabled: boolean;
     url: string;
     token: string;
-    ops: { stylize: boolean; imagegen: boolean; depth: boolean };
+    ops: { stylize: boolean; dream: boolean; imagegen: boolean; depth: boolean };
   };
 }
 

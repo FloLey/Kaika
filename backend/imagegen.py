@@ -37,6 +37,7 @@ import threading
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 from . import settings as app_settings  # noqa: E402 — stdlib-only module, safe anywhere
+from . import dream_cache  # noqa: E402 — numpy-only, no diffusers import at module scope
 
 from .optional_deps import require_cv2
 
@@ -194,8 +195,21 @@ STYLIZE_CONTROLNET: dict[str, str] = {
 }
 
 
-def _load_stylize_pipe(model: str, inpaint: bool, control: bool):
-    key = f"{model}:{'inpaint' if inpaint else 'img2img'}{':ctrl' if control else ''}"
+def _stylize_pipe_key(model: str, mode: str, control: bool) -> str:
+    """Singleton key for `_load_stylize_pipe`. Z-Image + control is the special case: its
+    Union pipeline is txt2img+control whatever the caller asks for (AI Stylize hand-rolls
+    img2img on top of it, see stylize_frames), so all three modes must land on ONE
+    instance — keying them apart would load 6.7 GB of Union weights twice."""
+    if control and _spec(model)["kind"] == "zimage":
+        return f"{model}:zctrl"
+    return f"{model}:{mode}{':ctrl' if control else ''}"
+
+
+def _load_stylize_pipe(model: str, mode: str, control: bool):
+    """A stylize/dream pipeline singleton. `mode` is "img2img" | "inpaint" | "txt2img" —
+    a bool stopped being enough when the Dream card needed a third one."""
+    inpaint = mode == "inpaint"
+    key = _stylize_pipe_key(model, mode, control)
     with _lock:
         if key in _pipes:
             return _pipes[key]
@@ -215,6 +229,11 @@ def _load_stylize_pipe(model: str, inpaint: bool, control: bool):
             else (torch.float16 if device != "cpu" else torch.float32)
         )
         try:
+            if mode == "txt2img" and not control:
+                # Only the Dream card asks for txt2img here, and it always has a control
+                # map — without one there is nothing to follow but the prompt, which is
+                # `generate()`'s job, not this one. Refuse rather than silently duplicate.
+                raise RuntimeError("txt2img stylize pipe needs a control input")
             if control:
                 cn_repo = STYLIZE_CONTROLNET.get(model)
                 if cn_repo is None:
@@ -240,14 +259,19 @@ def _load_stylize_pipe(model: str, inpaint: bool, control: bool):
                         ControlNetModel,
                         StableDiffusionControlNetImg2ImgPipeline,
                         StableDiffusionControlNetInpaintPipeline,
+                        StableDiffusionControlNetPipeline,
                     )
 
                     cn = ControlNetModel.from_pretrained(cn_repo, torch_dtype=dtype)
-                    cls = (
-                        StableDiffusionControlNetInpaintPipeline
-                        if inpaint
-                        else StableDiffusionControlNetImg2ImgPipeline
-                    )
+                    cls = {
+                        "inpaint": StableDiffusionControlNetInpaintPipeline,
+                        "img2img": StableDiffusionControlNetImg2ImgPipeline,
+                        # txt2img: the Dream card — no init image, the control map alone
+                        # decides the shapes. Note this pipeline names the control image
+                        # `image` (the img2img one keeps `image` for the init frame and
+                        # takes `control_image` instead).
+                        "txt2img": StableDiffusionControlNetPipeline,
+                    }[mode]
                     pipe = cls.from_pretrained(
                         model, controlnet=cn, torch_dtype=dtype, safety_checker=None
                     )
@@ -293,6 +317,182 @@ def _zimage_sigmas(full: list[float], strength: float) -> list[float]:
         return list(full)
     start = max(1, min(int(len(full) * (1.0 - strength)), len(full) - 1))
     return list(full[start:])
+
+
+def _zimage_img2img(pipe, spec: dict, img, strength: float, gen, H: int, W: int, mask=None) -> dict:
+    """Hand-roll img2img onto Z-Image's ControlNet pipeline, which ships as txt2img+control.
+
+    Returns the `latents`/`sigmas`/`num_inference_steps` kwargs that start the denoise
+    partway, from a noised encode of `img`, instead of from pure noise. Shared by
+    AI Stylize (where it is the whole point) and the Dream card (where it is what an
+    optional wired `video` input turns on).
+
+    A ControlNet *guides* structure but does not *confine* generation, so without this
+    anchor the model fills the frame and ignores a sparse control — which is exactly why
+    Dream's default (no anchor at all) reinvents its background, and why wiring a video
+    brings the input's layout back."""
+    import torch
+    from PIL import Image
+    from diffusers.pipelines.z_image.pipeline_z_image_controlnet import (  # lazy, like the rest
+        get_default_z_image_sigmas,
+        retrieve_latents,
+    )
+
+    device = pipe._execution_device
+    sub = _zimage_sigmas(get_default_z_image_sigmas(int(spec["steps"])), strength)
+    # The scheduler REMAPS requested sigmas (shift=3.0: 0.875 → 0.955). Noise with the
+    # sigma it will actually use — noising with the raw one under-noises the latents, so
+    # the model "denoises" absent noise and just reconstructs the input.
+    pipe.scheduler.set_timesteps(sigmas=sub, device=device)
+    sigma0 = float(pipe.scheduler.sigmas[0])
+    px = pipe.image_processor.preprocess(Image.fromarray(img), height=H, width=W)
+    z0 = retrieve_latents(
+        pipe.vae.encode(px.to(device, dtype=pipe.vae.dtype)),
+        generator=gen,
+        sample_mode="argmax",
+    )
+    z0 = (z0 - pipe.vae.config.shift_factor) * pipe.vae.config.scaling_factor
+    noise = torch.randn(z0.shape, generator=gen, dtype=torch.float32).to(device, dtype=z0.dtype)
+    latents = sigma0 * noise + (1.0 - sigma0) * z0  # the scheduler's scale_noise convention
+    return {
+        "latents": latents.to(pipe.transformer.dtype),
+        "sigmas": sub,
+        "num_inference_steps": len(sub),
+    }
+
+
+# Floor under a dark control's mean luminance: a nearly-black control fades coverage out
+# rather than being normalised up to full — black must still mean "invent".
+_KEEP_FLOOR = 0.05
+# Gaussian sigma (in latent cells) that spreads a sparse control's support so `keep`
+# is not capped at the control's own white fraction. See `_keep_mask`.
+_KEEP_SPREAD = 2.0
+# Real denoise steps the re-injection needs: at least two landing at a sigma where the
+# source is legible, plus two free ones to harmonise the mosaic. Below this the un-kept
+# cells resolve to grey mush instead of invention.
+_DREAM_SEEDED_STEPS = 6
+# Fraction of the schedule over which kept cells are pinned. The free tail is what lets
+# the model blend the scatter into a picture and lets the prompt and ControlNet act
+# everywhere; pinning to the last step freezes the exact source latent in those cells and
+# the result reads as an 8-pixel dither rather than a generated image.
+_INJECT_FRAC = 0.6
+
+
+def _keep_mask(control_img, keep: float, seed: int, lh: int, lw: int):
+    """The Dream card's scatter: a 0..1 weight per LATENT cell = the chance that cell
+    keeps the source image.
+
+    Per LATENT CELL, not per pixel, and that is not a shortcut. Both VAEs map an 8x8
+    pixel block to one latent cell, so a per-pixel scatter is low-passed away by the
+    encoder before the model ever sees it — the finest stencil that can physically
+    survive is one cell. (The first version of this built the composite in PIXEL space on
+    a bed of uniform RGB noise; uniform noise is nowhere near the natural-image manifold,
+    so the encode produced latents the model could not interpret and the card emitted
+    pure noise. Do not move this back to pixels.)
+
+    `keep` is a TARGET MEAN COVERAGE of the frame, distributed by the control's
+    brightness — not a multiplier on raw luminance. The normalisation is what makes it
+    mean the same thing on a 2%-white canny map (the card's own default control) as on a
+    smooth depth map: without it, `keep` 0.05 / 0.1 / 0.25 all landed on ~0.2% coverage
+    and were visually identical.
+
+    Deterministic from `seed`, so the frame cache stays valid — a random stencil would
+    make every re-run a miss. The stencil is fixed in SCREEN space within a part, so the
+    source moves through it while it holds still (the same rationale as the fixed
+    per-frame generator seed).
+    """
+    import numpy as np
+
+    cv2 = require_cv2("the Dream card")
+
+    k = float(np.clip(keep, 0.0, 1.0))
+    if k <= 0:
+        return np.zeros((lh, lw), np.float32)
+    g = cv2.cvtColor(np.ascontiguousarray(control_img), cv2.COLOR_RGB2GRAY)
+    # INTER_AREA, never INTER_LINEAR: a latent cell sees the MEAN of its 8x8 block, and
+    # that mean is the only thing the VAE can carry of a finer field.
+    lum = cv2.resize(g, (lw, lh), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+    # Spread the support before normalising. The card's DEFAULT control is an auto-canny
+    # — a couple of percent white — whose cells clip to p=1 immediately, so `keep`
+    # saturated at the map's own coverage (~6%) and the top of the slider did nothing.
+    # Blurring lets the seeding bleed outward from the contours as `keep` rises, which is
+    # both usable across the whole range and the right look: near the structure, not on
+    # it exactly. Harmless on an already-smooth control (a depth or density map).
+    lum = cv2.GaussianBlur(lum, (0, 0), _KEEP_SPREAD)
+    p = np.clip(lum * (k / max(float(lum.mean()), _KEEP_FLOOR)), 0.0, 1.0)
+    u = np.random.default_rng(int(seed)).random(p.shape, dtype=np.float32)
+    # A hard threshold, not a soft ramp: E[m] is then EXACTLY p, so `keep` really is the
+    # coverage it claims to be, and p == 0 gives exactly 0 (a black control must seed
+    # nothing). A ramp biased the mean down by half its width and, once re-centred, gave
+    # a black control a few percent of coverage — both wrong in ways a slider hides.
+    # Modulation stays smooth anyway because `u` is fixed per seed: raising `keep` only
+    # ever ADDS cells, never swaps them.
+    return (u < p).astype(np.float32)
+
+
+def _seeded_injection(pipe, iimg, mask, gen, H: int, W: int, nsteps: int, flow: bool) -> dict:
+    """The kwargs that make a Dream generation grow out of a scatter of the source.
+
+    Encodes the source once, then hands back a `callback_on_step_end` that pins the
+    stencilled latent cells onto its noised trajectory after every step. The generation
+    itself starts from the pipeline's own noise — a free txt2img — so the un-stencilled
+    region is genuinely invented rather than denoised from a doctored start."""
+    import torch
+    from PIL import Image
+
+    device = pipe._execution_device
+    px = pipe.image_processor.preprocess(Image.fromarray(iimg), height=H, width=W)
+    if flow:
+        from diffusers.pipelines.z_image.pipeline_z_image_controlnet import retrieve_latents
+    else:
+        from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img import (
+            retrieve_latents,
+        )
+    z0 = retrieve_latents(
+        pipe.vae.encode(px.to(device, dtype=pipe.vae.dtype)),
+        generator=gen,
+        # mode(), not sample(): deterministic AND consumes no RNG, so the frame cache
+        # stays byte-stable across re-runs.
+        sample_mode="argmax",
+    )
+    cfg = pipe.vae.config
+    # Flux-family VAEs (Z-Image) shift before scaling; SD's does not carry the field.
+    shift = getattr(cfg, "shift_factor", None) or 0.0
+    z0 = (z0 - shift) * cfg.scaling_factor
+    m = torch.from_numpy(mask).to(device, dtype=z0.dtype)[None, None]  # broadcast over C
+    noise = torch.randn(z0.shape, generator=gen, dtype=torch.float32).to(device, dtype=z0.dtype)
+    return {
+        "callback_on_step_end": _inject_cb(z0, noise, m, nsteps, flow=flow),
+        "callback_on_step_end_tensor_inputs": ["latents"],
+    }
+
+
+def _inject_cb(z0, noise, m, nsteps: int, *, flow: bool):
+    """A `callback_on_step_end` that pins the kept cells back onto the source's noised
+    trajectory after each scheduler step.
+
+    A blended START latent alone is not enough, and this is the part that makes `keep`
+    work at all: at a high sigma the kept cells are drowned (nothing shows), and at a low
+    one the un-kept cells are not free — they are a valid sample of "x0 = 0 + noise", so a
+    distilled model resolves them to grey. Re-injecting at each new sigma pins the source
+    where the stencil is while leaving the rest a genuine free generation, and the model's
+    receptive field grows the invented content OUT of the scattered seeds.
+    """
+    n_inject = max(1, int(round(nsteps * _INJECT_FRAC)))
+
+    def cb(pipe, i, t, kw):
+        if i >= n_inject:
+            return {}
+        lat = kw["latents"]
+        # After scheduler.step the step index has advanced, so this is the sigma the
+        # running latents now live at. Reading it from the scheduler (rather than
+        # indexing the timestep loop) stays correct when `strength` < 1 slices the
+        # timesteps but not the sigmas array.
+        s = pipe.scheduler.sigmas[pipe.scheduler.step_index].to(lat.dtype)
+        tgt = (s * noise + (1.0 - s) * z0) if flow else (z0 + noise * s)
+        return {"latents": (m * tgt + (1.0 - m) * lat).to(lat.dtype)}
+
+    return cb
 
 
 def _density_mask(dye):
@@ -380,18 +580,11 @@ def stylize_frames(
                 "control not available for '%s' (no ControlNet) — generating without it", model
             )
         use_control = False
-    pipe = _load_stylize_pipe(model, inpaint, use_control)
-    # Z-Image's ControlNet pipeline ships as txt2img + control (no image/strength/mask args), so
-    # below we hand-roll img2img on it: seeded `latents` + a truncated sigma schedule. Draft's
-    # ControlNet pipeline is img2img natively.
+    pipe = _load_stylize_pipe(model, "inpaint" if inpaint else "img2img", use_control)
+    # Z-Image's ControlNet pipeline ships as txt2img + control (no image/strength/mask args),
+    # so `_zimage_img2img` hand-rolls the anchor onto it. Draft's ControlNet pipeline is
+    # img2img natively.
     zimage_control = use_control and spec["kind"] == "zimage"
-    if zimage_control:
-        from diffusers.pipelines.z_image.pipeline_z_image_controlnet import (  # lazy, like the rest
-            get_default_z_image_sigmas,
-            retrieve_latents,
-        )
-
-        device = pipe._execution_device
     gh, gw = int(frames.shape[1]), int(frames.shape[2])
     H, W = _work_dims(gh, gw, int(short))
     strength = float(np.clip(strength, 0.05, 1.0))
@@ -417,35 +610,16 @@ def stylize_frames(
             # The Union's pipeline is txt2img + control, so we hand-roll img2img: seed its
             # `latents` with a noised encode of the input and hand it the matching tail of the
             # sigma schedule. Without that anchor the model ignores a sparse control entirely.
-            sub = _zimage_sigmas(get_default_z_image_sigmas(int(spec["steps"])), strength)
-            # The scheduler REMAPS requested sigmas (shift=3.0: 0.875 → 0.955). Noise with the
-            # sigma it will actually use — noising with the raw one under-noises the latents, so
-            # the model "denoises" absent noise and just reconstructs the input.
-            pipe.scheduler.set_timesteps(sigmas=sub, device=device)
-            sigma0 = float(pipe.scheduler.sigmas[0])
-            px = pipe.image_processor.preprocess(Image.fromarray(dye), height=H, width=W)
-            z0 = retrieve_latents(
-                pipe.vae.encode(px.to(device, dtype=pipe.vae.dtype)),
-                generator=gen,
-                sample_mode="argmax",
-            )
-            z0 = (z0 - pipe.vae.config.shift_factor) * pipe.vae.config.scaling_factor
-            noise = torch.randn(z0.shape, generator=gen, dtype=torch.float32).to(
-                device, dtype=z0.dtype
-            )
-            latents = sigma0 * noise + (1.0 - sigma0) * z0  # the scheduler's scale_noise convention
             kw = dict(
                 prompt=str(prompt),
                 negative_prompt=negative,
                 height=H,
                 width=W,
-                num_inference_steps=len(sub),
                 guidance_scale=0.0,
                 generator=gen,
                 control_image=Image.fromarray(cimg),
                 controlnet_conditioning_scale=float(control_scale),
-                latents=latents.to(pipe.transformer.dtype),
-                sigmas=sub,
+                **_zimage_img2img(pipe, spec, dye, strength, gen, H, W),
             )
         else:
             kw = dict(
@@ -476,6 +650,251 @@ def stylize_frames(
         if on_progress is not None:
             on_progress(i + 1, len(frames))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Dream card: pure txt2img + ControlNet on a prompt schedule (specs/dream/)
+# --------------------------------------------------------------------------- #
+# The distinction from stylize_frames above is the whole card: there is NO img2img
+# anchor. stylize_frames keeps the input's position and luminosity by starting from a
+# noised copy of it — even on Z-Image, where it hand-rolls that anchor onto a pipeline
+# that was txt2img all along (`_zimage_sigmas`, the seeded latents). Dream starts from
+# pure noise every frame, so consecutive frames share nothing but the control map, and
+# the imagery is free to reinvent itself. That freedom is the point, not a side effect.
+
+# Z-Image's `_encode_prompt` default (`max_sequence_length`). We re-tokenize with the
+# same value so a lerp's endpoints line up with the pipeline's own encode; if diffusers
+# ever changes its default, the parity test in test_dream.py is what catches it.
+_ZIMAGE_MAX_TOKENS = 512
+
+
+def _dream_embeds(pipe, spec: dict, a: str, b: str, w: float) -> dict:
+    """Text conditioning for one frame: prompt `a` lerped toward `b` by `w`.
+
+    Returns kwargs for the pipe's `__call__` — `{"prompt": ...}` at the ends, embeddings
+    in between. The ends deliberately take the pipeline's OWN encode path: most frames of
+    a real schedule are hold frames, so they pay nothing for the fade feature, and a hold
+    frame comes out byte-identical to what a fade-less render would have produced."""
+    import torch
+
+    if w <= 0:
+        return {"prompt": a}
+    if w >= 1:
+        return {"prompt": b}
+    if spec["kind"] == "zimage":
+        # Z-Image's `_encode_prompt` TRIMS each prompt to its true token count
+        # (`prompt_embeds[i][prompt_masks[i]]`), so two prompts of different lengths come
+        # back different-SHAPED and cannot be lerped element-wise. Redo the encode here
+        # keeping the PADDED hidden states — identically [max_tokens, d] for both — and
+        # trim by the UNION of the two masks at the end. Both prompts go through the same
+        # chat template, so most positions are shared scaffolding that lerps to itself and
+        # only the content tokens actually move.
+        device = pipe._execution_device
+        texts = [
+            pipe.tokenizer.apply_chat_template(
+                [{"role": "user", "content": t}],
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=True,
+            )
+            for t in (a, b)
+        ]
+        ti = pipe.tokenizer(
+            texts,
+            padding="max_length",
+            max_length=_ZIMAGE_MAX_TOKENS,
+            truncation=True,
+            return_tensors="pt",
+        )
+        masks = ti.attention_mask.to(device).bool()
+        hs = pipe.text_encoder(
+            input_ids=ti.input_ids.to(device),
+            attention_mask=masks,
+            output_hidden_states=True,
+        ).hidden_states[-2]
+        # Positions valid in only ONE prompt lerp against the other's masked-padding
+        # state, so a token the shorter prompt lacks fades out rather than snapping. That
+        # is an approximation; the ENDS are exact because they short-circuit above, which
+        # is the property worth pinning with a test.
+        mixed = torch.lerp(hs[0].float(), hs[1].float(), float(w)).to(hs.dtype)
+        return {"prompt_embeds": [mixed[masks[0] | masks[1]]]}
+    # SD: CLIP pads to a fixed 77 tokens, so both embeddings are already the same shape.
+    # The standard lerp, no surgery needed.
+    device = pipe._execution_device
+    ea, _ = pipe.encode_prompt(a, device, 1, False)
+    eb, _ = pipe.encode_prompt(b, device, 1, False)
+    return {"prompt_embeds": torch.lerp(ea.float(), eb.float(), float(w)).to(ea.dtype)}
+
+
+def dream_frames(control, plan, *, init=None, model=None, short=None, on_progress=None):
+    """Generate one image per `plan` entry, each guided by `control[i]` — [T,H,W,3] uint8.
+
+    `control` is [T,h,w,3] uint8 (an Extract card's edges/depth, or any control map).
+    `plan` is one dict per frame, `{prompt_a, prompt_b, w, seed, scale, strength}`, built by
+    `cut_schedule.dream_plan`. Keeping the schedule OUT of this function is deliberate:
+    it makes the generator testable against a fake pipe with no scheduling in the picture,
+    and it means the cache (dream_cache) can key on exactly what the pipe is handed.
+
+    `init` is the OPTIONAL per-frame start image (the card's wired `video` input). Without
+    it every frame starts from pure noise and only the control ties one frame to the next
+    — the card's default, and why its background is invented rather than preserved. With
+    it each frame starts from `init[i]` at that frame's `strength`, so the source's layout
+    and its black background survive; the schedule, fades, seeds and cache are unchanged.
+
+    Exactly one of `control` / `init` may be None. With `init` but no `control`, the
+    control is a CANNY of the init frame, so a single wired video is enough to make the
+    card work (the same auto-control AI Stylize applies on its draft model)."""
+    import numpy as np
+    import torch
+
+    cv2 = require_cv2("the Dream card")
+    from PIL import Image
+
+    model = model or DRAFT_MODEL
+    spec = _spec(model)
+    if model not in STYLIZE_CONTROLNET:
+        raise RuntimeError(
+            f"the Dream card needs a ControlNet for '{model}' and none is configured — "
+            "without one there is nothing for the output to follow"
+        )
+    if not len(plan):
+        raise ValueError("dream_frames: empty plan")
+    have_control = control is not None and len(control) > 0
+    have_init = init is not None and len(init) > 0
+    if not have_control and not have_init:
+        raise ValueError("dream_frames: needs a control clip, an init clip, or both")
+    # Per-model preview short side, the stylize_frames split: draft 384 (fast iteration),
+    # HD 576 (the empirical floor below which Z-Image paints blobs on a sparse input).
+    # The export passes a larger `short`.
+    if short is None:
+        short = 576 if spec["kind"] == "zimage" else 384
+    zimage = spec["kind"] == "zimage"
+    dims_from = control if have_control else init
+    gh, gw = int(dims_from.shape[1]), int(dims_from.shape[2])
+    H, W = _work_dims(gh, gw, int(short))
+    out = np.empty((len(plan), H, W, 3), np.uint8)
+    total = len(plan)
+    done = 0
+
+    def _tick():
+        if on_progress is not None:
+            on_progress(done, total)
+
+    def _at(clip, i):
+        """Frame i of a clip, holding its last frame when the clip is short."""
+        return cv2.resize(
+            np.ascontiguousarray(clip[min(i, len(clip) - 1)]),
+            (W, H),
+            interpolation=cv2.INTER_LINEAR,
+        )
+
+    # Pass 1: the cache. Hits tick the progress bar (a warm run that reported nothing
+    # would look hung), misses are collected so the remote path can batch them.
+    misses: list[tuple] = []
+    for i, step in enumerate(plan):
+        iimg = _at(init, i) if have_init else None
+        if have_control:
+            cimg = _at(control, i)
+        else:
+            # No Extract wired, but a video is: follow ITS shapes. Same auto-control
+            # AI Stylize applies on its draft model, and the same thresholds.
+            cimg = cv2.cvtColor(
+                cv2.Canny(cv2.cvtColor(iimg, cv2.COLOR_RGB2GRAY), 80, 160), cv2.COLOR_GRAY2RGB
+            )
+        key = dream_cache.frame_key(cimg, step, model, H, W, init_img=iimg)
+        hit = dream_cache.load(key)
+        if hit is not None and hit.shape == (H, W, 3):
+            out[i] = hit
+            done += 1
+            _tick()
+            continue
+        misses.append((i, cimg, step, key, iimg))
+
+    # Remote inference (⚙ settings): hand the MISSES to the rented GPU, batched. The
+    # cache stays LOCAL — looked up above, filled below — so a remote run still leaves a
+    # warm cache and a re-run after a small edit goes nowhere near the network. Resolved
+    # defaults travel with the call so the server applies them verbatim.
+    ep = app_settings.remote_endpoint("dream") if misses else None
+    if ep is not None:
+        from . import remote_client
+
+        hits = done
+        got = remote_client.dream_remote(
+            np.stack([c for _, c, _, _, _ in misses]),
+            [s for _, _, s, _, _ in misses],
+            model,
+            int(short),
+            *ep,
+            init=np.stack([m[4] for m in misses]) if have_init else None,
+            on_progress=(lambda d, _t: on_progress(hits + d, total)) if on_progress else None,
+        )
+        for (i, _c, _s, key, _ii), img in zip(misses, got):
+            out[i] = img
+            dream_cache.store(key, img)
+        dream_cache.evict()
+        return out
+
+    # ONE pipeline for both paths: txt2img + control. A wired `video` does NOT switch to
+    # the img2img pipeline — that one rebuilds the start latent from `image` and ignores
+    # any `latents` handed to it (its `prepare_latents` has no such parameter), so the
+    # scatter was silently thrown away and every `keep` produced the identical picture.
+    # The source now enters ONLY through the per-step injection, which both pipelines
+    # support via `callback_on_step_end`.
+    pipe = None  # loaded lazily: an all-hits run must not pay for 6 GB of weights
+    for i, cimg, step, key, iimg in misses:
+        if pipe is None:
+            pipe = _load_stylize_pipe(model, "txt2img", True)
+        gen = torch.Generator(device="cpu").manual_seed(int(step["seed"]))
+        kw = dict(
+            height=H,
+            width=W,
+            guidance_scale=0.0,  # both models are distilled; CFG off (see the note below)
+            generator=gen,
+            controlnet_conditioning_scale=float(step.get("scale", 0.7)),
+        )
+        # The two pipelines disagree about the control image's NAME: Z-Image's Union
+        # takes `control_image`, SD's txt2img ControlNet takes `image`.
+        kw["control_image" if zimage else "image"] = Image.fromarray(cimg)
+        if have_init:
+            # The scatter is a stencil over the LATENTS — see `_keep_mask` for why a
+            # pixel-space start image cannot work here. More steps than the model's
+            # distilled default, so the injection gets several passes before the free
+            # tail blends them into a picture.
+            steps = max(int(spec["steps"]), _DREAM_SEEDED_STEPS)
+            mask = _keep_mask(cimg, float(step.get("keep", 0.1)), int(step["seed"]), H // 8, W // 8)
+            kw["num_inference_steps"] = steps
+            kw.update(_seeded_injection(pipe, iimg, mask, gen, H, W, steps, zimage))
+        else:
+            kw["num_inference_steps"] = int(spec["steps"])
+        kw.update(
+            _dream_embeds(
+                pipe, spec, step["prompt_a"], step.get("prompt_b") or "", float(step.get("w") or 0)
+            )
+        )
+        # The lock covers INFERENCE only — a cache lookup above must not serialise
+        # against a live AI Stylize job for nothing.
+        with _infer_lock:  # one inference at a time on the single GPU
+            res = pipe(**kw)
+        img = np.asarray(res.images[0])
+        if img.shape[:2] != (H, W):  # never crash if the pipe ignores the aspect
+            img = cv2.resize(img, (W, H), interpolation=cv2.INTER_LINEAR)
+        out[i] = img
+        dream_cache.store(key, img)
+        done += 1
+        _tick()
+    # Once per job, not once per frame: globbing the cache dir hundreds of times inside
+    # one run would cost more than it saves (see dream_cache.store).
+    dream_cache.evict()
+    return out
+
+
+# NOTE on negative prompts: there are none here, on purpose. Both Turbo models run at
+# guidance_scale 0, and every one of these pipelines gates CFG on `guidance_scale > 0`
+# (Z-Image) / `> 1` (SD) — so a negative prompt is silently INERT. stylize_frames still
+# passes one; it does nothing there either, and is kept only because its remote twin
+# takes it positionally. Turning negatives on would mean raising guidance_scale, which
+# doubles the per-frame cost and degrades distilled models: a deliberate feature with a
+# card control, if ever wanted, not an inherited no-op.
 
 
 # --------------------------------------------------------------------------- #

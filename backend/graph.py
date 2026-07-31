@@ -64,4 +64,6 @@ from .graph_render import (  # noqa: F401
     resolve_node_points,
     stylize_describe,
     stylize_source,
+    dream_describe,
+    dream_source,
 )

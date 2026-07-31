@@ -306,6 +306,26 @@ SOURCE_PARAM_SPEC: dict[str, list[dict]] = {
         # colours (subtle blend), 1.0 fully restyles to the prompt (real flowers/lava).
         _p("strength", 0, 1, 1),
     ],
+    # The Dream card (control -> video): pure txt2img + ControlNet, one generated image
+    # per frame, under the prompt active at that frame. `control_scale` is how hard the
+    # ControlNet holds the output to the control map — modulatable on purpose, because
+    # loosening it on a beat and snapping it back is the good audio-reactive knob here.
+    # `trigger` splits the window into parts (the montage's schedule, shared); `reseed`
+    # re-rolls the seed in "gate" mode and falls back to the cut schedule when unwired.
+    # Note there is no per-model default as AI Stylize has (0.65 zimage / 0.8 SD): a PORT
+    # always resolves to a value, so there is no "unset" for the model to fill in.
+    "dream": [
+        _p("control_scale", 0, 1, 0.7, label="control"),
+        # Only matters with a `video` input wired: the FRACTION of the frame seeded
+        # from that clip, placed where the control is bright. 0 = pure invention,
+        # ~0.1 seeds a generation, high values start reproducing the frame. (There is
+        # no `strength` here: the seeded path is txt2img — the source arrives as a
+        # per-step latent injection, not as a denoise start, so a denoise strength has
+        # nothing to act on.)
+        _p("keep", 0, 1, 0.1),
+        _p("trigger", 0, 1, 0),
+        _p("reseed", 0, 1, 0),
+    ],
     # ── Generative SIMULATION cards (specs/generative-cards/) — real 2-D physics
     # (wave optics / Laplacian growth / buoyant combustion / wave equation /
     # volumetric lighting), signal-reactive per port. Colour is a static `palette`

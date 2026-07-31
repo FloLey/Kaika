@@ -106,8 +106,10 @@ function contributingComplete(graph: Graph, rootId: string): boolean {
       if (videoSource(graph, nid, "video") == null) return false;
     } else if (VIDEO_FX.has(n.type)) {
       // An FX card warps a stream it doesn't have yet — unrenderable even as the
-      // preview root (the backend raises on an unwired transform either way).
-      if (videoSource(graph, nid, "video") == null) return false;
+      // preview root (the backend raises on an unwired transform either way). The port
+      // names come from the map: Dream accepts EITHER `control` or `video`.
+      const ports = VIDEO_FX.get(n.type) as string[];
+      if (ports.every((p) => videoSource(graph, nid, p) == null)) return false;
     }
   }
   return true;

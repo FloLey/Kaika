@@ -19,7 +19,12 @@ def settings_file(tmp_path, monkeypatch):
 def test_defaults_when_no_file(settings_file):
     s = settings.get_settings()
     assert s["inference"]["enabled"] is False
-    assert s["inference"]["ops"] == {"stylize": True, "imagegen": True, "depth": False}
+    assert s["inference"]["ops"] == {
+        "stylize": True,
+        "dream": True,
+        "imagegen": True,
+        "depth": False,
+    }
 
 
 def test_corrupt_file_yields_defaults(settings_file):

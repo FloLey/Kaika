@@ -41,6 +41,7 @@ import RainNode from "./RainNode";
 import CloudsNode from "./CloudsNode";
 import TransformNode from "./TransformNode";
 import StylizeNode from "./StylizeNode";
+import DreamNode from "./DreamNode";
 import ExtractNode from "./ExtractNode";
 import EchoNode from "./EchoNode";
 import ColorGradeNode from "./ColorGradeNode";
@@ -76,6 +77,7 @@ import {
   cloudsNode,
   transformNode,
   stylizeNode,
+  dreamNode,
   extractNode,
   echoNode,
   colorgradeNode,
@@ -246,6 +248,20 @@ export const NODE_TYPES: Record<NodeType, NodeSpec> = {
       order: 3.6,
       category: "compositing",
       help: "Repaints the incoming video toward a text prompt (img2img); strength is a modulatable port and inpaint confines it to the shape. Wire an Extract card into control to guide it. Generates on demand into a clip; passes the video through until then.",
+      io: { in: "video", out: "video" },
+    },
+  },
+  dream: {
+    type: "dream",
+    Component: DreamNode,
+    chrome: { title: "dream", accent: "var(--fx)", outFlow: "video" },
+    factory: dreamNode,
+    palette: {
+      label: "Dream",
+      title: "Generate imagery that follows a control track — one image per frame",
+      order: 3.7,
+      category: "compositing",
+      help: "Invents every frame from scratch (txt2img + ControlNet) following a wired control track — an Extract card's edges or depth. A trigger signal splits the window into parts and each part gets its own prompt, with per-prompt crossfades. Generates on demand into a clip; passes the control through until then.",
       io: { in: "video", out: "video" },
     },
   },

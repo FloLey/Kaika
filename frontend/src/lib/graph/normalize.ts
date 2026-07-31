@@ -60,6 +60,7 @@ const KNOWN_NODE_TYPES = new Set<string>([
   "clouds",
   "transform",
   "stylize",
+  "dream",
   "extract",
   "echo",
   "colorgrade",
@@ -166,6 +167,37 @@ const manualBreakpoints: Coerce = (v) =>
         }))
         .sort((a, b) => a.t - b.t)
     : [];
+
+// Dream prompts: {id, text, fadeIn?, fadeOut?, span?} rows, one per part of the cut
+// schedule. Order IS the schedule, so unlike breakpoints these are never sorted. Like
+// montage extracts, the optional fields stay ABSENT at their defaults so an untouched
+// prompt keeps its exact shape (and the node its output hash). An empty list coerces to
+// one blank prompt — a Dream card with no prompts cannot generate at all, and silently
+// dropping the row would leave the card unusable with no way back.
+const dreamPrompts: Coerce = (v) => {
+  const rows = Array.isArray(v)
+    ? v
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+        .map((r) => {
+          const pos = (k: string) =>
+            typeof r[k] === "number" && Number.isFinite(r[k]) && (r[k] as number) > 0
+              ? (r[k] as number)
+              : undefined;
+          const span =
+            typeof r.span === "number" && Number.isFinite(r.span) && Math.round(r.span) >= 2
+              ? Math.min(16, Math.round(r.span))
+              : undefined;
+          return {
+            id: typeof r.id === "string" && r.id ? r.id : mkSlotId(),
+            text: typeof r.text === "string" ? r.text : "",
+            ...(pos("fadeIn") ? { fadeIn: pos("fadeIn") } : {}),
+            ...(pos("fadeOut") ? { fadeOut: pos("fadeOut") } : {}),
+            ...(span ? { span } : {}),
+          };
+        })
+    : [];
+  return rows.length ? rows : [{ id: mkSlotId(), text: "" }];
+};
 
 const numberList: Coerce = (v) =>
   Array.isArray(v)
@@ -351,6 +383,24 @@ const DATA_SCHEMAS: Record<string, Record<string, Coerce>> = {
     prompt: str("flowers, blooming roses and peonies, lush colorful petals, dark background"),
     assetUrl: str(""),
     ports: portsFor("stylize"),
+  },
+  dream: {
+    prompts: dreamPrompts,
+    manualBreakpoints,
+    disabledCuts: numberList,
+    threshold: num(0.5),
+    hysteresis: num(0.1),
+    seedMode: oneOf(["fixed", "frame", "gate"], "gate"),
+    seed: num(1),
+    fadeShape: num(1),
+    followLyrics: bool,
+    lyricStyle: str(""),
+    instrumentalPrompt: str(""),
+    skipUnaligned: bool,
+    model: oneOf(["draft", "hd"], "draft"),
+    assetUrl: str(""),
+    assetKey: str(""),
+    ports: portsFor("dream"),
   },
   extract: {
     kind: oneOf(["canny", "soft", "density", "depth"], "canny"),

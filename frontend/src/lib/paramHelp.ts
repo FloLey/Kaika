@@ -258,6 +258,24 @@ export const ARG_HELP: Record<string, Record<string, string>> = {
     strength:
       "How far the AI reinvents the input — the generation always STARTS from the input, so it keeps its layout (a fluid's black background stays black). With SD-Turbo the strength is near-binary: 1.0 fully restyles to the prompt (real flowers/lava, prompt colours) — this is the default; below ~0.9 it keeps the input's own colours (a subtle blend). Z-Image (HD) blends gradually: 1.0 restyles hardest, ~0.85 keeps more of the fluid's form. Modulatable — wire a signal to drive it.",
   },
+  dream: {
+    model:
+      "Which local diffusion model to use: SD-Turbo is a fast draft (a few seconds per frame) — iterate with it. Z-Image is HD and slow (~30s per frame, so a clip takes tens of minutes). Switch to it once the draft looks right.",
+    prompts:
+      "One prompt per PART of the schedule, in order. A wired trigger signal (plus any splits you place by hand) cuts the window into parts, and each part generates under its own prompt. With no trigger and one prompt, that prompt covers the whole clip.",
+    seed: "The number every frame's seed is derived from — change it and the whole clip reinvents itself. 🎲 bumps it, which is how you ask for another take: generated frames are cached on their inputs, so pressing regenerate with nothing changed correctly gives you back the same clip.",
+    seedMode:
+      "What makes consecutive frames differ. 'new per part' re-rolls at every cut, so each prompt gets its own family of imagery — wire the reseed port to re-roll WITHIN a part instead. 'fixed' keeps one seed throughout, so frames differ only because the control moved (calmest). 'new every frame' re-rolls constantly — a hard strobe where no two frames relate.",
+    fadeShape:
+      "The shape of a prompt crossfade. 1 = linear, and right for the SD-Turbo draft, which morphs steadily. Z-Image (HD) packs almost all of its change into a narrow band mid-fade, so a linear ramp there reads as a soft cut — raise this (try 3) to spread the change across the whole fade window. Below 1 makes the change snappier.",
+    keep: "Only does anything with a VIDEO wired. Each frame is generated from scratch, but a SCATTER of cells is pinned to that video's matching frame — and the control decides where: the brighter the control at a spot, the likelier it is pinned. So the source shows through exactly where your shapes are, and the dark parts stay free invention. This is the fraction of the frame pinned: 0 = pure invention, ~0.1 seeds a generation, high values start reproducing the frame instead of dreaming from it. Best when the control and the video come from the SAME clip — different ones pin clip A's pixels where clip B's edges are. A high value also flattens a prompt crossfade, since pinned areas don't morph. Modulatable.",
+    control_scale:
+      "How hard the output is held to the control map. Low = the imagery drifts free of the shapes; high = it traces them tightly (but flattens texture). Modulatable — wire a signal so it loosens on a beat and snaps back.",
+    trigger:
+      "The signal that splits the window into parts, one per prompt. Its rising edges are the cuts (through the card's own threshold/hysteresis), unioned with any splits placed by hand — the same schedule the montage card uses.",
+    reseed:
+      "Optional: re-roll the image seed on this signal's rising edges, in 'new per part' seed mode. Leave it unwired and the seed re-rolls at each cut instead.",
+  },
   extract: {
     kind: "What structure to pull from the video: canny = hard edges (real-time); soft = a softened edge map; density = the input's own brightness — the best 'volume' control for a fluid; depth = a depth map from a model (for real 3D footage, not fluids — downloads on first use). Feed the result into AI Stylize's control input.",
   },
@@ -413,6 +431,7 @@ export const ARG_SECTION: Record<string, string> = {
   montage: "animation-montage",
   transform: "animation-transform",
   stylize: "animation-stylize",
+  dream: "animation-dream",
   extract: "animation-stylize",
   echo: "animation-lookfx",
   colorgrade: "animation-lookfx",

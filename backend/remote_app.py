@@ -103,6 +103,35 @@ def stylize():
     return _npz_response(styled=styled)
 
 
+@app.route("/dream", methods=["POST"])
+def dream():
+    """npz(control[, init]) + params header (model/short/plan JSON) → npz(frames).
+    Batching and progress live on the CLIENT (remote_client.dream_remote); one request =
+    one batch, run verbatim. The frame cache stays client-side, so this box never keeps
+    one. `init` present = the card has a `video` wired, so this batch is img2img."""
+    import json
+
+    arrays = unpack_npz(request.get_data())
+    p = _params()
+    try:
+        plan = json.loads(p.get("plan") or "[]")
+    except ValueError as e:
+        return jsonify({"error": f"bad plan: {e}"}), 400
+    if not plan:
+        return jsonify({"error": "empty plan"}), 400
+    try:
+        frames = imagegen.dream_frames(
+            arrays["control"],
+            plan,
+            init=arrays.get("init"),
+            model=p.get("model") or None,
+            short=p.get("short"),
+        )
+    except (RuntimeError, ValueError) as e:
+        return jsonify({"error": str(e)}), 500
+    return _npz_response(frames=frames)
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     """params header → npz(im0..imN) of generated images (PNG-lossless uint8 RGB)."""

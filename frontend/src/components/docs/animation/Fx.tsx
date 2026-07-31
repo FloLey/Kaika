@@ -217,6 +217,92 @@ export default function Fx() {
         exactly what <strong>strength</strong> does (lower = closer to the input). Turn on{" "}
         <strong>inpaint</strong> to pin it harder — only the fluid's own shape is repainted.
       </p>
+
+      <h3 id="animation-dream">Dream — generate imagery that follows a control track</h3>
+      <p>
+        Where AI Stylize <em>repaints</em> a video you already have, <strong>Dream</strong>{" "}
+        (Compositing) <em>invents</em> one. Every frame is generated from scratch and guided only by
+        a <strong>control</strong> track — an <strong>Extract</strong> card's edges or depth, or a
+        video that already is a control map. There's no source image underneath, so consecutive
+        frames share nothing but the control's shapes: the imagery reinvents itself continuously
+        while the motion stays locked to what you wired in.
+      </p>
+      <p>
+        Because nothing is anchored to a source, the <strong>background will not stay black</strong>{" "}
+        the way it does in AI Stylize — the model fills the whole frame. That's the trade for
+        letting it invent freely. <strong>control</strong> (a modulatable port) decides how tightly
+        the result traces the control map: wire a signal so it loosens on a beat and snaps back.
+      </p>
+      <p>
+        <strong>
+          Want the source back? Wire the optional <em>video</em> input.
+        </strong>{" "}
+        With a clip there, each frame no longer starts from noise — it starts from that clip's
+        matching frame, so its layout, its colours and a fluid's black background all survive.{" "}
+        <strong>strength</strong> (modulatable) is how far each frame then travels from that start:
+        low keeps the source nearly intact, high reinvents it. With nothing wired to <em>video</em>{" "}
+        there is no start image and strength does nothing.
+      </p>
+      <p>
+        The two inputs are independent, and <strong>either one alone is enough</strong>. Control
+        only = pure invention following your shapes. Video only = the card cannies that clip for its
+        own control, so a single wire works. Both = your shapes, your start image, your prompts.
+        With a video wired and one prompt, Dream does what AI Stylize does — plus the schedule, the
+        fades and the frame cache.
+      </p>
+      <p>
+        <strong>Prompts follow a schedule.</strong> Wire a signal into <strong>trigger</strong> and
+        its rising edges split the window into <em>parts</em> — exactly the way the Montage card
+        cuts — and each part generates under its own prompt, in order. With no trigger and one
+        prompt, that prompt covers the whole clip, which is a perfectly good place to start. If
+        there are more cuts than prompts the last prompt holds to the end; <strong>×</strong> makes
+        one prompt swallow several cuts.
+      </p>
+      <p>
+        Each prompt has an <strong>in</strong> and an <strong>out</strong> fade, in seconds, so a
+        change can dissolve rather than cut. Leave both at 0 for a hard cut; set only{" "}
+        <strong>in</strong> for a lead-in after the cut, only <strong>out</strong> to start changing
+        before it, or both for a dissolve weighted to whichever side you like. If a part is too
+        short for the fades you asked for, they're scaled down to fit — so what you see is always
+        what renders.
+      </p>
+      <p>
+        <strong>fade shape</strong> is worth knowing about. The two models blend prompts very
+        differently: SD-Turbo morphs steadily, so the default of 1 (linear) is right for it. Z-Image
+        (HD) packs nearly all of its change into a narrow band in the middle of a fade, so a linear
+        ramp there looks like a soft cut rather than a dissolve — raise fade shape (try{" "}
+        <strong>3</strong>) and the change spreads across the whole fade window instead.
+      </p>
+      <p>
+        <strong>seed</strong> decides what makes consecutive frames differ. <em>New per part</em>{" "}
+        (the default) re-rolls at every cut, giving each prompt its own family of imagery — wire the{" "}
+        <strong>reseed</strong> port to re-roll <em>within</em> a part instead. <em>Fixed</em> holds
+        one seed throughout, so frames change only because the control moved: the calmest option,
+        and the one to reach for when the flicker is too much. <em>New every frame</em> is the
+        opposite extreme — a hard strobe where no two frames relate.
+      </p>
+      <p>
+        Like AI Stylize, generation runs on <strong>✨ generate</strong>, not on every render, and
+        the card passes its control through until you do. Editing is cheap after the first run:
+        frames are cached individually, so nudging a cut only regenerates the frames whose prompt
+        actually changed, and pressing generate again after a small edit is fast.
+      </p>
+      <p>
+        <strong>Exporting doesn't need you to have pressed ✨.</strong> The{" "}
+        <a href="#export">export</a> (and the output card's <strong>⬛ HD</strong>) regenerates
+        every Dream card from the graph, at the master's grid and the largest size the model handles
+        for your aspect — so a card you never generated ships as imagery rather than as the bare
+        control map, and a card you did generate is redrawn for the master instead of being blown up
+        from the editor's small draft. This matters most when a segment reuses a composition several
+        times: each copy carries its own clip, and the export covers all of them.
+      </p>
+      <p>
+        It keeps the <strong>model you picked</strong> — the export changes the size, never the
+        look, because your fades are tuned against the model you previewed with. Want Z-Image in the
+        master? Set the card to <em>HD</em>, which also shows you what you'll get. Budget for it:
+        one image per frame across a whole song is the longest part of an export by far, and the
+        export shows a <em>generating Dream frames</em> phase with its own counter while it works.
+      </p>
     </>
   );
 }

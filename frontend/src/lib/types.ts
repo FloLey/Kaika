@@ -438,6 +438,52 @@ export interface MontageData {
   hysteresis: number; // dead band so a hovering trigger can't machine-gun cuts
   ports: Record<string, FluidPort>;
 }
+// One part of the Dream card's schedule: the prompt covering the k-th interval of the
+// cut schedule, and how it enters and leaves. `fadeIn`/`fadeOut` are SECONDS and `span`
+// is how many effective cuts the part swallows — all three kept ABSENT at their defaults
+// so untouched prompts hash identically (the MontageExtract convention).
+export interface DreamPrompt {
+  id: string;
+  text: string;
+  fadeIn?: number;
+  fadeOut?: number;
+  span?: number;
+}
+// The Dream card (specs/dream/): pure txt2img + ControlNet, one generated image per
+// frame, following a wired `control` track and the prompt active at that frame. Its
+// schedule fields are the montage's, deliberately — the two cards share `cutSchedule.ts`
+// and `backend/cut_schedule.py` rather than each owning a copy of the same rules.
+export type DreamSeedMode = "fixed" | "frame" | "gate";
+export interface DreamData {
+  prompts: DreamPrompt[];
+  manualBreakpoints: ManualBreakpoint[]; // composition-LOCAL seconds
+  disabledCuts: number[]; // disabled GATE cuts, local seconds (frame-rounded)
+  threshold: number;
+  hysteresis: number;
+  seedMode: DreamSeedMode;
+  seed: number;
+  // Fade curve. 1 = linear. Above 1 the ramp flattens around the midpoint so a fade
+  // spends most of its duration mid-blend — which is what an HD (Z-Image) fade needs,
+  // because that model's visual change is packed into a narrow band around w = 0.5
+  // while SD-Turbo morphs evenly and wants the linear default. Absent at 1.
+  fadeShape?: number;
+  // "Follow the lyrics": the project's aligned lyric lines add their own cuts to the
+  // schedule, so the imagery changes on the sung lines. The lines arrive with the
+  // project (ctx.lyricLines / segment.lyric_lines) rather than over an edge — the same
+  // way the Lyrics card gets them.
+  followLyrics?: boolean;
+  // Appended to every lyric-seeded prompt when filling. Raw lyrics make poor prompts on
+  // their own (pronouns, slang, repetition); the style is what keeps the parts coherent.
+  lyricStyle?: string;
+  // The prompt for a part that covers a SILENCE between sung lines.
+  instrumentalPrompt?: string;
+  // Drop lines whose timings were interpolated rather than heard (`aligned: false`).
+  skipUnaligned?: boolean;
+  model?: string; // "hd" picks Z-Image; anything else is the SD-Turbo draft
+  assetUrl?: string; // the generated clip
+  assetKey?: string; // what it was generated FOR — a mismatch shows the stale badge
+  ports: Record<string, FluidPort>;
+}
 // The image GENERATOR: one prompt per image, generated locally (seeded) into a list
 // of content-addressed assets. Not a video producer — its `images` output wires into
 // a Slideshow card's `images` input.
@@ -628,6 +674,11 @@ export interface StylizeNode extends NodeBase {
   data: StylizeData;
 }
 
+export interface DreamNode extends NodeBase {
+  type: "dream";
+  data: DreamData;
+}
+
 export interface ExtractNode extends NodeBase {
   type: "extract";
   data: ExtractData;
@@ -676,6 +727,7 @@ export type GraphNode =
   | CloudsNode
   | TransformNode
   | StylizeNode
+  | DreamNode
   | ExtractNode
   | EchoNode
   | ColorGradeNode;

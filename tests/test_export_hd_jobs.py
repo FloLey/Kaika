@@ -442,3 +442,213 @@ def test_the_export_job_publishes_an_assets_phase_before_rendering(
     ex._export_job("j1", _segments(), pool, [], EXPORT, on_progress, None)
 
     assert phases[0] == "assets"
+
+
+# --------------------------------------------------------------------------- #
+# _dream_short — the clamp that keeps a distilled model inside its native range
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "label,w,h,model_key,want",
+    [
+        # `_work_dims` scales the SHORT side to the grid aspect and clips nothing, so the
+        # ceiling has to be applied here or a 9:16 master asks a 768-max model for 1360px.
+        ("portrait, draft", 1080, 1920, "draft", 432),  # 432 * 16/9 = 768 = max_edge
+        ("portrait, hd", 1080, 1920, "hd", 576),  # 576 * 16/9 = 1024 = max_edge
+        ("landscape is the same ratio", 1920, 1080, "hd", 576),
+        # Square has no long side to overflow, so the request stands as asked.
+        ("square, hd", 1024, 1024, "hd", 768),
+    ],
+)
+def test_the_dream_size_stays_inside_the_model_ceiling(label, w, h, model_key, want):
+    """A Dream clip is diffused at `stylizeSize` (768) unless the aspect would push the
+    LONG side past the model's native resolution — where a distilled few-step model tiles
+    and repeats rather than merely softening.
+
+    Asserted as exact pixel counts, not `<= max_edge`: an implementation that clamped to
+    something needlessly small would satisfy an inequality and quietly cost the master
+    resolution nobody would think to check."""
+    from backend import imagegen
+
+    model = imagegen.HD_MODEL if model_key == "hd" else imagegen.DRAFT_MODEL
+    got = ex._dream_short({**EXPORT, "width": w, "height": h}, model)
+
+    assert got == want, label
+    long_edge = got * max(w, h) / min(w, h)
+    assert long_edge <= imagegen.MODELS[model]["max_edge"] + 1, "clamped past the model's ceiling"
+
+
+# --------------------------------------------------------------------------- #
+# _regenerate_hd_dream — it generates from the GRAPH, not from what the card stored
+# --------------------------------------------------------------------------- #
+
+
+def _dream_seg(text="a forest", seg_id="s1", node_id="d1", model="draft", data=None):
+    node = {
+        "id": node_id,
+        "type": "dream",
+        "data": {"prompts": [{"id": "p1", "text": text}], "model": model, **(data or {})},
+    }
+    return {"id": seg_id, "graph": {"nodes": [node], "edges": []}}
+
+
+@pytest.fixture
+def dream_stubs(monkeypatch, assets_dir):
+    """Stub the four module boundaries a Dream regeneration crosses — render, diffusion,
+    encode, DB — and count the diffusions.
+
+    Nothing here mocks the logic under test. The key, the cache check and the in-memory
+    url swap all run for real; what is faked is a sim render, a ~2 GB model, ffmpeg and
+    Postgres. `plan` is DERIVED from the node's prompts, which is what lets a prompt edit
+    move the key the way it does in production."""
+    import numpy as np
+
+    from backend import fluid, imagegen
+    from backend import graph as graphmod
+
+    calls: list = []
+
+    def plan_for(graph, node_id):
+        node = next(n for n in graph["nodes"] if n["id"] == node_id)
+        text = ((node.get("data") or {}).get("prompts") or [{}])[0].get("text", "")
+        seed = int((node.get("data") or {}).get("seed") or 1)
+        return [
+            {"prompt_a": text, "prompt_b": None, "w": 0.0, "seed": seed, "scale": 0.7, "keep": 0.1}
+            for _ in range(3)
+        ]
+
+    monkeypatch.setattr(
+        graphmod,
+        "dream_describe",
+        lambda job, seg, graph, nid, *a, **k: ("c1", None, plan_for(graph, nid), 24),
+    )
+    monkeypatch.setattr(
+        graphmod,
+        "dream_source",
+        lambda job, seg, graph, nid, *a, **k: (
+            np.zeros((3, 8, 8, 3), np.uint8),
+            None,
+            plan_for(graph, nid),
+            24,
+        ),
+    )
+    monkeypatch.setattr(ex.graph_hash, "output_hash", lambda *a, **k: "UPSTREAM")
+
+    def fake_frames(control, plan, **k):
+        calls.append({"n": len(plan), "short": k.get("short"), "model": k.get("model")})
+        for i, _ in enumerate(plan):  # the progress contract the export's bar rides on
+            if k.get("on_progress"):
+                k["on_progress"](i, len(plan))
+        return np.zeros((len(plan), 8, 8, 3), np.uint8)
+
+    monkeypatch.setattr(imagegen, "dream_frames", fake_frames)
+    monkeypatch.setattr(
+        fluid, "render_mp4", lambda frames, fps, path, **k: path.write_bytes(b"mp4")
+    )
+    monkeypatch.setattr(ex.db, "add_asset", lambda *a, **k: None)
+    return calls
+
+
+def test_no_dream_nodes_is_a_no_op(assets_dir, monkeypatch):
+    """The common case. A project without a Dream card must not create an asset dir, and
+    above all must not reach for a diffusion model."""
+    from backend import imagegen
+
+    monkeypatch.setattr(
+        imagegen, "dream_frames", lambda *a, **k: pytest.fail("reached for the model")
+    )
+    segs = [{"id": "s1", "graph": {"nodes": [{"id": "f1", "type": "fluid", "data": {}}]}}]
+    ex._regenerate_hd_dream("j1", segs, EXPORT, None)
+    assert not (assets_dir / "j1").exists()
+
+
+def test_a_dream_card_the_user_never_generated_is_generated_by_the_export(dream_stubs, assets_dir):
+    """THE bug this path exists for. A `dream` node with no `assetUrl` renders as a
+    PASSTHROUGH of its control input, so before this the export silently shipped raw canny
+    edges — and per COMPOSITION, so a pool of nine copies needed nine separate ✨ clicks.
+
+    Keying on the graph rather than on the card's stored url is what makes an ungenerated
+    card impossible to ship by accident."""
+    seg = _dream_seg()
+    seg["graph"]["nodes"][0]["data"]["assetUrl"] = ""  # never generated in the editor
+
+    ex._regenerate_hd_dream("j1", [seg], EXPORT, None)
+
+    assert len(dream_stubs) == 1, "an ungenerated Dream card was left passing its control through"
+    url = seg["graph"]["nodes"][0]["data"]["assetUrl"]
+    assert url.startswith("/assets/j1/hd-dream-")
+    assert (assets_dir / "j1" / url.rsplit("/", 1)[-1]).exists()
+
+
+def test_an_unchanged_re_export_reuses_the_clip_and_a_prompt_edit_does_not(dream_stubs, assets_dir):
+    """Both halves of the content key, driven through the real function so the test never
+    compares a key helper against itself.
+
+    Half 1 (reuse) alone would pass for a routine that ignored its inputs entirely; half 2
+    (a prompt edit misses) alone would pass for one that never cached. At one diffusion
+    call per frame over a whole song, getting either wrong is hours."""
+    ex._regenerate_hd_dream("j1", [_dream_seg("a forest")], EXPORT, None)
+    assert len(dream_stubs) == 1
+
+    ex._regenerate_hd_dream("j1", [_dream_seg("a forest")], EXPORT, None)
+    assert len(dream_stubs) == 1, "an unchanged re-export re-diffused the whole clip"
+
+    ex._regenerate_hd_dream("j1", [_dream_seg("a burning forest")], EXPORT, None)
+    assert len(dream_stubs) == 2, "a prompt edit reused a clip generated for another prompt"
+
+
+def test_the_card_keeps_its_own_model_and_gains_the_export_size(dream_stubs, assets_dir):
+    """Deliberately unlike `_regenerate_hd_stylize`, which forces `HD_MODEL`.
+
+    `fadeShape` is tuned against the model the user previewed with — specs/dream/01
+    measured SD-Turbo morphing evenly while Z-Image packs its change into a narrow band —
+    so swapping the model at export time would re-read every fade they set as a soft cut.
+    The export changes the SIZE, and the model select stays the user's call."""
+    from backend import imagegen
+
+    ex._regenerate_hd_dream("j1", [_dream_seg(model="draft")], EXPORT, None)
+    ex._regenerate_hd_dream("j1", [_dream_seg("b", node_id="d2", model="hd")], EXPORT, None)
+
+    assert dream_stubs[0]["model"] == imagegen.DRAFT_MODEL
+    assert dream_stubs[1]["model"] == imagegen.HD_MODEL
+    # ...and each at its own ceiling for this 9:16 master, not at the editor's preview size
+    assert (dream_stubs[0]["short"], dream_stubs[1]["short"]) == (432, 576)
+
+
+def test_a_dream_card_with_no_prompts_is_left_alone(dream_stubs, assets_dir):
+    """There is nothing to generate from, and `dream_plan` would raise. Skipping keeps the
+    card passing its control through — degraded, but an export that finishes."""
+    seg = _dream_seg()
+    seg["graph"]["nodes"][0]["data"]["prompts"] = []
+
+    ex._regenerate_hd_dream("j1", [seg], EXPORT, None)
+
+    assert not dream_stubs
+    assert "assetUrl" not in seg["graph"]["nodes"][0]["data"]
+
+
+def test_progress_counts_every_dream_card_as_one_run(dream_stubs, assets_dir):
+    """Two cards, one bar. Per-card counters would rewind to 0 partway through the phase,
+    which on the one part of an export that can run for hours is the difference between
+    "slow" and "hung"."""
+    segs = [_dream_seg("a", node_id="d1"), _dream_seg("b", node_id="d2")]
+    seen: list = []
+
+    ex._regenerate_hd_dream(
+        "j1", segs, EXPORT, None, on_progress=lambda d, t, **k: seen.append((d, t, k.get("phase")))
+    )
+
+    assert {p for _, _, p in seen} == {"dream"}
+    assert {t for _, t, _ in seen} == {6}, "the total was per-card, not per-phase"
+    assert [d for d, _, _ in seen] == sorted(d for d, _, _ in seen), "the bar went backwards"
+
+
+def test_a_cancel_between_cards_stops_before_the_next_diffusion(dream_stubs, assets_dir):
+    """Cancellation is checked per card, not only per export. A user who cancels must not
+    wait out another card's worth of diffusion."""
+    segs = [_dream_seg("a", node_id="d1"), _dream_seg("b", node_id="d2")]
+
+    ex._regenerate_hd_dream("j1", segs, EXPORT, lambda: len(dream_stubs) >= 1)
+
+    assert len(dream_stubs) == 1

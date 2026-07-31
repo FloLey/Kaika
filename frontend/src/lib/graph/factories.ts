@@ -5,6 +5,7 @@
 import { FLUID_PARAMS, coercePorts, mkInputId, mkNodeId, mkSlotId } from "./core";
 import type {
   StylizeNode,
+  DreamNode,
   ExtractNode,
   EchoNode,
   ColorGradeNode,
@@ -601,6 +602,32 @@ export function stylizeNode(x: number, y: number): StylizeNode {
       prompt: "flowers, blooming roses and peonies, lush colorful petals, dark background",
       assetUrl: "",
       ports: coercePorts("stylize", undefined),
+    },
+  };
+}
+
+// The Dream card: pure txt2img + ControlNet on a prompt schedule (specs/dream/). Starts
+// with ONE prompt and no cuts — which is a complete, useful configuration (one prompt
+// over the whole window), so the card does something the moment you wire a control and
+// hit generate. `seedMode: "gate"` with `reseed` unwired falls back to the cut schedule,
+// so adding a trigger later gives a fresh image family per part with nothing else to do.
+export function dreamNode(x: number, y: number): DreamNode {
+  return {
+    id: mkNodeId(),
+    type: "dream",
+    x,
+    y,
+    data: {
+      prompts: [{ id: mkSlotId(), text: "a field of molten glass flowers, dark background" }],
+      manualBreakpoints: [],
+      disabledCuts: [],
+      threshold: 0.5,
+      hysteresis: 0.1,
+      seedMode: "gate",
+      seed: 1,
+      model: "draft",
+      assetUrl: "",
+      ports: coercePorts("dream", undefined),
     },
   };
 }

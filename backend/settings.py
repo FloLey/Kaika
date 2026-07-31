@@ -27,7 +27,7 @@ DEFAULTS: dict = {
         "enabled": False,
         "url": "",
         "token": "",
-        "ops": {"stylize": True, "imagegen": True, "depth": False},
+        "ops": {"stylize": True, "dream": True, "imagegen": True, "depth": False},
     },
 }
 

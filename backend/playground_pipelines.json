@@ -52,24 +52,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -94,18 +76,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.045
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -169,7 +139,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -213,24 +183,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -255,18 +207,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.045
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -330,7 +270,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -372,24 +312,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -414,18 +336,6 @@
                   "lo": 0.03,
                   "kind": "node",
                   "nodeId": "nz"
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -489,7 +399,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -572,24 +482,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "hi": 1,
@@ -614,18 +506,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -689,7 +569,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -742,6 +622,8 @@
             "hi": 1,
             "lo": 0,
             "gain": 1.3,
+            "wrap": false,
+            "delay": 0,
             "gamma": 2.2,
             "attack": 2,
             "invert": false,
@@ -757,24 +639,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "hi": 1,
@@ -799,18 +663,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -874,7 +726,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -932,24 +784,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "hi": 1,
@@ -974,18 +808,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -1049,7 +871,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -1102,24 +924,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -1142,18 +946,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -1217,7 +1009,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -1251,6 +1043,8 @@
             "count": 8,
             "layout": "ring",
             "radius": 0.34,
+            "offsetX": 0,
+            "offsetY": 0,
             "rotation": 0
           },
           "type": "pattern"
@@ -1261,24 +1055,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -1301,18 +1077,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -1376,7 +1140,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -1417,6 +1181,8 @@
             "count": 6,
             "layout": "ring",
             "radius": 0.28,
+            "offsetX": 0,
+            "offsetY": 0,
             "rotation": 0
           },
           "type": "pattern"
@@ -1426,9 +1192,11 @@
           "y": 210,
           "id": "an",
           "data": {
+            "fade": 1,
             "mode": "orbit",
             "rate": 1.5,
             "angle": 0,
+            "count": 3,
             "amount": 0.18
           },
           "type": "animate-points"
@@ -1439,24 +1207,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -1479,18 +1229,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -1554,7 +1292,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -1726,7 +1464,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -1750,24 +1488,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -1790,18 +1510,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -1865,7 +1573,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -1896,24 +1604,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -1936,18 +1626,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -2041,6 +1719,12 @@
                   "value": 1
                 }
               },
+              "position": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
               "intensity": {
                 "binding": {
                   "kind": "const",
@@ -2062,7 +1746,7 @@
           "type": "color"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -2100,10 +1784,23 @@
           "id": "ly",
           "data": {
             "case": "upper",
+            "font": "inter",
             "align": "center",
-            "ports": {},
+            "box_h": 0.84,
+            "box_w": 0.9,
+            "box_x": 0.05,
+            "box_y": 0.08,
+            "ports": {
+              "opacity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            },
             "reveal": "word",
-            "position": "bottom"
+            "outline": true,
+            "outlineWidth": 0.12
           },
           "type": "lyrics"
         },
@@ -2113,10 +1810,52 @@
           "id": "fl",
           "data": {
             "ports": {
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.3
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
               "force": {
                 "binding": {
                   "kind": "const",
                   "value": 24
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
                 }
               }
             },
@@ -2181,7 +1920,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -2225,8 +1964,13 @@
           "id": "tx",
           "data": {
             "case": "none",
+            "font": "inter",
             "text": "TEXT CARD",
             "align": "center",
+            "box_h": 0.3,
+            "box_w": 0.8,
+            "box_x": 0.1,
+            "box_y": 0.35,
             "ports": {
               "opacity": {
                 "binding": {
@@ -2236,7 +1980,9 @@
                   "nodeId": "lf"
                 }
               }
-            }
+            },
+            "outline": true,
+            "outlineWidth": 0.12
           },
           "type": "text"
         },
@@ -2247,7 +1993,8 @@
           "data": {},
           "type": "output"
         }
-      ]
+      ],
+      "version": 30
     }
   },
   {
@@ -2302,24 +2049,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -2342,18 +2071,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -2442,7 +2159,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -2486,10 +2203,46 @@
                   "value": 0.4
                 }
               },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
               "force": {
                 "binding": {
                   "kind": "const",
                   "value": 28
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
                 }
               }
             },
@@ -2525,12 +2278,6 @@
           "id": "flB",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.3
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -2547,6 +2294,36 @@
                 "binding": {
                   "kind": "const",
                   "value": 28
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
                 }
               }
             },
@@ -2611,7 +2388,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -2662,24 +2439,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -2702,18 +2461,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.07
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -2814,7 +2561,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -2938,7 +2685,7 @@
           "type": "extract"
         }
       ],
-      "version": 22
+      "version": 30
     }
   },
   {
@@ -2980,8 +2727,6 @@
         {
           "x": 60,
           "y": 60,
-          "cx": 481.8838165709376,
-          "cy": -162.67474516719955,
           "id": "fl",
           "data": {
             "ports": {
@@ -3098,9 +2843,7 @@
           "type": "output"
         }
       ],
-      "version": 22,
-      "viewMode": "detailed",
-      "viewOverrides": []
+      "version": 30
     }
   },
   {
@@ -3131,24 +2874,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -3171,18 +2896,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -3255,7 +2968,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -3293,10 +3006,52 @@
           "id": "fl",
           "data": {
             "ports": {
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.3
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
               "force": {
                 "binding": {
                   "kind": "const",
                   "value": 24
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
                 }
               }
             },
@@ -3383,7 +3138,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -3428,10 +3183,52 @@
           "id": "fl",
           "data": {
             "ports": {
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.3
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
               "force": {
                 "binding": {
                   "kind": "const",
                   "value": 24
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
                 }
               }
             },
@@ -3490,6 +3287,10 @@
               }
             },
             "start": 0,
+            "crop_h": 1,
+            "crop_w": 1,
+            "crop_x": 0,
+            "crop_y": 0,
             "assetUrl": "/assets/playground/sample.mp4"
           },
           "type": "video"
@@ -3542,7 +3343,7 @@
           "type": "lfo"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -3592,7 +3393,9 @@
           "y": 210,
           "id": "gate",
           "data": {
+            "divide": 1,
             "invert": false,
+            "minGap": 0,
             "threshold": 0.5,
             "hysteresis": 0.15
           },
@@ -3604,24 +3407,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "hi": 1,
@@ -3646,18 +3431,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -3721,7 +3494,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -3769,6 +3542,20 @@
             "box_w": 1,
             "box_x": 0,
             "box_y": 0,
+            "items": [
+              {
+                "url": "/assets/playground/sample.png",
+                "kind": "image"
+              },
+              {
+                "url": "/assets/playground/sample2.png",
+                "kind": "image"
+              },
+              {
+                "url": "/assets/playground/sample3.png",
+                "kind": "image"
+              }
+            ],
             "ports": {
               "opacity": {
                 "binding": {
@@ -3785,11 +3572,6 @@
                 }
               }
             },
-            "assetUrls": [
-              "/assets/playground/sample.png",
-              "/assets/playground/sample2.png",
-              "/assets/playground/sample3.png"
-            ],
             "threshold": 0.5,
             "hysteresis": 0.1
           },
@@ -3805,7 +3587,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -3843,6 +3625,7 @@
           "id": "gen",
           "data": {
             "seed": 1,
+            "model": "stabilityai/sd-turbo",
             "prompts": [
               "soft petals drifting",
               "golden light rays",
@@ -3879,6 +3662,7 @@
             "box_w": 1,
             "box_x": 0,
             "box_y": 0,
+            "items": [],
             "ports": {
               "opacity": {
                 "binding": {
@@ -3895,7 +3679,6 @@
                 }
               }
             },
-            "assetUrls": [],
             "threshold": 0.5,
             "hysteresis": 0.1
           },
@@ -3911,7 +3694,7 @@
           "type": "output"
         }
       ],
-      "version": 21
+      "version": 30
     }
   },
   {
@@ -3986,7 +3769,7 @@
               "speed": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "chroma": {
@@ -3998,7 +3781,7 @@
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "caustics": {
@@ -4010,7 +3793,7 @@
               "direction": {
                 "binding": {
                   "kind": "const",
-                  "value": 30.0
+                  "value": 30
                 }
               },
               "steepness": {
@@ -4034,7 +3817,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4115,7 +3898,7 @@
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "drop_size": {
@@ -4127,7 +3910,7 @@
               "ripple_speed": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               }
             },
@@ -4145,7 +3928,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4222,7 +4005,7 @@
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "origin_x": {
@@ -4240,7 +4023,7 @@
               "direction": {
                 "binding": {
                   "kind": "const",
-                  "value": 270.0
+                  "value": 270
                 }
               },
               "expansion": {
@@ -4276,7 +4059,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4356,7 +4139,7 @@
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "origin_x": {
@@ -4380,7 +4163,7 @@
               "direction": {
                 "binding": {
                   "kind": "const",
-                  "value": 90.0
+                  "value": 90
                 }
               },
               "thickness": {
@@ -4410,7 +4193,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4450,7 +4233,7 @@
               "bands": {
                 "binding": {
                   "kind": "const",
-                  "value": 2.0
+                  "value": 2
                 }
               },
               "drift": {
@@ -4468,7 +4251,7 @@
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "shimmer": {
@@ -4504,7 +4287,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4550,7 +4333,7 @@
               "opacity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "shading": {
@@ -4574,7 +4357,7 @@
               "direction": {
                 "binding": {
                   "kind": "const",
-                  "value": 15.0
+                  "value": 15
                 }
               },
               "brightness": {
@@ -4592,7 +4375,7 @@
               "light_angle": {
                 "binding": {
                   "kind": "const",
-                  "value": 300.0
+                  "value": 300
                 }
               }
             },
@@ -4610,7 +4393,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4641,24 +4424,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -4681,18 +4446,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -4756,7 +4509,7 @@
               "amount": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               },
               "length": {
@@ -4779,7 +4532,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -4810,24 +4563,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "kind": "const",
@@ -4850,18 +4585,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.08
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -4926,13 +4649,13 @@
               "shift": {
                 "binding": {
                   "kind": "const",
-                  "value": 0.0
+                  "value": 0
                 }
               },
               "intensity": {
                 "binding": {
                   "kind": "const",
-                  "value": 1.0
+                  "value": 1
                 }
               }
             },
@@ -4951,7 +4674,7 @@
           "type": "output"
         }
       ],
-      "version": 26
+      "version": 30
     }
   },
   {
@@ -5312,24 +5035,6 @@
           "id": "fl",
           "data": {
             "ports": {
-              "b": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "g": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.69
-                }
-              },
-              "r": {
-                "binding": {
-                  "kind": "const",
-                  "value": 0.27
-                }
-              },
               "emit": {
                 "binding": {
                   "hi": 1,
@@ -5354,18 +5059,6 @@
                 "binding": {
                   "kind": "const",
                   "value": 0.1
-                }
-              },
-              "opacity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
-                }
-              },
-              "intensity": {
-                "binding": {
-                  "kind": "const",
-                  "value": 1
                 }
               },
               "viscosity": {
@@ -5429,7 +5122,245 @@
           "type": "output"
         }
       ],
-      "version": 28
+      "version": 30
+    }
+  },
+  {
+    "key": "dream",
+    "label": "Dream",
+    "signals": [],
+    "graph": {
+      "edges": [
+        {
+          "id": "e2",
+          "source": "lf",
+          "target": "dr",
+          "sourcePort": "out",
+          "targetPort": "trigger"
+        },
+        {
+          "id": "e3",
+          "source": "dr",
+          "target": "out",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e-da3b10be",
+          "source": "fl",
+          "target": "dr",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e-fx",
+          "source": "fl",
+          "target": "ex",
+          "sourcePort": "out",
+          "targetPort": "video"
+        },
+        {
+          "id": "e-cx",
+          "source": "ex",
+          "target": "dr",
+          "sourcePort": "out",
+          "targetPort": "control"
+        }
+      ],
+      "nodes": [
+        {
+          "x": 60,
+          "y": 60,
+          "id": "fl",
+          "data": {
+            "ports": {
+              "emit": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.6
+                }
+              },
+              "angle": {
+                "binding": {
+                  "kind": "const",
+                  "value": 270
+                }
+              },
+              "force": {
+                "binding": {
+                  "kind": "const",
+                  "value": 34
+                }
+              },
+              "radius": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.08
+                }
+              },
+              "viscosity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "vorticity": {
+                "binding": {
+                  "kind": "const",
+                  "value": 6
+                }
+              },
+              "dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.95
+                }
+              },
+              "velocity_dissipation": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.97
+                }
+              }
+            },
+            "static": {
+              "fps": 24,
+              "grid": 96,
+              "wrap": true,
+              "color": [
+                0.27,
+                0.69,
+                1
+              ],
+              "points": [
+                [
+                  0.5,
+                  0.55
+                ]
+              ],
+              "radial": false,
+              "enabled": true,
+              "opacity": 1,
+              "intensity": 1,
+              "path_speed": 1,
+              "path_closed": false,
+              "path_pingpong": false
+            }
+          },
+          "type": "fluid"
+        },
+        {
+          "x": 404,
+          "y": 293,
+          "id": "ex",
+          "data": {
+            "kind": "density",
+            "ports": {}
+          },
+          "type": "extract"
+        },
+        {
+          "x": 60,
+          "y": 1180,
+          "id": "lf",
+          "data": {
+            "duty": 0.5,
+            "rate": 2,
+            "phase": 0,
+            "shape": "square",
+            "rateMode": "cycles"
+          },
+          "type": "lfo"
+        },
+        {
+          "x": 898,
+          "y": 104,
+          "id": "dr",
+          "data": {
+            "seed": 1,
+            "model": "draft",
+            "ports": {
+              "keep": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.1
+                }
+              },
+              "reseed": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              "trigger": {
+                "binding": {
+                  "hi": 1,
+                  "lo": 0,
+                  "kind": "node",
+                  "nodeId": "lf"
+                }
+              },
+              "strength": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.75
+                }
+              },
+              "control_scale": {
+                "binding": {
+                  "kind": "const",
+                  "value": 0.7
+                }
+              }
+            },
+            "prompts": [
+              {
+                "id": "p1",
+                "text": "a field of molten glass flowers, dark background"
+              },
+              {
+                "id": "p2",
+                "text": "a coral reef at night, bioluminescent, dark background",
+                "fadeIn": 0.3
+              },
+              {
+                "id": "slot-eddb85d5",
+                "text": "a beautiful house with a nice background "
+              }
+            ],
+            "assetKey": "",
+            "assetUrl": "/assets/playground/48c2bbb65670a762.mp4",
+            "seedMode": "gate",
+            "fadeShape": 1,
+            "threshold": 0.5,
+            "hysteresis": 0.1,
+            "disabledCuts": [
+              1.5
+            ],
+            "manualBreakpoints": [
+              {
+                "t": 0.7916666666666666,
+                "id": "slot-0729ec53"
+              },
+              {
+                "t": 2.2083333333333335,
+                "id": "slot-932f7bcb"
+              }
+            ]
+          },
+          "type": "dream"
+        },
+        {
+          "x": 1169,
+          "y": 87,
+          "id": "out",
+          "data": {
+            "title": "preview"
+          },
+          "type": "output"
+        }
+      ],
+      "version": 30
     }
   }
 ]

@@ -86,6 +86,7 @@ VIDEO_PRODUCERS = (
     "backdrop",
     "transform",
     "stylize",
+    "dream",
     "extract",
     "echo",
     "colorgrade",

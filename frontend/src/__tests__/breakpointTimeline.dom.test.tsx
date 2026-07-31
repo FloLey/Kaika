@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/react";
 import MontageEditor from "../components/animation/MontageEditor";
-import { extractColor } from "../components/animation/BreakpointTimeline";
+import { partColor } from "../components/animation/BreakpointTimeline";
 import { emptyGraph, montageNode, lfoNode, connect, addExtract } from "../lib/graphModel";
 import { leafComposition } from "../lib/compositions";
 import type { Asset, CompositionPool, Graph, MontageNode, Segment } from "../lib/types";
@@ -11,7 +11,7 @@ import type { NodeCtx } from "../components/animation/nodes/nodeProps";
 // The breakpoints timeline (specs/compositions step 06): both cut sources on one
 // strip with visible provenance — gate cuts toggle off/on (greyed, never hidden),
 // manual cuts place/drag/delete — and the montage's data records exactly what the
-// render will consume (lib/montageCuts mirrors backend _effective_cuts).
+// render will consume (lib/cutSchedule mirrors backend _effective_cuts).
 
 beforeAll(() => {
   HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
@@ -141,7 +141,7 @@ describe("breakpoints timeline", () => {
     // each video reads apart from its neighbour; black bands stay stylesheet-black.
     // (jsdom normalises the #rrggbbaa hex to rgba() — assert semi-transparent rgba.)
     expect(bands[0].style.background).toMatch(/^rgba\(.+0\.35\)$/);
-    expect(extractColor(0)).not.toBe(extractColor(1)); // neighbours never match
+    expect(partColor(0)).not.toBe(partColor(1)); // neighbours never match
     expect(bands[1].className).toContain("bp-band-black");
     expect(bands[1].style.background).toBe("");
     expect(parseFloat(bands[1].style.left)).toBeCloseTo(25, 0);

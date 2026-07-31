@@ -238,10 +238,20 @@ def output_hash(
     )
     if refs is not None:
         payload["compositions"] = refs
+
     # A lyrics card burns external (segment) lyric text into the frames; fold the lines
     # overlapping this segment into the hash so editing the lyrics busts the cache. A
     # lyrics card inside a REFERENCED composition burns the same segment lines.
-    if refs_have_lyrics or any(n.get("type") == "lyrics" for n in sub_nodes):
+    #
+    # A `dream` card on "follow the lyrics" consumes them too — for its SCHEDULE rather
+    # than its pixels, but the pixels move all the same. Without this a Dream card with
+    # no Lyrics card beside it would keep serving a clip from before the lyric edit.
+    def _reads_lyrics(n: dict) -> bool:
+        return n.get("type") == "lyrics" or (
+            n.get("type") == "dream" and bool((n.get("data") or {}).get("followLyrics"))
+        )
+
+    if refs_have_lyrics or any(_reads_lyrics(n) for n in sub_nodes):
         s, e = float(segment.get("start", 0.0)), float(segment.get("end", 0.0))
         payload["lyrics"] = [
             [round(float(ln.get("t0", 0)), 2), round(float(ln.get("t1", 0)), 2), ln.get("text", "")]

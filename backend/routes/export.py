@@ -270,6 +270,14 @@ def _segment_hd_job(
             _regenerate_hd_stylize(job_id, [seg], export, should_cancel, output)
             if should_cancel and should_cancel():
                 return None
+            # Behind the same opt-out: it is the same trade (minutes of diffusion for a
+            # master-grade layer), and a segment check that skipped one AI card but paid
+            # for the other would answer a question nobody asked.
+            _regenerate_hd_dream(
+                job_id, [seg], export, should_cancel, output, on_progress=on_progress
+            )
+            if should_cancel and should_cancel():
+                return None
 
         def progress(done, total, preview_url=None):
             on_progress(done, total, preview_url, phase="render")
@@ -332,6 +340,11 @@ def _export_job(job_id, segments, compositions, lyric_lines, export, on_progress
         if should_cancel and should_cancel():
             return None
         _regenerate_hd_stylize(job_id, hydrated, export, should_cancel)
+        if should_cancel and should_cancel():
+            return None
+        # Last, and the only pass that publishes progress — it is a diffusion call per
+        # frame over the whole song, so it dominates everything before the render.
+        _regenerate_hd_dream(job_id, hydrated, export, should_cancel, on_progress=on_progress)
         if should_cancel and should_cancel():
             return None
 
@@ -566,6 +579,198 @@ def _regenerate_hd_stylize(job_id, segments, export, should_cancel, output=None)
                     "addedAt": int(time.time()),
                 },
             )
+        n["data"] = {**d, "assetUrl": url}
+
+
+def _dream_short(export: dict, model: str) -> int:
+    """The short side to diffuse a Dream clip at for this export → px.
+
+    Asked for by `stylizeSize` (the shared "AI-card HD generation size" knob), then
+    CLAMPED so the long side stays inside the model's `max_edge`. The clamp is not
+    defensive tidying: `_work_dims` scales the short side to the grid aspect and does no
+    clipping of its own, so a 1080x1920 master at the 768 default would ask SD-Turbo
+    (max_edge 768) for 768x1360 — a third again past its native ceiling, where a
+    distilled 2-step model tiles and repeats rather than simply looking softer.
+
+    For a 9:16 master this lands at 576 on Z-Image and 432 on SD-Turbo. The first is
+    already the card's own HD preview size, which is the honest headline: at portrait
+    aspect the win here is generating the clip AT ALL and at the right grid, not a
+    resolution jump. Widen the master and the ceiling rises with it.
+    """
+    from .. import imagegen
+
+    want = int(export.get("stylizeSize") or 768)
+    w = int(export.get("width") or 1080)
+    h = int(export.get("height") or 1920)
+    max_edge = int(imagegen.MODELS[model]["max_edge"])
+    # Integer math on purpose: `max_edge / (long/short)` is the same number through a
+    # float divide that lands on 431.99999 as often as on 432, and truncating that costs
+    # a pixel band for no reason anyone could later explain.
+    ceiling = max_edge * min(w, h) // max(1, max(w, h))
+    return max(256, min(want, ceiling))
+
+
+def _regenerate_hd_dream(job_id, segments, export, should_cancel, output=None, on_progress=None):
+    """For every `dream` node, generate its clip from the EXPORT's graph and swap
+    `assetUrl` in place — so the master carries frames diffused for the master.
+
+    Runs last of the three asset passes because a Dream card's `control` can be an
+    `extract` of a `stylize` clip; the reverse (a stylize fed BY a dream) still reads the
+    card's own clip, which is the one ordering this can't satisfy both ways.
+
+    Three things make this different from `_regenerate_hd_stylize`, and each is a real
+    failure someone hits:
+
+    - **It generates whether or not the card ever did.** A `dream` node with no
+      `assetUrl` renders as a PASSTHROUGH of its control input (`_dream_block`), so an
+      ungenerated card exports as raw canny edges — silently, and PER COMPOSITION. A pool
+      of nine compositions carries nine independent copies of the node, so the old export
+      needed nine separate ✨ clicks to be right and gave no sign when it wasn't. Keying
+      on the graph instead of on the card's stored url deletes that whole class.
+    - **It keeps the card's own model.** `stylize` forces `HD_MODEL`; Dream must not.
+      `fadeShape` is tuned against the model the user previewed with — specs/dream/01
+      measured SD-Turbo morphing evenly while Z-Image packs its change into w in
+      [0.42, 0.62] — so swapping the model at export time would re-read every fade they
+      set as a soft cut. What the export changes is the SIZE and the grid. Users who want
+      Z-Image in the master set the card to `hd`, which also shows them what they'll get.
+    - **It reports progress.** One diffusion call per frame across a whole song is the
+      longest phase of an export by an order of magnitude. A silent `assets` phase here
+      looks hung for hours, so this publishes its own `dream` phase and drives the frame
+      counters.
+
+    Content-keyed on (model, size, plan, upstream graph hashes) so an unchanged
+    re-export reuses the clip instead of re-running the model. The per-frame
+    `dream_cache` sits underneath that and survives even a key miss, so nudging one cut
+    re-diffuses one ramp rather than the song.
+    """
+    render_output = output or song_render.output_from_export(export)
+    from .. import imagegen, fluid, graph as graphmod
+    import os
+    from uuid import uuid4
+
+    dream_nodes = [
+        (seg, n)
+        for seg in segments
+        for n in ((seg.get("graph") or {}).get("nodes") or [])
+        if n.get("type") == "dream"
+    ]
+    if not dream_nodes:
+        return
+    log.info("export: regenerating %d dream clip(s)", len(dream_nodes))
+
+    # Frames across ALL nodes, so the bar means "how much of the generation is left"
+    # rather than restarting per card. Counted up front from the plans, which is why
+    # `describe` runs before any decision to render.
+    planned: list = []
+    for seg, n in dream_nodes:
+        if should_cancel and should_cancel():
+            return
+        d = n.get("data") or {}
+        if not (d.get("prompts") or []):
+            log.warning("export: dream %s skipped (no prompts)", n.get("id"))
+            continue
+        model = imagegen.HD_MODEL if d.get("model") == "hd" else imagegen.DRAFT_MODEL
+        try:
+            csrc, isrc, plan, fps = graphmod.dream_describe(
+                job_id, seg, seg.get("graph") or {}, n["id"], stem_audio_path, render_output
+            )
+        except ValueError as e:  # not wired to anything — leave it passing through
+            log.warning("export: dream %s skipped (%s)", n.get("id"), e)
+            continue
+        planned.append((seg, n, d, model, csrc, isrc, plan, fps))
+    if not planned:
+        return
+    total = sum(len(p[6]) for p in planned)
+    done = 0
+
+    for seg, n, d, model, csrc, isrc, plan, fps in planned:
+        if should_cancel and should_cancel():
+            return
+        graph = seg.get("graph") or {}
+        short = _dream_short(export, model)
+        # The plan IS the card's semantics per frame (prompts, blend weights, seeds,
+        # control_scale, keep), so hashing it covers every schedule edit without naming
+        # the fields one by one — the list that would silently go stale next time a knob
+        # is added. The upstream hashes cover the pixels feeding it.
+        #
+        # Version marker: bump whenever generation semantics change so stale clips
+        # regenerate (v1 = initial).
+        inputs = "|".join(
+            graph_hash.output_hash(job_id, seg, graph, sid, render_output)
+            for sid in (csrc, isrc)
+            if sid is not None
+        )
+        key = hashlib.sha256(
+            f"v1|{model}|{short}|{json.dumps(plan, sort_keys=True)}|{inputs}".encode()
+        ).hexdigest()[:16]
+        name = f"hd-dream-{key}.mp4"
+        dest = ASSETS_DIR / job_id / name
+        url = f"/assets/{job_id}/{name}"
+        if dest.exists():
+            done += len(plan)  # a cache hit still moves the bar
+            if on_progress:
+                on_progress(done, total, phase="dream")
+        else:
+            log.info(
+                "export: dream %s — %d frame(s) at short %d on %s",
+                n.get("id"),
+                len(plan),
+                short,
+                model.split("/")[-1],
+            )
+            control, init, plan_src, fps = graphmod.dream_source(
+                job_id, seg, graph, n["id"], stem_audio_path, render_output
+            )
+
+            # `base` is bound as a default so each node's closure keeps its OWN start
+            # offset — the late-binding classic, and here it would rewind the bar to the
+            # last node's base on every tick.
+            def tick(i, _total, _base=done):
+                if on_progress:
+                    on_progress(_base + i, total, phase="dream")
+
+            frames = imagegen.dream_frames(
+                control,
+                plan_src,
+                init=init,
+                model=model,
+                short=short,
+                on_progress=tick,
+            )
+            done += len(plan_src)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            # Encoded BESIDE `dest` then `os.replace`d, for `_regenerate_hd_stylize`'s
+            # reasons: no whole clip through RAM, and no truncated file left behind by a
+            # killed worker for the `dest.exists()` check above to serve forever.
+            tmp = dest.with_name(f"{dest.stem}.{os.getpid()}.{uuid4().hex[:8]}.tmp{dest.suffix}")
+            # A SOURCE the export then re-encodes, so it carries the export CRF — a
+            # preview-grade intermediate would cap the master.
+            fluid.render_mp4(
+                frames,
+                int(fps),
+                tmp,
+                out_w=frames.shape[2],
+                out_h=frames.shape[1],
+                crf=fluid.CRF_EXPORT,
+            )
+            try:
+                os.replace(tmp, dest)  # atomic: a reader sees the whole clip or nothing
+            except BaseException:
+                tmp.unlink(missing_ok=True)  # never leave scratch behind, not even on SIGTERM
+                raise
+            db.add_asset(
+                job_id,
+                {
+                    "id": f"hd-dream-{key}",
+                    "url": url,
+                    "kind": "video",
+                    "name": name,
+                    "addedAt": int(time.time()),
+                },
+            )
+        # In MEMORY only, like the other two passes: the saved project keeps the card's
+        # own draft (and its `assetKey`, so the stale badge still reads the card's clip,
+        # not this one). Only the graph the export renders sees this url.
         n["data"] = {**d, "assetUrl": url}
 
 

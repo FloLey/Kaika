@@ -151,6 +151,14 @@ or the executor's dispatch.
 6. **Tests**: `registry.test.tsx` and `test_graph_registry.py` already assert every
    registered type round-trips; add behaviour tests for the new card/handler.
 
+A card that carries a **cut schedule** (a trigger splitting its window into parts —
+today the montage and Dream) has one extra rule: extend `ScheduledData` and reuse the
+shared machinery — `backend/cut_schedule.py`, `lib/cutSchedule.ts`, the
+`patchScheduled` breakpoint mutations and `BreakpointTimeline` (whose upper lane and
+legend are slots). Do NOT fork the schedule: the two sides are held together by
+`tests/fixtures/cut_schedule_cases.json`, read by both suites, and a third copy of
+the rules would drift silently — the timeline would draw cuts the render doesn't make.
+
 ## The render cache
 
 A clip is keyed by `output_hash` (backend) / `outputHash` (frontend): the

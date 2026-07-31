@@ -1,0 +1,975 @@
+{
+  "_comment": [
+    "Shared fixture for the Dream card's per-frame plan (specs/dream/03). READ BY BOTH",
+    "SIDES: tests/test_cut_schedule.py and frontend/src/__tests__/cutSchedule.test.ts.",
+    "The timeline draws from the frontend twin and the render generates from the Python",
+    "one; if they drift, the editor lies about what the render will do and nothing fails",
+    "loudly. Neither implementation can be 'fixed' alone while this file is the oracle.",
+    "",
+    "`expect` lists [prompt_a, prompt_b, w, seed] per frame; w is compared to 6dp."
+  ],
+  "cases": [
+    {
+      "name": "one prompt, no cuts — every frame is that prompt, fixed seed",
+      "cuts": [],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        }
+      ],
+      "fps": 4,
+      "nframes": 4,
+      "seed": 5,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          5
+        ],
+        [
+          "a",
+          null,
+          0,
+          5
+        ],
+        [
+          "a",
+          null,
+          0,
+          5
+        ],
+        [
+          "a",
+          null,
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "name": "hard cut — no fades, prompt flips exactly at the cut frame",
+      "cuts": [
+        2
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        }
+      ],
+      "fps": 4,
+      "nframes": 4,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "lead-in only (fadeIn 0.5s = 2 frames at 4fps) — ramp starts AT the cut",
+      "cuts": [
+        2
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b",
+          "fadeIn": 0.5
+        }
+      ],
+      "fps": 4,
+      "nframes": 6,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.5,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "trailing only (fadeOut 0.5s) — ramp ENDS at the cut, w hits 1 there",
+      "cuts": [
+        4
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a",
+          "fadeOut": 0.5
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        }
+      ],
+      "fps": 4,
+      "nframes": 6,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.5,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "symmetric dissolve — o == i, so w is exactly 0.5 at the cut frame",
+      "cuts": [
+        4
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a",
+          "fadeOut": 0.5
+        },
+        {
+          "id": "p1",
+          "text": "b",
+          "fadeIn": 0.5
+        }
+      ],
+      "fps": 4,
+      "nframes": 8,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.25,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.5,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.75,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "the clamp — a 5s fadeIn on a 1s part scales down to the part duration",
+      "cuts": [
+        4,
+        8
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b",
+          "fadeIn": 5
+        },
+        {
+          "id": "p2",
+          "text": "c"
+        }
+      ],
+      "fps": 4,
+      "nframes": 12,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.25,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.5,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.75,
+          1
+        ],
+        [
+          "c",
+          null,
+          0,
+          1
+        ],
+        [
+          "c",
+          null,
+          0,
+          1
+        ],
+        [
+          "c",
+          null,
+          0,
+          1
+        ],
+        [
+          "c",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "hold-last — more cuts than prompts, the last prompt runs to the end",
+      "cuts": [
+        2,
+        4,
+        6
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        }
+      ],
+      "fps": 4,
+      "nframes": 8,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "span — prompt 0 swallows two cuts before prompt 1 starts",
+      "cuts": [
+        2,
+        4,
+        6
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a",
+          "span": 2
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        }
+      ],
+      "fps": 4,
+      "nframes": 8,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "surplus prompts — a third prompt with only one cut never plays",
+      "cuts": [
+        2
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        },
+        {
+          "id": "p2",
+          "text": "never"
+        }
+      ],
+      "fps": 4,
+      "nframes": 4,
+      "seed": 1,
+      "seedMode": "fixed",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "seed mode frame — a new seed every frame",
+      "cuts": [],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        }
+      ],
+      "fps": 4,
+      "nframes": 4,
+      "seed": 10,
+      "seedMode": "frame",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          10
+        ],
+        [
+          "a",
+          null,
+          0,
+          11
+        ],
+        [
+          "a",
+          null,
+          0,
+          12
+        ],
+        [
+          "a",
+          null,
+          0,
+          13
+        ]
+      ]
+    },
+    {
+      "name": "seed mode gate, reseed unwired — falls back to the cut schedule",
+      "cuts": [
+        2
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        }
+      ],
+      "fps": 4,
+      "nframes": 4,
+      "seed": 10,
+      "seedMode": "gate",
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          10
+        ],
+        [
+          "a",
+          null,
+          0,
+          10
+        ],
+        [
+          "b",
+          null,
+          0,
+          11
+        ],
+        [
+          "b",
+          null,
+          0,
+          11
+        ]
+      ]
+    },
+    {
+      "name": "seed mode gate with its own reseed signal — re-rolls WITHIN a part",
+      "cuts": [
+        2
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a"
+        },
+        {
+          "id": "p1",
+          "text": "b"
+        }
+      ],
+      "fps": 4,
+      "nframes": 4,
+      "seed": 10,
+      "seedMode": "gate",
+      "reseedFrames": [
+        1,
+        3
+      ],
+      "expect": [
+        [
+          "a",
+          null,
+          0,
+          10
+        ],
+        [
+          "a",
+          null,
+          0,
+          11
+        ],
+        [
+          "b",
+          null,
+          0,
+          11
+        ],
+        [
+          "b",
+          null,
+          0,
+          12
+        ]
+      ]
+    },
+    {
+      "name": "fade shape 3 — the ramp flattens around the midpoint (HD's steep band)",
+      "cuts": [
+        4
+      ],
+      "prompts": [
+        {
+          "id": "p0",
+          "text": "a",
+          "fadeOut": 0.5
+        },
+        {
+          "id": "p1",
+          "text": "b",
+          "fadeIn": 0.5
+        }
+      ],
+      "fps": 4,
+      "nframes": 8,
+      "seed": 1,
+      "seedMode": "fixed",
+      "shape": 3,
+      "expect": [
+        [
+          "a",
+          null,
+          0.0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0.0,
+          1
+        ],
+        [
+          "a",
+          null,
+          0.0,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.4375,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.5,
+          1
+        ],
+        [
+          "a",
+          "b",
+          0.5625,
+          1
+        ],
+        [
+          "b",
+          null,
+          0.0,
+          1
+        ],
+        [
+          "b",
+          null,
+          0.0,
+          1
+        ]
+      ]
+    }
+  ],
+  "lyric_comment": [
+    "Lyric-derived cuts (Dream's 'follow the lyrics'). Lines are SONG-ABSOLUTE; every",
+    "other time on the card is composition-LOCAL, so `segStart` is subtracted here and",
+    "nowhere else. `expect` lists [frame, isGapStart]."
+  ],
+  "lyricCases": [
+    {
+      "name": "line starts become cuts, converted from song time to window time",
+      "lines": [
+        {
+          "t0": 10.0,
+          "t1": 11.0
+        },
+        {
+          "t0": 11.0,
+          "t1": 12.0
+        },
+        {
+          "t0": 12.0,
+          "t1": 13.0
+        }
+      ],
+      "segStart": 10.0,
+      "fps": 4,
+      "nframes": 16,
+      "expect": [
+        [
+          4,
+          false
+        ],
+        [
+          8,
+          false
+        ],
+        [
+          12,
+          true
+        ]
+      ]
+    },
+    {
+      "name": "back-to-back lines make no instrumental part between them (t1 is padded, not sung-until) — only the real trailing silence",
+      "lines": [
+        {
+          "t0": 0.0,
+          "t1": 2.0
+        },
+        {
+          "t0": 2.0,
+          "t1": 4.0
+        }
+      ],
+      "segStart": 0.0,
+      "fps": 4,
+      "nframes": 20,
+      "expect": [
+        [
+          8,
+          false
+        ],
+        [
+          16,
+          true
+        ]
+      ]
+    },
+    {
+      "name": "a REAL silence opens an instrumental part",
+      "lines": [
+        {
+          "t0": 0.0,
+          "t1": 1.0
+        },
+        {
+          "t0": 3.0,
+          "t1": 4.0
+        }
+      ],
+      "segStart": 0.0,
+      "fps": 4,
+      "nframes": 20,
+      "expect": [
+        [
+          4,
+          true
+        ],
+        [
+          12,
+          false
+        ],
+        [
+          16,
+          true
+        ]
+      ]
+    },
+    {
+      "name": "instrumental off — only line starts cut",
+      "lines": [
+        {
+          "t0": 0.0,
+          "t1": 1.0
+        },
+        {
+          "t0": 3.0,
+          "t1": 4.0
+        }
+      ],
+      "segStart": 0.0,
+      "fps": 4,
+      "nframes": 20,
+      "instrumental": false,
+      "expect": [
+        [
+          12,
+          false
+        ]
+      ]
+    },
+    {
+      "name": "unaligned lines skipped — their timings were interpolated, not heard",
+      "lines": [
+        {
+          "t0": 0.0,
+          "t1": 1.0
+        },
+        {
+          "t0": 2.0,
+          "t1": 3.0,
+          "aligned": false
+        },
+        {
+          "t0": 4.0,
+          "t1": 5.0
+        }
+      ],
+      "segStart": 0.0,
+      "fps": 4,
+      "nframes": 24,
+      "skipUnaligned": true,
+      "expect": [
+        [
+          4,
+          true
+        ],
+        [
+          16,
+          false
+        ],
+        [
+          20,
+          true
+        ]
+      ]
+    },
+    {
+      "name": "a line starting BEFORE the window is clamped away (segment starts mid-line)",
+      "lines": [
+        {
+          "t0": 8.0,
+          "t1": 12.0
+        },
+        {
+          "t0": 12.0,
+          "t1": 13.0
+        }
+      ],
+      "segStart": 10.0,
+      "fps": 4,
+      "nframes": 16,
+      "expect": [
+        [
+          8,
+          false
+        ],
+        [
+          12,
+          true
+        ]
+      ]
+    }
+  ]
+}

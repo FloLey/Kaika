@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useResolvedCurve } from "./useResolvedCurve";
 import { isLooseEdge, upstreamKey, videoSource } from "../../../lib/graphModel";
 import { riseFrames } from "../../../lib/imageCount";
-import { cutMarks, effectiveCuts, montageStarts } from "../../../lib/montageCuts";
+import { cutMarks, effectiveCuts, partStarts } from "../../../lib/cutSchedule";
 import type { CombineData, Graph, GraphNode, MontageData, VideoData } from "../../../lib/types";
 import type { NodeCtx } from "./nodeProps";
 
@@ -111,7 +111,7 @@ export function useMontageShortfall(node: GraphNode, ctx: NodeCtx | undefined) {
     return {
       frames,
       rises: frames.length,
-      starts: montageStarts(frames, spans),
+      starts: partStarts(frames, spans),
       // Every mark with its provenance (gate/manual, disabled) — the timeline's rows.
       marks: cutMarks(gateRises, d, fps, total),
       total,

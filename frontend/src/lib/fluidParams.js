@@ -78,6 +78,12 @@ export const SOURCE_PARAMS = {
   "stylize": [
     { key: "strength", label: "strength", min: 0, max: 1, step: 0.01, def: 1, group: "src", fmt: fmtFixed(2) },
   ],
+  "dream": [
+    { key: "control_scale", label: "control", min: 0, max: 1, step: 0.01, def: 0.7, group: "src", fmt: fmtFixed(2) },
+    { key: "keep", label: "keep", min: 0, max: 1, step: 0.01, def: 0.1, group: "src", fmt: fmtFixed(2) },
+    { key: "trigger", label: "trigger", min: 0, max: 1, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
+    { key: "reseed", label: "reseed", min: 0, max: 1, step: 0.01, def: 0, group: "src", fmt: fmtFixed(2) },
+  ],
   "waves": [
     { key: "scale", label: "scale", min: 0, max: 1, step: 0.01, def: 0.5, group: "src", fmt: fmtFixed(2) },
     { key: "steepness", label: "steepness", min: 0, max: 1, step: 0.01, def: 0.45, group: "src", fmt: fmtFixed(2) },

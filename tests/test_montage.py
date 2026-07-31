@@ -19,10 +19,9 @@ from PIL import Image
 from backend import graph as G
 from backend import paths
 from backend import sources as S
+from backend.cut_schedule import effective_cuts, part_starts
 from backend.graph_render import (
-    _effective_cuts,
-    _montage_cut_frames,
-    _montage_starts,
+    _cut_frames,
     _to_rgba,
     _window_sensitive,
 )
@@ -180,19 +179,19 @@ blue = lambda f: f[32, 32, 2] > 200 and f[32, 32, 0] < 50  # noqa: E731
 # The cut schedule — pure functions
 # --------------------------------------------------------------------------- #
 def test_starts_frame_zero_is_extract_zero_and_cuts_advance():
-    assert _montage_starts([6], [1, 1]) == [0, 6]
+    assert part_starts([6], [1, 1]) == [0, 6]
 
 
 def test_starts_holds_the_last_extract_when_cuts_exceed_extracts():
-    assert _montage_starts([3, 6, 9], [1, 1]) == [0, 3]  # extra cuts ignored
+    assert part_starts([3, 6, 9], [1, 1]) == [0, 3]  # extra cuts ignored
 
 
 def test_starts_span_swallows_extra_cuts():
-    assert _montage_starts([3, 6, 9], [2, 1, 1]) == [0, 6, 9]
+    assert part_starts([3, 6, 9], [2, 1, 1]) == [0, 6, 9]
 
 
 def test_starts_span_beyond_available_cuts_holds():
-    assert _montage_starts([3], [2, 1]) == [0]  # the ×2 never gets its 2nd cut
+    assert part_starts([3], [2, 1]) == [0]  # the ×2 never gets its 2nd cut
 
 
 def _sq(rate, n=12):
@@ -203,26 +202,26 @@ def _sq(rate, n=12):
 
 def test_effective_cuts_gate_only_matches_the_rises():
     d = {"threshold": 0.5, "hysteresis": 0.1}
-    cuts = _effective_cuts(_sq(2), d, 12, 12)
+    cuts = effective_cuts(_sq(2), d, 12, 12)
     assert cuts == [6]  # starts high → the mid-clip rise is the one cut
 
 
 def test_effective_cuts_unions_manual_and_dedupes_frames():
     d = {"threshold": 0.5, "hysteresis": 0.1, "manualBreakpoints": [{"t": 0.25}, {"t": 0.5}]}
     # gate rise at frame 6 (0.5s at 12fps) collides with the 0.5s manual — one cut.
-    assert _effective_cuts(_sq(2), d, 12, 12) == [3, 6]
+    assert effective_cuts(_sq(2), d, 12, 12) == [3, 6]
 
 
 def test_effective_cuts_disables_a_gate_cut_within_half_a_frame():
     d = {"threshold": 0.5, "hysteresis": 0.1, "disabledCuts": [0.5 + 0.3 / 12]}
-    assert _effective_cuts(_sq(2), d, 12, 12) == []  # the frame-6 rise is silenced
+    assert effective_cuts(_sq(2), d, 12, 12) == []  # the frame-6 rise is silenced
     d2 = {"threshold": 0.5, "hysteresis": 0.1, "disabledCuts": [0.5 + 0.7 / 12]}
-    assert _effective_cuts(_sq(2), d2, 12, 12) == [6]  # outside the band — untouched
+    assert effective_cuts(_sq(2), d2, 12, 12) == [6]  # outside the band — untouched
 
 
 def test_effective_cuts_clamps_inside_the_window():
     d = {"threshold": 0.5, "hysteresis": 0.1, "manualBreakpoints": [{"t": 0.0}, {"t": 99.0}]}
-    assert _effective_cuts(np.zeros(12, np.float32), d, 12, 12) == []
+    assert effective_cuts(np.zeros(12, np.float32), d, 12, 12) == []
 
 
 def test_a_disabled_time_silences_a_manual_on_the_same_frame():
@@ -236,10 +235,10 @@ def test_a_disabled_time_silences_a_manual_on_the_same_frame():
         "disabledCuts": [0.5],
         "manualBreakpoints": [{"t": 0.5}],
     }
-    assert _effective_cuts(_sq(2), d, 12, 12) == []
+    assert effective_cuts(_sq(2), d, 12, 12) == []
     # …and only that time: a manual clear of the band still cuts.
     d["manualBreakpoints"].append({"t": 0.25})
-    assert _effective_cuts(_sq(2), d, 12, 12) == [3]
+    assert effective_cuts(_sq(2), d, 12, 12) == [3]
 
 
 # --------------------------------------------------------------------------- #
@@ -258,8 +257,8 @@ def test_schedule_fps_pins_cuts_to_the_editor_rate(assets):
     hd = {**OUT, "fps": 30, "schedule_fps": OUT["fps"]}
     b = G.Dag("job", SEG, g, NOAUDIO, hd, pool=pool)  # the export: 30fps, 12fps schedule
     d = mont["data"]
-    ca = _montage_cut_frames(a, mont, d, a._fx_params(mont)["trigger"], round(a.duration * a.fps))
-    cb = _montage_cut_frames(b, mont, d, b._fx_params(mont)["trigger"], round(b.duration * b.fps))
+    ca = _cut_frames(a, mont, d, a._fx_params(mont)["trigger"], round(a.duration * a.fps))
+    cb = _cut_frames(b, mont, d, b._fx_params(mont)["trigger"], round(b.duration * b.fps))
     assert len(ca) == len(cb)  # SAME rise set — no extra/missing cut at the other rate
     for ta, tb in zip((c / 12 for c in ca), (c / 30 for c in cb)):
         assert abs(ta - tb) <= 0.5 / 12 + 1e-6  # same instant, ±half an editor frame

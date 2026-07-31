@@ -1,0 +1,114 @@
+/* ---- the Dream card (specs/dream/) -----------------------------------------
+   Additions to the SHARED breakpoints timeline in `09-montage.css`: Dream draws its
+   prompt PARTS in the upper lane (with their fade ramps as gradient shoulders — the
+   gradient itself is inline, since it is computed per band) plus draggable handles at
+   the transitions, and lists one prompt row per part below, colour-matched. */
+
+/* Fade handles sit ON a band boundary and own a few pixels either side, so dragging a
+   fade and clicking a band can never be the same gesture. Wider hit area than they
+   look (the ::after is the visible pip) — a 3px target is unusable with a mouse. */
+.bp-fade-handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 11px;
+  margin-left: -5px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+.bp-fade-handle::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  bottom: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.45;
+}
+.bp-fade-handle:hover::after {
+  opacity: 1;
+  background: var(--fx);
+}
+
+/* The prompt LIST scrolls rather than growing the card. A schedule can hold a dozen
+   prompts, and an unbounded list pushed ✨ generate off the bottom of the screen where
+   it could not be clicked at all — the card has to stay a usable size however long the
+   schedule gets. The timeline above and the controls below stay pinned. */
+.anim-dream-prompts {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain; /* don't scroll the canvas when the list bottoms out */
+}
+
+/* One row per prompt, in schedule order, keyed to its band by the left border. */
+.anim-dream-prompt {
+  padding: 4px 0 4px 7px;
+  margin-bottom: 6px;
+  border-left: 3px solid transparent;
+}
+.anim-dream-prompt.sel {
+  background: color-mix(in srgb, var(--fx) 9%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+.anim-dream-prompt-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+/* A clamped part is the one thing here that silently differs from what was typed —
+   `dream_plan` scales an over-long fade down to the part's duration — so it is called
+   out rather than left to be discovered in the render. */
+.anim-dream-prompt-head strong {
+  color: #b8743a; /* the app's amber (logs.css --log-warn) — readable on the light panel */
+  font-weight: 600;
+}
+.anim-dream-prompt-args {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.anim-dream-prompt-args label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.anim-dream-prompt-args .anim-num {
+  width: 46px;
+}
+
+/* A plain number input matching the card's other controls. */
+.anim-num {
+  width: 56px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+.anim-num-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The lyric style / instrumental prompt fields — a text sibling of `.anim-num`, sized to
+   fill the row rather than to hold a number. */
+.anim-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}

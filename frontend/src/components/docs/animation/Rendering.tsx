@@ -69,9 +69,10 @@ export default function Rendering() {
         quality preset picks, so it stays responsive while you edit. To judge how a segment will
         really look, hit <strong>⬛ HD</strong> on the output card: it renders that one segment at{" "}
         <strong>exactly the final export's settings</strong> (size, fps, detail, and HD-regenerated
-        Image-gen / AI-Stylize assets), muxes in the segment's audio, and opens it full screen with
-        playback controls and a download link. What you see is what the master will contain for that
-        segment — no need to export the whole track to find out.
+        Image-gen / AI-Stylize / <a href="#animation-dream">Dream</a> assets), muxes in the
+        segment's audio, and opens it full screen with playback controls and a download link. What
+        you see is what the master will contain for that segment — no need to export the whole track
+        to find out.
       </p>
       <ul>
         <li>
@@ -86,8 +87,10 @@ export default function Rendering() {
         </li>
         <li>
           It's a real HD render: <strong>minutes</strong>, not seconds. Progress shows the phase
-          (preparing assets → rendering → adding audio); the button cancels it. Leaving the segment
-          (or the Studio) does <em>not</em> cancel — come back and it's still going.
+          (preparing assets → generating Dream frames → rendering → adding audio); the button
+          cancels it. A <a href="#animation-dream">Dream</a> card makes that second phase the long
+          one — it's one image per frame — and it has its own counter for that reason. Leaving the
+          segment (or the Studio) does <em>not</em> cancel — come back and it's still going.
         </li>
         <li>
           Only <strong>one</strong> HD render runs at a time, whether it's a segment or the full

@@ -13,6 +13,7 @@ export const VIDEO_PRODUCERS: ReadonlySet<string> = new Set([
   "clouds",
   "colorgrade",
   "combine",
+  "dream",
   "echo",
   "extract",
   "fire",

@@ -65,9 +65,21 @@ export const VIDEO_SOURCES = new Set<string>([
 ]);
 
 // Video-FX cards: video in -> video out. They pass a stream through a per-frame op, so
-// (like `output`) they're renderable only with their `video` input wired — see
+// (like `output`) they're renderable only with their video input wired — see
 // `nodeRenderable`. Never emitter sources: a merge combine needs raw fluid emitters.
-export const VIDEO_FX = new Set<string>(["transform", "stylize", "extract", "echo", "colorgrade"]);
+//
+// The VALUE is which input port carries that stream. It used to be assumed to be
+// "video", which held until Dream: its main input is `control` (a shape to follow, not
+// a clip to warp), with `video` an OPTIONAL start image — so Dream is renderable from
+// EITHER, and an assumed port name would have marked every Dream card unrenderable.
+export const VIDEO_FX = new Map<string, string[]>([
+  ["transform", ["video"]],
+  ["stylize", ["video"]],
+  ["dream", ["control", "video"]],
+  ["extract", ["video"]],
+  ["echo", ["video"]],
+  ["colorgrade", ["video"]],
+]);
 
 // Generated from backend/graph_common.py — the two sides must name the same cards, and
 // this used to be a hand-kept third copy of the concept. VIDEO_SOURCES / VIDEO_FX above

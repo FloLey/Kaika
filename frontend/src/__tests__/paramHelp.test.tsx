@@ -45,6 +45,9 @@ const EXPECTED_BADGES: Record<string, number> = {
   transform: 6, // mode + wrap + zoom/rotate/pan_x/pan_y ports (segments hidden unless kaleidoscope)
   extract: 1, // kind (video/out ports use plain title tooltips)
   stylize: 3, // model + inpaint + strength port (prompt + video/control ports use title tooltips)
+  dream: 9, // model + seedMode + fadeShape + prompts (on the timeline legend)
+  //          + control_scale/keep/trigger/reseed ports. The prompt textareas
+  //          and their fade/span fields use plain title tooltips, as do the in-ports.
   echo: 3, // mode + length/amount ports
   colorgrade: 4, // mode + map (thermal default) + intensity/shift ports (tint row: title tooltip)
 };
@@ -74,6 +77,7 @@ const INLINE_ARGS: Record<string, string[]> = {
   transform: ["mode", "segments", "wrap"],
   extract: ["kind"],
   stylize: ["model", "inpaint"], // prompt is a textarea with a plain title tooltip
+  dream: ["model", "seedMode", "seed", "fadeShape", "prompts"], // the rows use title tooltips
   echo: ["mode"],
   gate: ["threshold", "hysteresis", "minGap", "divide", "invert"],
   slideshow: ["threshold", "hysteresis", "fit", "box"],

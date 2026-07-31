@@ -9,12 +9,12 @@ export default function SettingsRemote() {
         <span className="num">⚙</span>Remote inference — rent a GPU for the AI cards
       </h2>
       <p>
-        The AI generation (AI Stylize, Image gen, Extract depth) normally runs on this machine,
-        which can be slow — an HD stylize clip takes tens of minutes locally. The{" "}
-        <strong>⚙ settings</strong> (header, any screen) can send that work to a{" "}
-        <strong>remote GPU server</strong> you rent (RunPod, Lambda, any box with a CUDA GPU)
-        instead. Everything else — fluid simulation, stem separation, rendering — always stays
-        local.
+        The AI generation (AI Stylize, Dream, Image gen, Extract depth) normally runs on this
+        machine, which can be slow — an HD stylize or Dream clip takes tens of minutes locally,
+        since both spend one diffusion call per frame. The <strong>⚙ settings</strong> (header, any
+        screen) can send that work to a <strong>remote GPU server</strong> you rent (RunPod, Lambda,
+        any box with a CUDA GPU) instead. Everything else — fluid simulation, stem separation,
+        rendering — always stays local.
       </p>
       <h3>Setting up the server</h3>
       <p>
@@ -28,11 +28,13 @@ export default function SettingsRemote() {
       </p>
       <h3>Choosing what runs remotely</h3>
       <p>
-        Each operation has its own toggle — check <strong>AI Stylize</strong> to offload the heavy
-        ControlNet clips while keeping quick Image-gen drafts local, or check everything. Changes
-        apply to the <em>next</em> generation immediately, no restart. If the server is unreachable,
-        the generation <strong>fails with a clear error</strong> on the card — nothing silently
-        falls back to a slow local run; flip the master toggle off to go back to local.
+        Each operation has its own toggle — check <strong>AI Stylize</strong> and{" "}
+        <strong>Dream</strong> to offload the heavy per-frame clips while keeping quick Image-gen
+        drafts local, or check everything. Dream's frame cache stays on this machine either way, so
+        a re-run after a small edit still skips everything it already has. Changes apply to the{" "}
+        <em>next</em> generation immediately, no restart. If the server is unreachable, the
+        generation <strong>fails with a clear error</strong> on the card — nothing silently falls
+        back to a slow local run; flip the master toggle off to go back to local.
       </p>
     </section>
   );

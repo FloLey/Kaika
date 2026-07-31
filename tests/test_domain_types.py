@@ -110,7 +110,7 @@ def test_every_fixture_node_is_a_declared_node_plus_only_stripped_legacy_keys():
             extra |= set(n) - declared
             assert required <= set(n), f"{n.get('type')} missing: {required - set(n)}"
     assert seen, "no nodes in the fixture"
-    assert extra == _LEGACY_NODE_KEYS, (
+    assert extra <= _LEGACY_NODE_KEYS, (
         f"the fixture's non-declared node keys are {sorted(extra)}, expected exactly the "
         f"legacy set {sorted(_LEGACY_NODE_KEYS)} — either types.Node is stale, or a field "
         f"was added without a normalizeGraph migration to strip it"

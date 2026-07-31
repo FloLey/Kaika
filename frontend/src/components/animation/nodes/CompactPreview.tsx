@@ -53,6 +53,7 @@ export const VIDEO_TYPES = new Set([
   "montage",
   "transform",
   "stylize",
+  "dream",
   "extract",
   "echo",
   "colorgrade",

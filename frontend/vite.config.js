@@ -32,6 +32,7 @@ export default defineConfig({
       "/asset-from-youtube": "http://127.0.0.1:5000",
       "/generate-image": "http://127.0.0.1:5000",
       "/stylize": "http://127.0.0.1:5000",
+      "/dream": "http://127.0.0.1:5000",
       "/settings": "http://127.0.0.1:5000",
     },
   },

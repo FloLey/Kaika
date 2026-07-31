@@ -57,6 +57,7 @@ CARD_LABELS = {
     "transform": "Transform",
     "extract": "Extract",
     "stylize": "AI Stylize",
+    "dream": "Dream",
     "echo": "Echo",
     "colorgrade": "Color Grade",
     "output": "Output",

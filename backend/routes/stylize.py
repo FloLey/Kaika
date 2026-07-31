@@ -11,7 +11,6 @@ from uuid import uuid4
 
 from flask import Blueprint, jsonify
 
-from .. import db
 from .. import graph as graphmod
 from .. import imagegen
 from .. import jobs
@@ -19,6 +18,7 @@ from .. import fluid
 from ..media import stem_audio_path
 from ..web import json_body, validate_job_id, error_response
 from .uploads import _store_asset
+from ._node_assets import persist_asset_url
 
 log = logging.getLogger("kaika")
 
@@ -94,33 +94,5 @@ def _stylize_job(gen_job, job_id, segment, graph, node_id, output, prompt, inpai
             pass
     label = model.split("/")[-1]
     asset = _store_asset(job_id, data, f"stylize-{label}.mp4", kind="video")
-    _persist_asset_url(job_id, node_id, asset["url"])
+    persist_asset_url(job_id, node_id, "stylize", asset["url"])
     return {"assets": [asset]}
-
-
-def _persist_asset_url(job_id: str, node_id: str, url: str) -> None:
-    """Write the generated clip's URL onto its node in the DB, server-side.
-
-    The card's own poll does the same write when its tab is open — but an HD clip takes
-    tens of minutes, and a reload/close mid-job used to orphan the finished asset (the
-    only writer was the browser). This is the durable copy; the client write is idempotent
-    on top of it. Reads the CURRENT graph (not the job's snapshot) so edits made during
-    the run survive; a project/node deleted mid-job just logs. Best-effort by design —
-    the job result still carries the asset either way."""
-    try:
-        row = db.get_project(job_id)
-        if row is None:
-            return
-        segments = row["data"]["segments"]
-        pool = row["data"].get("compositions") or {}
-        hit = False
-        for comp in pool.values():
-            for n in ((comp or {}).get("graph") or {}).get("nodes", []):
-                if n.get("id") == node_id and n.get("type") == "stylize":
-                    n.setdefault("data", {})["assetUrl"] = url
-                    hit = True
-        if hit:
-            db.save_segments(job_id, segments, compositions=pool)
-            log.info("stylize: persisted %s onto node %s", url, node_id)
-    except Exception:  # noqa: BLE001 — never fail the job at the finish line
-        log.warning("stylize: could not persist assetUrl onto node %s", node_id, exc_info=True)

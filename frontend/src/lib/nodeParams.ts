@@ -45,6 +45,9 @@ export const CLOUDS_PARAMS: FluidParam[] = SOURCE_PARAMS.clouds;
 export const TRANSFORM_PARAMS: FluidParam[] = SOURCE_PARAMS.transform;
 // The AI Stylize FX card: `strength` = the img2img denoise curseur.
 export const STYLIZE_PARAMS: FluidParam[] = SOURCE_PARAMS.stylize;
+// The Dream card: `control_scale` (how hard the ControlNet holds the output to the
+// control map) plus the `trigger`/`reseed` gates that drive its prompt schedule.
+export const DREAM_PARAMS: FluidParam[] = SOURCE_PARAMS.dream;
 // The Echo look-FX card: motion trails — `length` (half-life, s) + `amount` (mix).
 export const ECHO_PARAMS: FluidParam[] = SOURCE_PARAMS.echo;
 // The Color Grade look-FX card: `intensity` (dry↔graded) + `shift` (LUT/midpoint/hue).
@@ -69,6 +72,7 @@ export const NODE_PARAMS: Record<string, FluidParam[]> = {
   clouds: CLOUDS_PARAMS,
   transform: TRANSFORM_PARAMS,
   stylize: STYLIZE_PARAMS,
+  dream: DREAM_PARAMS,
   echo: ECHO_PARAMS,
   colorgrade: COLORGRADE_PARAMS,
 };

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import BreakpointTimeline, { extractColor, useLiveExtract } from "./BreakpointTimeline";
+import BreakpointTimeline, { partColor, useLivePart } from "./BreakpointTimeline";
 import CropPad from "./nodes/CropPad";
 import StreamPreview from "./nodes/StreamPreview";
 import InputPicker from "./InputPicker";
@@ -70,7 +70,7 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
   // The extract under the playhead: its tile and timeline band highlight while the
   // transport moves, so "which video is this?" answers itself.
   const segStart = ctx.segStart ?? ctx.segment?.start ?? 0;
-  const liveExtract = useLiveExtract(ctx.groupClock, cuts?.starts, cuts?.total ?? 0, fps, segStart);
+  const liveExtract = useLivePart(ctx.groupClock, cuts?.starts, cuts?.total ?? 0, fps, segStart);
 
   // Clicking a coverage band on the timeline SELECTS that video: its tile scrolls
   // into view and takes a dashed outline in its colour — the answer to "which tile
@@ -171,9 +171,7 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
                 (k === liveExtract ? " live" : "") +
                 (k === picked ? " picked" : "")
               }
-              style={
-                k === liveExtract || k === picked ? { outlineColor: extractColor(k) } : undefined
-              }
+              style={k === liveExtract || k === picked ? { outlineColor: partColor(k) } : undefined}
               onClick={() => setSelected(k)}
               draggable
               onDragStart={() => setDragFrom(k)}
@@ -193,7 +191,7 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
                 )}
               </div>
               <div className="montage-tile-name" title={comp?.name}>
-                <span className="montage-tile-key" style={{ background: extractColor(k) }} />
+                <span className="montage-tile-key" style={{ background: partColor(k) }} />
                 {k + 1}. {comp ? comp.name : "missing composition"}
               </div>
               <div className="montage-tile-meta">
@@ -317,16 +315,57 @@ export default function MontageEditor({ node, ctx, onGraphChange }: Props) {
           The extract boundaries above redraw live off the same schedule. */}
       {cuts && (
         <BreakpointTimeline
-          montageId={node.id}
+          nodeId={node.id}
           marks={cuts.marks}
-          coverage={coverage}
           fps={fps}
           total={cuts.total}
           clock={ctx.groupClock}
           segStart={segStart}
-          liveExtract={liveExtract}
-          onSelectExtract={selectExtract}
           onGraphChange={onGraphChange}
+          lane={
+            /* The EXTRACTS lane: material coverage, one clickable band per stretch.
+               Click a band to SELECT the video playing there — its own lane above the
+               rail, so selecting can never collide with click-to-place-a-cut. */
+            <div className="bp-extracts" role="group" aria-label="extract coverage">
+              {coverage.map((b, i) => (
+                <button
+                  key={`c${i}`}
+                  type="button"
+                  className={
+                    "bp-band" +
+                    (b.kind === "black" ? " bp-band-black" : "") +
+                    (b.kind === "covered" && b.extract === liveExtract ? " bp-band-live" : "")
+                  }
+                  style={{
+                    left: `${(b.from / cuts.total) * 100}%`,
+                    width: `${((b.to - b.from) / cuts.total) * 100}%`,
+                    // The band under the playhead brightens (b3 vs 59 alpha): "this is
+                    // the video playing right now".
+                    ...(b.kind === "covered"
+                      ? {
+                          background: `${partColor(b.extract)}${b.extract === liveExtract ? "b3" : "59"}`,
+                        }
+                      : {}),
+                  }}
+                  title={
+                    (b.kind === "black"
+                      ? `no material here — the export renders BLACK (extract ${b.extract + 1})`
+                      : `extract ${b.extract + 1}`) + " — click to select its tile"
+                  }
+                  onClick={() => selectExtract(b.extract)}
+                />
+              ))}
+            </div>
+          }
+          legend={
+            <>
+              <span className="bp-key bp-key-gate" /> gate ·{" "}
+              <span className="bp-key bp-key-manual" /> manual ·{" "}
+              <span className="bp-key bp-key-covered" /> filmed ·{" "}
+              <span className="bp-key bp-key-black" /> black · {(cuts.total / fps).toFixed(1)}s
+              <ArgInfo type="montage" k="breakpoints" />
+            </>
+          }
         />
       )}
 

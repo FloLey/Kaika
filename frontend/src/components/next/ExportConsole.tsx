@@ -33,6 +33,10 @@ import type { CompositionPool, OutputSettings, Segment } from "../../lib/types";
 // What the backend's `phase` means, in words that say why nothing is moving.
 const PHASE_LABEL: Record<string, string> = {
   assets: "regenerating images in HD",
+  // Its own phase because it is the only asset pass that can run for hours — one
+  // diffusion call per frame — and the only one that drives the frame counters, so
+  // "assets" sitting at 0% would be the wrong story to tell about it.
+  dream: "generating Dream frames",
   render: "rendering frames",
   audio: "muxing audio",
 };

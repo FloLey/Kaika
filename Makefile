@@ -71,7 +71,7 @@ test-frontend:
 
 lint:
 	.venv/bin/ruff check backend tests scripts
-	.venv/bin/black --check backend tests scripts/measure_render.py scripts/ai_stylize_prototype.py
+	.venv/bin/black --check backend tests scripts/measure_render.py scripts/ai_stylize_prototype.py scripts/dream_lerp_probe.py
 	cd frontend && npm run lint
 	cd frontend && npm run typecheck
 	cd frontend && npm run format:check
@@ -102,6 +102,7 @@ clean-cache:
 	rm -f data/fluid/*.mp4
 	rm -rf data/fluid/stream
 	rm -f data/fluid_cache/*.npy
+	rm -f data/dream_cache/*.png
 	@echo "render + fluid-frame cache cleared"
 
 # Reachability sweep: drop cached clips no saved project points to (keeps recent ones).

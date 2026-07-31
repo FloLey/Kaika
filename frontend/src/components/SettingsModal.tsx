@@ -55,6 +55,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const inf = settings?.inference;
   const OPS: { key: keyof AppSettings["inference"]["ops"]; label: string; hint: string }[] = [
     { key: "stylize", label: "AI Stylize", hint: "the slowest one — HD ControlNet clips" },
+    { key: "dream", label: "Dream", hint: "one generated frame per frame — the other slow one" },
     { key: "imagegen", label: "Image gen", hint: "the ✨ card + the export's HD images" },
     { key: "depth", label: "Extract depth", hint: "the Extract card's depth model" },
   ];

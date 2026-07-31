@@ -144,7 +144,10 @@
   overflow-y: auto;
 }
 
-/* ---- the breakpoints timeline (montage editor) ------------------------------ */
+/* ---- the breakpoints timeline (SHARED: montage editor + the Dream card) ------
+   The rail, the marks, the band geometry and the playhead serve both scheduled
+   cards; only the upper lane's CONTENT differs, which is why the component takes it
+   as a slot. Dream's own additions (fade handles, prompt rows) live in 11-dream.css. */
 .bp-timeline {
   display: flex;
   flex-direction: column;

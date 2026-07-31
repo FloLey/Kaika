@@ -130,11 +130,41 @@ export function cardInputs(node: GraphNode): CardInputs {
       };
     case "output":
       return { inputs: [{ portId: "video", flow: "video", label: "video", kind: "edge" }] };
-    case "stylize":
-      // The `video` input is the img2img base (rendered as the card's main in-port); the
-      // optional `control` input takes an Extract card's edges/depth for ControlNet.
+    // The pass-through FX cards. Their `video` input has to be DECLARED here, not just
+    // drawn as the card's in-port: `planDrop` builds its candidates from this list, so
+    // without an entry a wire dropped on the card body finds nowhere to land and parks
+    // as a loose edge instead of connecting. Extract felt the worst of it — it has no
+    // modulatable ports at all, so it offered literally nothing to drop onto.
+    case "extract":
+    case "transform":
+    case "echo":
+    case "colorgrade":
       return {
-        inputs: [...params, { portId: "control", flow: "video", label: "control", kind: "edge" }],
+        inputs: [...params, { portId: "video", flow: "video", label: "video", kind: "edge" }],
+      };
+    case "stylize":
+      // The `video` input is the img2img base; the optional `control` input takes an
+      // Extract card's edges/depth for ControlNet. Both are listed, so a dropped wire
+      // opens the menu rather than silently picking one.
+      return {
+        inputs: [
+          ...params,
+          { portId: "video", flow: "video", label: "video", kind: "edge" },
+          { portId: "control", flow: "video", label: "control", kind: "edge" },
+        ],
+      };
+    case "dream":
+      // BOTH video inputs must be listed. `control` is the ControlNet map; `video` is
+      // the optional start image. Either alone is enough (with only a video, its canny
+      // becomes the control), so a dropped wire is genuinely ambiguous and `planDrop`
+      // must open its menu. Listing only one made that drop auto-connect silently and
+      // left the other port unreachable from the canvas.
+      return {
+        inputs: [
+          ...params,
+          { portId: "control", flow: "video", label: "control", kind: "edge" },
+          { portId: "video", flow: "video", label: "video", kind: "edge" },
+        ],
       };
     // The gen-sim cards: every one takes a colour override; waves/rain also the
     // refracted video input; fire/lightning/rain the points positions input.

@@ -60,6 +60,7 @@ export {
   cloudsNode,
   transformNode,
   stylizeNode,
+  dreamNode,
   extractNode,
   echoNode,
   colorgradeNode,

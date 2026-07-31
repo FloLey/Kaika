@@ -87,6 +87,7 @@ data/               gitignored working data (uploads, stems, caches, assets)
 | `assets.py` | `/upload-asset/<job>`, `GET/DELETE /assets/<job>[/<id>]`, `/asset-from-youtube/<job>`, and the DERIVED preview files: `/asset-proxy/…` (seekable 360p) and `/asset-clip/…?start&dur` (the seconds a preview plays) |
 | `imagegen.py` | `/generate-image/<job>` |
 | `stylize.py` | `/stylize/<job>` — the AI Stylize card's diffusion restyle |
+| `dream.py` | `/dream/<job>` — the Dream card's per-frame txt2img+ControlNet generation |
 | `jobs_routes.py` | `/jobs/<id>`, `/logs` |
 | `animation.py` | `/extract`, `/resolve`, `/resolve-points`, `/fluid` |
 | `export.py` | `/export/stream`, `/export/segment`, `/export/segment/cached`, `/export/trim` (+ shared status/cancel) |
@@ -105,6 +106,15 @@ the implementation lives in five modules:
   than in the render dispatch table so `graph_validate` needn't import `graph_render`
   — that was the backend's only circular import; `graph_render` asserts at import
   that its handler table matches this set.
+- **`cut_schedule.py`** — the CUT SCHEDULE shared by the montage and Dream cards
+  (`effective_cuts` = gate rises ∪ manual breakpoints − disabled, `part_starts`,
+  and Dream's per-frame `dream_plan`). A leaf like `graph_common`, so the schedule is
+  testable without the render DAG. Mirrored by `frontend/src/lib/cutSchedule.ts`; the
+  two are held together by `tests/fixtures/cut_schedule_cases.json`, read by BOTH
+  suites — the timeline draws from one and the render generates from the other, so a
+  drift would make the editor lie with nothing failing loudly. The dag-aware wrapper
+  that re-resolves a gate at the project's editing fps stays in `graph_render`
+  (`_cut_frames`).
 - **`graph_validate.py`** — `validate(graph, output_id=None)`: raises `ValueError`
   → HTTP 400 on an unrenderable graph (missing output, malformed bindings, cycles,
   a stacked combine feeding a merge). `output_id` names the render **target**: when
@@ -215,6 +225,21 @@ must not contain itself). Every modulatable port is either a `const` or a
   (`sim_dims`/`upscale`).
 - **`signals.py`** — audio features (energy/onset/flux/brightness/harmonic/
   chroma/beat/bar) + shaping into 0..1 curves; the STFT is LRU-cached.
+- **`routes/export.py`** — before either render path runs, three **asset passes**
+  regenerate what a card only ever produced at preview quality, swapping urls in
+  the IN-MEMORY graph so the saved project keeps its drafts:
+  `_regenerate_hd_images` (`imagegen` nodes) → `_regenerate_hd_stylize`
+  (`stylize`) → `_regenerate_hd_dream` (`dream`). Each is content-keyed so an
+  unchanged re-export reuses its output. Dream is last (its control may be an
+  extract of a stylize clip) and differs from the other two in three ways worth
+  knowing: it generates **whether or not the card was ever generated** — an
+  `assetUrl`-less `dream` node renders as a passthrough of its control, and each
+  composition in the pool carries its own copy of the node, so the pre-pass
+  version of this shipped raw canny edges unless every copy had been clicked;
+  it keeps the **card's own model** (`fadeShape` is tuned per model — see
+  `specs/dream/01`), changing only the size, clamped by `_dream_short` to the
+  model's `max_edge` for the master's aspect; and it publishes its own `dream`
+  progress phase, being one diffusion call per frame across the whole song.
 - **`song_render.py`** — the whole-song export, on two paths chosen by
   `independent_segments`:
   - **Incremental** (no fluid field in more than one segment — montage/video/
@@ -245,20 +270,22 @@ fine for a local tool):
 
 ### Remote inference (optional)
 
-Every diffusion entrypoint (`imagegen.generate` / `stylize_frames` / `depth_frames`)
-consults `settings.remote_endpoint(op)` first: when the ⚙ settings
+Every diffusion entrypoint (`imagegen.generate` / `stylize_frames` / `dream_frames` /
+`depth_frames`) consults `settings.remote_endpoint(op)` first: when the ⚙ settings
 (`data/settings.json`, `backend/settings.py`, routes in `routes/settings.py`) enable
 it for that operation, the call ships to a rented GPU running `backend/remote_app.py`
 — a thin Flask wrapper around the SAME imagegen module (which picks cuda there via
 `_pick_device`). Transport is compressed npz via `backend/remote_client.py`, stylize
-in batches of 8 frames (progress per batch). Failures raise a clear RuntimeError on
+and dream in batches of 8 frames (progress per batch). Dream consults its frame cache
+BEFORE the remote call and fills it after, so the cache stays local and a re-run after
+a small edit goes nowhere near the network. Failures raise a clear RuntimeError on
 the card — no silent local fallback. `remote_app` pins `KAIKA_FORCE_LOCAL` so the
 GPU box can never bounce a request back out.
 - **`render_jobs.py`** — streaming renders. Two workers, per-job cancel events;
   the UI cancels the previous render on every edit, so an abandoned render stops
   between blocks.
 
-## Caching (three layers)
+## Caching (four layers)
 
 1. **Raw frames** — `fluid_cache.py`, `data/fluid_cache/*.npy`. Keyed by
    `fluid.params_hash(params)` — *physics only* — so a downstream-only edit
@@ -273,9 +300,22 @@ GPU box can never bounce a request back out.
    run; a sensitive child keys on its true absolute window (same composition at
    two windows = two renders — the contextual time base, by design). Bounded by
    the same LRU + age caps; the reachability sweep never touches this directory.
-2. **Encoded clips** — `render_cache.py`, `data/fluid/<hash>.mp4`. Keyed by
+2. **Generated frames** — `dream_cache.py`, `data/dream_cache/*.png`. One entry per
+   GENERATED frame of a Dream card, keyed by
+   `sha1(control frame bytes, prompt state, seed, model, dims, control scale)`. It is
+   per-frame rather than per-clip because Dream's input is a *schedule*: dragging a cut
+   changes a handful of frames out of hundreds, and at one diffusion call per frame a
+   whole-clip cache would make the timeline editor unusable. The key CANONICALIZES hold
+   frames (at blend weight 0 the second prompt is dropped, at 1 the first) — without
+   that, every hold frame would key against its neighbouring part's prompt and a cut
+   nudge would invalidate two whole parts instead of one transition's ramp. PNG, so a hit
+   is byte-identical to a miss. Bounded by LRU + age like the others (`store` does NOT
+   evict — it runs once per frame; `imagegen.dream_frames` evicts once per job); the
+   reachability sweep never touches it, and the generated CLIP it feeds is kept alive by
+   `cache_gc`'s ordinary `assetUrl` rule.
+3. **Encoded clips** — `render_cache.py`, `data/fluid/<hash>.mp4`. Keyed by
    `output_hash`; LRU + age caps as a **backstop**.
-3. **The reachability sweep** — `cache_gc.py`, the *primary* cleaner. After each
+4. **The reachability sweep** — `cache_gc.py`, the *primary* cleaner. After each
    project save (and once at startup) it recomputes every clip hash and asset
    file the **current state of every saved project** points to, and deletes the
    rest (minus a 30-min recency window for the live editing session). It bails
@@ -283,9 +323,9 @@ GPU box can never bounce a request back out.
    must never read as "nothing is reachable". Whole-song HD exports
    (`song_<hash>.mp4`) are reachable too, via the stem **recorded at export time**
    in the analysis cache (`song_exports`) plus a best-effort recompute — the
-   recorded stem is required because the export's HD image regeneration swaps
-   imagegen assetUrls in memory only, so its hash can't be rebuilt from the saved
-   row. Single-segment HD renders (`/export/segment`) record the same way under
+   recorded stem is required because the export's asset passes swap imagegen /
+   stylize / dream assetUrls in memory only, so its hash can't be rebuilt from
+   the saved row. Single-segment HD renders (`/export/segment`) record the same way under
    `segment_exports` (both the silent clip and its `hd-…` muxed sibling, last 10)
    — for those the record is the ONLY source: they render the client's graph,
    which may never have been saved.

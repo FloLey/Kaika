@@ -67,7 +67,7 @@ import {
   shiftMontageLocalTimes,
   splitAt,
 } from "../lib/compositions";
-import { cutMarks, effectiveCuts, montageStarts } from "../lib/montageCuts";
+import { cutMarks, effectiveCuts, partStarts } from "../lib/cutSchedule";
 import type {
   CombineData,
   MontageData,
@@ -1273,7 +1273,7 @@ describe("montage extract & breakpoint mutations", () => {
   });
 });
 
-describe("montageCuts (the schedule mirror of backend _effective_cuts)", () => {
+describe("cutSchedule (the schedule mirror of backend _effective_cuts)", () => {
   const base = { manualBreakpoints: [], disabledCuts: [] };
 
   it("unions gate rises and manual breakpoints, sorted and frame-deduped", () => {
@@ -1327,10 +1327,10 @@ describe("montageCuts (the schedule mirror of backend _effective_cuts)", () => {
     expect(cutMarks([], inRange, 24, 240)[0].breakpointId).toBe("b1");
   });
 
-  it("montageStarts mirrors the span-consumption rule (holds when cuts run dry)", () => {
-    expect(montageStarts([10, 20, 30], [1, 1, 1, 1])).toEqual([0, 10, 20, 30]);
-    expect(montageStarts([10, 20, 30], [2, 1])).toEqual([0, 20]); // ×2 swallows two cuts
-    expect(montageStarts([10], [1, 1, 1])).toEqual([0, 10]); // extract 3 never starts
-    expect(montageStarts([], [1, 1])).toEqual([0]);
+  it("partStarts mirrors the span-consumption rule (holds when cuts run dry)", () => {
+    expect(partStarts([10, 20, 30], [1, 1, 1, 1])).toEqual([0, 10, 20, 30]);
+    expect(partStarts([10, 20, 30], [2, 1])).toEqual([0, 20]); // ×2 swallows two cuts
+    expect(partStarts([10], [1, 1, 1])).toEqual([0, 10]); // extract 3 never starts
+    expect(partStarts([], [1, 1])).toEqual([0]);
   });
 });
