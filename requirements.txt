@@ -30,7 +30,7 @@ safetensors==0.8.0
 accelerate==1.14.0
 # Control-image extraction (canny/soft-edge) for the Extract card, and the img2img
 # preprocessing in AI Stylize. Headless build — no GUI/Qt deps.
-opencv-python-headless==5.0.0
+opencv-python-headless==5.0.0.93
 # HTTP client for the optional remote-inference mode (backend/remote_client.py posts
 # diffusion work to a rented GPU running backend/remote_app.py).
 requests==2.34.2
