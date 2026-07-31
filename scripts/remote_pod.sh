@@ -112,6 +112,24 @@ if [ $ok -eq 0 ]; then
   # --no-cache-dir: pip's wheel cache is GBs, and a container disk is often 20 GB
   # total. We install once per pod; there is nothing for a cache to speed up.
   "$PY" -m pip install --no-cache-dir -r requirements.txt
+
+  # PyPI serves ONE torch build per version, currently linked against CUDA 13, which
+  # needs a 580+ driver. Rented boxes lag: this was measured on a RunPod image whose
+  # driver was 12.4, where that wheel imports fine and then reports no CUDA device — a
+  # 4090 sitting idle behind a stack that says it cannot see a GPU. PyTorch's own index
+  # carries the same VERSION built against CUDA 12, and CUDA minor-version compatibility
+  # means a cu126 build runs on any 12.x driver. So match the build to the driver.
+  #
+  # It has to be requested by its full local version (2.12.1+cu126): plain `torch==2.12.1`
+  # is already satisfied by the cu130 wheel, and pip does nothing at all.
+  drv_major=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9]*\).*/\1/p' | head -1)
+  if [ -n "$drv_major" ] && [ "$drv_major" -lt 13 ]; then
+    tver=$(sed -n 's/^torch==\([0-9.]*\).*/\1/p' requirements.txt | head -1)
+    echo "  driver speaks CUDA ${drv_major}.x — refitting torch $tver to a cu126 build"
+    "$PY" -m pip install --no-cache-dir --quiet \
+      --index-url https://download.pytorch.org/whl/cu126 "torch==${tver}+cu126" \
+      || echo "  ⚠ no cu126 build for torch $tver — the GPU check below will say if it matters"
+  fi
   echo "$WANT" > "$STAMP"
 else
   echo -e "\n▸ dependencies already installed — skipping"
