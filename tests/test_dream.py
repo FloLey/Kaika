@@ -447,3 +447,49 @@ def test_zimage_control_shares_one_pipe_across_modes():
 def test_txt2img_without_control_is_refused():
     with pytest.raises(RuntimeError, match="control"):
         imagegen._load_stylize_pipe(imagegen.DRAFT_MODEL, "txt2img", False)
+
+
+# --------------------------------------------------------------------------- #
+# Cancellation — heard INSIDE the loop, not between calls
+# --------------------------------------------------------------------------- #
+
+
+def test_a_cancel_is_heard_between_frames(fake_pipe):
+    """The bug this exists for, from a real session: a user cancelled an HD export and it
+    kept diffusing for another 25 minutes, because the only cancellation test sat between
+    whole cards and one card was 617 frames. At ~80 s/frame on MPS, "checked once per
+    call" and "not cancellable" are the same thing.
+
+    Asserted on the CALL COUNT, not just the exception: a version that raised only after
+    finishing the plan would still raise."""
+    stop = {"now": False}
+
+    def should_cancel():
+        stop["now"] = len(fake_pipe.calls) >= 2
+        return stop["now"]
+
+    with pytest.raises(imagegen.Cancelled):
+        imagegen.dream_frames(
+            _control(10),
+            [_step(seed=i) for i in range(10)],
+            short=256,
+            should_cancel=should_cancel,
+        )
+    assert len(fake_pipe.calls) == 2, "the cancel was not honoured until the plan ran out"
+
+
+def test_the_check_happens_before_the_call_not_after(fake_pipe):
+    """Already cancelled on entry → not one frame is diffused. One frame is ~80 s; a
+    check placed after the call would spend it every single time."""
+    with pytest.raises(imagegen.Cancelled):
+        imagegen.dream_frames(
+            _control(3), [_step(seed=i) for i in range(3)], short=256, should_cancel=lambda: True
+        )
+    assert fake_pipe.calls == []
+
+
+def test_no_should_cancel_means_no_cancelling(fake_pipe):
+    """The card's ✨ passes nothing; it must not become cancellable by accident (and must
+    not pay a per-frame call into None)."""
+    out = imagegen.dream_frames(_control(3), [_step(seed=i) for i in range(3)], short=256)
+    assert len(fake_pipe.calls) == 3 and out.shape[0] == 3

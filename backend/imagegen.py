@@ -726,7 +726,19 @@ def _dream_embeds(pipe, spec: dict, a: str, b: str, w: float) -> dict:
     return {"prompt_embeds": torch.lerp(ea.float(), eb.float(), float(w)).to(ea.dtype)}
 
 
-def dream_frames(control, plan, *, init=None, model=None, short=None, on_progress=None):
+class Cancelled(RuntimeError):
+    """A generation stopped because its caller asked it to.
+
+    An exception rather than a partial return: a Dream run is one diffusion call per
+    frame, so "stop" has to be heard INSIDE the loop, and a half-filled array that looks
+    like a result is exactly the thing a caller forgets to check. Callers that can be
+    cancelled catch this and treat it as "nothing happened".
+    """
+
+
+def dream_frames(
+    control, plan, *, init=None, model=None, short=None, on_progress=None, should_cancel=None
+):
     """Generate one image per `plan` entry, each guided by `control[i]` — [T,H,W,3] uint8.
 
     `control` is [T,h,w,3] uint8 (an Extract card's edges/depth, or any control map).
@@ -734,6 +746,12 @@ def dream_frames(control, plan, *, init=None, model=None, short=None, on_progres
     `cut_schedule.dream_plan`. Keeping the schedule OUT of this function is deliberate:
     it makes the generator testable against a fake pipe with no scheduling in the picture,
     and it means the cache (dream_cache) can key on exactly what the pipe is handed.
+
+    `should_cancel` is polled once per GENERATED frame (not per cached one — a warm pass
+    is milliseconds) and raises `Cancelled` when it returns true. Checking only between
+    whole calls is not enough and the gap is not theoretical: an HD export cancelled by
+    the user kept diffusing a 617-frame node for another 25 minutes, because the only
+    cancellation test in the export's Dream pass sat BETWEEN cards.
 
     `init` is the OPTIONAL per-frame start image (the card's wired `video` input). Without
     it every frame starts from pure noise and only the control ties one frame to the next
@@ -816,6 +834,10 @@ def dream_frames(control, plan, *, init=None, model=None, short=None, on_progres
     # defaults travel with the call so the server applies them verbatim.
     ep = app_settings.remote_endpoint("dream") if misses else None
     if ep is not None:
+        # One check before handing the whole batch over — the remote call is atomic from
+        # here, so this is the last moment a cancel can be honoured on this path.
+        if should_cancel is not None and should_cancel():
+            raise Cancelled("dream generation cancelled before the remote batch")
         from . import remote_client
 
         hits = done
@@ -842,6 +864,10 @@ def dream_frames(control, plan, *, init=None, model=None, short=None, on_progres
     # support via `callback_on_step_end`.
     pipe = None  # loaded lazily: an all-hits run must not pay for 6 GB of weights
     for i, cimg, step, key, iimg in misses:
+        # Before the expensive call, not after: at ~80 s/frame on MPS, a check placed one
+        # line lower costs a whole frame of latency on every cancel.
+        if should_cancel is not None and should_cancel():
+            raise Cancelled(f"dream generation cancelled at frame {i}")
         if pipe is None:
             pipe = _load_stylize_pipe(model, "txt2img", True)
         gen = torch.Generator(device="cpu").manual_seed(int(step["seed"]))

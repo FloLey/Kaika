@@ -14,7 +14,7 @@ behaviour with a real failure mode:
   and the in-place HD assetUrl swaps land on a throwaway dict — the export renders the
   DRAFT images, looks fine, and is wrong in exactly the way nobody notices until they
   compare the master to the preview.
-- both job bodies release `_HD_SLOT` from a `finally`. Miss it once on the failure path
+- both job bodies release the shared GPU slot from a `finally`. Miss it once on the failure path
   and every later export 409s for the life of the process, pointing at a render_id that
   finished long ago.
 
@@ -46,6 +46,7 @@ import json
 
 import pytest
 
+from backend import heavy
 from backend.routes import export as ex
 
 
@@ -59,20 +60,14 @@ def free_slot():
 
 
 def _drain():
-    while True:
-        try:
-            ex._HD_SLOT.release()
-        except ValueError:  # BoundedSemaphore: already fully released
-            break
-    ex._HD_RUNNING = None
+    held = heavy.holder()
+    if held is not None:
+        heavy.release(held[1])
 
 
 def _held() -> bool:
     """True if the HD slot is currently taken."""
-    if ex._HD_SLOT.acquire(blocking=False):
-        ex._HD_SLOT.release()
-        return False
-    return True
+    return heavy.holder() is not None
 
 
 @pytest.fixture

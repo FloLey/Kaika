@@ -12,8 +12,8 @@ from uuid import uuid4
 from flask import Blueprint, jsonify
 
 from .. import db
-from .. import jobs
 from ..web import json_body, validate_job_id, error_response
+from ._gpu import submit_generation
 from .assets import _store_asset
 
 bp = Blueprint("imagegen", __name__)
@@ -48,12 +48,12 @@ def generate_image(body, job_id):
         model = imagegen.DRAFT_MODEL
     aspect = _project_aspect(job_id)
     gen_job = uuid4().hex[:8]
-    jobs.submit(
+    refused = submit_generation(
         gen_job,
         "generating",
         lambda: _generate_assets(job_id, prompts, seed, model, aspect, imagegen.DRAFT_EDGE),
     )
-    return jsonify({"job_id": gen_job})
+    return refused or jsonify({"job_id": gen_job})
 
 
 def _project_aspect(job_id: str) -> tuple:

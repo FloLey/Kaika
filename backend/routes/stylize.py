@@ -13,11 +13,12 @@ from flask import Blueprint, jsonify
 
 from .. import graph as graphmod
 from .. import imagegen
-from .. import jobs
 from .. import fluid
+from .. import jobs
 from ..media import stem_audio_path
 from ..web import json_body, validate_job_id, error_response
 from .uploads import _store_asset
+from ._gpu import submit_generation
 from ._node_assets import persist_asset_url
 
 log = logging.getLogger("kaika")
@@ -47,14 +48,14 @@ def stylize(body, job_id):
     inpaint = bool(d.get("inpaint", False))
     prompt = str(d.get("prompt") or "flowers")
     gen_job = uuid4().hex[:8]
-    jobs.submit(
+    refused = submit_generation(
         gen_job,
         "stylizing",
         lambda: _stylize_job(
             gen_job, job_id, segment, graph, node_id, output, prompt, inpaint, model
         ),
     )
-    return jsonify({"job_id": gen_job})
+    return refused or jsonify({"job_id": gen_job})
 
 
 def _stylize_job(gen_job, job_id, segment, graph, node_id, output, prompt, inpaint, model) -> dict:

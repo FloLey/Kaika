@@ -93,9 +93,11 @@ export default function Rendering() {
           segment (or the Studio) does <em>not</em> cancel — come back and it's still going.
         </li>
         <li>
-          Only <strong>one</strong> HD render runs at a time, whether it's a segment or the full
-          export — they'd otherwise starve each other and every card preview. Starting a second one
-          tells you which is already running.
+          Only <strong>one</strong> heavy job runs at a time — an HD render (segment or full export){" "}
+          <em>or</em> a card's <strong>✨ generate</strong>, never both. Starting a second one tells
+          you which is already running instead of queueing it. This isn't tidiness: there's one GPU,
+          and two diffusion jobs on it don't take turns, they interleave — both end up running at{" "}
+          <em>half</em> speed, and neither finishes sooner.
         </li>
         <li>
           The HD clip is cached separately from the card's draft, so rendering in HD never disturbs

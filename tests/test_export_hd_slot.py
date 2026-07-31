@@ -20,6 +20,7 @@ import pytest
 
 from backend import db
 from backend import render_jobs
+from backend import heavy
 from backend.routes import export as EX
 
 
@@ -32,13 +33,10 @@ def free_slot():
     _drain(EX)
 
 
-def _drain(mod):
-    while True:
-        try:
-            mod._HD_SLOT.release()
-        except ValueError:  # BoundedSemaphore: already fully released
-            break
-    mod._HD_RUNNING = None
+def _drain(mod):  # noqa: ARG001 — the slot is module-global now, `mod` kept for the callers
+    held = heavy.holder()
+    if held is not None:
+        heavy.release(held[1])
 
 
 @pytest.fixture
@@ -103,8 +101,7 @@ def test_a_failing_start_hands_the_slot_back(client, free_slot, one_segment_proj
         EX.render_jobs.start = original
 
     # The slot is free again: acquiring must succeed immediately.
-    assert EX._HD_SLOT.acquire(blocking=False), "the failed export leaked the HD slot"
-    EX._HD_SLOT.release()
+    assert heavy.holder() is None, "the failed export leaked the HD slot"
 
 
 def test_the_slot_is_shared_between_song_and_segment_exports(
@@ -138,15 +135,13 @@ def test_export_song_rejects_a_project_with_an_unmarked_segment(
     r = client.post("/export/stream", json={"job_id": "beef5678"})
     assert r.status_code == 400
     assert "final output" in r.get_json()["error"]
-    assert EX._HD_SLOT.acquire(blocking=False), "a rejected export consumed the HD slot"
-    EX._HD_SLOT.release()
+    assert heavy.holder() is None, "a rejected export consumed the HD slot"
 
 
 def test_export_song_404s_an_unknown_project(client, free_slot, monkeypatch):
     monkeypatch.setattr(db, "get_project", lambda jid: None)
     assert client.post("/export/stream", json={"job_id": "ghost"}).status_code == 404
-    assert EX._HD_SLOT.acquire(blocking=False), "a 404 consumed the HD slot"
-    EX._HD_SLOT.release()
+    assert heavy.holder() is None, "a 404 consumed the HD slot"
 
 
 # --------------------------------------------------------------------------- #

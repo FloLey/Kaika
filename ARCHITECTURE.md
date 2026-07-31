@@ -267,6 +267,18 @@ fine for a local tool):
   generation** (`imagegen.py`, the Image gen card's ✨ — a local diffusion model
   on MPS, lazily loaded). **One worker**, so GPU work never overlaps (and
   matplotlib state stays single-threaded).
+- **`heavy.py`** — the one-holder admission slot ACROSS the two pools. `jobs.py`'s
+  single worker only serialises work within itself; an HD render lives on
+  `render_jobs.py` and used to run beside a card's ✨ quite happily. That is not a
+  queue: `imagegen._infer_lock` interleaves the two diffusion loops frame by frame,
+  so both halve. Measured — a Dream pass alone ~80 s/frame, ~83 s/frame *each* with
+  an export's Dream pass beside it. `heavy.claim/release` is taken by
+  `routes/export._start_hd_render` and by `routes/_gpu.submit_generation` (the ✨
+  routes), and refuses **at the request** with a 409 naming the holder rather than
+  queueing — a queued job would sit on a worker for hours with nothing to show.
+  Releases are keyed by id so a late `finally` cannot free a slot its successor
+  already holds. Ingestion is deliberately outside it: GPU-heavy, but it runs at
+  upload time and never against studio work.
 
 ### Remote inference (optional)
 

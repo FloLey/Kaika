@@ -19,6 +19,7 @@ from helpers import no_audio as NOAUDIO
 from backend import graph as G
 from backend import graph_render as GR
 from backend import song_render as SR
+from backend import heavy
 from backend.routes import export as EX
 
 EXPORT = {"width": 1080, "height": 1920, "fps": 30, "gridCells": 216, "imageSize": 1024}
@@ -284,8 +285,9 @@ def test_route_409s_while_an_hd_render_is_running(client, monkeypatch):
         assert second.status_code == 409
         assert second.get_json()["render_id"] == "rid-1"  # tells the UI what to cancel
     finally:
-        EX._HD_RUNNING = None
-        EX._HD_SLOT.release()  # the job never ran, so release the slot by hand
+        held = heavy.holder()  # the job never ran, so hand the slot back by hand
+        if held is not None:
+            heavy.release(held[1])
 
 
 # ── the cache lookup (`POST /export/segment/cached`) ─────────────────────────

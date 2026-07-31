@@ -297,6 +297,12 @@ export default function Fx() {
         times: each copy carries its own clip, and the export covers all of them.
       </p>
       <p>
+        While it runs, <strong>✨ generate</strong> is refused on every card (and the other way
+        round): one GPU, and two diffusion jobs on it interleave rather than queue, so both would
+        crawl at half speed. <strong>Cancel works mid-generation</strong> — it stops on the next
+        frame, not at the end of the card.
+      </p>
+      <p>
         It keeps the <strong>model you picked</strong> — the export changes the size, never the
         look, because your fades are tuned against the model you previewed with. Want Z-Image in the
         master? Set the card to <em>HD</em>, which also shows you what you'll get. Budget for it:

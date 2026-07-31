@@ -23,6 +23,7 @@ from .. import imagegen
 from .. import jobs
 from ..media import stem_audio_path
 from ..web import json_body, validate_job_id, error_response
+from ._gpu import submit_generation
 from ._node_assets import persist_asset_url
 from .uploads import _store_asset
 
@@ -54,12 +55,12 @@ def dream(body, job_id):
         return error_response("dream node has no prompts", 400)
     model = imagegen.HD_MODEL if d.get("model") == "hd" else imagegen.DRAFT_MODEL
     gen_job = uuid4().hex[:8]
-    jobs.submit(
+    refused = submit_generation(
         gen_job,
         "dreaming",
         lambda: _dream_job(gen_job, job_id, segment, graph, node_id, output, model),
     )
-    return jsonify({"job_id": gen_job})
+    return refused or jsonify({"job_id": gen_job})
 
 
 def _dream_job(gen_job, job_id, segment, graph, node_id, output, model) -> dict:

@@ -17,6 +17,7 @@ from flask import Blueprint, jsonify
 from .. import db
 from .. import graph as graphmod
 from .. import graph_hash
+from .. import heavy
 from .. import render_cache
 from .. import render_jobs
 from .. import song_render
@@ -37,48 +38,59 @@ _EXPORT_DEFAULTS = song_render.EXPORT_DEFAULTS
 # whole-song and a segment export can now finish at the same time.
 _RECORD_LOCK = threading.Lock()
 
-# ONE HD render at a time (whole-song or single segment). Both are minutes long at a
-# fine grid and share the `render_jobs` pool with every card preview; admission is
-# non-blocking AT THE REQUEST (-> 409) rather than a wait inside the job, because a
-# blocked job would sit on a pool worker and starve the previews it competes with.
-_HD_SLOT = threading.BoundedSemaphore(1)
-_HD_RUNNING: str | None = None
-
 # How many single-segment HD renders a project pins against the cache sweep. Roughly
 # "the last few HD checks of a session"; older ones age out like any unreferenced clip.
 _SEGMENT_KEEP = 10
 
+# The id the claim carries between "admitted" and "we know the render_id" — see
+# `heavy.adopt`. Module-level so a test can recognise it.
+_PENDING = "starting"
+
 
 def _start_hd_render(run):
-    """Admit ONE HD render: take the shared slot, start the job, remember its id.
+    """Admit ONE HD render: take the shared GPU slot, start the job, publish its id.
 
-    Returns `(response, status)` on refusal, or `(None, render_id)` on success. Written
-    twice before (song + segment), including the `except: release; raise` that hands the
-    slot back — miss that once and the first failed export 409s every later one for the
-    life of the process, with a render_id that finished long ago and nothing in the UI to
-    explain it.
+    Returns `(response, status)` on refusal, or `(None, render_id)` on success. The slot
+    used to be a semaphore local to this module, which covered HD-vs-HD and nothing else;
+    it now lives in `backend/heavy.py` so a card's ✨ is refused by the SAME slot. Two
+    diffusion loops on one MPS device do not queue, they interleave — both halve.
+
+    The `except: release; raise` matters as much as the claim: miss it once and the first
+    failed export 409s every later one for the life of the process, pointing at a
+    render_id that finished long ago with nothing in the UI to explain it.
     """
-    global _HD_RUNNING
-    if not _HD_SLOT.acquire(blocking=False):
-        return (
-            jsonify({"error": "an HD render is already running", "render_id": _HD_RUNNING}),
-            409,
-        ), None
+    busy = heavy.claim(heavy.HD_RENDER, _PENDING)
+    if busy is not None:
+        body, status = heavy.refusal(busy)
+        # `render_id` kept alongside the generic shape: the HD buttons have polled that
+        # field since before this slot was shared, and only an HD holder has one.
+        if busy[0] == heavy.HD_RENDER:
+            body["render_id"] = busy[1]
+        return (jsonify(body), status), None
     try:
         render_id = render_jobs.start(run)
     except Exception:
-        _HD_SLOT.release()
+        heavy.release(_PENDING)
         raise
-    _HD_RUNNING = render_id
+    heavy.adopt(_PENDING, render_id)
     return None, render_id
 
 
-def _finish_hd_render() -> None:
-    """Release the slot and forget the running id. Pairs with `_start_hd_render`; both
-    job bodies call it from a `finally`."""
-    global _HD_RUNNING
-    _HD_RUNNING = None
-    _HD_SLOT.release()
+def _finish_hd_render(render_id: str | None = None) -> None:
+    """Hand the GPU back. Pairs with `_start_hd_render`; both job bodies call it from a
+    `finally`.
+
+    Releases by id so a job that outlives its own cancellation cannot free a slot the
+    NEXT render already holds — which would put two heavy jobs on the device through the
+    one path meant to keep them apart. `None` covers the job bodies that never learn
+    their own id; they run one at a time by construction, so clearing the current HD
+    holder is the same thing."""
+    current = heavy.holder()
+    if render_id is None:
+        if current is not None and current[0] == heavy.HD_RENDER:
+            heavy.release(current[1])
+        return
+    heavy.release(render_id)
 
 
 def _cached_lyric_lines(job_id: str) -> list:
@@ -729,14 +741,23 @@ def _regenerate_hd_dream(job_id, segments, export, should_cancel, output=None, o
                 if on_progress:
                     on_progress(_base + i, total, phase="dream")
 
-            frames = imagegen.dream_frames(
-                control,
-                plan_src,
-                init=init,
-                model=model,
-                short=short,
-                on_progress=tick,
-            )
+            try:
+                frames = imagegen.dream_frames(
+                    control,
+                    plan_src,
+                    init=init,
+                    model=model,
+                    short=short,
+                    on_progress=tick,
+                    # Per FRAME, not per card. The between-cards check below is useless on
+                    # its own here: one node can be the whole song, and at ~80 s/frame on
+                    # MPS a cancelled export went on diffusing for another 25 minutes with
+                    # its job already marked cancelled. Nothing in the UI could stop it.
+                    should_cancel=should_cancel,
+                )
+            except imagegen.Cancelled:
+                log.info("export: dream %s cancelled mid-generation", n.get("id"))
+                return
             done += len(plan_src)
             dest.parent.mkdir(parents=True, exist_ok=True)
             # Encoded BESIDE `dest` then `os.replace`d, for `_regenerate_hd_stylize`'s
