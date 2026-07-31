@@ -575,11 +575,14 @@ header {
   text-decoration: none;
   cursor: pointer;
 }
+/* FIXED and portalled (ui/Info.tsx), not absolute inside the badge. Absolute meant any
+   scrolling ancestor clipped it — and the docked inspector scrolls, so every "?" in the
+   side panel showed a tip cut off mid-sentence. `top`/`left` come from the badge's
+   measured rect; the element only exists while the tip is open, so there is no
+   hidden/visible dance left to do here. */
 .info-tip {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 60;
+  position: fixed;
+  z-index: 100; /* above the dock and the montage editor; below a modal scrim (also 100) */
   width: max-content;
   max-width: 260px;
   padding: 8px 10px;
@@ -595,19 +598,14 @@ header {
   text-align: left;
   white-space: normal;
   box-shadow: var(--shadow);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  transition:
-    opacity 0.12s,
-    transform 0.12s;
   pointer-events: none;
+  animation: info-tip-in 0.12s ease-out;
 }
-.info:hover .info-tip,
-.info:focus .info-tip {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
+@keyframes info-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 /* Step 1 — upload + lyrics */
