@@ -129,6 +129,14 @@ if [ $ok -eq 0 ]; then
     "$PY" -m pip install --no-cache-dir --quiet \
       --index-url https://download.pytorch.org/whl/cu126 "torch==${tver}+cu126" \
       || echo "  ⚠ no cu126 build for torch $tver — the GPU check below will say if it matters"
+
+    # torchaudio and torchcodec are C extensions linked against the torch we just
+    # replaced, so their .so files stop loading — and transformers imports torchaudio on
+    # the way into diffusers, which turns an unused package into a hard failure three
+    # layers away ("Failed to import diffusers.loaders.peft"). Absent is fine: every
+    # importer of these checks availability first. They arrive here only as demucs
+    # dependencies, and stem separation never runs on the inference box.
+    "$PY" -m pip uninstall -y -q torchaudio torchcodec 2>/dev/null || true
   fi
   echo "$WANT" > "$STAMP"
 else
