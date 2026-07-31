@@ -111,3 +111,101 @@ def structure_sections(bars: list, timeout: float = 180.0) -> list:
         dedup.append(s)
     dedup[0]["start_bar"] = 0
     return dedup
+
+
+# --------------------------------------------------------------------------- #
+# Lyric alignment
+# --------------------------------------------------------------------------- #
+_ALIGN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "map": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "line": {"type": "integer"},
+                    "first_word": {"type": "integer"},
+                    "last_word": {"type": "integer"},
+                },
+                "required": ["line", "first_word", "last_word"],
+            },
+        }
+    },
+    "required": ["map"],
+}
+
+_ALIGN_SYSTEM = (
+    "You align written song lyrics to an automatic transcript of the same recording.\n"
+    "The transcript is noisy: proper nouns come out mangled (Weeknd->Weekend, YOLO->Your "
+    "low) and words get dropped. The written lyrics are the truth about the WORDS; the "
+    "transcript is the truth about the ORDER and the TIMING.\n"
+    "For each written line, give the range of transcript word indices it is sung over. "
+    "Ranges must not overlap and must increase with the line number — the singer performs "
+    "the lines in order.\n"
+    "A repeated chorus appears several times in the transcript: match the FIRST written "
+    "occurrence to the FIRST sung one, the second to the second.\n"
+    "Omit a line entirely if it is genuinely not sung in the recording."
+)
+
+
+def align_lyrics(lines: list[str], words: list[tuple], timeout: float = 300.0) -> dict:
+    """Map written lyric lines onto a Whisper transcript → ``{line_index: (i0, i1)}``
+    of WORD indices. Raises on any failure so the caller falls back to the string matcher.
+
+    Only the MATCHING is the model's: the caller reads the times out of `words` at the
+    returned indices, so a hallucinated number cannot become a timestamp. Same contract
+    as `structure_sections`, where the labels are the model's and the times come from the
+    downbeat grid.
+
+    Why a model at all: string matching compares characters, so a chorus written twice
+    with a one-word variation ("I heard that years ago" / "I did that years ago") can
+    anchor the audio's FIRST chorus onto the text's SECOND one — and everything before
+    it, verses included, is then stranded and dropped. A model reads "Weekend I like your
+    outfit" as "Weeknd, I like your outfit" and places the verse where it is actually
+    sung."""
+    if not lines or not words:
+        raise RuntimeError("nothing to align")
+    lyr = "\n".join(f"{i}: {t}" for i, t in enumerate(lines))
+    hyp = " ".join(f"[{j}]{w}" for j, (w, _t0, _t1) in enumerate(words))
+    payload = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        "think": OLLAMA_THINK,
+        "format": _ALIGN_SCHEMA,
+        "messages": [
+            {"role": "system", "content": _ALIGN_SYSTEM},
+            {
+                "role": "user",
+                "content": f"WRITTEN LYRICS:\n{lyr}\n\nTRANSCRIPT:\n{hyp}\n\nReturn the map.",
+            },
+        ],
+    }
+    req = urllib.request.Request(
+        OLLAMA_URL.rstrip("/") + "/api/chat",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    resp = json.load(urllib.request.urlopen(req, timeout=timeout))
+    data = json.loads(resp["message"]["content"])
+
+    # Validate hard. The model may hand back out-of-range indices, backwards ranges, or a
+    # line placed before the previous one — none of which may reach a timestamp.
+    n_w = len(words)
+    out: dict[int, tuple[int, int]] = {}
+    used_to = -1
+    for m in sorted(data.get("map", []), key=lambda r: int(r.get("line", 0))):
+        try:
+            li, a, b = int(m["line"]), int(m["first_word"]), int(m["last_word"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if not 0 <= li < len(lines):
+            continue
+        a, b = max(0, min(n_w - 1, a)), max(0, min(n_w - 1, b))
+        if b < a or a <= used_to:  # backwards, or overlapping the previous line
+            continue
+        out[li] = (a, b)
+        used_to = b
+    if len(out) < max(1, len(lines) // 4):
+        raise RuntimeError(f"LLM aligned only {len(out)}/{len(lines)} lines")
+    return out

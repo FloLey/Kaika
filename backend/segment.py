@@ -250,6 +250,17 @@ def _resolve_lines(
                 min(t[0] for t in ts), max(t[1] for t in ts), lines[li], aligned=True
             )
 
+    return _interpolate_gaps(res, lines)
+
+
+def _interpolate_gaps(res: list, lines: list[str]) -> list:
+    """Fill runs of unplaced lines BETWEEN two placed ones by spreading them evenly, as
+    `aligned=False` (interpolated, not actually heard).
+
+    Shared by both matchers. Only interior runs are filled: a run before the first placed
+    line or after the last has no pair of anchors to spread between, and inventing one
+    would put a line where nothing was sung. Those stay None and `align_lines` drops
+    them — which is why it matters that the matcher place the FIRST lines correctly."""
     aligned_idx = [i for i, l in enumerate(res) if l is not None]
     if not aligned_idx:
         return res
@@ -258,6 +269,8 @@ def _resolve_lines(
         if not gap:
             continue
         lo, hi = res[a].t1, res[b].t0
+        if hi <= lo:  # anchors out of order — spreading would run backwards
+            continue
         step = (hi - lo) / (len(gap) + 1)
         for j, li in enumerate(gap):
             t0 = lo + step * (j + 1)
@@ -265,10 +278,40 @@ def _resolve_lines(
     return res
 
 
+def _llm_resolve_lines(
+    lines: list[str], words: Sequence[tuple[str, float, float]]
+) -> list[LyricLine | None] | None:
+    """`_resolve_lines` via the local LLM, or None when it can't be used.
+
+    Preferred over the string matcher because the failure it avoids is severe and silent:
+    difflib compares CHARACTERS, so a chorus written twice with a one-word variation can
+    anchor the audio's first chorus onto the text's second one — stranding every earlier
+    line, whole verses included, which `align_lines` then drops without a trace. A model
+    reads "Weekend I like your outfit" as "Weeknd, I like your outfit" and places it where
+    it is sung.
+
+    The model only ever returns WORD INDICES; every timestamp below is read out of
+    Whisper's own output, so a hallucinated number cannot become a time."""
+    try:
+        placed = llm.align_lyrics(list(lines), list(words))
+    except Exception as e:  # noqa: BLE001 — Ollama absent/slow/odd JSON: fall back quietly
+        _log.info("lyric alignment via LLM unavailable (%s); using the string matcher", e)
+        return None
+    res: list[LyricLine | None] = [None] * len(lines)
+    for li, (a, b) in placed.items():
+        t0, t1 = float(words[a][1]), float(words[b][2])
+        res[li] = LyricLine(t0, max(t1, t0 + 0.05), lines[li], aligned=True)
+    return res
+
+
 def align_lines(lines: list[str], words: Sequence[tuple[str, float, float]]) -> list[LyricLine]:
     """Aligned lyric lines (Nones dropped) with readable display timings — used
     for the review overlay / `lyric_lines`."""
-    res = _resolve_lines(lines, words)
+    res = _llm_resolve_lines(lines, words)
+    if res is None:
+        res = _resolve_lines(lines, words)
+    else:
+        res = _interpolate_gaps(res, lines)
     final = [l for l in res if l is not None]
     for i, l in enumerate(final):
         nxt = final[i + 1].t0 if i + 1 < len(final) else None
