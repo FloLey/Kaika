@@ -132,9 +132,10 @@ machine, from a checkout of this repo:
 VOL=/workspace KAIKA_REMOTE_TOKEN=<secret> ./scripts/remote_pod.sh
 ```
 
-That installs the deps, refuses to start on a CPU box or without a token, warms
-every model onto `$VOL/hf`, then serves on port 5100 under a restart loop. It is
-idempotent, so it doubles as the pod's start command. By hand it is
+That builds a venv at `$VOL/venv`, refuses to start on a CPU box or without a
+token, warms every model onto `$VOL/hf`, then serves on port 5100 under a restart
+loop. Both live on the volume, so a redeploy onto the same volume skips the
+download entirely. It is idempotent, and doubles as the pod's start command. By hand it is
 `pip install -r requirements.txt` then `python -m backend.remote_app`, with
 `python -m scripts.warm_models` to pre-download (add `--smoke` to prove the GPU
 works before a real job depends on it).
@@ -142,8 +143,8 @@ works before a real job depends on it).
 **Sizing.** The HD model ships fp32 (~32 GB on disk) and is cast to bf16 at
 load, so plan for **24 GB VRAM minimum** and, less obviously, **≥32 GB of system
 RAM** — it is loaded with `low_cpu_mem_usage=False`, so the full fp32 checkpoint
-lands in host memory before the cast. Budget ~45 GB of persistent volume for
-`HF_HOME`; without one you re-download it all on every pod restart.
+lands in host memory before the cast. Budget **~60 GB of persistent volume** (weights + venv);
+without one you re-download it all on every redeploy.
 
 Then open the app's **⚙ settings**, enable
 remote inference, paste the box's URL + token, pick which operations go remote,

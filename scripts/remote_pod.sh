@@ -7,8 +7,9 @@
 # straight to serving, so it is safe as the pod's start command.
 #
 # What it gets right that a hand-typed session usually does not:
-#   - HF_HOME on the persistent volume. The default cache is on the container's
-#     ephemeral disk, so without this you re-download ~40 GB on every restart.
+#   - HF_HOME *and the venv* on the persistent volume. Both default to the container's
+#     ephemeral disk, so without this a redeploy re-downloads ~40 GB of weights and
+#     ~8 GB of torch — and redeploying is the normal way to use a network volume.
 #   - Models downloaded BEFORE the port opens, so the app never meets a server that
 #     accepts a job and then sits silent for half an hour.
 #   - The server supervised, because a CUDA OOM kills the process and a dead port
@@ -46,20 +47,38 @@ if [ -z "${KAIKA_REMOTE_TOKEN:-}" ]; then
   fi
 fi
 
-# Marker rather than a pip probe: `pip install` on a warm pod still takes ~30s to decide
-# it has nothing to do, and this script doubles as a start command.
-STAMP="$VOL/.kaika-deps-$(md5sum requirements.txt | cut -c1-8)"
-if [ ! -f "$STAMP" ]; then
-  echo -e "\n▸ installing dependencies"
-  python -m pip install --quiet --upgrade pip
-  python -m pip install -r requirements.txt
-  touch "$STAMP"
+# The venv lives on the VOLUME, not in the container. A rented box's container disk is
+# thrown away when you redeploy — which is the normal way to use a network volume, not an
+# edge case — and ~8 GB of torch with it. On the volume it outlives the pod, so the second
+# deploy is instant instead of another download.
+#
+# The stamp records the requirements hash AND the interpreter, because a redeploy on a
+# newer base image gets a different python and a venv built against the old one silently
+# stops importing. Trusting a stamp alone is how you get a box that claims to be ready and
+# then fails on the first request, so the last word goes to an actual import.
+VENV="$VOL/venv"
+PY="$VENV/bin/python"
+STAMP="$VENV/.kaika-deps"
+WANT="$(md5sum requirements.txt | cut -c1-8) $(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+
+ok=0
+if [ -x "$PY" ] && [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$WANT" ]; then
+  "$PY" -c "import torch, diffusers, flask" 2>/dev/null && ok=1
+  [ $ok -eq 1 ] || echo "  ⚠ venv stamped but not importable — rebuilding"
+fi
+
+if [ $ok -eq 0 ]; then
+  echo -e "\n▸ installing dependencies into $VENV (a few minutes, once per volume)"
+  [ -x "$PY" ] || python -m venv "$VENV"
+  "$PY" -m pip install --quiet --upgrade pip
+  "$PY" -m pip install -r requirements.txt
+  echo "$WANT" > "$STAMP"
 else
-  echo -e "\n▸ dependencies already installed (requirements.txt unchanged)"
+  echo -e "\n▸ dependencies already on the volume — skipping install"
 fi
 
 echo -e "\n▸ checking the GPU"
-python - <<'PY'
+"$PY" - <<'PY'
 import torch
 if not torch.cuda.is_available():
     raise SystemExit(
@@ -76,12 +95,12 @@ echo -e "\n▸ warming models (downloads only, no VRAM)"
 # Unquoted on purpose: quoted, an unset WARM_ARGS becomes an empty argv entry
 # and argparse rejects it.
 # shellcheck disable=SC2086
-python -m scripts.warm_models ${WARM_ARGS:-}
+"$PY" -m scripts.warm_models ${WARM_ARGS:-}
 
 echo -e "\n▸ serving on :$PORT — supervised, Ctrl-C to stop"
 # A CUDA OOM takes the process down; the app would just see a dead port. Restart with a
 # pause so a genuinely broken box does not spin.
 while true; do
-  python -m backend.remote_app || echo "  ✗ server exited ($?) — restarting in 5s"
+  "$PY" -m backend.remote_app || echo "  ✗ server exited ($?) — restarting in 5s"
   sleep 5
 done
