@@ -114,7 +114,7 @@ def _load_pipe(model: str):
                 pipe = AutoPipelineForText2Image.from_pretrained(model, torch_dtype=dtype)
         except Exception as e:  # noqa: BLE001 — network/model errors get one clean message
             raise RuntimeError(f"could not load image model '{model}': {e}") from e
-        pipe = _place(pipe, device)
+        pipe = pipe.to(device)
         log.info("imagegen: loaded %s on %s", model, device)
         _pipes[model] = pipe
         return pipe
@@ -287,45 +287,11 @@ def _load_stylize_pipe(model: str, mode: str, control: bool):
             raise
         except Exception as e:  # noqa: BLE001 — one clean message the job surfaces
             raise RuntimeError(f"could not load stylize model '{model}': {e}") from e
-        pipe = _place(pipe, device)
+        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=True)
         log.info("imagegen: loaded stylize pipe %s on %s", key, device)
         _pipes[key] = pipe
         return pipe
-
-
-# Below this much VRAM, the HD pipeline does not leave room to work in. Measured on a
-# 24 GB 4090: resident alone it reserved ~24 GB, and the next 76 MiB allocation was the
-# one that failed. 32 GB is the first common card size with real headroom.
-_OFFLOAD_UNDER_GB = 32
-
-
-def _place(pipe, device: str):
-    """Put `pipe` on `device`, offloading to host RAM when the card is too small.
-
-    `enable_model_cpu_offload` keeps one component on the GPU at a time and parks the
-    rest in system memory — the text encoder in particular is dead weight for every step
-    after the prompt is encoded. It costs a transfer per component per frame, which is
-    the cheaper end of the trade against not running at all, and rented boxes pair a
-    24 GB card with far more host RAM than that (77 GB on the one this was measured on).
-
-    Only on CUDA. MPS shares one pool with the host, so there is nothing to offload TO,
-    and asking for it there trades real speed for no memory at all.
-    """
-    if device != "cuda":
-        return pipe.to(device)
-    import torch
-
-    total_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
-    if total_gb >= _OFFLOAD_UNDER_GB:
-        return pipe.to(device)
-    try:
-        pipe.enable_model_cpu_offload()
-        log.info("imagegen: %.0f GB card — model CPU offload enabled", total_gb)
-        return pipe
-    except Exception as e:  # noqa: BLE001 — an old diffusers may not offer it
-        log.warning("imagegen: could not enable CPU offload (%s), loading whole", e)
-        return pipe.to(device)
 
 
 def _work_dims(gh: int, gw: int, short: int) -> tuple[int, int]:
