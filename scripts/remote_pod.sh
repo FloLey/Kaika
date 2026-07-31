@@ -47,16 +47,25 @@ if [ -z "${KAIKA_REMOTE_TOKEN:-}" ]; then
   fi
 fi
 
-# The venv lives on the VOLUME, not in the container. A rented box's container disk is
-# thrown away when you redeploy — which is the normal way to use a network volume, not an
-# edge case — and ~8 GB of torch with it. On the volume it outlives the pod, so the second
-# deploy is instant instead of another download.
+# The venv goes on the CONTAINER disk, the weights on the volume. That split is not
+# arbitrary — it follows what each filesystem is good at. A rented box's volume is
+# typically network-backed (RunPod's is MooseFS): measured on one, ~414 MB/s streaming
+# but ~21 ms per file created. Model weights are a handful of multi-GB files read
+# sequentially, so they are perfectly happy there. A venv with torch is ~40k small files,
+# so the same volume costs a quarter of an hour to install onto and pays that latency
+# again on every import, forever. Losing the venv on redeploy and spending ~5 minutes
+# rebuilding it is the cheaper side of that trade.
 #
-# The stamp records the requirements hash AND the interpreter, because a redeploy on a
-# newer base image gets a different python and a venv built against the old one silently
-# stops importing. Trusting a stamp alone is how you get a box that claims to be ready and
-# then fails on the first request, so the last word goes to an actual import.
-VENV="$VOL/venv"
+# Override with KAIKA_VENV if your volume is local NVMe, where the reverse holds.
+#
+# Whatever the location, the stamp lives INSIDE the venv. It used to sit on the volume
+# while the packages went to the container, so a redeploy kept the marker and lost the
+# packages under it — "already installed", then a failure at the first import. The stamp
+# also records the interpreter, since a redeploy on a newer base image gets a different
+# python and a venv built against the old one stops importing without saying so. And the
+# last word still goes to an actual import: a box that claims to be ready and fails on
+# the first request is the failure this whole script exists to prevent.
+VENV="${KAIKA_VENV:-/opt/kaika-venv}"
 PY="$VENV/bin/python"
 STAMP="$VENV/.kaika-deps"
 WANT="$(md5sum requirements.txt | cut -c1-8) $(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
@@ -68,10 +77,17 @@ if [ -x "$PY" ] && [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$WANT" ]; then
 fi
 
 if [ $ok -eq 0 ]; then
-  echo -e "\n▸ installing dependencies into $VENV (a few minutes, once per volume)"
+  free_gb=$(df -BG --output=avail "$(dirname "$VENV")" 2>/dev/null | tail -1 | tr -dc 0-9)
+  if [ -n "$free_gb" ] && [ "$free_gb" -lt 14 ]; then
+    echo "  ⚠ only ${free_gb} GB free at $VENV — torch and its CUDA libs need ~12 GB."
+    echo "    Set KAIKA_VENV to somewhere roomier if the install fails."
+  fi
+  echo -e "\n▸ installing dependencies into $VENV (a few minutes, once per pod)"
   [ -x "$PY" ] || python -m venv "$VENV"
   "$PY" -m pip install --quiet --upgrade pip
-  "$PY" -m pip install -r requirements.txt
+  # --no-cache-dir: pip's wheel cache is GBs, and a container disk is often 20 GB
+  # total. We install once per pod; there is nothing for a cache to speed up.
+  "$PY" -m pip install --no-cache-dir -r requirements.txt
   echo "$WANT" > "$STAMP"
 else
   echo -e "\n▸ dependencies already on the volume — skipping install"

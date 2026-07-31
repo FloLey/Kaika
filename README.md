@@ -132,10 +132,14 @@ machine, from a checkout of this repo:
 VOL=/workspace KAIKA_REMOTE_TOKEN=<secret> ./scripts/remote_pod.sh
 ```
 
-That builds a venv at `$VOL/venv`, refuses to start on a CPU box or without a
-token, warms every model onto `$VOL/hf`, then serves on port 5100 under a restart
-loop. Both live on the volume, so a redeploy onto the same volume skips the
-download entirely. It is idempotent, and doubles as the pod's start command. By hand it is
+That builds a venv on the container disk, refuses to start on a CPU box or
+without a token, warms every model onto `$VOL/hf`, then serves on port 5100 under
+a restart loop. It is idempotent, and doubles as the pod's start command. The
+weights go on the volume and the venv does not, deliberately: a rented volume is
+usually network-backed, which is fine for a few multi-GB files read sequentially
+and terrible for the ~40k small files of a torch install (~21 ms each on RunPod's
+MooseFS). `KAIKA_VENV` overrides it if your volume is local NVMe. `PORT` picks the
+listen port — use whichever one the host actually proxies. By hand it is
 `pip install -r requirements.txt` then `python -m backend.remote_app`, with
 `python -m scripts.warm_models` to pre-download (add `--smoke` to prove the GPU
 works before a real job depends on it).
