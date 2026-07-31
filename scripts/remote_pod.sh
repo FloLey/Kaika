@@ -68,7 +68,31 @@ fi
 VENV="${KAIKA_VENV:-/opt/kaika-venv}"
 PY="$VENV/bin/python"
 STAMP="$VENV/.kaika-deps"
-WANT="$(md5sum requirements.txt | cut -c1-8) $(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+
+# requirements.txt pins scipy 1.18 and numpy 2.4, which publish no wheels below 3.12 —
+# and GPU images are routinely a version or two behind (the RunPod PyTorch 2.4 image is
+# 3.11). Left to the system python, the install runs for four minutes and then dies on a
+# resolver error, which reads like a broken pin rather than a wrong interpreter. Find one
+# that qualifies, and fetch one if the box has none: uv ships standalone CPython builds,
+# so this needs no PPA and no apt.
+PYBASE=""
+for c in python3.12 python3.13 python3 python; do
+  command -v "$c" >/dev/null 2>&1 || continue
+  if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+    PYBASE="$(command -v "$c")"
+    break
+  fi
+done
+if [ -z "$PYBASE" ]; then
+  echo -e "\n▸ no python >= 3.12 on this image — fetching one with uv"
+  python3 -m pip install --quiet --no-cache-dir uv
+  python3 -m uv python install 3.12
+  PYBASE="$(python3 -m uv python find 3.12)"
+  [ -x "$PYBASE" ] || { echo "✗ could not obtain a python 3.12" >&2; exit 1; }
+fi
+echo "  python  $PYBASE ($("$PYBASE" -V 2>&1))"
+
+WANT="$(md5sum requirements.txt | cut -c1-8) $("$PYBASE" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 
 ok=0
 if [ -x "$PY" ] && [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$WANT" ]; then
@@ -83,7 +107,7 @@ if [ $ok -eq 0 ]; then
     echo "    Set KAIKA_VENV to somewhere roomier if the install fails."
   fi
   echo -e "\n▸ installing dependencies into $VENV (a few minutes, once per pod)"
-  [ -x "$PY" ] || python -m venv "$VENV"
+  [ -x "$PY" ] || "$PYBASE" -m venv "$VENV"
   "$PY" -m pip install --quiet --upgrade pip
   # --no-cache-dir: pip's wheel cache is GBs, and a container disk is often 20 GB
   # total. We install once per pod; there is nothing for a cache to speed up.
