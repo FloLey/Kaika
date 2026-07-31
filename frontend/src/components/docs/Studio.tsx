@@ -214,8 +214,10 @@ export default function Studio() {
           value at the playhead, so you can <em>feel</em> the motion.
         </li>
         <li>
-          <strong>Play one signal</strong> — the play button on a card auditions just that band;
-          playing one pauses the others (solo).
+          <strong>Play one signal</strong> — the play button on a card auditions just that band:
+          this stem alone, filtered to the band you drew, over this segment's window only. Playing
+          one pauses the others and the full mix (solo). For <em>beat</em> and <em>bar</em> the band
+          is ignored — those are tempo phases — so you hear the whole stem.
         </li>
         <li>
           <strong>Play the whole segment</strong> — plays the full mix for the segment while every

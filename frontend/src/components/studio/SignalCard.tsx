@@ -56,6 +56,12 @@ export default function SignalCard({
   const { curve, loading } = useSignalCurve(signal, jobId, segStart, segEnd, winLen);
   // beat/bar are tempo-locked phases — the frequency band has no effect.
   const bandIgnored = signal.feature === "beat" || signal.feature === "bar";
+  // What you HEAR has to match what the card says drives the curve. The card disables
+  // the Hz inputs and prints "band ignored" for beat/bar, so filtering the audio by a
+  // band the extraction never reads would make play sound like a signal that isn't
+  // this one. Full-range there; the stored min/max stay untouched for when the
+  // feature is switched back.
+  const [playMin, playMax] = bandIgnored ? [0, nyq] : [signal.minHz, signal.maxHz];
 
   const patch = (p: Partial<Signal>) => onChange(signal.id, p);
 
@@ -86,8 +92,8 @@ export default function SignalCard({
 
   // Live band-pass while listening.
   useEffect(() => {
-    engine.setBand(signal.id, signal.minHz, signal.maxHz);
-  }, [signal.id, signal.minHz, signal.maxHz]);
+    engine.setBand(signal.id, playMin, playMax);
+  }, [signal.id, playMin, playMax]);
 
   // Park playback at the window start when the segment changes.
   useEffect(() => {
@@ -105,7 +111,7 @@ export default function SignalCard({
       el.currentTime = segStart;
     }
     if (el.paused) {
-      engine.connect(signal.id, el, signal.minHz, signal.maxHz, false);
+      engine.connect(signal.id, el, playMin, playMax, false);
       onSolo(signal.id);
       el.play().catch(() => {});
     } else {

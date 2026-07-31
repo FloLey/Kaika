@@ -15,6 +15,10 @@ interface Track {
 class AudioEngine {
   ctx: AudioContext | null = null;
   tracks = new Map<string, Track>();
+  // `createMediaElementSource` throws InvalidStateError the SECOND time it is handed
+  // the same element — and there is no way to ask an element whether it is captured.
+  // Keyed weakly so a discarded <audio> takes its source node with it.
+  private sources = new WeakMap<HTMLAudioElement, MediaElementAudioSourceNode>();
 
   ensureCtx(): AudioContext {
     if (!this.ctx) {
@@ -32,8 +36,17 @@ class AudioEngine {
   connect(uid: string, el: HTMLAudioElement, min: number, max: number, muted = false): Track {
     const ctx = this.ensureCtx();
     let t = this.tracks.get(uid);
+    // A remount hands us a NEW element under the SAME id — leaving the signals tab for
+    // the animation canvas and coming back does exactly this. Returning the old chain
+    // would leave the live element uncaptured, and an uncaptured <audio> still plays:
+    // you get the whole stem, full-range, instead of the band. That silent downgrade is
+    // why this compares identity rather than trusting the id.
+    if (t && t.el !== el) {
+      this.remove(uid);
+      t = undefined;
+    }
     if (!t) {
-      const src = ctx.createMediaElementSource(el);
+      const src = this.srcFor(ctx, el);
       const hp1 = ctx.createBiquadFilter();
       hp1.type = "highpass";
       const hp2 = ctx.createBiquadFilter();
@@ -55,6 +68,17 @@ class AudioEngine {
     this.setBand(uid, min, max);
     this.setMuted(uid, muted);
     return t;
+  }
+
+  // One source node per element, for the element's whole life. Re-capturing is fatal,
+  // so this cache is what lets `connect` rebuild a chain freely.
+  private srcFor(ctx: AudioContext, el: HTMLAudioElement): MediaElementAudioSourceNode {
+    let s = this.sources.get(el);
+    if (!s) {
+      s = ctx.createMediaElementSource(el);
+      this.sources.set(el, s);
+    }
+    return s;
   }
 
   setBand(uid: string, min: number, max: number) {
@@ -87,6 +111,9 @@ class AudioEngine {
 
   reset() {
     for (const uid of [...this.tracks.keys()]) this.remove(uid);
+    // The cached sources belong to the context we are about to close; a node from a
+    // closed context cannot be re-wired into the next one.
+    this.sources = new WeakMap();
     if (this.ctx) {
       this.ctx.close().catch(() => {});
       this.ctx = null;
