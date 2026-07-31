@@ -124,17 +124,28 @@ Env vars (see `.env.example`): `DATABASE_URL` (default
 
 ### Remote inference (optional — rent a GPU for the AI cards)
 
-The diffusion work (AI Stylize, Image gen, Extract depth) can run on a remote
-CUDA box (RunPod & co) instead of the local MPS GPU. On the rented machine, from
-a checkout of this repo:
+The diffusion work (AI Stylize, Dream, Image gen, Extract depth) can run on a
+remote CUDA box (RunPod & co) instead of the local MPS GPU. On the rented
+machine, from a checkout of this repo:
 
 ```sh
-pip install -r requirements.txt
-KAIKA_REMOTE_TOKEN=<secret> python -m backend.remote_app   # port 5100 (PORT env)
+VOL=/workspace KAIKA_REMOTE_TOKEN=<secret> ./scripts/remote_pod.sh
 ```
 
-Models download from Hugging Face on first use — put `HF_HOME` on the persistent
-volume so they survive pod restarts. Then open the app's **⚙ settings**, enable
+That installs the deps, refuses to start on a CPU box or without a token, warms
+every model onto `$VOL/hf`, then serves on port 5100 under a restart loop. It is
+idempotent, so it doubles as the pod's start command. By hand it is
+`pip install -r requirements.txt` then `python -m backend.remote_app`, with
+`python -m scripts.warm_models` to pre-download (add `--smoke` to prove the GPU
+works before a real job depends on it).
+
+**Sizing.** The HD model ships fp32 (~32 GB on disk) and is cast to bf16 at
+load, so plan for **24 GB VRAM minimum** and, less obviously, **≥32 GB of system
+RAM** — it is loaded with `low_cpu_mem_usage=False`, so the full fp32 checkpoint
+lands in host memory before the cast. Budget ~45 GB of persistent volume for
+`HF_HOME`; without one you re-download it all on every pod restart.
+
+Then open the app's **⚙ settings**, enable
 remote inference, paste the box's URL + token, pick which operations go remote,
 and hit *test connection*. Everything else (Demucs, fluid sim, rendering) always
 runs locally; if the box is unreachable a generation fails with a clear error

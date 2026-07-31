@@ -71,7 +71,7 @@ test-frontend:
 
 lint:
 	.venv/bin/ruff check backend tests scripts
-	.venv/bin/black --check backend tests scripts/measure_render.py scripts/ai_stylize_prototype.py scripts/dream_lerp_probe.py
+	.venv/bin/black --check backend tests scripts/measure_render.py scripts/ai_stylize_prototype.py scripts/dream_lerp_probe.py scripts/warm_models.py
 	cd frontend && npm run lint
 	cd frontend && npm run typecheck
 	cd frontend && npm run format:check

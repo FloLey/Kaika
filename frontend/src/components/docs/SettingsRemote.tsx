@@ -19,12 +19,16 @@ export default function SettingsRemote() {
       <h3>Setting up the server</h3>
       <p>
         On the GPU machine, from a checkout of this repo:{" "}
+        <code>VOL=/workspace KAIKA_REMOTE_TOKEN=&lt;secret&gt; ./scripts/remote_pod.sh</code>. That
+        installs the dependencies, checks the GPU, downloads the models onto the persistent volume
+        and then serves on port 5100, supervised — and it is safe to use as the pod's start command,
+        since a warm box skips straight to serving. (By hand:{" "}
         <code>pip install -r requirements.txt</code>, then{" "}
-        <code>KAIKA_REMOTE_TOKEN=&lt;secret&gt; python -m backend.remote_app</code> (port 5100).
-        It's the <em>same generation code</em> the app runs locally, so results match seed for seed.
-        Models download from Hugging Face on the first request — slow once, then cached. Paste the
-        server's URL and token into the ⚙ settings and hit <strong>test connection</strong>: you
-        should see its GPU and latency.
+        <code>KAIKA_REMOTE_TOKEN=&lt;secret&gt; python -m backend.remote_app</code>.) It's the{" "}
+        <em>same generation code</em> the app runs locally, so results match seed for seed. Models
+        download from Hugging Face on the first request — slow once, then cached. Paste the server's
+        URL and token into the ⚙ settings and hit <strong>test connection</strong>: you should see
+        its GPU and latency.
       </p>
       <h3>Choosing what runs remotely</h3>
       <p>
