@@ -139,3 +139,66 @@ describe("TransportBar", () => {
     expect((container.querySelector(".tbar-head") as HTMLElement).style.left).toBe("25%");
   });
 });
+
+// A seek issued BEFORE the audio has metadata. jsdom never loads media, so
+// `readyState` is 0 and `currentTime` is a plain property — the same shape as a real
+// browser silently dropping the write. These pin the bug where entering a segment left
+// the element at 0 while the UI read the segment head, so the first play started at the
+// top of the song and only behaved after you scrubbed by hand.
+describe("seeking before the audio is loaded", () => {
+  const stubEl = (readyState: number) => {
+    const a = transport.audioEl()!;
+    Object.defineProperty(a, "readyState", { value: readyState, configurable: true });
+    let t = 0;
+    Object.defineProperty(a, "currentTime", {
+      configurable: true,
+      get: () => t,
+      // A real element ignores the write until metadata exists; mirror that exactly.
+      set: (v: number) => {
+        if ((a.readyState as number) >= 1) t = v;
+      },
+    });
+    a.play = vi.fn().mockResolvedValue(undefined);
+    return a;
+  };
+
+  it("applies the seek once metadata arrives, instead of losing it", () => {
+    const a = stubEl(0);
+    transport.setWindow(30, 60, { reseek: true });
+    expect(a.currentTime).toBe(0); // dropped by the element, as a browser would
+
+    Object.defineProperty(a, "readyState", { value: 1, configurable: true });
+    fireEvent(a, new Event("loadedmetadata"));
+    expect(a.currentTime).toBe(30); // …and replayed the moment it could land
+  });
+
+  it("starts play INSIDE the window even when the element was not ready", () => {
+    const a = stubEl(0);
+    transport.setWindow(30, 60, { reseek: true });
+    transport.play();
+    // Nothing can play yet; the element is still empty.
+    expect(a.play).not.toHaveBeenCalled();
+
+    Object.defineProperty(a, "readyState", { value: 2, configurable: true });
+    fireEvent(a, new Event("canplay"));
+    expect(a.play).toHaveBeenCalled();
+    // The whole point: it began at the segment head, not at 0 (the top of the song).
+    expect(a.currentTime).toBe(30);
+  });
+
+  it("a newer seek supersedes a pending one", () => {
+    const a = stubEl(0);
+    transport.setWindow(30, 60, { reseek: true });
+    transport.setWindow(90, 120, { reseek: true });
+    Object.defineProperty(a, "readyState", { value: 1, configurable: true });
+    fireEvent(a, new Event("loadedmetadata"));
+    expect(a.currentTime).toBe(90);
+  });
+
+  it("seeks normally once loaded (no queueing when it can just be set)", () => {
+    const a = stubEl(1);
+    transport.setWindow(30, 60);
+    transport.seekSong(42);
+    expect(a.currentTime).toBe(42);
+  });
+});

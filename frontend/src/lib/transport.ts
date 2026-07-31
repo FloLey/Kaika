@@ -71,7 +71,36 @@ export function audioEl(): HTMLAudioElement | null {
   el.addEventListener("pause", () => patch({ playing: false }));
   el.addEventListener("ended", () => patch({ playing: false }));
   el.addEventListener("timeupdate", onTick);
+  el.addEventListener("loadedmetadata", flushSeek);
   return el;
+}
+
+// A seek asked for before the element could accept it. Writing `currentTime` while
+// `readyState` is HAVE_NOTHING is SILENTLY DROPPED by the browser — and `setSource`
+// calls `load()`, which resets readyState to 0 right before the studio seeks to the
+// segment head. The write vanished, `position` was still set (so the UI read 105s while
+// the element sat at 0), and the first play started from the top of the song. It only
+// behaved once you scrubbed by hand, which happened late enough to land. Remember the
+// last requested seek instead and apply it as soon as metadata arrives.
+let pendingSeek: number | null = null;
+
+function applySeek(a: HTMLAudioElement, t: number) {
+  if (a.readyState >= 1) {
+    // HAVE_METADATA: duration is known, so currentTime sticks.
+    a.currentTime = t;
+    pendingSeek = null;
+  } else {
+    pendingSeek = t; // one slot: a newer seek supersedes an older one
+  }
+}
+
+function flushSeek() {
+  const a = el;
+  if (!a || pendingSeek == null) return;
+  a.currentTime = pendingSeek;
+  pendingSeek = null;
+  position = a.currentTime;
+  emitPos();
 }
 
 function onTick() {
@@ -122,7 +151,7 @@ export function seekSong(t: number) {
   if (!a) return;
   const hi = state.windowEnd > 0 ? state.windowEnd : Number.MAX_SAFE_INTEGER;
   const clamped = Math.min(Math.max(t, state.windowStart), hi);
-  a.currentTime = clamped;
+  applySeek(a, clamped);
   position = clamped;
   emitPos();
 }
@@ -130,18 +159,26 @@ export function seekSong(t: number) {
 export function play() {
   const a = audioEl();
   if (!a) return;
-  // Outside the window (a fresh segment, or a finished one) — start at its head
-  // rather than wherever the previous window left the playhead.
-  if (
-    a.currentTime < state.windowStart ||
-    (state.windowEnd > 0 && a.currentTime >= state.windowEnd - 0.02)
-  ) {
-    a.currentTime = state.windowStart;
-  }
+  // The clamp has to run when the element can actually TAKE it, so it lives inside the
+  // start closure rather than before the readiness check. Outside the window (a fresh
+  // segment, or a finished one) we start at its head rather than wherever the previous
+  // window left the playhead — but on a just-loaded element the old code wrote that
+  // correction into a currentTime the browser was still ignoring, and playback began at
+  // 0: the top of the song instead of the segment.
+  const start = () => {
+    if (
+      a.currentTime < state.windowStart ||
+      (state.windowEnd > 0 && a.currentTime >= state.windowEnd - 0.02)
+    ) {
+      a.currentTime = state.windowStart;
+      pendingSeek = null; // this IS the seek now — don't let a stale one fight it
+    }
+    void a.play().catch(() => {});
+  };
   // The full mix is compressed and may not be buffered on the first play; waiting
   // for `canplay` beats starting silent.
-  if (a.readyState >= 2) void a.play().catch(() => {});
-  else a.addEventListener("canplay", () => void a.play().catch(() => {}), { once: true });
+  if (a.readyState >= 2) start();
+  else a.addEventListener("canplay", start, { once: true });
 }
 
 export function pause() {
@@ -158,7 +195,7 @@ export function reset() {
   const a = audioEl();
   if (a) {
     a.pause();
-    a.currentTime = state.windowStart;
+    applySeek(a, state.windowStart);
   }
   position = state.windowStart;
   emitPos();
@@ -184,6 +221,7 @@ export function __resetForTest() {
   el = null;
   state = INITIAL;
   position = 0;
+  pendingSeek = null;
   stateSubs.clear();
   posSubs.clear();
 }
