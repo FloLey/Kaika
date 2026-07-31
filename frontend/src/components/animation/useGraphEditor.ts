@@ -74,6 +74,7 @@ interface GraphEditorOpts {
   exportSettings?: NodeCtx["exportSettings"];
   assets?: NodeCtx["assets"];
   lyricLines?: LyricLine[];
+  lyricLinesDefault?: LyricLine[];
   onSaveLyricLines?: NodeCtx["onSaveLyricLines"];
   groupClock?: NodeCtx["groupClock"];
   groupPlaying?: boolean;
@@ -98,6 +99,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
     exportSettings,
     assets,
     lyricLines,
+    lyricLinesDefault,
     onSaveLyricLines,
     groupClock,
     groupPlaying,
@@ -468,6 +470,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       assets,
       signals: segment.signals,
       lyricLines,
+      lyricLinesDefault,
       onSaveLyricLines,
       lyricsKey,
       graph,
@@ -496,6 +499,7 @@ export function useGraphEditor(opts: GraphEditorOpts) {
       exportSettings,
       assets,
       lyricLines,
+      lyricLinesDefault,
       onSaveLyricLines,
       lyricsKey,
       graph,

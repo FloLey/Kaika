@@ -95,3 +95,43 @@ def test_put_lyric_lines_coerces_and_drops_junk(client, mk_project, analysis_dir
     assert r.status_code == 200
     saved = json.loads((analysis_dir / f"{job}.json").read_text())
     assert saved["lyric_lines"] == [{"t0": 1.5, "t1": 2.0, "text": "42"}]
+
+
+def test_the_pristine_alignment_survives_an_edit(client, mk_project, analysis_dir):
+    """The restore point. `_save_lyric_lines` overwrites `lyric_lines` wholesale, so
+    without a separate snapshot the only way back would be re-transcribing the vocals."""
+    job = mk_project("test-lyr-0010")
+    orig = [{"t0": 0.0, "t1": 1.0, "text": "as sung"}]
+    (analysis_dir / f"{job}.json").write_text(
+        json.dumps({"lyric_lines": orig, "lyric_lines_default": orig})
+    )
+    client.put(
+        f"/projects/{job}",
+        json={"segments": [], "lyric_lines": [{"t0": 0.0, "t1": 1.0, "text": "rewritten"}]},
+    )
+    data = json.loads((analysis_dir / f"{job}.json").read_text())
+    assert data["lyric_lines"][0]["text"] == "rewritten"
+    assert data["lyric_lines_default"][0]["text"] == "as sung", "the snapshot must not move"
+
+
+def test_a_project_without_a_snapshot_gets_one_on_its_first_edit(client, mk_project, analysis_dir):
+    """Projects analysed before the snapshot existed would otherwise never get a restore
+    point — and the first edit is exactly when they stop being able to make one."""
+    job = mk_project("test-lyr-0011")
+    orig = [{"t0": 0.0, "t1": 1.0, "text": "as sung"}]
+    (analysis_dir / f"{job}.json").write_text(json.dumps({"lyric_lines": orig}))
+    client.put(
+        f"/projects/{job}",
+        json={"segments": [], "lyric_lines": [{"t0": 0.0, "t1": 1.0, "text": "edited"}]},
+    )
+    data = json.loads((analysis_dir / f"{job}.json").read_text())
+    assert data["lyric_lines_default"][0]["text"] == "as sung"
+
+
+def test_the_project_get_serves_the_snapshot(client, mk_project, analysis_dir):
+    job = mk_project("test-lyr-0012")
+    (analysis_dir / f"{job}.json").write_text(
+        json.dumps({"lyric_lines": [], "lyric_lines_default": [{"t0": 0, "t1": 1, "text": "x"}]})
+    )
+    body = client.get(f"/projects/{job}").get_json()
+    assert body["lyric_lines_default"][0]["text"] == "x"

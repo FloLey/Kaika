@@ -42,6 +42,7 @@ interface StudioProps {
   exportSettings?: import("../../lib/export").ExportSettings;
   assets?: import("../../lib/types").Asset[];
   lyricLines?: LyricLine[];
+  lyricLinesDefault?: LyricLine[];
   onSaveLyricLines?: (lines: LyricLine[]) => Promise<void>;
   // Which mix the shared transport plays ("instrumental" while building a cover
   // keeps the old vocal from fighting the new words).
@@ -77,6 +78,7 @@ export default function Studio({
   exportSettings,
   assets,
   lyricLines,
+  lyricLinesDefault,
   onSaveLyricLines,
   audioMode,
   onEditSplit,
@@ -586,6 +588,7 @@ export default function Studio({
                 exportSettings={exportSettings}
                 assets={assets}
                 lyricLines={lyricLines}
+                lyricLinesDefault={lyricLinesDefault}
                 onSaveLyricLines={onSaveLyricLines}
                 groupClock={refAudio}
                 groupPlaying={allPlaying}

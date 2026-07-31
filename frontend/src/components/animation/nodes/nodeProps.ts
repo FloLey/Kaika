@@ -97,7 +97,10 @@ export interface NodeCtx {
   // "clip too short" warning needs each video's duration) instead of measuring in the
   // browser — probing a 1 GB source per card is what stalled the editor.
   assets?: Asset[];
-  lyricLines?: LyricLine[]; // aligned lyric lines for the lyrics card
+  lyricLines?: LyricLine[];
+  // The pristine alignment (snapshotted at analysis). Present = the Lyrics card can
+  // offer its restore; absent = the project predates the snapshot and has none.
+  lyricLinesDefault?: LyricLine[]; // aligned lyric lines for the lyrics card
   lyricsKey?: string; // JSON of lyricLines, serialized once for the outputs' render keys
   onSaveLyricLines?: (lines: LyricLine[]) => Promise<void>; // persist edited text (keeps timings)
   groupClock?: RefObject<HTMLAudioElement | null>;

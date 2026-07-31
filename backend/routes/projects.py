@@ -70,6 +70,9 @@ def project_get(job_id: str):
             "vocal_envelope": analysis.get("vocal_envelope", []),
             "envelope_times": analysis.get("envelope_times", []),
             "lyric_lines": analysis.get("lyric_lines", []),
+            # Present only when a pristine alignment was snapshotted — the card enables
+            # its "restore" on this, rather than offering a button that does nothing.
+            "lyric_lines_default": analysis.get("lyric_lines_default", []),
         }
     )
 
@@ -93,6 +96,11 @@ def _save_lyric_lines(job_id: str, lines: list) -> None:
     ]
     cache = ANALYSIS_DIR / f"{job_id}.json"
     analysis = json.loads(cache.read_text()) if cache.exists() else {}
+    # Back-fill the snapshot from whatever is on disk the FIRST time this project is
+    # edited: projects analysed before the snapshot existed would otherwise never get a
+    # restore point, and the first edit is exactly when they stop being able to make one.
+    if not analysis.get("lyric_lines_default") and analysis.get("lyric_lines"):
+        analysis["lyric_lines_default"] = analysis["lyric_lines"]
     analysis["lyric_lines"] = clean
     cache.write_text(json.dumps(analysis))
 

@@ -82,6 +82,11 @@ export default function LyricsNode({
   const set = useNodeData<LyricsData>(node, onGraphChange);
   const lineCount = (ctx?.lyricLines || []).length;
   const [editorOpen, setEditorOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  // Compared by value, not by reference: the point is whether the WORDS and TIMINGS
+  // differ, so a reload that rebuilds both arrays must not re-enable the button.
+  const sameAsDefault =
+    JSON.stringify(ctx?.lyricLines || []) === JSON.stringify(ctx?.lyricLinesDefault || []);
   // A `color` card can drive the fill and/or the outline colour (else white / black).
   const fillWired = useMemo(
     () => !!(ctx?.graph && videoSource(ctx.graph, node.id, "fillColor")),
@@ -199,6 +204,31 @@ export default function LyricsNode({
             title="Edit the words and start/end time of each line"
           >
             ✎ edit lines
+          </button>
+        )}
+        {/* Back to the alignment this project was analysed with. It is a stored SNAPSHOT,
+            not a re-run: the aligner is Whisper + a matching pass over the vocals, half a
+            minute of work to recover something we already had. Hidden when the project
+            predates the snapshot, so the button never lies about what it can do. */}
+        {ctx?.onSaveLyricLines && (ctx?.lyricLinesDefault || []).length > 0 && (
+          <button
+            className="btn sm"
+            disabled={restoring || sameAsDefault}
+            title={
+              sameAsDefault
+                ? "The lines already match the original alignment"
+                : "Discard your edits and go back to the alignment from the analysis"
+            }
+            onClick={async () => {
+              setRestoring(true);
+              try {
+                await ctx.onSaveLyricLines?.(ctx.lyricLinesDefault || []);
+              } finally {
+                setRestoring(false);
+              }
+            }}
+          >
+            {restoring ? "restoring…" : "↺ restore original"}
           </button>
         )}
       </div>

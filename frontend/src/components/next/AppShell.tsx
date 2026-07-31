@@ -266,6 +266,7 @@ export default function AppShell() {
             exportSettings={p.exportSettings}
             assets={p.assets}
             lyricLines={p.lyricLines}
+            lyricLinesDefault={p.lyricLinesDefault}
             onSaveLyricLines={p.saveLyricLines}
             audioMode={p.exportSettings.audioMode}
             // The two tabs live in the URL, so a link can open the graph directly.

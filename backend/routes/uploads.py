@@ -275,6 +275,12 @@ def _finalize_proposal(job_id: str, result: dict) -> dict:
                 "vocal_envelope": result.get("vocal_envelope", []),
                 "envelope_times": result.get("envelope_times", []),
                 "lyric_lines": result.get("lyric_lines", []),
+                # The pristine alignment, kept UNTOUCHED for the card's "restore".
+                # Written once here and never again: the in-app editor overwrites
+                # `lyric_lines` wholesale, so without a snapshot the only way back would
+                # be re-transcribing the vocals — half a minute of Whisper to recover
+                # something we already had.
+                "lyric_lines_default": result.get("lyric_lines", []),
             }
         )
     )

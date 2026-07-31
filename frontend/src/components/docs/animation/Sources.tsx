@@ -106,6 +106,12 @@ export default function Sources() {
           new words line by line (uploading different words directly won't align — the timing comes
           from matching what is actually sung). When the automatic timing is off — or there were no
           lyrics to align to — nudge each line's times by hand.
+          <br />
+          <strong>↺ restore original</strong> puts back the alignment the track was analysed with,
+          discarding every edit since. That original is stored once, at analysis time, so restoring
+          is instant and always available — however many times you have rewritten the lines. It only
+          appears on tracks analysed after this was added; older projects keep their first edit as
+          the restore point instead.
         </li>
       </ul>
 

@@ -125,6 +125,9 @@ export function useProject() {
   const [vocalEnvelope, setVocalEnvelope] = useState<number[]>([]);
   const [envelopeTimes, setEnvelopeTimes] = useState<number[]>([]);
   const [lyricLines, setLyricLines] = useState<LyricLine[]>([]);
+  // The pristine alignment, snapshotted server-side at analysis time. Kept apart from
+  // `lyricLines` so the card can offer a restore WITHOUT re-transcribing the vocals.
+  const [lyricLinesDefault, setLyricLinesDefault] = useState<LyricLine[]>([]);
   const [activeSegId, setActiveSegId] = useState<string | null>(null);
   // Project-wide animation output settings (size/quality/fps/background).
   const [output, setOutput] = useState(OUTPUT_DEFAULTS);
@@ -245,6 +248,7 @@ export function useProject() {
         setVocalEnvelope(segData.vocal_envelope || []);
         setEnvelopeTimes(segData.envelope_times || []);
         setLyricLines(segData.lyric_lines || []);
+        setLyricLinesDefault(segData.lyric_lines || []); // fresh analysis IS the default
         if (segData.duration) setDuration(segData.duration);
         lastSaved.current = "";
         setSegments(hydrateSegments(segData.segments, data.stems));
@@ -274,6 +278,7 @@ export function useProject() {
       setOriginalSpec(p.stems?.original?.spectrogram || "");
       setVocalEnvelope(p.vocal_envelope || []);
       setLyricLines(p.lyric_lines || []);
+      setLyricLinesDefault(p.lyric_lines_default || p.lyric_lines || []);
       setEnvelopeTimes(p.envelope_times || []);
       const segs = hydrateSegments(p.segments, p.stems || {});
       setSegments(segs);
@@ -380,6 +385,7 @@ export function useProject() {
       vocalEnvelope,
       envelopeTimes,
       lyricLines,
+      lyricLinesDefault,
       activeSegId,
       output,
       exportSettings,
@@ -416,6 +422,7 @@ export function useProject() {
       vocalEnvelope,
       envelopeTimes,
       lyricLines,
+      lyricLinesDefault,
       activeSegId,
       output,
       exportSettings,
