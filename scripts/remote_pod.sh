@@ -7,9 +7,9 @@
 # straight to serving, so it is safe as the pod's start command.
 #
 # What it gets right that a hand-typed session usually does not:
-#   - HF_HOME *and the venv* on the persistent volume. Both default to the container's
-#     ephemeral disk, so without this a redeploy re-downloads ~40 GB of weights and
-#     ~8 GB of torch — and redeploying is the normal way to use a network volume.
+#   - HF_HOME on the persistent volume. It defaults to the container's ephemeral disk,
+#     so without this a redeploy re-downloads ~40 GB of weights — and redeploying is
+#     the normal way to use a network volume, not an edge case.
 #   - Models downloaded BEFORE the port opens, so the app never meets a server that
 #     accepts a job and then sits silent for half an hour.
 #   - The server supervised, because a CUDA OOM kills the process and a dead port
@@ -90,7 +90,7 @@ if [ $ok -eq 0 ]; then
   "$PY" -m pip install --no-cache-dir -r requirements.txt
   echo "$WANT" > "$STAMP"
 else
-  echo -e "\n▸ dependencies already on the volume — skipping install"
+  echo -e "\n▸ dependencies already installed — skipping"
 fi
 
 echo -e "\n▸ checking the GPU"
