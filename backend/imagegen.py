@@ -736,6 +736,15 @@ def _place(pipe, device):
     for name, comp in pipe.components.items():
         if isinstance(comp, torch.nn.Module):
             comp.to(home if name == "text_encoder" else device)
+    # The transformer and its ControlNet are the two big residents — the ControlNet is
+    # built FROM the transformer (`ZImageControlNetModel.from_transformer`) and is nearly
+    # as large — so together they leave a few hundred MiB. That is under what a full-frame
+    # VAE encode of a wired `video` needs in one block: measured, 172 MiB requested with
+    # 169 MiB free. Tiling makes the VAE work in overlapping windows instead, which is the
+    # supported way to cut exactly this peak.
+    vae = getattr(pipe, "vae", None)
+    if vae is not None and hasattr(vae, "enable_tiling"):
+        vae.enable_tiling()
     log.info(
         "imagegen: text encoder stays in host RAM (card under %s GB)", _RELEASE_ENCODER_UNDER_GB
     )
