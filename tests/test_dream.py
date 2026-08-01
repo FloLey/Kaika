@@ -38,10 +38,24 @@ class FakePipe:
         self.vae = _FakeVae()
         self.image_processor = _FakeImageProcessor()
         self.scheduler = _FakeScheduler()
+        # Z-Image conditions through the tokenizer + text encoder rather than
+        # `encode_prompt`, and every frame goes through one of the two paths now, so both
+        # have to exist by default. `test_zimage_lerp_trims_by_the_union_mask` builds
+        # sharper stubs where the VALUES matter.
+        self.tokenizer = _FakeTokenizer()
+        self.text_encoder = _FakeTextEncoder()
 
     def get_timesteps(self, steps, strength, device):
         n = max(1, int(steps * strength))
         return list(range(n)), n
+
+    def encode_prompt(self, prompt, device, num, cfg):
+        """Every frame is conditioned on a cached encode now — holds included — so this
+        is no longer opt-in per test. Tests that care about the VALUES still override it;
+        the rest just need the call to work."""
+        import torch
+
+        return torch.zeros((1, 77, 4)), None
 
     def __call__(self, **kw):
         self.calls.append(kw)
@@ -49,6 +63,33 @@ class FakePipe:
         img = np.zeros((h, w, 3), np.uint8)
         img[..., 0] = len(self.calls)
         return type("R", (), {"images": [_ImageLike(img)]})()
+
+
+class _FakeTokenizer:
+    def apply_chat_template(self, messages, **kw):
+        return messages[0]["content"]
+
+    def __call__(self, texts, **kw):
+        import torch
+
+        n = kw["max_length"]
+        ids = torch.zeros((len(texts), n), dtype=torch.long)
+        mask = torch.zeros((len(texts), n), dtype=torch.long)
+        for i, t in enumerate(texts):
+            mask[i, : max(1, len(t))] = 1
+        return type("T", (), {"input_ids": ids, "attention_mask": mask})()
+
+
+class _FakeTextEncoder:
+    def __call__(self, input_ids, attention_mask, output_hidden_states):
+        import torch
+
+        b, n = input_ids.shape
+        hs = torch.zeros((b, n, 4))
+        return type("O", (), {"hidden_states": [None, hs, None]})()
+
+    def to(self, device):
+        return self
 
 
 class _FakeVae:
@@ -334,14 +375,90 @@ def test_the_mask_follows_the_control_not_just_the_count():
 # --------------------------------------------------------------------------- #
 
 
-def test_endpoints_take_the_plain_prompt_path(fake_pipe):
-    """w == 0 / w == 1 must bypass the embedding machinery entirely: a hold frame has to
-    be identical to what a render with no fades at all would produce."""
+def test_endpoints_carry_one_prompt_unmixed(fake_pipe, monkeypatch):
+    """w == 0 / w == 1 must condition on ONE prompt, with no trace of the other.
+
+    Holds used to hand the pipeline `{"prompt": a}` and let it encode; they now take the
+    cached encode like every other frame, which is what lets the text encoder be released
+    for the rest of the job. The property that matters is unchanged and is the one pinned
+    here: at an endpoint the neighbouring prompt cannot influence a pixel.
+    """
+    import torch
+
+    monkeypatch.setattr(imagegen, "_spec", lambda m: {"kind": "auto", "steps": 2})
+    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (
+        torch.full((1, 77, 4), 1.0 if p == "alpha" else 3.0),
+        None,
+    )
     plan = [_step("alpha", "beta", w=0.0), _step("alpha", "beta", w=1.0)]
-    imagegen.dream_frames(_control(2), plan, short=256)
-    assert fake_pipe.calls[0]["prompt"] == "alpha"
-    assert fake_pipe.calls[1]["prompt"] == "beta"
-    assert all("prompt_embeds" not in c for c in fake_pipe.calls)
+    imagegen.dream_frames(_control(2), plan, model=imagegen.DRAFT_MODEL, short=256)
+    assert all("prompt" not in c for c in fake_pipe.calls)
+    assert float(fake_pipe.calls[0]["prompt_embeds"].mean()) == pytest.approx(1.0)  # alpha alone
+    assert float(fake_pipe.calls[1]["prompt_embeds"].mean()) == pytest.approx(3.0)  # beta alone
+
+
+def test_each_distinct_prompt_is_encoded_once_per_job(fake_pipe, monkeypatch):
+    """The reason this cache exists: the encoder's input is the TEXT, so a long schedule
+    over a few prompts was re-running the same strings thousands of times — and pinning
+    ~4 GB of weights on the device to do it."""
+    import torch
+
+    monkeypatch.setattr(imagegen, "_spec", lambda m: {"kind": "auto", "steps": 2})
+    seen = []
+
+    def encode(p, dev, n, cfg):
+        seen.append(p)
+        return torch.zeros((1, 77, 4)), None
+
+    fake_pipe.encode_prompt = encode
+    # 30 frames, two prompts, and a ramp between them so both are genuinely referenced.
+    plan = [_step("alpha", "beta", w=i / 19) for i in range(20)]
+    imagegen.dream_frames(_control(20), plan, model=imagegen.DRAFT_MODEL, short=256)
+    assert len(fake_pipe.calls) == 20
+    assert sorted(seen) == ["alpha", "beta"]
+
+
+def test_the_text_encoder_is_released_on_a_small_card(fake_pipe, monkeypatch):
+    """~4 GB back on a card where the HD pipeline already left 76 MiB unavailable. And it
+    must come BACK: `_pipes` caches the pipeline, so the next job inherits whatever
+    device the last one left the encoder on."""
+    import torch
+
+    monkeypatch.setattr(imagegen, "_spec", lambda m: {"kind": "auto", "steps": 2})
+    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (torch.zeros((1, 77, 4)), None)
+    moves = []
+    fake_pipe.text_encoder = type("E", (), {"to": lambda self, d: moves.append(str(d))})()
+    fake_pipe._execution_device = "cuda"
+    monkeypatch.setattr(
+        torch.cuda, "get_device_properties", lambda i: type("P", (), {"total_memory": 24 * 2**30})()
+    )
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
+
+    # Two jobs on the same cached pipe. Distinct seeds so the second one MISSES the frame
+    # cache — an all-hits run builds no conditioning at all, and would prove nothing here.
+    for seed in (1, 2):
+        imagegen.dream_frames(
+            _control(1), [_step("alpha", seed=seed)], model=imagegen.DRAFT_MODEL, short=256
+        )
+    # onto the device to encode, off it to render — twice, so job two is not stranded.
+    assert moves == ["cuda", "cpu", "cuda", "cpu"]
+
+
+def test_a_roomy_card_keeps_the_encoder_resident(fake_pipe, monkeypatch):
+    """The release costs a 4 GB transfer per job. On a card with headroom that buys
+    nothing, so it must not happen."""
+    import torch
+
+    monkeypatch.setattr(imagegen, "_spec", lambda m: {"kind": "auto", "steps": 2})
+    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (torch.zeros((1, 77, 4)), None)
+    moves = []
+    fake_pipe.text_encoder = type("E", (), {"to": lambda self, d: moves.append(str(d))})()
+    fake_pipe._execution_device = "cuda"
+    monkeypatch.setattr(
+        torch.cuda, "get_device_properties", lambda i: type("P", (), {"total_memory": 48 * 2**30})()
+    )
+    imagegen.dream_frames(_control(1), [_step("alpha")], model=imagegen.DRAFT_MODEL, short=256)
+    assert moves == ["cuda"]
 
 
 def test_midpoint_uses_embeddings_not_a_prompt(fake_pipe, monkeypatch):
@@ -392,12 +509,17 @@ def test_zimage_lerp_trims_by_the_union_mask(monkeypatch):
             mask = torch.zeros((len(texts), n), dtype=torch.long)
             for i, t in enumerate(texts):  # "aaa" -> 3 real tokens
                 mask[i, : len(t)] = 1
+                ids[i, 0] = 0 if t[0] == "a" else 1  # what Enc reads back
             return type("T", (), {"input_ids": ids, "attention_mask": mask})()
 
     class Enc:
         def __call__(self, input_ids, attention_mask, output_hidden_states):
+            # Keyed on the CONTENT, not on a batch index: prompts are encoded one at a
+            # time now (that is what makes them cacheable per prompt), so every call
+            # carries a batch of exactly one and an index-derived value would be
+            # constant.
             b, n = input_ids.shape
-            hs = torch.stack([torch.full((n, 4), float(i)) for i in range(b)])
+            hs = torch.stack([torch.full((n, 4), float(input_ids[i, 0])) for i in range(b)])
             # the encode reads hidden_states[-2], so park it second-to-last
             return type("O", (), {"hidden_states": [None, hs, None]})()
 
@@ -407,7 +529,8 @@ def test_zimage_lerp_trims_by_the_union_mask(monkeypatch):
     pipe.text_encoder = Enc()
 
     # "aa" = 2 tokens, "bbbbb" = 5 → the union keeps 5.
-    got = imagegen._dream_embeds(pipe, {"kind": "zimage"}, "aa", "bbbbb", 0.5)
+    step = _step("aa", "bbbbb", w=0.5)
+    got = imagegen._dream_conditioning(pipe, {"kind": "zimage"}, [step])(step)
     embeds = got["prompt_embeds"]
     assert isinstance(embeds, list) and len(embeds) == 1
     assert embeds[0].shape[0] == 5

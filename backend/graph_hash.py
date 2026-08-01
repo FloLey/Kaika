@@ -51,7 +51,7 @@ from .types import Graph, Output, Segment
 #       the curve rested on the floor whatever the music did; it now rests around 0.63.
 #       Every brightness signal produces different values, so every clip driven by one
 #       is stale.
-RENDER_VERSION = 19
+RENDER_VERSION = 20
 
 # Signal defining-fields folded into the cache hash (01 §3.6). Order is fixed so
 # the hashed tuple is stable.

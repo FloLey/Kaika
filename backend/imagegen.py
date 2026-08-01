@@ -668,62 +668,124 @@ def stylize_frames(
 _ZIMAGE_MAX_TOKENS = 512
 
 
-def _dream_embeds(pipe, spec: dict, a: str, b: str, w: float) -> dict:
-    """Text conditioning for one frame: prompt `a` lerped toward `b` by `w`.
+# Below this much VRAM the text encoder's ~4 GB is the difference between running and
+# not: measured on a 24 GB 4090, the HD pipeline resident allocated 22.8 GiB and the next
+# 76 MiB request was the one that raised. 32 GB is the first common size with headroom.
+_RELEASE_ENCODER_UNDER_GB = 32
 
-    Returns kwargs for the pipe's `__call__` — `{"prompt": ...}` at the ends, embeddings
-    in between. The ends deliberately take the pipeline's OWN encode path: most frames of
-    a real schedule are hold frames, so they pay nothing for the fade feature, and a hold
-    frame comes out byte-identical to what a fade-less render would have produced."""
+
+def _encode_one(pipe, spec: dict, text: str) -> tuple:
+    """`(hidden_states, mask)` for ONE prompt — the raw material both frame paths need.
+
+    Z-Image's own `_encode_prompt` TRIMS to the true token count
+    (`prompt_embeds[i][prompt_masks[i]]`), so two prompts of different lengths come back
+    different-SHAPED and cannot be lerped element-wise. Keep the PADDED states here,
+    identically `[max_tokens, d]` whatever the prompt, and let the caller trim: by this
+    prompt's own mask for a hold, by the UNION of two for a blend.
+
+    SD's CLIP already pads to a fixed 77, so there is nothing to undo — `mask` is None
+    and the caller passes the tensor through.
+    """
+    device = pipe._execution_device
+    if spec["kind"] != "zimage":
+        emb, _ = pipe.encode_prompt(text, device, 1, False)
+        return emb, None
+    templated = pipe.tokenizer.apply_chat_template(
+        [{"role": "user", "content": text}],
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=True,
+    )
+    ti = pipe.tokenizer(
+        [templated],
+        padding="max_length",
+        max_length=_ZIMAGE_MAX_TOKENS,
+        truncation=True,
+        return_tensors="pt",
+    )
+    mask = ti.attention_mask.to(device).bool()[0]
+    hs = pipe.text_encoder(
+        input_ids=ti.input_ids.to(device),
+        attention_mask=mask[None],
+        output_hidden_states=True,
+    ).hidden_states[-2][0]
+    return hs, mask
+
+
+def _release_text_encoder(pipe, device: str) -> None:
+    """Park the text encoder in host RAM once every prompt has been encoded.
+
+    Only worth doing where host and device memory are separate pools, and only where the
+    card is small enough for ~4 GB to matter. On MPS there is nowhere to release TO — the
+    two share one pool — so this would trade transfer time for no memory at all.
+
+    Safe because nothing downstream touches it: the per-frame path is arithmetic on
+    cached tensors, and `_seeded_injection` uses only the VAE and the image processor.
+    """
+    if device != "cuda":
+        return
+    enc = getattr(pipe, "text_encoder", None)
+    if enc is None or not hasattr(enc, "to"):
+        return
     import torch
 
-    if w <= 0:
-        return {"prompt": a}
-    if w >= 1:
-        return {"prompt": b}
-    if spec["kind"] == "zimage":
-        # Z-Image's `_encode_prompt` TRIMS each prompt to its true token count
-        # (`prompt_embeds[i][prompt_masks[i]]`), so two prompts of different lengths come
-        # back different-SHAPED and cannot be lerped element-wise. Redo the encode here
-        # keeping the PADDED hidden states — identically [max_tokens, d] for both — and
-        # trim by the UNION of the two masks at the end. Both prompts go through the same
-        # chat template, so most positions are shared scaffolding that lerps to itself and
-        # only the content tokens actually move.
-        device = pipe._execution_device
-        texts = [
-            pipe.tokenizer.apply_chat_template(
-                [{"role": "user", "content": t}],
-                tokenize=False,
-                add_generation_prompt=True,
-                enable_thinking=True,
-            )
-            for t in (a, b)
-        ]
-        ti = pipe.tokenizer(
-            texts,
-            padding="max_length",
-            max_length=_ZIMAGE_MAX_TOKENS,
-            truncation=True,
-            return_tensors="pt",
-        )
-        masks = ti.attention_mask.to(device).bool()
-        hs = pipe.text_encoder(
-            input_ids=ti.input_ids.to(device),
-            attention_mask=masks,
-            output_hidden_states=True,
-        ).hidden_states[-2]
-        # Positions valid in only ONE prompt lerp against the other's masked-padding
-        # state, so a token the shorter prompt lacks fades out rather than snapping. That
-        # is an approximation; the ENDS are exact because they short-circuit above, which
-        # is the property worth pinning with a test.
-        mixed = torch.lerp(hs[0].float(), hs[1].float(), float(w)).to(hs.dtype)
-        return {"prompt_embeds": [mixed[masks[0] | masks[1]]]}
-    # SD: CLIP pads to a fixed 77 tokens, so both embeddings are already the same shape.
-    # The standard lerp, no surgery needed.
+    if torch.cuda.get_device_properties(0).total_memory / 2**30 >= _RELEASE_ENCODER_UNDER_GB:
+        return
+    enc.to("cpu")
+    torch.cuda.empty_cache()
+    log.info("imagegen: text encoder released to host RAM for the rest of this job")
+
+
+def _dream_conditioning(pipe, spec: dict, plan: list):
+    """Encode every distinct prompt in `plan` ONCE, then return `embeds(step) -> kwargs`.
+
+    The text encoder's input is the prompt TEXT — nothing per-frame. A schedule holds a
+    handful of distinct prompts, so encoding inside the frame loop re-ran the same few
+    strings thousands of times for an identical result, AND pinned ~4 GB of weights on the
+    device for the whole render. Both go away by hoisting the encode out here.
+
+    Prompts are collected through `dream_cache.canonical_prompts` — the same collapse the
+    cache keys on, which already drops the second prompt where it cannot affect a pixel.
+    Sharing it means we encode exactly what gets rendered, and the two cannot drift.
+
+    Every frame now takes THIS path, holds included. That is deliberate and it is what
+    makes the release safe: leave one frame on the pipeline's internal encode and the
+    first call after the release finds the encoder on the wrong device. It is also why
+    the path cannot be gated on card size — the frame cache is shared between local and
+    remote runs and keys only on inputs, so a machine-dependent encode would let one clip
+    mix frames from two different generations under identical keys.
+    """
+    import torch
+
+    zimage = spec["kind"] == "zimage"
     device = pipe._execution_device
-    ea, _ = pipe.encode_prompt(a, device, 1, False)
-    eb, _ = pipe.encode_prompt(b, device, 1, False)
-    return {"prompt_embeds": torch.lerp(ea.float(), eb.float(), float(w)).to(ea.dtype)}
+
+    wanted: list[str] = []
+    for step in plan:
+        a, b, w = dream_cache.canonical_prompts(step)
+        for text in (a, b) if (w > 0 and b) else (a,):
+            if text not in wanted:
+                wanted.append(text)
+
+    # A previous job on this cached pipeline may have released it; put it back before use.
+    enc = getattr(pipe, "text_encoder", None)
+    if enc is not None and hasattr(enc, "to"):
+        enc.to(device)
+    encoded = {text: _encode_one(pipe, spec, text) for text in wanted}
+    _release_text_encoder(pipe, device)
+
+    def embeds(step: dict) -> dict:
+        a, b, w = dream_cache.canonical_prompts(step)
+        hs_a, mask_a = encoded[a]
+        if w <= 0 or not b:
+            return {"prompt_embeds": [hs_a[mask_a]] if zimage else hs_a}
+        hs_b, mask_b = encoded[b]
+        mixed = torch.lerp(hs_a.float(), hs_b.float(), float(w)).to(hs_a.dtype)
+        # Positions valid in only ONE prompt lerp against the other's masked-padding
+        # state, so a token the shorter prompt lacks fades out rather than snapping.
+        return {"prompt_embeds": [mixed[mask_a | mask_b]] if zimage else mixed}
+
+    return embeds
 
 
 class Cancelled(RuntimeError):
@@ -862,14 +924,17 @@ def dream_frames(
     # scatter was silently thrown away and every `keep` produced the identical picture.
     # The source now enters ONLY through the per-step injection, which both pipelines
     # support via `callback_on_step_end`.
-    pipe = None  # loaded lazily: an all-hits run must not pay for 6 GB of weights
+    # Still lazy — an all-hits run reaches neither line, since both are guarded by the
+    # same `misses` the loop iterates. Hoisted out of the loop so the conditioning can be
+    # built once, which is the point: encoding inside it re-ran the same prompts per frame
+    # and kept ~4 GB of text encoder pinned on the device for the whole render.
+    pipe = _load_stylize_pipe(model, "txt2img", True) if misses else None
+    embeds = _dream_conditioning(pipe, spec, [s for _, _, s, _, _ in misses]) if misses else None
     for i, cimg, step, key, iimg in misses:
         # Before the expensive call, not after: at ~80 s/frame on MPS, a check placed one
         # line lower costs a whole frame of latency on every cancel.
         if should_cancel is not None and should_cancel():
             raise Cancelled(f"dream generation cancelled at frame {i}")
-        if pipe is None:
-            pipe = _load_stylize_pipe(model, "txt2img", True)
         gen = torch.Generator(device="cpu").manual_seed(int(step["seed"]))
         kw = dict(
             height=H,
@@ -892,11 +957,7 @@ def dream_frames(
             kw.update(_seeded_injection(pipe, iimg, mask, gen, H, W, steps, zimage))
         else:
             kw["num_inference_steps"] = int(spec["steps"])
-        kw.update(
-            _dream_embeds(
-                pipe, spec, step["prompt_a"], step.get("prompt_b") or "", float(step.get("w") or 0)
-            )
-        )
+        kw.update(embeds(step))
         # The lock covers INFERENCE only — a cache lookup above must not serialise
         # against a live AI Stylize job for nothing.
         with _infer_lock:  # one inference at a time on the single GPU

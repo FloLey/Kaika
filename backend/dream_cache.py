@@ -47,7 +47,7 @@ ENABLED = os.environ.get("DREAM_FRAME_CACHE", "1") != "0"
 #   3: that scatter moved to LATENT space (`_keep_mask` + per-step re-injection).
 #      v2 emitted pure noise for every video-wired frame; without this bump they
 #      would keep being served.
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 
 
 def _dir() -> Path:

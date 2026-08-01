@@ -203,6 +203,14 @@ class FakePipe:
         self.calls = []
         self._execution_device = "cpu"
 
+    def encode_prompt(self, prompt, device, num, cfg):
+        """Conditioning is built once per job now, from a cached encode that EVERY frame
+        uses — holds included — so a pipe that reaches the loop has to offer this. These
+        tests only count calls and cache hits; the values are irrelevant."""
+        import torch
+
+        return torch.zeros((1, 77, 4)), None
+
     def __call__(self, **kw):
         self.calls.append(kw)
         img = np.zeros((kw["height"], kw["width"], 3), np.uint8)
