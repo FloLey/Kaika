@@ -425,7 +425,14 @@ def test_the_text_encoder_is_released_on_a_small_card(fake_pipe, monkeypatch):
     import torch
 
     monkeypatch.setattr(imagegen, "_spec", lambda m: {"kind": "auto", "steps": 2})
-    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (torch.zeros((1, 77, 4)), None)
+
+    # The fake claims a CUDA device to exercise the placement rule; this machine has no
+    # CUDA, so the embedding has to survive a `.to(cuda)` that can never really happen.
+    class _Emb:
+        def to(self, device):
+            return self
+
+    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (_Emb(), None)
     moves = []
     fake_pipe.text_encoder = type("E", (), {"to": lambda self, d: moves.append(str(d))})()
     # A real torch.device, NOT the string "cuda": `torch.device("cuda") != "cuda"` is
@@ -443,8 +450,9 @@ def test_the_text_encoder_is_released_on_a_small_card(fake_pipe, monkeypatch):
         imagegen.dream_frames(
             _control(1), [_step("alpha", seed=seed)], model=imagegen.DRAFT_MODEL, short=256
         )
-    # onto the device to encode, off it to render — twice, so job two is not stranded.
-    assert moves == ["cuda", "cpu", "cuda", "cpu"]
+    # Off the card BEFORE encoding, both times. Never onto it: the pipeline load already
+    # left 9.75 MiB free on the real card, so an encode there cannot get its workspace.
+    assert moves == ["cpu", "cpu"]
 
 
 def test_a_roomy_card_keeps_the_encoder_resident(fake_pipe, monkeypatch):
@@ -453,7 +461,14 @@ def test_a_roomy_card_keeps_the_encoder_resident(fake_pipe, monkeypatch):
     import torch
 
     monkeypatch.setattr(imagegen, "_spec", lambda m: {"kind": "auto", "steps": 2})
-    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (torch.zeros((1, 77, 4)), None)
+
+    # The fake claims a CUDA device to exercise the placement rule; this machine has no
+    # CUDA, so the embedding has to survive a `.to(cuda)` that can never really happen.
+    class _Emb:
+        def to(self, device):
+            return self
+
+    fake_pipe.encode_prompt = lambda p, dev, n, cfg: (_Emb(), None)
     moves = []
     fake_pipe.text_encoder = type("E", (), {"to": lambda self, d: moves.append(str(d))})()
     fake_pipe._execution_device = torch.device("cuda")

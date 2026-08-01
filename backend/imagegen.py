@@ -674,7 +674,7 @@ _ZIMAGE_MAX_TOKENS = 512
 _RELEASE_ENCODER_UNDER_GB = 32
 
 
-def _encode_one(pipe, spec: dict, text: str) -> tuple:
+def _encode_one(pipe, spec: dict, text: str, run_on, keep_on) -> tuple:
     """`(hidden_states, mask)` for ONE prompt — the raw material both frame paths need.
 
     Z-Image's own `_encode_prompt` TRIMS to the true token count
@@ -685,11 +685,14 @@ def _encode_one(pipe, spec: dict, text: str) -> tuple:
 
     SD's CLIP already pads to a fixed 77, so there is nothing to undo — `mask` is None
     and the caller passes the tensor through.
+
+    `run_on` is where the encoder itself lives, `keep_on` where the result is wanted.
+    They differ on a card too small to hold the encoder: the forward runs in host RAM and
+    only the (tiny) embeddings come back.
     """
-    device = pipe._execution_device
     if spec["kind"] != "zimage":
-        emb, _ = pipe.encode_prompt(text, device, 1, False)
-        return emb, None
+        emb, _ = pipe.encode_prompt(text, run_on, 1, False)
+        return emb.to(keep_on), None
     templated = pipe.tokenizer.apply_chat_template(
         [{"role": "user", "content": text}],
         tokenize=False,
@@ -703,41 +706,39 @@ def _encode_one(pipe, spec: dict, text: str) -> tuple:
         truncation=True,
         return_tensors="pt",
     )
-    mask = ti.attention_mask.to(device).bool()[0]
+    mask = ti.attention_mask.to(run_on).bool()[0]
     hs = pipe.text_encoder(
-        input_ids=ti.input_ids.to(device),
+        input_ids=ti.input_ids.to(run_on),
         attention_mask=mask[None],
         output_hidden_states=True,
     ).hidden_states[-2][0]
-    return hs, mask
+    return hs.to(keep_on), mask.to(keep_on)
 
 
-def _release_text_encoder(pipe, device: str) -> None:
-    """Park the text encoder in host RAM once every prompt has been encoded.
+def _encoder_home(device) -> str | None:
+    """Where the text encoder should live: `"cpu"` to keep it off a small card, else None
+    (leave it wherever the pipeline put it).
 
-    Only worth doing where host and device memory are separate pools, and only where the
-    card is small enough for ~4 GB to matter. On MPS there is nowhere to release TO — the
-    two share one pool — so this would trade transfer time for no memory at all.
+    Deciding this BEFORE the encode, not after, is the whole point. `pipe.to(device)`
+    moves every component up, and on a 24 GB card that leaves 9.75 MiB free — measured:
+    the encode could not allocate its own 30 MiB workspace, so a release scheduled for
+    afterwards was never reached. Off the card first, encode in host RAM, and only the
+    embeddings come back.
 
-    Safe because nothing downstream touches it: the per-frame path is arithmetic on
-    cached tensors, and `_seeded_injection` uses only the VAE and the image processor.
+    Only where host and device memory are separate pools. On MPS the two share one, so
+    there is nowhere to move TO and this would buy nothing.
+
+    `str()` first: `_execution_device` is a torch.device, and `torch.device("cuda")`
+    compares UNEQUAL to the string "cuda", so a plain `!=` skips this on the one hardware
+    it exists for — while a fake pipe holding a string makes the test agree.
     """
-    # `str()` first: `_execution_device` is a torch.device, and `torch.device("cuda")`
-    # compares UNEQUAL to the string "cuda" — so a plain `!=` silently skipped the whole
-    # release on the one hardware it exists for, while a fake pipe holding a string made
-    # the test agree.
     if not str(device).startswith("cuda"):
-        return
-    enc = getattr(pipe, "text_encoder", None)
-    if enc is None or not hasattr(enc, "to"):
-        return
+        return None
     import torch
 
     if torch.cuda.get_device_properties(0).total_memory / 2**30 >= _RELEASE_ENCODER_UNDER_GB:
-        return
-    enc.to("cpu")
-    torch.cuda.empty_cache()
-    log.info("imagegen: text encoder released to host RAM for the rest of this job")
+        return None
+    return "cpu"
 
 
 def _dream_conditioning(pipe, spec: dict, plan: list):
@@ -771,12 +772,19 @@ def _dream_conditioning(pipe, spec: dict, plan: list):
             if text not in wanted:
                 wanted.append(text)
 
-    # A previous job on this cached pipeline may have released it; put it back before use.
+    # Move it BEFORE encoding, not after: on a card the pipeline already fills, the
+    # encode's own workspace is what fails. `_pipes` caches the pipeline across jobs, so
+    # this also re-homes an encoder the last job left elsewhere.
+    home = _encoder_home(device)
     enc = getattr(pipe, "text_encoder", None)
     if enc is not None and hasattr(enc, "to"):
-        enc.to(device)
-    encoded = {text: _encode_one(pipe, spec, text) for text in wanted}
-    _release_text_encoder(pipe, device)
+        enc.to(home or device)
+    if home is not None:
+        import torch as _t
+
+        _t.cuda.empty_cache()  # hand the ~4 GB back before anything asks for workspace
+        log.info("imagegen: text encoder kept in host RAM — %s prompt(s) to encode", len(wanted))
+    encoded = {text: _encode_one(pipe, spec, text, home or device, device) for text in wanted}
 
     def embeds(step: dict) -> dict:
         a, b, w = dream_cache.canonical_prompts(step)
