@@ -955,6 +955,7 @@ def dream_frames(
             *ep,
             init=np.stack([m[4] for m in misses]) if have_init else None,
             on_progress=(lambda d, _t: on_progress(hits + d, total)) if on_progress else None,
+            should_cancel=should_cancel,
         )
         for (i, _c, _s, key, _ii), img in zip(misses, got):
             out[i] = img

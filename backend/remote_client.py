@@ -116,17 +116,28 @@ def stylize_remote(
     return np.concatenate(chunks, axis=0)
 
 
-def dream_remote(control, plan, model, short, url, token, init=None, on_progress=None):
+def dream_remote(
+    control, plan, model, short, url, token, init=None, on_progress=None, should_cancel=None
+):
     """Remote twin of imagegen.dream_frames — batched like `stylize_remote`.
 
     The PLAN travels as JSON in the params header, sliced per batch so each request
     carries exactly the entries for the control frames it ships. The frame CACHE stays
     on the client (imagegen.dream_frames consults it before this call and fills it
     after), so a remote run still leaves a warm local cache. `init` is the optional
-    per-frame start clip — index-aligned with `control`, sliced the same way."""
+    per-frame start clip — index-aligned with `control`, sliced the same way.
+
+    `should_cancel` is consulted BETWEEN batches. Its absence was a real defect: the
+    caller checked once before handing the whole clip over, so a cancelled HD export kept
+    generating until the segment finished — 40 more frames after the click, measured, and
+    up to an hour on a long segment. The GPU slot is held for all of it, which reads as
+    "an HD render is already running" long after the user stopped one.
+    """
     import json
 
     import numpy as np
+
+    from .imagegen import Cancelled
 
     total = len(plan)
     chunks = []
@@ -138,6 +149,8 @@ def dream_remote(control, plan, model, short, url, token, init=None, on_progress
         arrays = {"control": np.ascontiguousarray(np.asarray(control)[idx])}
         if init is not None and len(init) > 0:
             arrays["init"] = np.ascontiguousarray(np.asarray(init)[idx])
+        if should_cancel is not None and should_cancel():
+            raise Cancelled(f"dream generation cancelled after {i} of {total} frames")
         params = dict(model=model, short=int(short), plan=json.dumps(plan[i:hi]))
         out = _post(url, token, "/dream", pack_npz(**arrays), params, "dream")
         frames = unpack_npz(out).get("frames")

@@ -277,7 +277,17 @@ def test_remote_gets_only_the_misses_and_fills_the_local_cache(monkeypatch, fake
     imagegen.dream_frames(_control(4), plan[:2], short=256)  # warm two of the four
     calls = {}
 
-    def fake_remote(control, sub_plan, model, short, url, token, init=None, on_progress=None):
+    def fake_remote(
+        control,
+        sub_plan,
+        model,
+        short,
+        url,
+        token,
+        init=None,
+        on_progress=None,
+        should_cancel=None,
+    ):
         calls["n"] = len(sub_plan)
         calls["prompts"] = [s["prompt_a"] for s in sub_plan]
         return np.stack([np.full((256, 256, 3), 40 + i, np.uint8) for i in range(len(sub_plan))])
