@@ -736,23 +736,11 @@ def _place(pipe, device):
     for name, comp in pipe.components.items():
         if isinstance(comp, torch.nn.Module):
             comp.to(home if name == "text_encoder" else device)
-    # The transformer and its ControlNet are the two big residents — the ControlNet is
-    # built FROM the transformer (`ZImageControlNetModel.from_transformer`) and is nearly
-    # as large — so together they leave a few hundred MiB. That is under what a full-frame
-    # VAE encode of a wired `video` needs in one block: measured, 172 MiB requested with
-    # 169 MiB free. Tiling makes the VAE work in overlapping windows instead, which is the
-    # supported way to cut exactly this peak.
-    vae = getattr(pipe, "vae", None)
-    if vae is not None and hasattr(vae, "enable_tiling"):
-        vae.enable_tiling()
-    # And the peak the traceback actually names: the ControlNet's own attention
-    # (controlnet_z_image.py:406). Slicing computes it in chunks instead of one block,
-    # which is diffusers' supported lever for exactly this and costs a little speed.
-    if hasattr(pipe, "enable_attention_slicing"):
-        try:
-            pipe.enable_attention_slicing(1)
-        except Exception as e:  # noqa: BLE001 — not every attention processor slices
-            log.warning("imagegen: attention slicing unavailable (%s)", e)
+    # This buys the txt2img path and only that. A wired `video` adds the source-injection
+    # work on top and still does not fit here — the ControlNet's own forward is where it
+    # runs out (controlnet_z_image.py:406), which VAE tiling and attention slicing were
+    # both tried against and neither moved: Z-Image's attention is SDPA and ignores
+    # slicing. That configuration wants a card with real headroom, not a smaller peak.
     log.info(
         "imagegen: text encoder stays in host RAM (card under %s GB)", _RELEASE_ENCODER_UNDER_GB
     )
@@ -986,9 +974,6 @@ def dream_frames(
     # and kept ~4 GB of text encoder pinned on the device for the whole render.
     pipe = _load_stylize_pipe(model, "txt2img", True) if misses else None
     embeds = _dream_conditioning(pipe, spec, [s for _, _, s, _, _ in misses]) if misses else None
-    # A card small enough to need the encoder in host RAM is also small enough that the
-    # allocator's between-frame reserve matters. Same test, one place.
-    tight = bool(misses) and _encoder_home(pipe._execution_device) is not None
     for i, cimg, step, key, iimg in misses:
         # Before the expensive call, not after: at ~80 s/frame on MPS, a check placed one
         # line lower costs a whole frame of latency on every cancel.
@@ -1020,14 +1005,6 @@ def dream_frames(
         # The lock covers INFERENCE only — a cache lookup above must not serialise
         # against a live AI Stylize job for nothing.
         with _infer_lock:  # one inference at a time on the single GPU
-            if tight:
-                # The transformer and its ControlNet leave a few hundred MiB on a 24 GB
-                # card, and the previous frame's freed blocks stay RESERVED by the
-                # allocator — 905 MiB of them, measured. That is dead space this frame
-                # cannot use: the ControlNet's own forward is where it runs out. Handing
-                # it back per frame costs microseconds and is the difference between
-                # finishing and raising.
-                torch.cuda.empty_cache()
             res = pipe(**kw)
         img = np.asarray(res.images[0])
         if img.shape[:2] != (H, W):  # never crash if the pipe ignores the aspect
