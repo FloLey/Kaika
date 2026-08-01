@@ -428,7 +428,10 @@ def test_the_text_encoder_is_released_on_a_small_card(fake_pipe, monkeypatch):
     fake_pipe.encode_prompt = lambda p, dev, n, cfg: (torch.zeros((1, 77, 4)), None)
     moves = []
     fake_pipe.text_encoder = type("E", (), {"to": lambda self, d: moves.append(str(d))})()
-    fake_pipe._execution_device = "cuda"
+    # A real torch.device, NOT the string "cuda": `torch.device("cuda") != "cuda"` is
+    # True, and a string here let a `!=` guard pass review while skipping the release on
+    # the only hardware it exists for.
+    fake_pipe._execution_device = torch.device("cuda")
     monkeypatch.setattr(
         torch.cuda, "get_device_properties", lambda i: type("P", (), {"total_memory": 24 * 2**30})()
     )
@@ -453,7 +456,7 @@ def test_a_roomy_card_keeps_the_encoder_resident(fake_pipe, monkeypatch):
     fake_pipe.encode_prompt = lambda p, dev, n, cfg: (torch.zeros((1, 77, 4)), None)
     moves = []
     fake_pipe.text_encoder = type("E", (), {"to": lambda self, d: moves.append(str(d))})()
-    fake_pipe._execution_device = "cuda"
+    fake_pipe._execution_device = torch.device("cuda")
     monkeypatch.setattr(
         torch.cuda, "get_device_properties", lambda i: type("P", (), {"total_memory": 48 * 2**30})()
     )

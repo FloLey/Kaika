@@ -722,7 +722,11 @@ def _release_text_encoder(pipe, device: str) -> None:
     Safe because nothing downstream touches it: the per-frame path is arithmetic on
     cached tensors, and `_seeded_injection` uses only the VAE and the image processor.
     """
-    if device != "cuda":
+    # `str()` first: `_execution_device` is a torch.device, and `torch.device("cuda")`
+    # compares UNEQUAL to the string "cuda" — so a plain `!=` silently skipped the whole
+    # release on the one hardware it exists for, while a fake pipe holding a string made
+    # the test agree.
+    if not str(device).startswith("cuda"):
         return
     enc = getattr(pipe, "text_encoder", None)
     if enc is None or not hasattr(enc, "to"):
