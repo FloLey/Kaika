@@ -745,6 +745,14 @@ def _place(pipe, device):
     vae = getattr(pipe, "vae", None)
     if vae is not None and hasattr(vae, "enable_tiling"):
         vae.enable_tiling()
+    # And the peak the traceback actually names: the ControlNet's own attention
+    # (controlnet_z_image.py:406). Slicing computes it in chunks instead of one block,
+    # which is diffusers' supported lever for exactly this and costs a little speed.
+    if hasattr(pipe, "enable_attention_slicing"):
+        try:
+            pipe.enable_attention_slicing(1)
+        except Exception as e:  # noqa: BLE001 — not every attention processor slices
+            log.warning("imagegen: attention slicing unavailable (%s)", e)
     log.info(
         "imagegen: text encoder stays in host RAM (card under %s GB)", _RELEASE_ENCODER_UNDER_GB
     )
