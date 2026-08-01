@@ -978,6 +978,9 @@ def dream_frames(
     # and kept ~4 GB of text encoder pinned on the device for the whole render.
     pipe = _load_stylize_pipe(model, "txt2img", True) if misses else None
     embeds = _dream_conditioning(pipe, spec, [s for _, _, s, _, _ in misses]) if misses else None
+    # A card small enough to need the encoder in host RAM is also small enough that the
+    # allocator's between-frame reserve matters. Same test, one place.
+    tight = bool(misses) and _encoder_home(pipe._execution_device) is not None
     for i, cimg, step, key, iimg in misses:
         # Before the expensive call, not after: at ~80 s/frame on MPS, a check placed one
         # line lower costs a whole frame of latency on every cancel.
@@ -1009,6 +1012,14 @@ def dream_frames(
         # The lock covers INFERENCE only — a cache lookup above must not serialise
         # against a live AI Stylize job for nothing.
         with _infer_lock:  # one inference at a time on the single GPU
+            if tight:
+                # The transformer and its ControlNet leave a few hundred MiB on a 24 GB
+                # card, and the previous frame's freed blocks stay RESERVED by the
+                # allocator — 905 MiB of them, measured. That is dead space this frame
+                # cannot use: the ControlNet's own forward is where it runs out. Handing
+                # it back per frame costs microseconds and is the difference between
+                # finishing and raising.
+                torch.cuda.empty_cache()
             res = pipe(**kw)
         img = np.asarray(res.images[0])
         if img.shape[:2] != (H, W):  # never crash if the pipe ignores the aspect
