@@ -114,7 +114,7 @@ def _load_pipe(model: str):
                 pipe = AutoPipelineForText2Image.from_pretrained(model, torch_dtype=dtype)
         except Exception as e:  # noqa: BLE001 — network/model errors get one clean message
             raise RuntimeError(f"could not load image model '{model}': {e}") from e
-        pipe = pipe.to(device)
+        pipe = _place(pipe, device)
         log.info("imagegen: loaded %s on %s", model, device)
         _pipes[model] = pipe
         return pipe
@@ -287,7 +287,7 @@ def _load_stylize_pipe(model: str, mode: str, control: bool):
             raise
         except Exception as e:  # noqa: BLE001 — one clean message the job surfaces
             raise RuntimeError(f"could not load stylize model '{model}': {e}") from e
-        pipe = pipe.to(device)
+        pipe = _place(pipe, device)
         pipe.set_progress_bar_config(disable=True)
         log.info("imagegen: loaded stylize pipe %s on %s", key, device)
         _pipes[key] = pipe
@@ -713,6 +713,33 @@ def _encode_one(pipe, spec: dict, text: str, run_on, keep_on) -> tuple:
         output_hidden_states=True,
     ).hidden_states[-2][0]
     return hs.to(keep_on), mask.to(keep_on)
+
+
+def _place(pipe, device):
+    """Move `pipe` onto `device`, leaving the text encoder in host RAM on a small card.
+
+    `pipe.to(device)` moves every component, and on a 24 GB card that lands at 23.5 GiB
+    with 9.75 MiB free — enough to finish loading and nothing else, so the first 30 MiB
+    anyone asks for fails. Releasing the encoder afterwards cannot help: by then the
+    memory is already gone. It has to never go up.
+
+    Safe because `pipe.device` — which `_execution_device` and the pipeline's own latent
+    placement read — reports the FIRST `nn.Module` in the pipeline's signature. For
+    Z-Image's ControlNet pipeline that is the VAE (`scheduler, vae, text_encoder, ...`),
+    so the pipeline still correctly says it executes on the GPU.
+    """
+    home = _encoder_home(device)
+    if home is None:
+        return pipe.to(device)
+    import torch
+
+    for name, comp in pipe.components.items():
+        if isinstance(comp, torch.nn.Module):
+            comp.to(home if name == "text_encoder" else device)
+    log.info(
+        "imagegen: text encoder stays in host RAM (card under %s GB)", _RELEASE_ENCODER_UNDER_GB
+    )
+    return pipe
 
 
 def _encoder_home(device) -> str | None:
