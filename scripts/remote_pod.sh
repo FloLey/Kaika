@@ -18,6 +18,11 @@ set -euo pipefail
 
 VOL="${VOL:-/workspace}"
 export PORT="${PORT:-5100}"
+# The HD model and its ControlNet leave a few hundred MiB on a 24 GB card, and the
+# allocator's default segments fragment that margin into pieces too small to use — the
+# OOM message itself recommends this. Expandable segments grow in place instead, so the
+# free memory stays one usable block.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export HF_HOME="${HF_HOME:-$VOL/hf}"
 
 cd "$(dirname "$0")/.."
