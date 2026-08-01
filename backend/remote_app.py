@@ -128,6 +128,11 @@ def dream():
             short=p.get("short"),
         )
     except (RuntimeError, ValueError) as e:
+        # Log the traceback HERE. The message alone crosses the wire and reaches the
+        # card, which is right for the user — but it strands whoever is debugging the
+        # box with a CUDA OOM and no idea which allocation raised it. That cost an
+        # evening of guessing between the load, the encode and the VAE.
+        log.exception("dream failed")
         return jsonify({"error": str(e)}), 500
     return _npz_response(frames=frames)
 
