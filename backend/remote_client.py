@@ -20,7 +20,13 @@ import logging
 log = logging.getLogger("kaika.remote")
 
 STYLIZE_BATCH = 8  # frames per POST — ~15 MB of HD output per batch, minutes of GPU work
-TIMEOUT = 900  # seconds per request; a batch of 8 HD frames is minutes even on CUDA
+# (connect, read). A bare number sets BOTH, and the read half is re-armed by every byte
+# that arrives — so a connection the far end has stopped feeding, which is what a CDN
+# does when it drops a response mid-body, never expires at all. Observed: the pod logged
+# 200 for the batch it had finished, the client sat on the socket for nine hours, and the
+# job stayed "running" with a cancel it could not reach because the check lives between
+# batches. 300 s is ~7x a warm HD batch and still bounded.
+TIMEOUT = (15, 300)
 
 
 def pack_npz(**arrays) -> bytes:
