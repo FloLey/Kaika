@@ -25,6 +25,7 @@ from ..compositions import final_output_id, root_composition
 from ..media import stem_audio_path
 from ..paths import ANALYSIS_DIR, ANIM_DIR, ASSETS_DIR
 from ..web import json_body, error_response, validate_job_id
+from ._node_assets import persist_asset_url
 
 log = logging.getLogger("kaika")
 
@@ -789,10 +790,17 @@ def _regenerate_hd_dream(job_id, segments, export, should_cancel, output=None, o
                     "addedAt": int(time.time()),
                 },
             )
-        # In MEMORY only, like the other two passes: the saved project keeps the card's
-        # own draft (and its `assetKey`, so the stale badge still reads the card's clip,
-        # not this one). Only the graph the export renders sees this url.
         n["data"] = {**d, "assetUrl": url}
+        # …and durably, onto THIS segment's composition. The other two passes stay
+        # memory-only because they swap a draft the card can regenerate in seconds; a
+        # Dream clip is hours of diffusion, and leaving it unreferenced meant the export
+        # produced the master while every card, and everything downstream of it, kept
+        # showing the draft it was generated from. Scoped by composition: the node id is
+        # shared across the pool, so an unscoped write would put this segment's clip on
+        # all nine.
+        persist_asset_url(
+            job_id, n["id"], "dream", url, composition_id=seg.get("rootCompositionId")
+        )
 
 
 @bp.post("/export/trim")
